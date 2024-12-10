@@ -19,3 +19,6 @@ authentication
 - [ ] provide endpoint: sign up
 - [ ] provide endpoint: logout -- is this needed?
 - [ ] oath with google, facebook
+
+organization
+- [ ] write README.md
