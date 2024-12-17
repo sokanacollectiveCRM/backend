@@ -60,6 +60,7 @@ const authController = {
         email,
         password,
       });
+
       if (error) {
         return res.status(401).json({ error: error.message });
       }
@@ -74,6 +75,7 @@ const authController = {
       res.status(200).json({
         message: "Login successful",
         user: data.user,
+        token: data.session.access_token,
       });
     } catch (error) {
       console.error("Login error:", error);
@@ -92,7 +94,6 @@ const authController = {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      // Get user data directly using the token
       const {
         data: { user },
         error: userError,
@@ -103,7 +104,6 @@ const authController = {
         return res.status(401).json({ error: "Authentication failed" });
       }
 
-      // Fetch additional user data from the "users" table
       const { data: additionalUserData, error: dbError } = await supabase
         .from("users")
         .select("*")
@@ -173,6 +173,24 @@ const authController = {
       return res.redirect(
         `${process.env.FRONTEND_URL}/auth/callback?error=server_error`
       );
+    }
+  },
+  async getAllUsers(req, res) {
+    try {
+      const { data: users, error } = await supabase
+        .from("users")
+        .select("username, email, firstname, lastname")
+        .order("username", { ascending: true });
+
+      if (error) {
+        console.error("Error fetching users:", error);
+        return res.status(400).json({ error: error.message });
+      }
+
+      res.status(200).json(users);
+    } catch (error) {
+      console.error("Get all users error:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   },
 };
