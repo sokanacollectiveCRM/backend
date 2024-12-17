@@ -1,11 +1,21 @@
 const express = require("express");
 const cors = require("cors");
+const cookieParser = require("cookie-parser");
 require("dotenv").config();
 
-const app = express();
+const authRoutes = require("./routes/authRoutes");
 
-app.use(cors());
+const app = express();
+app.use(
+  cors({
+    origin: "http://localhost:3001",
+    credentials: true,
+  })
+);
+app.use(cookieParser());
 app.use(express.json());
+
+app.use("/auth", authRoutes);
 
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok" });
@@ -14,4 +24,5 @@ app.get("/health", (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
 });
