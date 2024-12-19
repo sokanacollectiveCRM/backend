@@ -27,7 +27,7 @@ authentication
 
 organization
 
-- [ ] write README.md
+- [x] write README.md
 
 code styling
 
