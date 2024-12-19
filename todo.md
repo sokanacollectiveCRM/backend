@@ -13,7 +13,7 @@ database
 api
 
 - [x] node express, using supabase ORM
-- [ ] provide endpoint: get all users
+- [x] provide endpoint: get all users
   - requires session token
 
 authentication
@@ -23,7 +23,7 @@ authentication
 - [x] provide endpoint: sign up
 - [x] provide endpoint: logout (remove session token)
   - requires session token
-- [ ] oath with google
+- [x] oath with google
 
 organization
 
