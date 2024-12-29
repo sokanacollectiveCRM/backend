@@ -8,7 +8,7 @@ const authRoutes = require('./routes/authRoutes');
 const app = express();
 
 const corsOptions = {
-  origin: '*',
+  origin: process.env.FRONTEND_URL,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
@@ -20,7 +20,7 @@ app.options('*', cors(corsOptions));
 
 if (process.env.NODE_ENV !== 'production') {
   console.log('CORS Configuration:', {
-    origin: '*',
+    origin: process.env.FRONTEND_URL,
     credentials: true,
   });
 }
