@@ -88,7 +88,6 @@ const authController = {
 
   async getMe(req, res) {
     try {
-      // Extract token from either the cookie or the Authorization header
       const token =
         req.cookies.session || req.headers.authorization?.split(' ')[1];
 
@@ -98,7 +97,6 @@ const authController = {
         return res.status(401).json({ error: 'Not authenticated' });
       }
 
-      // Use the token to get user details
       const {
         data: { user },
         error: userError,
@@ -110,7 +108,6 @@ const authController = {
         return res.status(401).json({ error: 'Authentication failed' });
       }
 
-      // Query user details from your database
       const { data: userData, error: dbError } = await supabase
         .from('users')
         .select('id, username, email, firstname, lastname')
@@ -119,12 +116,9 @@ const authController = {
 
       console.log('GetMe database query result:', { userData, error: dbError });
 
-      // Return user data if found
       if (userData && !dbError) {
         return res.json(userData);
       }
-
-      // Fallback to basic user information
       return res.json({
         id: user.id,
         email: user.email,
