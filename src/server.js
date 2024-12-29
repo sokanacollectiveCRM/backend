@@ -12,10 +12,11 @@ const corsOptions = {
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
+  optionsSuccessStatus: 204,
   maxAge: 86400,
 };
-
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 if (process.env.NODE_ENV !== 'production') {
   console.log('CORS Configuration:', {
