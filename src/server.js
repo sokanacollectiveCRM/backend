@@ -27,7 +27,7 @@ if (process.env.NODE_ENV !== 'production') {
 app.use(cookieParser());
 app.use(express.json());
 
-app.use((err, req, res, next) => {
+app.use((err, req, res) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Something broke!' });
 });
