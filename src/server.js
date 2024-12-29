@@ -38,6 +38,11 @@ if (process.env.NODE_ENV !== 'production') {
 app.use(cookieParser());
 app.use(express.json());
 
+app.use((req, res, next) => {
+  req.url = req.url.replace(/\/+/g, '/');
+  next();
+});
+
 app.use('/auth', authRoutes);
 
 app.get('/health', (req, res) => {
