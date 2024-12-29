@@ -37,3 +37,7 @@ github
 - [x] enforce linting/styling in order to merge into main
 - [x] can't push directly to main (except ethan, amy, aanand)
 - [x] pr templates
+
+deploy
+
+- [x] deploy on vercel
