@@ -27,15 +27,26 @@ if (process.env.NODE_ENV !== 'production') {
 app.use(cookieParser());
 app.use(express.json());
 
-app.use((err, req, res) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Something broke!' });
-});
-
 app.use('/auth', authRoutes);
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
+});
+
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error('Error details:', {
+    message: err.message,
+    stack: err.stack,
+    status: err.status || 500,
+  });
+
+  res.status(err.status || 500).json({
+    error:
+      process.env.NODE_ENV === 'production'
+        ? 'Internal Server Error'
+        : err.message,
+  });
 });
 
 const PORT = process.env.PORT || 3000;
