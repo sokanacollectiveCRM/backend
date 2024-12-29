@@ -179,7 +179,7 @@ const authController = {
     try {
       const { data: users, error } = await supabase
         .from('users')
-        .select('username, email, firstname, lastn1ame')
+        .select('username, email, firstname, lastname')
         .order('username', { ascending: true });
 
       if (error) {
@@ -360,6 +360,132 @@ const authController = {
     } catch (error) {
       console.error('Token handling error:', error);
       res.status(500).json({ error: error.message });
+    }
+  },
+
+  async requestPasswordReset(req, res) {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({
+          error: 'Email is required',
+        });
+      }
+
+      const redirectTo = `${process.env.FRONTEND_URL}/auth/reset-password`;
+      console.log('Setting redirect URL:', redirectTo);
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: redirectTo,
+      });
+
+      if (error) {
+        console.error('Password reset request error:', error);
+        return res.status(400).json({ error: error.message });
+      }
+
+      res.status(200).json({
+        message: 'Password reset instructions sent to email',
+      });
+    } catch (error) {
+      console.error('Password reset request error:', error);
+      res
+        .status(500)
+        .json({ error: 'Failed to process password reset request' });
+    }
+  },
+
+  async handlePasswordRecovery(req, res) {
+    try {
+      const { token_hash, type } = req.query;
+
+      if (!token_hash || type !== 'recovery') {
+        console.log('Invalid token or type:', { token_hash, type });
+        return res.redirect(
+          `${process.env.FRONTEND_URL}/auth/reset-password?error=${encodeURIComponent(
+            'Invalid password recovery link'
+          )}`
+        );
+      }
+
+      const { data, error } = await supabase.auth.verifyOtp({
+        token_hash,
+        type: 'recovery',
+      });
+
+      if (error) {
+        console.error('Recovery verification error:', error);
+        return res.redirect(
+          `${process.env.FRONTEND_URL}/auth/reset-password?error=${encodeURIComponent(
+            error.message
+          )}`
+        );
+      }
+
+      const queryParams = new URLSearchParams({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+        type: 'recovery',
+      });
+
+      const redirectUrl = `${process.env.FRONTEND_URL}/auth/reset-password?${queryParams.toString()}`;
+      return res.redirect(redirectUrl);
+    } catch (error) {
+      console.error('Password recovery error:', error);
+      return res.redirect(
+        `${process.env.FRONTEND_URL}/auth/reset-password?error=${encodeURIComponent(
+          'Failed to process password recovery'
+        )}`
+      );
+    }
+  },
+
+  async updatePassword(req, res) {
+    try {
+      const { password } = req.body;
+      const token = req.headers.authorization?.split(' ')[1];
+
+      if (!password) {
+        return res.status(400).json({
+          error: 'New password is required',
+        });
+      }
+
+      if (!token) {
+        return res.status(401).json({
+          error: 'Authorization token is required',
+        });
+      }
+      const {
+        // eslint-disable-next-line no-unused-vars
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.setSession({
+        access_token: token,
+        refresh_token: token,
+      });
+
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+        return res.status(401).json({ error: sessionError.message });
+      }
+      const { data, error } = await supabase.auth.updateUser({
+        password: password,
+      });
+
+      if (error) {
+        console.error('Password update error:', error);
+        return res.status(400).json({ error: error.message });
+      }
+
+      res.status(200).json({
+        message: 'Password updated successfully',
+        user: data.user,
+      });
+    } catch (error) {
+      console.error('Password update error:', error);
+      res.status(500).json({ error: 'Failed to update password' });
     }
   },
 };

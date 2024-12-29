@@ -24,17 +24,16 @@ authentication
 - [x] provide endpoint: logout (remove session token)
   - requires session token
 - [x] oath with google
-
-organization
+- [x] allow users to reset passwords organization
 
 - [x] write README.md
 
 code styling
 
-- all the same prettier/eslint configs as frontend
+- [x] all the same prettier/eslint configs as frontend
 
 github
 
-- enforce linting/styling in order to merge into main
-- can't push directly to main (except ethan, amy, aanand)
-- pr templates
+- [x] enforce linting/styling in order to merge into main
+- [x] can't push directly to main (except ethan, amy, aanand)
+- [x] pr templates

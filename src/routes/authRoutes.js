@@ -12,5 +12,8 @@ router.get('/users', authMiddleware, authController.getAllUsers);
 router.get('/google', authController.googleAuth);
 router.get('/callback', authController.handleOAuthCallback);
 router.post('/callback', authController.handleToken);
+router.post('/reset-password', authController.requestPasswordReset);
+router.put('/reset-password', authController.updatePassword);
+router.get('/verify-recovery', authController.handlePasswordRecovery);
 
 module.exports = router;
