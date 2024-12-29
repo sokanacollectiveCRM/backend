@@ -8,15 +8,25 @@ const authRoutes = require('./routes/authRoutes');
 const app = express();
 
 const corsOptions = {
-  origin: process.env.FRONTEND_URL,
+  origin: (origin, callback) => {
+    const allowedOrigins = [
+      process.env.FRONTEND_URL,
+      process.env.FRONTEND_URL_DEV,
+    ];
+
+    if (allowedOrigins.includes(origin) || !origin) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
-  optionsSuccessStatus: 204,
   maxAge: 86400,
 };
+
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
 
 if (process.env.NODE_ENV !== 'production') {
   console.log('CORS Configuration:', {
@@ -49,6 +59,13 @@ app.use((err, req, res, next) => {
         : err.message,
   });
 });
+
+if (process.env.NODE_ENV !== 'production') {
+  console.log('CORS Configuration:', {
+    allowedOrigins: [process.env.FRONTEND_URL, process.env.FRONTEND_URL_DEV],
+    credentials: true,
+  });
+}
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
