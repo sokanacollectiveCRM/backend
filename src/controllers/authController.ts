@@ -1,3 +1,5 @@
+import { Request, Response } from 'express';
+
 import {
   AuthenticationError,
   AuthorizationError,
@@ -5,7 +7,6 @@ import {
   NotFoundError,
   ValidationError
 } from 'domainErrors';
-import { Request, Response } from 'express';
 import {
   AuthRequest,
   LoginBody,
@@ -14,14 +15,15 @@ import {
   TokenBody,
   UpdatePasswordBody,
 } from 'types';
+import { AuthUseCase } from 'usecase/authUseCase.js';
 
-import { AuthUseCase } from '../authUseCase.js';
 
 export class AuthController {
   private authUseCase: AuthUseCase;
 
   constructor(authUseCase: AuthUseCase) {
     this.authUseCase = authUseCase;
+    this.handleError = this.handleError.bind(this);
   }
 
   //
@@ -42,20 +44,9 @@ export class AuthController {
       const user = await this.authUseCase.signup(email, password, username, firstname, lastname);
       res.status(201).json({ message: 'User created successfully', user: user.toJSON() })
     } 
-    catch (error) {
-      if (error instanceof ValidationError) {
-        res.status(400).json({ error: error.message });
-      } else if (error instanceof ConflictError) {
-        res.status(409).json({ error: error.message });
-      } else if (error instanceof AuthenticationError) {
-        res.status(401).json({ error: error.message });
-      } else if (error instanceof NotFoundError) {
-        res.status(404).json({ error: error.message });
-      } else if (error instanceof AuthorizationError) {
-        res.status(403).json({ error: error.message });
-      } else {
-      res.status(500).json({ error: `Internal server error: ${error.message}` });
-      }
+    catch (signUpError) {
+      const error = this.handleError(signUpError, res);
+      res.status(error.status).json({ error: error.message})
     }
   }
   
@@ -75,11 +66,12 @@ export class AuthController {
     try {
       const { email, password } = req.body;
       // call useCase to grab the user and token
-      const { user, token } = await this.authUseCase.login(email, password);
-      res.status(200).json({ message: 'Login successful', user: user.toJSON() , token: token });
+      const result = await this.authUseCase.login(email, password);
+      res.status(200).json({ message: 'Login successful', user: result.user.toJSON() , token: result.token });
     } 
     catch (loginError) {
-      res.status(500).json({ error: (loginError as Error). message || 'Authentication failed' });
+      const error = this.handleError(loginError, res);
+      res.status(error.status).json({ error: error.message})
     }
   }
 
@@ -101,9 +93,9 @@ export class AuthController {
       const user = await this.authUseCase.getMe(token);
       res.json(user);
     } 
-    catch (error) {
-      console.error('getMe endpoint error:', error);
-      res.status(500).json({ error: `Authentication failed: ${error}'` });
+    catch (getMeError) {
+      const error = this.handleError(getMeError, res);
+      res.status(error.status).json({ error: error.message})
     }
   }
   
@@ -140,18 +132,13 @@ export class AuthController {
       const token_hash = req.query.token_hash as string;
       const type = req.query.type as string;
       // call useCase to return success, query params, and error message
-      const result = await this.authUseCase.verifyEmail(token_hash, type);
-
-      if (result.success) {
-        // Redirect with tokens if verification is successful
-        return res.redirect(`${process.env.FRONTEND_URL}/auth/callback?${result.queryParams.toString()}`);
-      } else {
-        // Redirect with error message if verification fails
-        return res.redirect(`${process.env.FRONTEND_URL}/auth/callback?error=${encodeURIComponent(result.error)}`);
-      }
+      const queryParams = await this.authUseCase.verifyEmail(token_hash, type);
+        
+      // Redirect with tokens if verification is successful
+      return res.redirect(`${process.env.FRONTEND_URL}/auth/callback?${queryParams}`);
     } 
-    catch {
-      res.redirect(`${process.env.FRONTEND_URL}/auth/callback?error=server_error`);
+    catch (error) {
+      res.redirect(`${process.env.FRONTEND_URL}/auth/callback?error=${error.message}`);
     }
   }
   
@@ -171,9 +158,9 @@ export class AuthController {
       const users = await this.authUseCase.getAllUsers();
       res.status(200).json(users.map(user => user.toJSON()));
     }
-    catch (error) {
-      // console.error('Get all users error:', error);
-      res.status(500).json({ error: `Internal server error: ${error}'` });
+    catch (getAllUsersError) {
+      const error = this.handleError(getAllUsersError, res);
+      res.status(error.status).json({ error: error.message})
     }
   }
   
@@ -190,11 +177,14 @@ export class AuthController {
     res: Response
   ): Promise<void> {
     try {
-      const url = await this.authUseCase.googleAuth();
+      console.log('starting google auth');
+      const redirectTo = `${process.env.FRONTEND_URL}/auth/callback`;
+      const url = await this.authUseCase.googleAuth(redirectTo);
       res.json({ url });
     } 
-    catch (error) {
-      res.status(500).json({ error: `Failed to initialize Google auth: ${error}'` });
+    catch (googleAuthError) {
+      const error = this.handleError(googleAuthError, res);
+      res.status(error.status).json({ error: error.message})
     }
   }
   
@@ -211,11 +201,13 @@ export class AuthController {
     res: Response
   ): Promise<void> {
     try {
+      console.log('OAuth callback received:', req.query);
       const code = req.query.code as string;
 
       // call useCase to retrieve current session and user
       const data = await this.authUseCase.handleOAuthCallback(code);
       // create our cookie
+      console.log("creating cookie");
       res.cookie('session', data.session.access_token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -226,9 +218,8 @@ export class AuthController {
       // Redirect to home page
       res.redirect(`${process.env.FRONTEND_URL}`);
     } catch (error) {
-      // console.error('OAuth callback error:', error);
       res.redirect(
-        `${process.env.FRONTEND_URL}/login?error=` + encodeURIComponent((error as Error).message)
+        `${process.env.FRONTEND_URL}/login?error=` + encodeURIComponent(error.message)
       );
     }
   }
@@ -247,10 +238,14 @@ export class AuthController {
   ): Promise<void> {
     try {
       const { access_token } = req.body;
+
+      if (!access_token) {
+        res.status(401).json({ error: 'No access token provided' });
+      }
       
-      const { user, accessToken } = await this.authUseCase.handleToken(access_token);
+      const user = await this.authUseCase.handleToken(access_token);
   
-      res.cookie('session', accessToken, {
+      res.cookie('session', access_token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
@@ -258,10 +253,11 @@ export class AuthController {
         path: '/',
       });
 
-      res.json({ success: true , user: user});
-    } catch (error) {
-      // console.error('Token handling error:', error);
-      res.status(500).json({ error: (error as Error).message });
+      res.json({ success: true , user: user.toJSON()});
+    } catch (handleTokenError) {
+      console.log(handleTokenError);
+      // const error = this.handleError(handleTokenError, res);
+      // res.status(error.status).json({ error: error.message})
     }
   }
   
@@ -282,16 +278,12 @@ export class AuthController {
       const redirectTo = `${process.env.FRONTEND_URL}/auth/reset-password`;
       
       // call useCase to redirect user to reset password and check for errors
-      const error = await this.authUseCase.requestPasswordReset(email, redirectTo);
+      await this.authUseCase.requestPasswordReset(email, redirectTo);
       
-      if (error) {
-        res.status(400).json({ error: error.message })
-        return;
-      }
       res.status(200).json({ message: 'Password reset instructions sent to email'});
-    } catch (error) {
-      // console.error('Password reset request error:', error);
-      res.status(500).json({ error: `Failed to process password reset request: ${error}'` });
+    } catch (requestPasswordError) {
+      const error = this.handleError(requestPasswordError, res);
+      res.status(error.status).json({ error: error.message})
     }
   }
 
@@ -312,25 +304,11 @@ export class AuthController {
       const type = req.query.type as string;
       
       // call useCase to retrieve access and refresh tokens.
-      const result = await this.authUseCase.handlePasswordRecovery(token_hash, type);
-      
-      if (result.error) {
-        res.redirect(
-          `${process.env.FRONTEND_URL}/auth/reset-password?error=${encodeURIComponent(result.error)}`
-        )
-        return;
-      }
-  
-      const queryParams = new URLSearchParams({
-        access_token: result.access_token,
-        refresh_token: result.refresh_token,
-        type: 'recovery',
-      });
+      const queryParams = await this.authUseCase.handlePasswordRecovery(token_hash, type);
   
       const redirectUrl = `${process.env.FRONTEND_URL}/auth/reset-password?${queryParams.toString()}`;
       res.redirect(redirectUrl);
     } catch {
-      // console.error('Password recovery error:', error);
       res.redirect(
         `${process.env.FRONTEND_URL}/auth/reset-password?error=${encodeURIComponent(
           'Failed to process password recovery'
@@ -355,19 +333,37 @@ export class AuthController {
       const { password } = req.body;
       const token = req.headers.authorization?.split(' ')[1];
       
-      const result = await this.authUseCase.updatePassword(password, token);
-
-      if (result.error) {
-        res.status(result.status!).json({ error: result.error });
-      }
+      const user = await this.authUseCase.updatePassword(password, token);
   
       res.status(200).json({
         message: 'Password updated successfully',
-        user: result.user.toJSON(),
+        user: user.toJSON(),
       });
-    } catch (error) {
-      // console.error('Password update error:', error);
-      res.status(500).json({ error: `Failed to update password: ${error}'` });
+    } catch (updatePasswordError) {
+      const error = this.handleError(updatePasswordError, res);
+      res.status(error.status).json({ error: error.message})
+    }
+  }
+
+  // Helper method to handle errors
+  private handleError(
+    error: Error, 
+    res: Response
+  ): { status: number, message: string } {
+    console.error('Error:', error.message);
+    
+    if (error instanceof ValidationError) {
+      return { status: 400, message: error.message};
+    } else if (error instanceof ConflictError) {
+      return { status: 409, message: error.message};
+    } else if (error instanceof AuthenticationError) {
+      return { status: 401, message: error.message};
+    } else if (error instanceof NotFoundError) {
+      return { status: 404, message: error.message};
+    } else if (error instanceof AuthorizationError) {
+      return { status: 403, message: error.message};
+    } else {
+      return { status: 500, message: error.message};
     }
   }
 }

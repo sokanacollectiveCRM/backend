@@ -1,0 +1,44 @@
+export class User {
+  id: string;
+  username: string;
+  email: string;
+  firstname: string;
+  lastname: string;
+  createdAt: Date;
+  updatedAt: Date;
+
+  constructor(data: {
+    id?: string;
+    username: string;
+    email: string;
+    firstname?: string;
+    lastname?: string;
+    createdAt?: Date;
+    updatedAt?: Date;
+  }) {
+    this.id = data.id || crypto.randomUUID();
+    this.username = data.username;
+    this.email = data.email;
+    this.firstname = data.firstname || '';
+    this.lastname = data.lastname || '';
+    this.createdAt = data.createdAt || new Date();
+    this.updatedAt = data.updatedAt || new Date();
+  }
+
+  getFullName(): string {
+    return `${this.firstname} ${this.lastname}`.trim();
+  }
+
+  toJSON(): object {
+    return {
+      id: this.id,
+      username: this.username,
+      email: this.email,
+      firstname: this.firstname,
+      lastname: this.lastname,
+      fullName: this.getFullName(),
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt
+    };
+  }
+}
