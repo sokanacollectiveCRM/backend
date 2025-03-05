@@ -7,7 +7,7 @@
     "node": ">=18.x"
   },
   "scripts": {
-    "start": "node src/server.ts",
+    "start": "npx tsx src/server.ts",
     "dev": "nodemon src/server.ts --watch src",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
