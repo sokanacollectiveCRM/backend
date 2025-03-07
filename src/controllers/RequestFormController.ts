@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 import { RequestFormService } from "../Services/RequestFormService";
-import { RequestForm } from "../Entities/RequestForm";
 
 
 export class RequestFormController{
