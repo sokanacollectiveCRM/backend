@@ -1,5 +1,5 @@
-import {RequestForm} from "../Entities/RequestForm"
-import { RequestFormRepository } from "../Repositories/RequestFormRepository"
+import { RequestForm } from "../entities/RequestForm";
+import { RequestFormRepository } from "../Repositories/RequestFormRepository";
 
 export class RequestFormService{
 
