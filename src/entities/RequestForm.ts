@@ -86,22 +86,3 @@ export class RequestForm{
     this.annual_income = annual_income     
   }
 }
-
-
-first_name: string;
-last_name: string;
-email: string;
-phone_number: string;
-children_expected: number;
-service_needed: ServiceTypes;
-pronouns: Pronouns;
-address: string;
-city: string;
-state: string;
-zip_code: string;
-health_history: string;
-allergies: string;
-due_date: Date;
-hopsital: string;
-baby_sex: Sex;
-annual_income: IncomeLevel;
