@@ -15,7 +15,18 @@ export class RequestFormRepository{
                     email: formData.email,
                     phone_number: formData.phone_number,
                     children_expected: formData.children_expected,
-                    service_needed: formData.service_needed
+                    service_needed: formData.service_needed,
+                    pronouns: formData.pronouns,
+                    address: formData.address,
+                    city: formData.city,
+                    state: formData.state,
+                    zip_code: formData.zip_code,
+                    health_history: formData.health_history,
+                    allergies: formData.allergies,
+                    due_date: formData.due_date,
+                    hopsital: formData.hopsital,
+                    baby_sex: formData.baby_sex,
+                    annual_income: formData.annual_income,    
                 }
             ]);
 

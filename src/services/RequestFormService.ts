@@ -48,7 +48,18 @@ export class RequestFormService {
       formData.email,
       formData.phone_number,
       formData.children_expected,
-      formData.service_needed
+      formData.service_needed,
+      formData.pronouns, 
+      formData.address, 
+      formData.city, 
+      formData.state, 
+      formData.zip_code, 
+      formData.health_history, 
+      formData.allergies, 
+      formData.due_date, 
+      formData.hopsital, 
+      formData.baby_sex, 
+      formData.annual_income,      
     );
 
     // Save to repository
