@@ -77,14 +77,13 @@ export class RequestForm{
     this.address = address 
     this.city = city 
     this.state = state 
-    this.zip_code = pppppp 
-    this.health_history = pppppp 
-    this.allergies = pppppp 
-    this.due_date = pppppp 
-    this.hopsital = pppppp 
-    this.baby_sex = pppppp 
-    this.annual_income = pppppp     
-
+    this.zip_code = zip_code 
+    this.health_history = health_history 
+    this.allergies = allergies 
+    this.due_date = due_date 
+    this.hopsital = hopsital 
+    this.baby_sex = baby_sex 
+    this.annual_income = annual_income     
   }
 }
 
