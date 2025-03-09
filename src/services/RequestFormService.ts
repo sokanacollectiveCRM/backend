@@ -1,32 +1,70 @@
-import {RequestForm} from "../Entities/RequestForm"
-import { RequestFormRepository } from "../Repositories/RequestFormRepository"
+import { RequestForm, ServiceTypes, Pronouns, Sex, IncomeLevel } from "../entities/RequestForm";
+import { RequestFormRepository } from "../repositories/RequestFormRepository";
+import { ValidationError } from "../domainErrors";
 
-export class RequestFormService{
+export class RequestFormService {
+  private repository: RequestFormRepository;
 
-    private repository : RequestFormRepository
+  constructor() {
+    this.repository = new RequestFormRepository();
+  }
 
-
-    constructor(){
-        this.repository = new RequestFormRepository();
+  async newForm(formData: {
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone_number: string;
+    children_expected: string;
+    service_needed: ServiceTypes;
+    pronouns: Pronouns;
+    address: string;
+    city: string;
+    state: string;
+    zip_code: string;
+    health_history: string;
+    allergies: string;
+    due_date: Date;
+    hospital: string;
+    baby_sex: Sex;
+    annual_income: IncomeLevel;
+    service_specifics: string;
+  }): Promise<RequestForm> {
+    if (!formData.first_name || !formData.last_name || !formData.service_needed) {
+      throw new ValidationError("Missing required fields: name and service type");
+    }
+    
+    if (!formData.email || !formData.email.includes('@')) {
+      throw new ValidationError("Valid email is required");
+    }
+    
+    if (!formData.phone_number) {
+      throw new ValidationError("Phone number is required");
     }
 
-    async newForm(formData){
-        if (!formData.first_name || !formData.last_name || !formData.service_needed){
-            throw Error
-        }
-        if (!formData.email || !formData.email.includes('@')){
-            throw Error
-        }
-    
-
-    const finalForm = new RequestForm(
-        formData.first_name,
-        formData.last_name,
-        formData.email,
-        formData.service_needed,
-        formData.phone_number,
-        formData.address
+    const requestForm = new RequestForm(
+      formData.first_name,
+      formData.last_name,
+      formData.email,
+      formData.phone_number,
+      formData.children_expected,
+      formData.service_needed,
+      formData.pronouns, 
+      formData.address, 
+      formData.city, 
+      formData.state, 
+      formData.zip_code, 
+      formData.health_history, 
+      formData.allergies, 
+      formData.due_date, 
+      formData.hospital, 
+      formData.baby_sex, 
+      formData.annual_income,
+      formData.service_specifics,
     );
-}
 
+    // Save to repository
+    await this.repository.saveData(requestForm);
+    
+    return requestForm;
+  }
 }
