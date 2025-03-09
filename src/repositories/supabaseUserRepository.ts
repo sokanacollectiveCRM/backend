@@ -109,7 +109,6 @@ export class SupabaseUserRepository implements UserRepository {
       firstname: data.firstname,
       lastname: data.lastname,
       createdAt: new Date(data.created_at || Date.now()),
-      updatedAt: new Date(data.updated_at || Date.now())
     });
   }
 }
