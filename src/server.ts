@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import express, { Express, NextFunction, Request, Response } from 'express';
 import authRoutes from 'routes/authRoutes';
 import requestRouter from 'routes/requestRoute';
+import emailRoutes from 'routes/EmailRoutes';
 
 dotenv.config();
 
@@ -54,6 +55,7 @@ app.use((req, res, next) => {
 });
 
 app.use('/auth', authRoutes);
+app.use('/email', emailRoutes);
 
 app.use('/requestService', requestRouter);
 
