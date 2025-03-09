@@ -2,9 +2,10 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express, { Express, NextFunction, Request, Response } from 'express';
+import emailRoutes from 'routes/EmailRoutes';
+import adminRoutes from 'routes/adminRoutes';
 import authRoutes from 'routes/authRoutes';
 import requestRouter from 'routes/requestRoute';
-import emailRoutes from 'routes/EmailRoutes';
 
 dotenv.config();
 
@@ -59,6 +60,7 @@ app.use('/email', emailRoutes);
 
 app.use('/requestService', requestRouter);
 
+app.use('/admin', adminRoutes); 
 
 app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({ status: 'ok' });

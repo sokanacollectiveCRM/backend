@@ -3,14 +3,12 @@ import dotenv from "dotenv";
 dotenv.config()
 const supabase = createClient(process.env.SUPABASE_URL,process.env.SUPABASE_ANON_KEY) 
 
-
-
 export class RequestFormRepository{
     async saveData(formData){
         try {
             console.log(" Attempting to insert form data:", formData);
             const {data,error } = await supabase 
-             .from('requests') 
+             .from('client_request_form') 
              .insert([
                 {
                     first_name: formData.first_name,
@@ -49,4 +47,49 @@ export class RequestFormRepository{
         }
     }
 
+    async getRequestById(requestId: number) {
+        const { data, error } = await supabase
+            .from('client_request_form')
+            .select('*')
+            .eq('id', requestId)
+            .single();
+    
+        if (error) {
+            console.error("Failed to fetch request:", error);
+            throw new Error("Failed to fetch request: " + error.message);
+        }
+    
+        return data;
+    }
+    
+    async getAllPendingRequests() {
+        const { data, error } = await supabase
+            .from('client_request_form')
+            .select('*')
+            .eq('status', 'pending')
+            .order('created_at', { ascending: false });
+    
+        if (error) {
+            console.error("Failed to fetch pending requests:", error);
+            throw new Error("Failed to fetch pending requests: " + error.message);
+        }
+    
+        return data;
+    }
+    
+    async updateRequestStatus(requestId: number, status: 'pending' | 'approved' | 'rejected') {
+        const { data, error } = await supabase
+            .from('client_request_form')
+            .update({ status: status, created_at: new Date() })
+            .eq('id', requestId)
+            .select()
+            .single();
+    
+        if (error) {
+            console.error("Failed to update request status:", error);
+            throw new Error("Failed to update request status: " + error.message);
+        }
+    
+        return data;
+    }
 }
