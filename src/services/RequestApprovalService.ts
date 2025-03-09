@@ -19,7 +19,7 @@ export class RequestApprovalService {
     await this.requestRepository.updateRequestStatus(requestId, 'approved');
 
     const token = crypto.randomUUID();
-    const signupUrl = `${signupBaseUrl}?token=${token}&email=${request.email}`;
+    const signupUrl = signupBaseUrl;
 
     // 4. Send approval email
     await this.emailService.sendClientApprovalEmail(

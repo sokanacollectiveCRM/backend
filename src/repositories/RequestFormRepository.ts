@@ -80,7 +80,7 @@ export class RequestFormRepository{
     async updateRequestStatus(requestId: number, status: 'pending' | 'approved' | 'rejected') {
         const { data, error } = await supabase
             .from('client_request_form')
-            .update({ status: status, created_at: new Date() })
+            .update({ status: status })
             .eq('id', requestId)
             .select()
             .single();
