@@ -1,10 +1,10 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import {
-  AuthenticationError
-} from 'domainErrors';
 import { User } from 'entities/User';
 import { UserRepository } from 'repositories/interface/userRepository';
 import { AuthService } from 'services/interface/authService';
+import {
+  AuthenticationError
+} from '../domains/errors';
 
 export class SupabaseAuthService implements AuthService {
   private supabaseClient: SupabaseClient;

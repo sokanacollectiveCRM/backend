@@ -1,13 +1,6 @@
 import { Request, Response } from 'express';
 
 import {
-  AuthenticationError,
-  AuthorizationError,
-  ConflictError,
-  NotFoundError,
-  ValidationError
-} from 'domainErrors';
-import {
   AuthRequest,
   LoginBody,
   PasswordResetBody,
@@ -16,6 +9,13 @@ import {
   UpdatePasswordBody,
 } from 'types';
 import { AuthUseCase } from 'usecase/authUseCase.js';
+import {
+  AuthenticationError,
+  AuthorizationError,
+  ConflictError,
+  NotFoundError,
+  ValidationError
+} from '../domains/errors';
 
 
 export class AuthController {
