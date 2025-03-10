@@ -10,7 +10,7 @@ export class RequestFormRepository{
         try {
             console.log(" Attempting to insert form data:", formData);
             const {data,error } = await supabase 
-             .from('requests') 
+             .from('client_request_form') 
              .insert([
                 {
                     first_name: formData.first_name,
