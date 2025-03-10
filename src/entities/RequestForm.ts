@@ -34,7 +34,7 @@ export class RequestForm{
   last_name: string;
   email: string;
   phone_number: string;
-  children_expected: number;
+  children_expected: string;
   service_needed: ServiceTypes;
   pronouns: Pronouns;
   address: string;
@@ -44,16 +44,17 @@ export class RequestForm{
   health_history: string;
   allergies: string;
   due_date: Date;
-  hopsital: string;
+  hospital: string;
   baby_sex: Sex;
   annual_income: IncomeLevel;
+  service_specifics: string;
   
   constructor(
     first_name: string, 
     last_name: string, 
     email: string, 
     phone_number: string, 
-    children_expected: number, 
+    children_expected: string, 
     service_needed: ServiceTypes, 
     pronouns: Pronouns, 
     address: string, 
@@ -63,9 +64,10 @@ export class RequestForm{
     health_history: string, 
     allergies: string, 
     due_date: Date, 
-    hopsital: string, 
+    hospital: string, 
     baby_sex: Sex, 
-    annual_income: IncomeLevel,     
+    annual_income: IncomeLevel,
+    service_specifics: string, 
   ){
     this.first_name = first_name
     this.last_name = last_name
@@ -81,8 +83,9 @@ export class RequestForm{
     this.health_history = health_history 
     this.allergies = allergies 
     this.due_date = due_date 
-    this.hopsital = hopsital 
+    this.hospital = hospital 
     this.baby_sex = baby_sex 
-    this.annual_income = annual_income     
+    this.annual_income = annual_income
+    this.service_specifics = service_specifics
   }
 }

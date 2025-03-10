@@ -3,11 +3,14 @@ import dotenv from "dotenv";
 dotenv.config()
 const supabase = createClient(process.env.SUPABASE_URL,process.env.SUPABASE_ANON_KEY) 
 
+
+
 export class RequestFormRepository{
     async saveData(formData){
         try {
+            console.log(" Attempting to insert form data:", formData);
             const {data,error } = await supabase 
-             .from('user_requests') // this will take whatever table we store this data in, not sure if we should have a seperate requests table
+             .from('requests') 
              .insert([
                 {
                     first_name: formData.first_name,
@@ -24,20 +27,25 @@ export class RequestFormRepository{
                     health_history: formData.health_history,
                     allergies: formData.allergies,
                     due_date: formData.due_date,
-                    hopsital: formData.hopsital,
+                    hospital: formData.hospital,
                     baby_sex: formData.baby_sex,
-                    annual_income: formData.annual_income,    
+                    annual_income: formData.annual_income,
+                    service_specifics: formData.service_specifics,
                 }
-            ]);
+            ])
 
         if (error) {
-            throw new Error(error.message);
+            console.error("Supabase insert error:", error);
+            throw new Error("Database insertion failed: " + error.message);        
         }
 
         console.log('Form saved successfully:', data);
+        return data;
+
 
         } catch (error) {
-            console.error(error)
+            console.error(error);
+            throw error;
         }
     }
 

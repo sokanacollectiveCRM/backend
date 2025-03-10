@@ -14,7 +14,7 @@ export class RequestFormService {
     last_name: string;
     email: string;
     phone_number: string;
-    children_expected: number;
+    children_expected: string;
     service_needed: ServiceTypes;
     pronouns: Pronouns;
     address: string;
@@ -24,11 +24,11 @@ export class RequestFormService {
     health_history: string;
     allergies: string;
     due_date: Date;
-    hopsital: string;
+    hospital: string;
     baby_sex: Sex;
     annual_income: IncomeLevel;
+    service_specifics: string;
   }): Promise<RequestForm> {
-    // Validate required fields
     if (!formData.first_name || !formData.last_name || !formData.service_needed) {
       throw new ValidationError("Missing required fields: name and service type");
     }
@@ -57,9 +57,10 @@ export class RequestFormService {
       formData.health_history, 
       formData.allergies, 
       formData.due_date, 
-      formData.hopsital, 
+      formData.hospital, 
       formData.baby_sex, 
-      formData.annual_income,      
+      formData.annual_income,
+      formData.service_specifics,
     );
 
     // Save to repository
