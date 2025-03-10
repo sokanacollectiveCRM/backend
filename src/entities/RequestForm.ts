@@ -48,7 +48,6 @@ export class RequestForm{
   baby_sex: Sex;
   annual_income: IncomeLevel;
   service_specifics: string;
-
   
   constructor(
     first_name: string, 

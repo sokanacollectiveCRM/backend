@@ -41,6 +41,7 @@ export class RequestFormService {
       throw new ValidationError("Phone number is required");
     }
 
+    // Create request form entity
     const requestForm = new RequestForm(
       formData.first_name,
       formData.last_name,

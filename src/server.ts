@@ -54,6 +54,7 @@ app.use((req, res, next) => {
 });
 
 app.use('/auth', authRoutes);
+app.use('/email', emailRoutes);
 
 app.use('/requestService', requestRouter);
 
