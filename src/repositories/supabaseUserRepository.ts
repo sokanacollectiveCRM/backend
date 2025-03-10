@@ -56,7 +56,20 @@ export class SupabaseUserRepository implements UserRepository {
       return [];
     }
 
-    const patientIds = assignments.map(assignment => assignments.client_id);
+    // store out client ids into an array
+    const clientIds = assignments.map(assignment => assignment.client_id);
+
+    // grab our users
+    const { data: users, error: getUsersError } = await this.supabaseClient
+      .from('users')
+      .select('*')
+      .eq('id', clientIds);
+
+    if (getUsersError) {
+      throw new Error(`Failed to fetch clients: ${getUsersError.message}`);
+    }
+
+    return users.map(this.mapToUser);
   }
   
   async save(user: User): Promise<User> {
