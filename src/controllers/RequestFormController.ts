@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { RequestFormService } from "../Services/RequestFormService";
+import { RequestFormService } from "../services/RequestFormService";
 
 
 export class RequestFormController{
@@ -12,13 +12,18 @@ export class RequestFormController{
 
     async createForm(req: Request, res: Response){
         try {
+            if (!req.body) {
+              return res.status(400).json({ error: 'No body found in request' });
+            }
+        
             const formData = req.body;
             await this.service.newForm(formData);
-            res.status(200).json({message: "Form data recieved, now onto processing"})
+            res.status(200).json({ message: "Form data received, onto processing" });
             
-        } catch (error) {
-            res.status(400).json({error})
-        }
+          } catch (error) {
+            console.error("Error processing form data:", error);
+            res.status(400).json({ error: error.message });
+          }
 
     }
     
