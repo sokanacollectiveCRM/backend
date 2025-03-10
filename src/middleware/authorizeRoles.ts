@@ -1,6 +1,11 @@
 import { NextFunction, Response } from 'express';
 import type { AuthRequest } from 'types';
 
+// authorizeRoles
+//
+// Takes in an array of authorized roles (in lowercase) of 'patient', 'doula', 'admin'.
+//
+
 const authorizeRoles = (
   allowedRoles: string[]
 ) => {
@@ -8,15 +13,18 @@ const authorizeRoles = (
 
     // Check if user exists
     if (!req.user) {
-      return res.status(401).json({ error: 'Unauthorized ' });
+      res.status(401).json({ error: 'Unauthorized ' });
     }
 
+    // Grab the role
     const { role } = req.user;
 
+    // Check that the role is authorized 
     if (!allowedRoles.includes(role)) {
-      return res.status(403).json({ error: 'Forbidden: Insufficient permissions ' });
+      res.status(403).json({ error: 'Forbidden: Insufficient permissions ' });
     }
 
+    // Continue to controller
     next();
   };
 };

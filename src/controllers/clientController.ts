@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 
+import { ClientUseCase } from 'usecase/clientUseCase';
 import {
   AuthenticationError,
   AuthorizationError,
@@ -7,14 +8,30 @@ import {
   NotFoundError,
   ValidationError
 } from 'domainErrors';
+import { AuthRequest } from 'types'
 
 export class clientController {
-  private clientUseCase;
+  private clientUseCase: ClientUseCase;
 
-  constructor () {};
+  constructor (clientUseCase: ClientUseCase) {
+    this.clientUseCase = clientUseCase;
+  };
 
   async getClients(
-    req,
-    res
-  )
+    req: AuthRequest,
+    res: Response,
+  ): Promise<void> {
+    try {
+      const { role } = req.user;
+
+      // Returns clients based on the role
+      let clients;
+      if (role === 'admin') {
+        clients = 
+      }
+    } 
+    catch (error) {
+
+    }
+  }
 }

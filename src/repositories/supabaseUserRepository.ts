@@ -26,19 +26,37 @@ export class SupabaseUserRepository implements UserRepository {
     
     return this.mapToUser(data);
   }
-  
-  async findByUsername(username: string): Promise<User | null> {
+
+  async findByRole(role: string): Promise<User[]> {
     const { data, error } = await this.supabaseClient
       .from('users')
       .select('*')
-      .eq('username', username)
-      .single();
-      
-    if (error || !data) {
-      return null;
+      .eq('role', role)
+      .order('first_name', { ascending: true });
+
+    if (error) {
+      throw new Error(`Failed to fetch ${role} users: ${error.message}`);
     }
-    
-    return this.mapToUser(data);
+
+    return data.map(this.mapToUser);
+  }
+
+  async findClientsByDoula(doulaId: string): Promise<User[]> {
+    const { data: assignments, error: assignmentsError } = await this.supabaseClient
+      .from('assignments')
+      .select('client_id')
+      .eq('doula_id', doulaId)
+
+    if (assignmentsError) {
+      throw new Error(`Failed to fetch assignments: ${assignmentsError.message}`);
+    }
+
+    // Return if there are no assigned clients
+    if (!assignments || assignments.length === 0) {
+      return [];
+    }
+
+    const patientIds = assignments.map(assignment => assignments.client_id);
   }
   
   async save(user: User): Promise<User> {
