@@ -8,11 +8,21 @@ export interface UserRepository {
    * Find a user by their email
    */
   findByEmail(email: string): Promise<User | null>;
-  
+
   /**
-   * Find a user by their username
+   * Get all users by role
    */
-  findByUsername(username: string): Promise<User | null>;
+  findByRole(role: string): Promise<User[]>;
+
+  /**
+   * Get all clients by Doula
+   */
+  findClientsByDoula(doulaId: string): Promise<User[]>;
+
+  /**
+   * FOR SHOWCASE ONLY
+   */
+  findClientsAll(): Promise<any>;
   
   /**
    * Save a user to the repository

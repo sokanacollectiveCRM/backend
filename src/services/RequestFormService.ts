@@ -1,12 +1,12 @@
-import { RequestForm, ServiceTypes, Pronouns, Sex, IncomeLevel } from "../entities/RequestForm";
-import { RequestFormRepository } from "../repositories/RequestFormRepository";
 import { ValidationError } from "../domainErrors";
+import { IncomeLevel, Pronouns, RequestForm, ServiceTypes, Sex } from "../entities/RequestForm";
+import { RequestFormRepository } from "../repositories/RequestFormRepository";
 
 export class RequestFormService {
   private repository: RequestFormRepository;
 
-  constructor() {
-    this.repository = new RequestFormRepository();
+  constructor(requestFormRepository: RequestFormRepository) {
+    this.repository = requestFormRepository;
   }
 
   async newForm(formData: {

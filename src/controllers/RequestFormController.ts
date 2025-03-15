@@ -6,8 +6,8 @@ export class RequestFormController{
     private service: RequestFormService;
 
 
-    constructor(){
-        this.service = new RequestFormService();
+    constructor(requestFormService: RequestFormService){
+        this.service = requestFormService;
     }
 
     async createForm(req: Request, res: Response){

@@ -26,19 +26,69 @@ export class SupabaseUserRepository implements UserRepository {
     
     return this.mapToUser(data);
   }
-  
-  async findByUsername(username: string): Promise<User | null> {
+
+  async findByRole(role: string): Promise<User[]> {
     const { data, error } = await this.supabaseClient
       .from('users')
       .select('*')
-      .eq('username', username)
-      .single();
-      
-    if (error || !data) {
-      return null;
+      .eq('role', role)
+      .order('first_name', { ascending: true });
+
+    if (error) {
+      throw new Error(`Failed to fetch ${role} users: ${error.message}`);
     }
-    
-    return this.mapToUser(data);
+
+    return data.map(this.mapToUser);
+  }
+
+  async findClientsAll(): Promise<any> {
+    const { data, error } = await this.supabaseClient
+      .from('client_request_form')
+      .select('first_name, last_name, service_needed, requested, updated_at, status');
+
+    if (error) {
+      throw new Error(`Failed to fetch clients: ${error.message}`);
+    }
+
+    return data.map((client) => ({
+      firstName: client.first_name,
+      lastName: client.last_name,
+      serviceNeeded: client.service_needed,
+      requestedAt: new Date(client.requested), // Ensure it's a Date object
+      updatedAt: new Date(client.updated_at), // Ensure it's a Date object
+      status: client.status,
+    }));
+  }
+
+  async findClientsByDoula(doulaId: string): Promise<User[]> {
+    const { data: assignments, error: assignmentsError } = await this.supabaseClient
+      .from('assignments')
+      .select('client_id')
+      .eq('doula_id', doulaId)
+
+    if (assignmentsError) {
+      throw new Error(`Failed to fetch assignments: ${assignmentsError.message}`);
+    }
+
+    // Return if there are no assigned clients
+    if (!assignments || assignments.length === 0) {
+      return [];
+    }
+
+    // store out client ids into an array
+    const clientIds = assignments.map(assignment => assignment.client_id);
+
+    // grab our users
+    const { data: users, error: getUsersError } = await this.supabaseClient
+      .from('users')
+      .select('*')
+      .eq('id', clientIds);
+
+    if (getUsersError) {
+      throw new Error(`Failed to fetch clients: ${getUsersError.message}`);
+    }
+
+    return users.map(this.mapToUser);
   }
   
   async save(user: User): Promise<User> {
@@ -109,7 +159,8 @@ export class SupabaseUserRepository implements UserRepository {
       firstname: data.firstname,
       lastname: data.lastname,
       createdAt: new Date(data.created_at || Date.now()),
-      updatedAt: new Date(data.updated_at || Date.now())
+      updatedAt: new Date(data.updated_at || Date.now()),
+      role: data.role || 'client'
     });
   }
 }
