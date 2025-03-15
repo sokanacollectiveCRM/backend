@@ -10,7 +10,7 @@ import {
 import { AuthRequest } from 'types';
 import { ClientUseCase } from 'usecase/clientUseCase';
 
-export class clientController {
+export class ClientController {
   private clientUseCase: ClientUseCase;
 
   constructor (clientUseCase: ClientUseCase) {
@@ -30,14 +30,17 @@ export class clientController {
     res: Response,
   ): Promise<void> {
     try {
-      const { email, role } = req.user;
+      const { id, role } = req.user;
       // call use case to grab all users
-      const users = await this.clientUseCase.getClients(email, role);
-      res.json(users)
+      const clients = await this.clientUseCase.getClients(id, role);
+      res.json(clients)
     } 
     catch (getError) {
       const error = this.handleError(getError, res);
-      res.status(error.status).json({ error: error.message})
+
+      if (!res.headersSent) {
+        res.status(error.status).json({ error: error.message})
+      }
     }
   }
 

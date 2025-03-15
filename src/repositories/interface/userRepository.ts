@@ -18,6 +18,11 @@ export interface UserRepository {
    * Get all clients by Doula
    */
   findClientsByDoula(doulaId: string): Promise<User[]>;
+
+  /**
+   * FOR SHOWCASE ONLY
+   */
+  findClientsAll(): Promise<any>;
   
   /**
    * Save a user to the repository

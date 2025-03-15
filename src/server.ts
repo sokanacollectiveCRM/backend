@@ -3,8 +3,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import express, { Express, NextFunction, Request, Response } from 'express';
 import authRoutes from 'routes/authRoutes';
-import requestRouter from 'routes/requestRoute';
+import clientRoutes from 'routes/clientRoutes';
 import emailRoutes from 'routes/EmailRoutes';
+import requestRouter from 'routes/requestRoute';
 
 dotenv.config();
 
@@ -56,8 +57,8 @@ app.use((req, res, next) => {
 
 app.use('/auth', authRoutes);
 app.use('/email', emailRoutes);
-
 app.use('/requestService', requestRouter);
+app.use('/clients', clientRoutes);
 
 
 app.get('/health', (_req: Request, res: Response) => {

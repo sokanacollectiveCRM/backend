@@ -1,5 +1,5 @@
 import express, { Router } from 'express';
-import authController from 'index';
+import { authController } from 'index';
 import authMiddleware from 'middleware/authMiddleware';
 
 

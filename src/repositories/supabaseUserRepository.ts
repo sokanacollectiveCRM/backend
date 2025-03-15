@@ -41,6 +41,25 @@ export class SupabaseUserRepository implements UserRepository {
     return data.map(this.mapToUser);
   }
 
+  async findClientsAll(): Promise<any> {
+    const { data, error } = await this.supabaseClient
+      .from('client_request_form')
+      .select('first_name, last_name, service_needed, requested, updated_at, status');
+
+    if (error) {
+      throw new Error(`Failed to fetch clients: ${error.message}`);
+    }
+
+    return data.map((client) => ({
+      firstName: client.first_name,
+      lastName: client.last_name,
+      serviceNeeded: client.service_needed,
+      requestedAt: new Date(client.requested), // Ensure it's a Date object
+      updatedAt: new Date(client.updated_at), // Ensure it's a Date object
+      status: client.status,
+    }));
+  }
+
   async findClientsByDoula(doulaId: string): Promise<User[]> {
     const { data: assignments, error: assignmentsError } = await this.supabaseClient
       .from('assignments')
@@ -140,7 +159,8 @@ export class SupabaseUserRepository implements UserRepository {
       firstname: data.firstname,
       lastname: data.lastname,
       createdAt: new Date(data.created_at || Date.now()),
-      updatedAt: new Date(data.updated_at || Date.now())
+      updatedAt: new Date(data.updated_at || Date.now()),
+      role: data.role || 'client'
     });
   }
 }

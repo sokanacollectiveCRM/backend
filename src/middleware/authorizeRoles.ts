@@ -1,4 +1,6 @@
 import { NextFunction, Response } from 'express';
+import { userRepository } from 'index';
+import { User } from 'entities/User';
 import type { AuthRequest } from 'types';
 
 // authorizeRoles
@@ -16,11 +18,12 @@ const authorizeRoles = (
       res.status(401).json({ error: 'Unauthorized ' });
     }
 
+    console.log(req.user.email)
     // Grab the role
-    const { role } = req.user;
+    const user = userRepository.findByEmail(req.user.email)
 
     // Check that the role is authorized 
-    if (!allowedRoles.includes(role)) {
+    if (!allowedRoles.includes(user.role)) {
       res.status(403).json({ error: 'Forbidden: Insufficient permissions ' });
     }
 

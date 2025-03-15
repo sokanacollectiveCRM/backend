@@ -6,6 +6,7 @@ export class User {
   lastname: string;
   createdAt: Date;
   updatedAt: Date;
+  role: string;
 
   constructor(data: {
     id?: string;
@@ -15,6 +16,7 @@ export class User {
     lastname?: string;
     createdAt?: Date;
     updatedAt?: Date;
+    role?: string;
   }) {
     this.id = data.id || crypto.randomUUID();
     this.username = data.username;
@@ -23,6 +25,7 @@ export class User {
     this.lastname = data.lastname || '';
     this.createdAt = data.createdAt || new Date();
     this.updatedAt = data.updatedAt || new Date();
+    this.role = data.role || 'client';
   }
 
   getFullName(): string {
@@ -38,7 +41,8 @@ export class User {
       lastname: this.lastname,
       fullName: this.getFullName(),
       createdAt: this.createdAt,
-      updatedAt: this.updatedAt
+      updatedAt: this.updatedAt,
+      role: this.role
     };
   }
 }

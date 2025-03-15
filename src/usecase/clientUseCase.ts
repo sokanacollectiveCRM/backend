@@ -1,10 +1,6 @@
-import { User } from 'entities/User';
 import { UserRepository } from 'repositories/interface/userRepository';
-import {
-  AuthorizationError
-} from '../domainErrors';
 
-export class clientUseCase {
+export class ClientUseCase {
   private userRepository;
 
   constructor (userRepository: UserRepository) {
@@ -20,26 +16,28 @@ export class clientUseCase {
   async getClients(
     id: string,
     role: string
-  ): Promise<User[]> {
+  ): Promise<any> {
 
-    if (role !== "admin" || role !== "doula") {
-      throw new AuthorizationError("forbidden");
-    }
-
-    let users;
+    // if (role !== "admin" && role !== "doula") {
+    //   throw new AuthorizationError("forbidden");
+    // }
     try {
-      if (role === "admin") {
-        // return all the users of the client role
-        users = await this.userRepository.findByRole("client");
-      }
-      else if (role === "doula") {
-        // return the clients assigned to the doula
-        users = await this.userRepository.findClientsByDoula(id);
-      }
+    let users = await this.userRepository.findClientsAll();
+    // let users;
+    // try {
+    //   if (role === "admin") {
+    //     // return all the users of the client role
+        
+    //   }
+    //   else if (role === "doula") {
+    //     // return the clients assigned to the doula
+    //     users = await this.userRepository.findClientsByDoula(id);
+    //   }
+
+      return users;
     }
     catch (error) {
       throw new Error(`Could not return clients: ${error.message}`);
     }
-
   }
 }
