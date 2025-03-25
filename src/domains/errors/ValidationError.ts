@@ -1,4 +1,3 @@
-// src/domain/errors/ValidationError.ts
 import { DomainError } from './DomainError';
 
 export class ValidationError extends DomainError {

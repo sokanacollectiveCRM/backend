@@ -1,4 +1,3 @@
-// src/domain/errors/AuthenticationError.ts
 import { DomainError } from './DomainError';
 
 export class AuthenticationError extends DomainError {

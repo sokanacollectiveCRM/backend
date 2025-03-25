@@ -1,4 +1,3 @@
-// src/domain/errors/AuthorizationError.ts
 import { DomainError } from './DomainError';
 
 export class AuthorizationError extends DomainError {

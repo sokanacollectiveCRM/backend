@@ -1,4 +1,3 @@
-// src/domain/errors/ConflictError.ts
 import { DomainError } from './DomainError';
 
 export class ConflictError extends DomainError {
