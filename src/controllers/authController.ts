@@ -113,6 +113,7 @@ export class AuthController {
   ): Promise<void> {
     res.clearCookie('session');
     await this.authUseCase.logout();
+    console.log('logged out')
     res.json({ message: 'Logged out successfully' });
   }
   
