@@ -6,7 +6,7 @@ import {
   AuthenticationError,
   NotFoundError,
   ValidationError
-} from '../domainErrors';
+} from '../domains/errors';
 
 
 export class AuthUseCase {
