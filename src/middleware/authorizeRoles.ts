@@ -1,6 +1,6 @@
+import { User } from 'entities/User';
 import { NextFunction, Response } from 'express';
 import { userRepository } from 'index';
-import { User } from 'entities/User';
 import type { AuthRequest } from 'types';
 
 // authorizeRoles
@@ -8,28 +8,35 @@ import type { AuthRequest } from 'types';
 // Takes in an array of authorized roles (in lowercase) of 'patient', 'doula', 'admin'.
 //
 
-const authorizeRoles = (
+const authorizeRoles = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
   allowedRoles: string[]
-) => {
-  return (req: AuthRequest, res: Response, next: NextFunction) => {
+): Promise<void> => {
+  try {
 
-    // Check if user exists
-    if (!req.user) {
-      res.status(401).json({ error: 'Unauthorized ' });
+    if (!req.user || !req.user.email) {
+      res.status(401).json({ error: 'Unauthorized: No user found' });
     }
 
-    console.log(req.user.email)
-    // Grab the role
-    const user = userRepository.findByEmail(req.user.email)
+    // Fetch user from database
+    const user: User = await userRepository.findByEmail(req.user.email)
+
+    if (!user) {
+      res.status(401).json({ error: 'User profile does not exist' });
+    }
 
     // Check that the role is authorized 
     if (!allowedRoles.includes(user.role)) {
       res.status(403).json({ error: 'Forbidden: Insufficient permissions ' });
     }
 
-    // Continue to controller
     next();
-  };
+  }
+  catch {
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 export default authorizeRoles;

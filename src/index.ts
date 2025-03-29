@@ -9,33 +9,22 @@ import supabase from 'supabase';
 import { AuthUseCase } from 'usecase/authUseCase';
 import { ClientUseCase } from 'usecase/clientUseCase';
 
-// ******** Auth Controller
-
-// Instantiate low-level dependencies first
 const userRepository = new SupabaseUserRepository(supabase);
+const requestRepository = new RequestFormRepository(supabase);
+
+// ******** Auth Controller
 const authService = new SupabaseAuthService(supabase, userRepository);
-
-// Instantiate Use Case with dependencies
 const authUseCase = new AuthUseCase(authService, userRepository);
-
-// Instantiate Controller with Use Case
 const authController = new AuthController(authUseCase);
 
 // ******** Request Controller
-
-// Instantiate low-level dependencies first
-const requestRepository = new RequestFormRepository(supabase);
 const requestService = new RequestFormService(requestRepository);
-
-// Instantiate Controller
 const requestFormController = new RequestFormController(requestService);
 
 // ******** Request Controller
-
 const clientUseCase = new ClientUseCase(userRepository);
-
 const clientController = new ClientController(clientUseCase);
 
-// Export all of our controllers
-export { authController, clientController, requestFormController, userRepository };
+// Export all of our controllers + services
+export { authController, authService, clientController, requestFormController, userRepository };
 

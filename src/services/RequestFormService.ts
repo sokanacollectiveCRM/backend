@@ -1,4 +1,4 @@
-import { ValidationError } from "../domainErrors";
+import { ValidationError } from "../domains/errors";
 import { IncomeLevel, Pronouns, RequestForm, ServiceTypes, Sex } from "../entities/RequestForm";
 import { RequestFormRepository } from "../repositories/RequestFormRepository";
 
