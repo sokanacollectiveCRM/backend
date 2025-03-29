@@ -43,7 +43,7 @@ export class SupabaseUserRepository implements UserRepository {
 
   async findClientsAll(): Promise<any> {
     const { data, error } = await this.supabaseClient
-      .from('client_request_form')
+      .from('client_info')
       .select('first_name, last_name, service_needed, requested, updated_at, status');
 
     if (error) {
