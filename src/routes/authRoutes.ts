@@ -31,6 +31,6 @@ authRoutes.post('/callback', (req, res) => authController.handleToken(req, res))
 // Password reset routes
 authRoutes.post('/reset-password', (req, res) => authController.requestPasswordReset(req, res));
 authRoutes.get('/password-recovery', (req, res) => authController.handlePasswordRecovery(req, res));
-authRoutes.put('/update-password', (req, res) => authController.updatePassword(req, res));
+authRoutes.put('/reset-password', (req, res) => authController.updatePassword(req, res));
 
 export default authRoutes;
