@@ -15,8 +15,6 @@ const authMiddleware = async (
 
     const token = authHeader ? authHeader.split(' ')[1] : cookieToken;
 
-    console.log(token);
-
     if (!token) {
       res.status(401).json({ error: 'No session token provided' });
       return;
