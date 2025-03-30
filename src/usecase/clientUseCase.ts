@@ -1,7 +1,7 @@
 import { UserRepository } from 'repositories/interface/userRepository';
 
 export class ClientUseCase {
-  private userRepository;
+  private userRepository: UserRepository;
 
   constructor (userRepository: UserRepository) {
     this.userRepository = userRepository;

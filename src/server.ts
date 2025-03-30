@@ -2,6 +2,7 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express, { Express, NextFunction, Request, Response } from 'express';
+import userRoutes from 'routes/allUsersRoutes';
 import authRoutes from 'routes/authRoutes';
 import clientRoutes from 'routes/clientRoutes';
 import emailRoutes from 'routes/EmailRoutes';
@@ -59,6 +60,7 @@ app.use('/auth', authRoutes);
 app.use('/email', emailRoutes);
 app.use('/requestService', requestRouter);
 app.use('/clients', clientRoutes);
+app.use('/users', userRoutes);
 
 
 app.get('/health', (_req: Request, res: Response) => {
