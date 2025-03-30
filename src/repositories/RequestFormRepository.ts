@@ -1,15 +1,17 @@
-import { createClient } from "@supabase/supabase-js";
-import dotenv from "dotenv";
-dotenv.config()
-const supabase = createClient(process.env.SUPABASE_URL,process.env.SUPABASE_ANON_KEY) 
-
-
+import { SupabaseClient } from "@supabase/supabase-js";
 
 export class RequestFormRepository{
+    private supabaseClient: SupabaseClient;
+
+    constructor(supabaseClient: SupabaseClient) {
+        this.supabaseClient = supabaseClient;
+    }
+
     async saveData(formData){
         try {
+            console.log("supabase:", this.supabaseClient);
             console.log(" Attempting to insert form data:", formData);
-            const {data,error } = await supabase 
+            const { data,error } = await this.supabaseClient 
              .from('client_request_form') 
              .insert([
                 {
