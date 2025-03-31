@@ -1,3 +1,11 @@
+enum Role {
+  ADMIN = "admin",
+  DOULA = "doula",
+  CLIENT = "client"
+};
+
+enum 
+
 export class User {
   id: string;
   username: string;
@@ -7,6 +15,14 @@ export class User {
   createdAt: Date;
   updatedAt: Date;
   role: string;
+  address: string;
+  city: string;
+  state: string;
+  coutnry: string;
+  zip_code: number;
+  profile_picture: Buffer;
+  account_status: string;
+
 
   constructor(data: {
     id?: string;
