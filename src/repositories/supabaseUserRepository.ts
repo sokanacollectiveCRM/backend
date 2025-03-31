@@ -3,6 +3,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { User } from 'entities/User';
 import { UserRepository } from 'repositories/interface/userRepository';
+import { ROLE } from 'types';
 
 export class SupabaseUserRepository implements UserRepository {
   private supabaseClient: SupabaseClient;
@@ -160,7 +161,14 @@ export class SupabaseUserRepository implements UserRepository {
       lastname: data.lastname,
       createdAt: new Date(data.created_at || Date.now()),
       updatedAt: new Date(data.updated_at || Date.now()),
-      role: data.role || 'client'
+      role: data.role || ROLE.CLIENT,
+      address: data.address,
+      city: data.city,
+      state: data.state,
+      country: data.country,
+      zip_code: data.zip_code,
+      profile_picture: data.profile_picture,
+      account_status: data.account_status
     });
   }
 }
