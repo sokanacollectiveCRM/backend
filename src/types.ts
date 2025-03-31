@@ -52,7 +52,18 @@ export interface SupabaseUserMetadata {
   [key: string]: unknown;
 }
 
-export enum STATES {
+export enum ACCOUNT_STATUS {
+  PENDING = "pending",
+  APPROVED = "approved"
+};
+
+export enum ROLE {
+  ADMIN = "admin",
+  DOULA = "doula",
+  CLIENT = "client"
+};
+
+export enum STATE {
   AL = "AL",
   AK = "AK",
   AZ = "AZ",
@@ -103,4 +114,4 @@ export enum STATES {
   WV = "WV",
   WI = "WI",
   WY = "WY"  
-}
+};
