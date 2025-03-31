@@ -16,6 +16,8 @@ export class User {
   zip_code: number;
   profile_picture: Buffer;
   account_status: ACCOUNT_STATUS;
+  business: string;
+  bio: string;
 
   constructor(data: {
     id?: string;
@@ -33,6 +35,8 @@ export class User {
     zip_code?: number;
     profile_picture?: Buffer;
     account_status?: ACCOUNT_STATUS;
+    business?: string;
+    bio?: string;  
     }) {
       this.id = data.id || crypto.randomUUID();
       this.username = data.username;
@@ -49,6 +53,8 @@ export class User {
       this.zip_code = data.zip_code;
       this.profile_picture = data.profile_picture;
       this.account_status = data.account_status; 
+      this.business = data.business;
+      this.bio = data.bio;    
   }
 
   getFullName(): string {
@@ -72,7 +78,9 @@ export class User {
       country: this.country,
       zip_code: this.zip_code,
       profile_picture: this.profile_picture,
-      account_status: this.account_status
+      account_status: this.account_status,
+      business: this.business,
+      bio: this.bio
     };
   }
 }

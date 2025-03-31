@@ -168,7 +168,9 @@ export class SupabaseUserRepository implements UserRepository {
       country: data.country,
       zip_code: data.zip_code,
       profile_picture: data.profile_picture,
-      account_status: data.account_status
+      account_status: data.account_status,
+      business: data.business,
+      bio: data.bio
     });
   }
 }
