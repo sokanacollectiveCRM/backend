@@ -11,36 +11,36 @@ import { AuthUseCase } from 'usecase/authUseCase';
 import { ClientUseCase } from 'usecase/clientUseCase';
 import { UserUseCase } from 'usecase/UserUseCase';
 
-// ******** Auth Controller
-
-// Instantiate low-level dependencies first
+//-----------------------------------------------
+// Repositories (Data Access Layer)
+//-----------------------------------------------
 const userRepository = new SupabaseUserRepository(supabase);
-const authService = new SupabaseAuthService(supabase, userRepository);
-
-// Instantiate Use Case with dependencies
-const authUseCase = new AuthUseCase(authService, userRepository);
-
-// Instantiate Controller with Use Case
-const authController = new AuthController(authUseCase);
-
-// ******** Request Controller
-const userUseCase = new UserUseCase(userRepository);
-const userController = new UserController(userUseCase);
-
-// Instantiate low-level dependencies first
 const requestRepository = new RequestFormRepository(supabase);
+
+//-----------------------------------------------
+// Services (External Integrations)
+//-----------------------------------------------
+const authService = new SupabaseAuthService(supabase, userRepository);
 const requestService = new RequestFormService(requestRepository);
 
-// Instantiate Controller
-const requestFormController = new RequestFormController(requestService);
-
-// ******** Request Controller
-
+//-----------------------------------------------
+// Use Cases (Business Logic)
+//-----------------------------------------------
+const authUseCase = new AuthUseCase(authService, userRepository);
+const userUseCase = new UserUseCase(userRepository);
 const clientUseCase = new ClientUseCase(userRepository);
+
+//-----------------------------------------------
+// Controllers (API Layer)
+//-----------------------------------------------
+const authController = new AuthController(authUseCase);
+const userController = new UserController(userUseCase);
+const requestFormController = new RequestFormController(requestService);
 const clientController = new ClientController(clientUseCase);
 
-
-
-// Export all of our controllers
-export { authController, clientController, requestFormController, userRepository, userController };
-
+export { 
+  authController, 
+  userController,
+  clientController, 
+  requestFormController
+};
