@@ -14,7 +14,7 @@ export class User {
   state: STATE;
   country: string;
   zip_code: number;
-  profile_picture: Buffer;
+  profile_picture: Buffer;  
   account_status: ACCOUNT_STATUS;
   business: string;
   bio: string;
