@@ -6,7 +6,9 @@ import {
   ConflictError,
   NotFoundError,
   ValidationError
-} from '../domains/errors';
+
+} from 'domains/errors';
+
 import { AuthRequest } from 'types';
 import { ClientUseCase } from 'usecase/clientUseCase';
 
@@ -44,25 +46,25 @@ export class ClientController {
     }
   }
 
-    // Helper method to handle errors
-    private handleError(
-      error: Error, 
-      res: Response
-    ): { status: number, message: string } {
-      console.error('Error:', error.message);
-      
-      if (error instanceof ValidationError) {
-        return { status: 400, message: error.message};
-      } else if (error instanceof ConflictError) {
-        return { status: 409, message: error.message};
-      } else if (error instanceof AuthenticationError) {
-        return { status: 401, message: error.message};
-      } else if (error instanceof NotFoundError) {
-        return { status: 404, message: error.message};
-      } else if (error instanceof AuthorizationError) {
-        return { status: 403, message: error.message};
-      } else {
-        return { status: 500, message: error.message};
-      }
+  // Helper method to handle errors
+  private handleError(
+    error: Error, 
+    res: Response
+  ): { status: number, message: string } {
+    console.error('Error:', error.message);
+    
+    if (error instanceof ValidationError) {
+      return { status: 400, message: error.message};
+    } else if (error instanceof ConflictError) {
+      return { status: 409, message: error.message};
+    } else if (error instanceof AuthenticationError) {
+      return { status: 401, message: error.message};
+    } else if (error instanceof NotFoundError) {
+      return { status: 404, message: error.message};
+    } else if (error instanceof AuthorizationError) {
+      return { status: 403, message: error.message};
+    } else {
+      return { status: 500, message: error.message};
     }
+  }
 }

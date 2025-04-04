@@ -1,4 +1,4 @@
-import { User } from '@supabase/supabase-js';
+import { User } from 'entities/User';
 import { Request } from 'express';
 
 export interface AuthRequest extends Request {
