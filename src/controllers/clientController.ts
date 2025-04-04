@@ -6,7 +6,9 @@ import {
   ConflictError,
   NotFoundError,
   ValidationError
+
 } from 'domains/errors';
+
 import { AuthRequest } from 'types';
 import { ClientUseCase } from 'usecase/clientUseCase';
 
