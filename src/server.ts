@@ -62,7 +62,6 @@ app.use('/requestService', requestRouter);
 app.use('/clients', clientRoutes);
 app.use('/users', userRoutes);
 
-
 app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({ status: 'ok' });
 });

@@ -1,60 +1,60 @@
-import { STATE, ACCOUNT_STATUS, ROLE } from "types";
+import { ACCOUNT_STATUS, ROLE, STATE } from "types";
 
 export class User {
   id: string;
-  username: string;
-  email: string;
-  firstname: string;
-  lastname: string;
-  createdAt: Date;
-  updatedAt: Date;
-  role: ROLE;
-  address: string;
-  city: string;
-  state: STATE;
-  country: string;
-  zip_code: number;
-  profile_picture: Buffer;  
-  account_status: ACCOUNT_STATUS;
-  business: string;
-  bio: string;
+  username?: string;
+  email?: string;
+  firstname?: string;
+  lastname?: string;
+  created_at?: Date;
+  updated_at?: Date;
+  role?: ROLE;
+  address?: string;
+  city?: string;
+  state?: STATE;
+  country?: string;
+  zip_code?: number;
+  profile_picture?: File;  
+  account_status?: ACCOUNT_STATUS;
+  business?: string;
+  bio?: string;
 
   constructor(data: {
     id?: string;
-    username: string;
-    email: string;
+    username?: string;
+    email?: string;
     firstname?: string;
     lastname?: string;
-    createdAt?: Date;
-    updatedAt?: Date;
+    created_at?: Date;
+    updated_at?: Date;
     role?: ROLE;
     address?: string;
     city?: string;
     state?: STATE;
     country?: string;
     zip_code?: number;
-    profile_picture?: Buffer;
+    profile_picture?: File;
     account_status?: ACCOUNT_STATUS;
     business?: string;
     bio?: string;  
     }) {
-      this.id = data.id || crypto.randomUUID();
-      this.username = data.username;
-      this.email = data.email;
+      this.id = data.id;
+      this.username = data.username || "";
+      this.email = data.email || "";
       this.firstname = data.firstname || '';
       this.lastname = data.lastname || '';
-      this.createdAt = data.createdAt || new Date();
-      this.updatedAt = data.updatedAt || new Date();
+      this.created_at = data.created_at || new Date();
+      this.updated_at = data.updated_at || new Date();
       this.role = data.role || ROLE.CLIENT;
-      this.address = data.address;
-      this.city = data.city;
-      this.state = data.state;
-      this.country = data.country;
-      this.zip_code = data.zip_code;
-      this.profile_picture = data.profile_picture;
-      this.account_status = data.account_status; 
-      this.business = data.business;
-      this.bio = data.bio;    
+      this.address = data.address || "";
+      this.city = data.city || "";
+      this.state = data.state || STATE.IL;
+      this.country = data.country || "";
+      this.zip_code = data.zip_code || -1;
+      this.profile_picture = data.profile_picture || null;
+      this.account_status = data.account_status || ACCOUNT_STATUS.PENDING; 
+      this.business = data.business || "";
+      this.bio = data.bio || "";    
   }
 
   getFullName(): string {
@@ -69,8 +69,8 @@ export class User {
       firstname: this.firstname,
       lastname: this.lastname,
       fullName: this.getFullName(),
-      createdAt: this.createdAt,
-      updatedAt: this.updatedAt,
+      created_at: this.created_at,
+      updatedAt: this.updated_at,
       role: this.role,
       address: this.address,
       city: this.city,
