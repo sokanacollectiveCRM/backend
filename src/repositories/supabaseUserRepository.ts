@@ -144,7 +144,7 @@ export class SupabaseUserRepository implements UserRepository {
 
     const { data, error } = await this.supabaseClient
       .from('users')
-      .update({username: "frontiner"})
+      .update(updateData)
       .eq('id', user.id)
       .single();
     
