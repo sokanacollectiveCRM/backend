@@ -115,12 +115,10 @@ export class SupabaseUserRepository implements UserRepository {
     return this.mapToUser(data);
   }
 
-  async update(user): Promise<User> {
-    console.log("inside update, parameter user is", user);
+  async update(user): Promise<void> {
 
-    console.log("BURHHH");
+    console.assert(user.id !== undefined, "paramter `user` does not have an id, which is required for this function");
     const updateData: UserData = {};
-    console.log("122");
 
     // soooo we want to only update if it exists in the database so this is a workaround
     if (user.username !== undefined) updateData.username = user.username;
@@ -131,7 +129,6 @@ export class SupabaseUserRepository implements UserRepository {
     if (user.role !== undefined) updateData.role = user.role;
     if (user.address !== undefined) updateData.address = user.address;
     if (user.city !== undefined) updateData.city = user.city;
-    console.log("132 line");
     if (user.state !== undefined) updateData.state = user.state;
     if (user.country !== undefined) updateData.country = user.country;
     if (user.zip_code !== undefined) updateData.zip_code = user.zip_code;
@@ -139,8 +136,6 @@ export class SupabaseUserRepository implements UserRepository {
     if (user.account_status !== undefined) updateData.account_status = user.account_status;
     if (user.business !== undefined) updateData.business = user.business;
     if (user.bio !== undefined) updateData.bio = user.bio;
-
-    console.log("inside `update()` in supabaseUserRepository, created updateData is", updateData);
 
     const { data, error } = await this.supabaseClient
       .from('users')
@@ -152,7 +147,7 @@ export class SupabaseUserRepository implements UserRepository {
       console.log("error updating user", error);
       throw new Error(error.message);
     }
-    return this.mapToUser(data);
+    // return this.mapToUser(data);
   }
   
   async findAll(): Promise<User[]> {
