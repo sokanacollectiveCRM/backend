@@ -6,11 +6,23 @@ export interface AuthRequest extends Request {
 }
 
 export interface UserData {
-  id: string;
-  username: string;
-  email: string;
-  firstname: string | null;
-  lastname: string | null;
+  id?: string;
+  username?: string;
+  email?: string;
+  firstname?: string;
+  lastname?: string;
+  created_at?: Date;
+  updated_at?: Date;
+  role?: ROLE;
+  address?: string;
+  city?: string;
+  state?: STATE;
+  country?: string;
+  zip_code?: number;
+  profile_picture?: File;  
+  account_status?: ACCOUNT_STATUS;
+  business?: string;
+  bio?: string;  
 }
 
 export interface SignupBody {

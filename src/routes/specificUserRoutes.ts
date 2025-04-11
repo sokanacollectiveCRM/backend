@@ -7,4 +7,6 @@ const userRoutes: Router = express.Router();
 // route for retrieving specific user's information
 userRoutes.get('/:id', authMiddleware, (req, res) => userController.getUserById(req, res));
 
+userRoutes.put('/update', authMiddleware, (req, res) => userController.updateUser(req, res));
+
 export default userRoutes;

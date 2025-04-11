@@ -42,6 +42,7 @@ export {
   authController, 
   userController,
   clientController, 
-  requestFormController
+  requestFormController,
+  authService,
+  userRepository,
 };
-

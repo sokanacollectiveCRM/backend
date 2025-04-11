@@ -3,7 +3,10 @@
     "baseUrl": "src",
     "module": "CommonJS",
     "target": "ES2020",
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "paths": {
+      "@/*": ["src/*"]
+    }
   },
-  "include": ["./**/*.ts", "src/server.mts"],
+  "include": ["./**/*.ts", "src/server.mts", "src/usecase/userUseCase.tsx", "src/controllers/userController.tsx"],
 }

@@ -2,8 +2,10 @@
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import { User } from 'entities/User';
+import { userInfo } from 'os';
 import { UserRepository } from 'repositories/interface/userRepository';
 import { ROLE } from 'types';
+import { UserData } from 'types';
 
 export class SupabaseUserRepository implements UserRepository {
   private supabaseClient: SupabaseClient;
@@ -112,6 +114,41 @@ export class SupabaseUserRepository implements UserRepository {
     
     return this.mapToUser(data);
   }
+
+  async update(user): Promise<void> {
+
+    console.assert(user.id !== undefined, "paramter `user` does not have an id, which is required for this function");
+    const updateData: UserData = {};
+
+    // soooo we want to only update if it exists in the database so this is a workaround
+    if (user.username !== undefined) updateData.username = user.username;
+    if (user.email !== undefined) updateData.email = user.email;
+    if (user.firstname !== undefined) updateData.firstname = user.firstname;
+    if (user.lastname !== undefined) updateData.lastname = user.lastname;
+    if (user.updated_at !== undefined) updateData.updated_at = user.updated_at;
+    if (user.role !== undefined) updateData.role = user.role;
+    if (user.address !== undefined) updateData.address = user.address;
+    if (user.city !== undefined) updateData.city = user.city;
+    if (user.state !== undefined) updateData.state = user.state;
+    if (user.country !== undefined) updateData.country = user.country;
+    if (user.zip_code !== undefined) updateData.zip_code = user.zip_code;
+    if (user.profile_picture !== undefined) updateData.profile_picture = user.profile_picture;
+    if (user.account_status !== undefined) updateData.account_status = user.account_status;
+    if (user.business !== undefined) updateData.business = user.business;
+    if (user.bio !== undefined) updateData.bio = user.bio;
+
+    const { data, error } = await this.supabaseClient
+      .from('users')
+      .update(updateData)
+      .eq('id', user.id)
+      .single();
+    
+    if (error) {
+      console.log("error updating user", error);
+      throw new Error(error.message);
+    }
+    // return this.mapToUser(data);
+  }
   
   async findAll(): Promise<User[]> {
     const { data, error } = await this.supabaseClient
@@ -159,8 +196,8 @@ export class SupabaseUserRepository implements UserRepository {
       email: data.email,
       firstname: data.firstname,
       lastname: data.lastname,
-      createdAt: new Date(data.created_at || Date.now()),
-      updatedAt: new Date(data.updated_at || Date.now()),
+      created_at: new Date(data.created_at || Date.now()),
+      updated_at: new Date(data.updated_at || Date.now()),
       role: data.role || ROLE.CLIENT,
       address: data.address,
       city: data.city,
