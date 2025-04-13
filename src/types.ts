@@ -1,8 +1,14 @@
 import { User } from 'entities/User';
 import { Request } from 'express';
+import type { File as MulterFile } from 'multer';
 
 export interface AuthRequest extends Request {
   user?: User;
+}
+
+export interface UpdateRequest extends Request {
+  user?: User;
+  file?: MulterFile;
 }
 
 export interface UserData {

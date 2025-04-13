@@ -155,7 +155,10 @@ export class SupabaseAuthService implements AuthService {
       throw new Error(error.message);
     }
 
-    return data.user;
+    // Fetch user from database
+    const user = await this.userRepository.findByEmail(data.user.email);
+
+    return user;
   }
 
   async getGoogleAuthUrl(

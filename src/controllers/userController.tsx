@@ -1,18 +1,16 @@
-import { Response } from 'express';
-import { AuthenticationError, AuthorizationError, ConflictError, NotFoundError, ValidationError } from 'domains/errors';
-// import { UserUseCase } from "usecase/UserUseCase";
 import { UserUseCase } from "@/usecase/userUseCase";
-import { AuthRequest } from "types";
-import { User } from 'entities/User';
-import { SupabaseUserRepository } from 'repositories/supabaseUserRepository';
-import { SupabaseClient } from '@supabase/supabase-js';
-import supabase from 'supabase';
+import { AuthenticationError, AuthorizationError, ConflictError, NotFoundError, ValidationError } from 'domains/errors';
+import { Response } from 'express';
+import { UserRepository } from 'repositories/interface/userRepository';
+import { AuthRequest, UpdateRequest } from 'types';
 
 export class UserController {
   private userUseCase: UserUseCase;
+  private userRepository: UserRepository;
 
-  constructor(userUseCase: UserUseCase) {
+  constructor(userUseCase: UserUseCase, userRepository: UserRepository) {
     this.userUseCase = userUseCase;
+    this.userRepository = userRepository
   }
 
   async getUserById(req: AuthRequest, res: Response): Promise<void> {
@@ -36,25 +34,22 @@ export class UserController {
     }
   }
 
-  async updateUser(req: AuthRequest, res: Response): Promise<void> {
+  async updateUser(req: UpdateRequest, res: Response): Promise<void> {
     try {
-      const userId = req.body.id;
+      const user = req.user
       const updateData = req.body;
-      console.log("inside updateUser, updateData", updateData);
-      console.log("inside updateUser, userId", userId);
+      const profilePicture = req.file;
       
-      const existingUser = await this.userUseCase.getUserById(userId);
-      if (!existingUser) {
-        res.status(404).json({ error: 'User not found' });
-        return;
+      // upload profile picture to supabase storage so we can grab it later
+      if (profilePicture) {
+        const imageUrl = await this.userUseCase.uploadProfilePicture(user, profilePicture);
+        updateData.profile_picture = imageUrl;
       }
-      const userRepository = new SupabaseUserRepository(supabase);
-      const updatedUser = await userRepository.update({
-        id: userId,
-        ...updateData
-      });
+      
+      // Here we will handle which fields to update
+      const updatedUser = await this.userUseCase.updateUser(user, updateData);
   
-      res.status(200).json(updatedUser);
+      res.status(200).json(updatedUser.toJSON());
     } catch(error) {
       res.status(400).json({ error: error.message});
     }

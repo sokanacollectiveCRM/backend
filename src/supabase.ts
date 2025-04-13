@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const supabaseUrl: string = process.env.SUPABASE_URL || '';
-const supabaseKey: string = process.env.SUPABASE_ANON_KEY || '';
+const supabaseKey: string = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 console.log(supabaseUrl);
 console.log(supabaseKey);
