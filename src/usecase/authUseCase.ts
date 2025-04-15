@@ -235,21 +235,18 @@ export class AuthUseCase {
 
     try {
       // Get user data from token
-      const userData = await this.authService.getUserFromToken(accessToken);
-      
-      // Check if user exists
-      let user = await this.userRepository.findByEmail(userData.email);
+      let user = await this.authService.getUserFromToken(accessToken);
       
       // Create user if doesn't exist
       if (!user) {
         const newUser = new User({
-          username: userData.email.split('@')[0],
-          email: userData.email,
-          firstname: userData.user_metadata?.given_name || 
-                    userData.user_metadata?.name?.split(' ')[0] || 
+          username: user.email.split('@')[0],
+          email: user.email,
+          firstname: user.user_metadata?.given_name || 
+                    user.user_metadata?.name?.split(' ')[0] || 
                     null,
-          lastname: userData.user_metadata?.family_name || 
-                   userData.user_metadata?.name?.split(' ')[1] || 
+          lastname: user.user_metadata?.family_name || 
+                   user.user_metadata?.name?.split(' ')[1] || 
                    null,
         });
         

@@ -2,10 +2,9 @@
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import { User } from 'entities/User';
-import { userInfo } from 'os';
+import { File as MulterFile } from 'multer';
 import { UserRepository } from 'repositories/interface/userRepository';
 import { ROLE } from 'types';
-import { UserData } from 'types';
 
 export class SupabaseUserRepository implements UserRepository {
   private supabaseClient: SupabaseClient;
@@ -115,39 +114,19 @@ export class SupabaseUserRepository implements UserRepository {
     return this.mapToUser(data);
   }
 
-  async update(user): Promise<void> {
+  async update(userId: string, fieldsToUpdate: Partial<User>): Promise<User> {
 
-    console.assert(user.id !== undefined, "paramter `user` does not have an id, which is required for this function");
-    const updateData: UserData = {};
-
-    // soooo we want to only update if it exists in the database so this is a workaround
-    if (user.username !== undefined) updateData.username = user.username;
-    if (user.email !== undefined) updateData.email = user.email;
-    if (user.firstname !== undefined) updateData.firstname = user.firstname;
-    if (user.lastname !== undefined) updateData.lastname = user.lastname;
-    if (user.updated_at !== undefined) updateData.updated_at = user.updated_at;
-    if (user.role !== undefined) updateData.role = user.role;
-    if (user.address !== undefined) updateData.address = user.address;
-    if (user.city !== undefined) updateData.city = user.city;
-    if (user.state !== undefined) updateData.state = user.state;
-    if (user.country !== undefined) updateData.country = user.country;
-    if (user.zip_code !== undefined) updateData.zip_code = user.zip_code;
-    if (user.profile_picture !== undefined) updateData.profile_picture = user.profile_picture;
-    if (user.account_status !== undefined) updateData.account_status = user.account_status;
-    if (user.business !== undefined) updateData.business = user.business;
-    if (user.bio !== undefined) updateData.bio = user.bio;
-
-    const { data, error } = await this.supabaseClient
+    const { data: updatedUser, error: updatedUserError } = await this.supabaseClient
       .from('users')
-      .update(updateData)
-      .eq('id', user.id)
-      .single();
-    
-    if (error) {
-      console.log("error updating user", error);
-      throw new Error(error.message);
-    }
-    // return this.mapToUser(data);
+      .update(fieldsToUpdate)
+      .eq('id', userId)
+      .select()
+      .single()
+
+    console.log(updatedUserError);
+
+    if (updatedUserError) throw new Error(updatedUserError.message);
+    return this.mapToUser(updatedUser);
   }
   
   async findAll(): Promise<User[]> {
@@ -186,6 +165,32 @@ export class SupabaseUserRepository implements UserRepository {
     if (error) {
       throw new Error(`Failed to delete user: ${error.message}`);
     }
+  }
+  
+  async uploadProfilePicture(user: User, profilePicture: MulterFile) {
+    const filePath = `${user.id}/${Date.now()}_${profilePicture.originalname}`;
+
+    // upload to supabase
+    const { data, error: uploadError } = await this.supabaseClient.storage
+    .from('profile-pictures')
+    .upload(filePath, profilePicture.buffer, {
+      contentType: profilePicture.mimetype,
+      upsert: true,
+    });
+
+    if (uploadError) {
+      console.log('Upload error', uploadError);
+      throw new Error('failed to stash profile picture');
+    }
+
+    // grab the link to it
+    const { data: { publicUrl }} = await this.supabaseClient.storage
+      .from('profile-pictures')
+      .getPublicUrl(filePath);
+
+    console.log("this is the data", publicUrl);
+
+    return publicUrl;
   }
   
   // Helper to map database user to domain User

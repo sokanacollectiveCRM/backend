@@ -1,4 +1,5 @@
 import { User } from 'entities/User';
+import type { File as MulterFile } from 'multer';
 
 /**
  * UserRepository defines the interface for user data operations
@@ -28,6 +29,11 @@ export interface UserRepository {
    * Save a user to the repository
    */
   save(user: User): Promise<User>;
+
+  /**
+   * Update a user to the repository
+   */
+  update(userId: string, fieldsToUpdate: Partial<User>): Promise<User>;
   
   /**
    * Get all users
@@ -43,4 +49,9 @@ export interface UserRepository {
    * Delete a user
    */
   delete(id: string): Promise<void>;
+
+  /**
+   * Upload a user profile picture
+   */
+  uploadProfilePicture(user: User, profilePicture: MulterFile): Promise<string>;
 }
