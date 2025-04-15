@@ -1,5 +1,5 @@
 import express, { Router } from 'express';
-import { EmailController } from '../controllers/EmailController';
+import { EmailController } from '../controllers/emailController';
 import authMiddleware from '../middleware/authMiddleware';
 
 const emailController = new EmailController();
