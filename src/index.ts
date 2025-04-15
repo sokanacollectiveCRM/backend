@@ -9,7 +9,7 @@ import { SupabaseAuthService } from 'services/supabaseAuthService';
 import supabase from 'supabase';
 import { AuthUseCase } from 'usecase/authUseCase';
 import { ClientUseCase } from 'usecase/clientUseCase';
-import { UserUseCase } from 'usecase/UserUseCase';
+import { UserUseCase } from 'usecase/userUseCase';
 
 //-----------------------------------------------
 // Repositories (Data Access Layer)

@@ -8,5 +8,5 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["./**/*.ts", "src/server.mts", "src/usecase/userUseCase.tsx", "src/controllers/userController.tsx"],
+  "include": ["./**/*.ts", "src/server.mts"],
 }
