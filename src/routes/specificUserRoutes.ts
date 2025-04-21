@@ -8,6 +8,8 @@ const userRoutes: Router = express.Router();
 // route for retrieving specific user's information
 userRoutes.get('/:id', authMiddleware, (req, res) => userController.getUserById(req, res));
 
+userRoutes.get('/:id/hours', authMiddleware, (req, res) => userController.getHoursById(req, res));
+
 // uploading a profile picture requires multer
 const upload = multer({ 
   storage: multer.memoryStorage(),

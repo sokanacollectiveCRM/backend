@@ -34,6 +34,17 @@ export class UserController {
     }
   }
 
+  async getHoursById(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.params.id;
+      const hoursData = await this.userRepository.getHoursById(userId);
+      res.status(200).json(hoursData);
+    } catch (error) {
+      console.log("Error when retrieving user's work data");
+      this.handleError(error, res);
+    }
+  }
+
   async updateUser(req: UpdateRequest, res: Response): Promise<void> {
     try {
       const user = req.user
@@ -54,6 +65,7 @@ export class UserController {
       res.status(400).json({ error: error.message});
     }
   }
+
 
   private handleError(error: Error, res: Response): void {
     console.error('Error:', error.message);

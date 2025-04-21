@@ -131,15 +131,57 @@ export class SupabaseUserRepository implements UserRepository {
   
   async findAll(): Promise<User[]> {
     const { data, error } = await this.supabaseClient
-      .from('users')
-      .select('username, email, firstname, lastname')
-      .order('username', { ascending: true });
-      
+    .from('users')
+    .select('username, email, firstname, lastname')
+    .order('username', { ascending: true });
+    
     if (error) {
       throw new Error(`Failed to fetch users: ${error.message}`);
     }
     
     return data.map(this.mapToUser);
+  }
+  
+  async getHoursById(id: string): Promise<any> {
+    try {
+      // Get all hours entries for this doula
+      const { data: hoursData, error: hoursError } = await this.supabaseClient
+        .from('hours')
+        .select('*')
+        .eq('doula_id', id);
+      
+      if (hoursError) throw new Error(hoursError.message);
+      if (!hoursData) return [];
+      
+      // Get doula data once (since it's the same for all entries)
+      const doulaData = await this.findById(id);
+      if (!doulaData) throw new Error(`Doula with ID ${id} not found`);
+      
+      // Process each hour entry to include client data
+      const result = await Promise.all(hoursData.map(async (entry) => {
+        const clientData = await this.findById(entry.client_id);
+        
+        return {
+          id: entry.id,
+          start_time: entry.start_time,
+          end_time: entry.end_time,
+          doula: {
+            id: doulaData.id,
+            firstname: doulaData.firstname,
+            lastname: doulaData.lastname
+          },
+          client: clientData ? {
+            id: clientData.id,
+            firstname: clientData.firstname,
+            lastname: clientData.lastname
+          } : null
+        };
+      }));
+      
+      return result;
+    } catch (error) {
+      throw new Error(`Failed to get user's hours: ${error.message}`);
+    }
   }
   
   async findById(id: string): Promise<User | null> {
@@ -192,7 +234,7 @@ export class SupabaseUserRepository implements UserRepository {
 
     return publicUrl;
   }
-  
+
   // Helper to map database user to domain User
   private mapToUser(data: any): User {
     return new User({
