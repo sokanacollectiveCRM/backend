@@ -1,6 +1,7 @@
 // infrastructure/repositories/SupabaseUserRepository.ts
 
 import { SupabaseClient } from '@supabase/supabase-js';
+import { Client } from 'entities/Client';
 import { User } from 'entities/User';
 import { File as MulterFile } from 'multer';
 import { UserRepository } from 'repositories/interface/userRepository';
@@ -46,20 +47,27 @@ export class SupabaseUserRepository implements UserRepository {
   async findClientsAll(): Promise<any> {
     const { data, error } = await this.supabaseClient
       .from('client_info')
-      .select('first_name, last_name, service_needed, requested, updated_at, status');
+      .select(`
+        id,
+        first_name,
+        last_name,
+        service_needed,
+        requested,
+        updated_at,
+        status,
+        user_id,
+        users (
+          email,
+          first_name,
+          last_name
+        )
+      `);
 
     if (error) {
       throw new Error(`Failed to fetch clients: ${error.message}`);
     }
 
-    return data.map((client) => ({
-      firstName: client.first_name,
-      lastName: client.last_name,
-      serviceNeeded: client.service_needed,
-      requestedAt: new Date(client.requested), // Ensure it's a Date object
-      updatedAt: new Date(client.updated_at), // Ensure it's a Date object
-      status: client.status,
-    }));
+    return data.map(this.mapToClient);
   }
 
   async findClientsByDoula(doulaId: string): Promise<User[]> {
@@ -214,5 +222,36 @@ export class SupabaseUserRepository implements UserRepository {
       business: data.business,
       bio: data.bio
     });
+  }
+
+  // Helper to map to client entity
+  private mapToClient(client: any): Client {
+
+    // grab the user data from users table
+    const userData = client.users ?? {
+      id: client.user_id,
+      first_name: client.first_name,
+      last_name: client.last_name,
+      email: null,
+    };
+
+    // if user doesn't exist (not approved), we fill fields from client_info table
+    const user = this.mapToUser({
+      id: userData.id ?? client.user_id,
+      firstname: userData.first_name,
+      lastname: userData.last_name,
+      email: userData.email,
+      created_at: client.created_at ?? null,
+      updated_at: client.updated_at ?? null,
+      role: 'client',
+    })
+
+    return new Client(
+      user,
+      client.service_needed,
+      new Date(client.requested),
+      new Date(client.updated_at),
+      client.status
+    )
   }
 }
