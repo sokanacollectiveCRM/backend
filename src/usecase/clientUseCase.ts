@@ -19,9 +19,10 @@ export class ClientUseCase {
   ): Promise<any> {
 
     try {
-    let users = await this.userRepository.findClientsAll();
-
-      return users;
+      if (role === "admin") {
+        let users = await this.userRepository.findClientsAll();
+        return users;
+      }
     }
     catch (error) {
       throw new Error(`Could not return clients: ${error.message}`);
