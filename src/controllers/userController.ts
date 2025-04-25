@@ -37,6 +37,7 @@ export class UserController {
   async getHoursById(req: AuthRequest, res: Response): Promise<void> {
     try {
       const userId = req.params.id;
+      console.log("getHoursById in userController is called");
       const hoursData = await this.userRepository.getHoursById(userId);
       res.status(200).json(hoursData);
     } catch (error) {

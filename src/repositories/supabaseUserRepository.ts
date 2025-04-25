@@ -143,6 +143,7 @@ export class SupabaseUserRepository implements UserRepository {
   }
   
   async getHoursById(id: string): Promise<any> {
+    console.log("getHoursById is run");
     try {
       // Get all hours entries for this doula
       const { data: hoursData, error: hoursError } = await this.supabaseClient
@@ -151,7 +152,10 @@ export class SupabaseUserRepository implements UserRepository {
         .eq('doula_id', id);
       
       if (hoursError) throw new Error(hoursError.message);
-      if (!hoursData) return [];
+      if (!hoursData) {
+        console.log("there's no hours data so returning []");
+        return []
+      };
       
       // Get doula data once (since it's the same for all entries)
       const doulaData = await this.findById(id);
@@ -177,6 +181,8 @@ export class SupabaseUserRepository implements UserRepository {
           } : null
         };
       }));
+
+      console.log("about to return result", result);
       
       return result;
     } catch (error) {
