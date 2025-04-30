@@ -1,16 +1,13 @@
-import { UserUseCase } from "@/usecase/userUseCase";
 import { AuthenticationError, AuthorizationError, ConflictError, NotFoundError, ValidationError } from 'domains/errors';
 import { Response } from 'express';
-import { UserRepository } from 'repositories/interface/userRepository';
 import { AuthRequest, UpdateRequest } from 'types';
+import { UserUseCase } from "usecase/userUseCase";
 
 export class UserController {
   private userUseCase: UserUseCase;
-  private userRepository: UserRepository;
 
-  constructor(userUseCase: UserUseCase, userRepository: UserRepository) {
+  constructor(userUseCase: UserUseCase) {
     this.userUseCase = userUseCase;
-    this.userRepository = userRepository
   }
 
   async getUserById(req: AuthRequest, res: Response): Promise<void> {

@@ -3,6 +3,7 @@ import { ClientController } from 'controllers/clientController';
 import { RequestFormController } from 'controllers/requestFormController';
 import { UserController } from 'controllers/userController';
 import { RequestFormRepository } from 'repositories/requestFormRepository';
+import { SupabaseClientRepository } from 'repositories/supabaseClientRepository';
 import { SupabaseUserRepository } from 'repositories/supabaseUserRepository';
 import { RequestFormService } from 'services/RequestFormService';
 import { SupabaseAuthService } from 'services/supabaseAuthService';
@@ -16,6 +17,7 @@ import { UserUseCase } from 'usecase/userUseCase';
 //-----------------------------------------------
 const userRepository = new SupabaseUserRepository(supabase);
 const requestRepository = new RequestFormRepository(supabase);
+const clientRepository = new SupabaseClientRepository(supabase);
 
 //-----------------------------------------------
 // Services (External Integrations)
@@ -28,7 +30,7 @@ const requestService = new RequestFormService(requestRepository);
 //-----------------------------------------------
 const authUseCase = new AuthUseCase(authService, userRepository);
 const userUseCase = new UserUseCase(userRepository);
-const clientUseCase = new ClientUseCase(userRepository);
+const clientUseCase = new ClientUseCase(userRepository, clientRepository);
 
 //-----------------------------------------------
 // Controllers (API Layer)

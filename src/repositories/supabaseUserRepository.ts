@@ -1,6 +1,7 @@
 // infrastructure/repositories/SupabaseUserRepository.ts
 
 import { SupabaseClient } from '@supabase/supabase-js';
+import { Client } from 'entities/Client';
 import { User } from 'entities/User';
 import { File as MulterFile } from 'multer';
 import { UserRepository } from 'repositories/interface/userRepository';
@@ -46,20 +47,29 @@ export class SupabaseUserRepository implements UserRepository {
   async findClientsAll(): Promise<any> {
     const { data, error } = await this.supabaseClient
       .from('client_info')
-      .select('first_name, last_name, service_needed, requested, updated_at, status');
+      .select(`
+        id,
+        firstname,
+        lastname,
+        service_needed,
+        requested,
+        updated_at,
+        status,
+        user_id,
+        users (
+          profile_picture,
+          firstname,
+          lastname
+        )
+      `);
 
     if (error) {
-      throw new Error(`Failed to fetch clients: ${error.message}`);
+      throw new Error(`${error.message}`);
     }
+    
+    console.log("data", data);
 
-    return data.map((client) => ({
-      firstName: client.first_name,
-      lastName: client.last_name,
-      serviceNeeded: client.service_needed,
-      requestedAt: new Date(client.requested), // Ensure it's a Date object
-      updatedAt: new Date(client.updated_at), // Ensure it's a Date object
-      status: client.status,
-    }));
+    return data.map((client) => this.mapToClient(client));
   }
 
   async findClientsByDoula(doulaId: string): Promise<User[]> {
@@ -87,7 +97,7 @@ export class SupabaseUserRepository implements UserRepository {
       .eq('id', clientIds);
 
     if (getUsersError) {
-      throw new Error(`Failed to fetch clients: ${getUsersError.message}`);
+      throw new Error(`${getUsersError.message}`);
     }
 
     return users.map(this.mapToUser);
@@ -262,5 +272,40 @@ export class SupabaseUserRepository implements UserRepository {
       business: data.business,
       bio: data.bio
     });
+  }
+
+  // Helper to map to client entity
+  private mapToClient(data: any): Client {
+    // If the user has created a profile, grab user data from users table. If not, grab details
+    // from the request form (client_info table).
+    const userData = data.users ? {
+      id: data.users.user_id,
+      firstname: data.users.firstname,
+      lastname: data.users.lastname,
+      profile_picture: data.users,
+    } :
+    {
+      id: data.id,
+      firstname: data.firstname,
+      lastname: data.lastname,
+      profile_picture: ''
+    };
+
+    // if user doesn't exist (not approved), we fill fields from client_info table
+    const user = this.mapToUser({
+      id: userData.id ?? data.id,
+      firstname: userData.firstname,
+      lastname: userData.lastname,
+      profile_picture: userData.profile_picture,
+      role: 'client',
+    })
+
+    return new Client(
+      user,
+      data.service_needed,
+      new Date(data.requested),
+      new Date(data.updated_at),
+      data.status
+    )
   }
 }
