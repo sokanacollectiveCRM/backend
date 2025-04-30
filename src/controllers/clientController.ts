@@ -46,6 +46,36 @@ export class ClientController {
   }
 
   //
+  // updateClientStatus
+  //
+  // Updates client status in client_info table by grabbing the client to update in the request body
+  //
+  // returns:
+  //    Client
+  //
+  async updateClientStatus(
+    req: AuthRequest,
+    res: Response,
+  ): Promise<void> {
+    const { clientId, status } = req.body;
+
+    if (!clientId || !status) {
+      res.status(400).json({ message: 'Missing client ID or status' });
+    }
+
+    try {
+      const client = await this.clientUseCase.updateClientStatus(clientId, status);
+      res.json(this.mapToClientSummary(client));
+    }
+    catch (statusError) {
+      const error = this.handleError(statusError, res);
+
+      res.status(error.status).json({ error: error.message });
+    }
+  }
+  
+
+  //
   // updateStatus()
   //
   // Updates the user's status
