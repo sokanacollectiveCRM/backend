@@ -54,4 +54,9 @@ export interface UserRepository {
    * Upload a user profile picture
    */
   uploadProfilePicture(user: User, profilePicture: MulterFile): Promise<string>;
+    
+  /**
+   * Get this user's work hours
+   */
+  getHoursById(id: string): Promise<void>;
 }
