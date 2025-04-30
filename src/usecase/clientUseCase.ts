@@ -20,8 +20,8 @@ export class ClientUseCase {
 
     try {
       if (role === "admin") {
-        let users = await this.userRepository.findClientsAll();
-        return users;
+        let clients = await this.userRepository.findClientsAll();
+        return clients;
       }
     }
     catch (error) {

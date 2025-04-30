@@ -1,13 +1,12 @@
-import { Response } from 'express';
-
 import {
   AuthenticationError,
   AuthorizationError,
   ConflictError,
   NotFoundError,
   ValidationError
-
 } from 'domains/errors';
+import { Client } from 'entities/Client';
+import { Response } from 'express';
 
 import { AuthRequest } from 'types';
 import { ClientUseCase } from 'usecase/clientUseCase';
@@ -35,7 +34,7 @@ export class ClientController {
       const { id, role } = req.user;
       // call use case to grab all users
       const clients = await this.clientUseCase.getClients(id, role);
-      res.json(clients)
+      res.json(clients.map(this.mapToClientSummary));
     } 
     catch (getError) {
       const error = this.handleError(getError, res);
@@ -45,6 +44,11 @@ export class ClientController {
       }
     }
   }
+
+  //
+  // updateStatus()
+  //
+  // Updates the user's status
 
   // Helper method to handle errors
   private handleError(
@@ -66,5 +70,18 @@ export class ClientController {
     } else {
       return { status: 500, message: error.message};
     }
+  }
+
+  // Helper for returning basic summary of a client
+  private mapToClientSummary(client: Client) {
+    return {
+      id: client.user.id.toString(),
+      firstname: client.user.firstname,
+      lastname: client.user.lastname,
+      serviceNeeded: client.serviceNeeded,
+      requestedAt: client.requestedAt,
+      updatedAt: client.updatedAt,
+      status: client.status,
+    };
   }
 }

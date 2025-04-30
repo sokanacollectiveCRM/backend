@@ -4,7 +4,7 @@ import { User } from './User';
 export class Client {
   constructor(
     public user: User,
-    public contract: ServiceTypes,
+    public serviceNeeded: ServiceTypes,
     public requestedAt: Date,
     public updatedAt: Date,
     public status: ACCOUNT_STATUS, // or enum if you have one defined
