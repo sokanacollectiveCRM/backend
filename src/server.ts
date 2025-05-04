@@ -5,6 +5,7 @@ import express, { Express, NextFunction, Request, Response } from 'express';
 import authRoutes from 'routes/authRoutes';
 import clientRoutes from 'routes/clientRoutes';
 import emailRoutes from 'routes/emailRoutes';
+import quickbookRoutes from 'routes/quickbooksRoutes';
 import requestRouter from 'routes/requestRoute';
 import userRoutes from 'routes/specificUserRoutes';
 
@@ -60,6 +61,7 @@ app.use('/auth', authRoutes);
 app.use('/email', emailRoutes);
 app.use('/requestService', requestRouter);
 app.use('/clients', clientRoutes);
+app.use('/quickbooks', quickbookRoutes)
 app.use('/users', userRoutes);
 
 app.get('/health', (_req: Request, res: Response) => {
