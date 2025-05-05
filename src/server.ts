@@ -8,6 +8,7 @@ import emailRoutes from 'routes/emailRoutes';
 import quickbookRoutes from 'routes/quickbooksRoutes';
 import requestRouter from 'routes/requestRoute';
 import userRoutes from 'routes/specificUserRoutes';
+import customersRoutes from './routes/customersRoutes';
 
 dotenv.config();
 
@@ -62,6 +63,7 @@ app.use('/email', emailRoutes);
 app.use('/requestService', requestRouter);
 app.use('/clients', clientRoutes);
 app.use('/quickbooks', quickbookRoutes)
+app.use('/quickbooks/customers', customersRoutes);
 app.use('/users', userRoutes);
 
 app.get('/health', (_req: Request, res: Response) => {
