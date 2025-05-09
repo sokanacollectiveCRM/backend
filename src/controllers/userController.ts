@@ -3,6 +3,7 @@ import { Response } from 'express';
 import { AuthRequest, UpdateRequest } from 'types';
 import { UserUseCase } from "usecase/userUseCase";
 
+
 export class UserController {
   private userUseCase: UserUseCase;
 

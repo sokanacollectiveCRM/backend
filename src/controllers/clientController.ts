@@ -44,6 +44,34 @@ export class ClientController {
       }
     }
   }
+//
+  // getCSVClients()
+  //
+  // Grabs all client data in CSV form
+  //
+  // returns:
+  //    CSV of users
+  //
+  async getCSVClients(
+    req: AuthRequest,
+    res: Response,
+  ): Promise<void> {
+    try {
+      const {role} = req.user;
+      const clientsCSV = await this.clientUseCase.getCSV(role);
+      res.header("Content-Type", "text/csv");
+      res.attachment("clients.csv");
+
+      res.send(clientsCSV);
+    } 
+    catch (getError) {
+      const error = this.handleError(getError, res);
+
+      if (!res.headersSent) {
+        res.status(error.status).json({ error: error.message})
+      }
+    }
+  }
 
   //
   // updateClientStatus

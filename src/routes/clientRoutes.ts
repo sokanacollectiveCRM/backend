@@ -10,7 +10,14 @@ clientRoutes.get('/',
   (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']), 
   (req, res) => clientController.getClients(req, res)
 );
-clientRoutes.put('/status', 
+
+clientRoutes.get('/fetchCSV', 
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin','client']), 
+  (req, res) => clientController.getCSVClients(req, res)
+);
+
+clientRoutes.put('/status',
   authMiddleware, 
   (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']), 
   (req, res) => clientController.updateClientStatus(req, res)

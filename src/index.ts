@@ -30,7 +30,7 @@ const requestService = new RequestFormService(requestRepository);
 //-----------------------------------------------
 const authUseCase = new AuthUseCase(authService, userRepository);
 const userUseCase = new UserUseCase(userRepository);
-const clientUseCase = new ClientUseCase(userRepository, clientRepository);
+const clientUseCase = new ClientUseCase(userRepository, clientRepository,userRepository);
 
 //-----------------------------------------------
 // Controllers (API Layer)
