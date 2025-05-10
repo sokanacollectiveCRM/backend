@@ -314,7 +314,7 @@ export class SupabaseUserRepository implements UserRepository {
       .from('hours')
       .insert([
         {
-          id: "123456789",
+          // id: "123456789",
           doula_id: doula_id, 
           client_id: client_id, 
           start_time: start_time, 
