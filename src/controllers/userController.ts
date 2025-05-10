@@ -12,7 +12,6 @@ export class UserController {
 
   async getUserById(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { id, role } = req.user;
       const targetUserId = req.params.id;
 
       const user = await this.userUseCase.getUserById(targetUserId);
@@ -34,11 +33,22 @@ export class UserController {
   async getHoursById(req: AuthRequest, res: Response): Promise<void> {
     try {
       const userId = req.params.id;
-      console.log("getHoursById in userController is called");
-      const hoursData = await this.userRepository.getHoursById(userId);
+      const hoursData = await this.userUseCase.getHoursById(userId);
       res.status(200).json(hoursData);
     } catch (error) {
       console.log("Error when retrieving user's work data");
+      this.handleError(error, res);
+    }
+  }
+
+  async addNewHours(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { doula_id, client_id, start_time, end_time } = req.params;
+
+      const newWorkEntry = await this.userUseCase.addNewHours(doula_id, client_id, new Date(start_time), new Date(end_time));
+      res.status(200).json(newWorkEntry);
+    } catch (error) {
+      console.log("Error trying to add new work entry");
       this.handleError(error, res);
     }
   }

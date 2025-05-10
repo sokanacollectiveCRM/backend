@@ -36,7 +36,7 @@ const clientUseCase = new ClientUseCase(userRepository, clientRepository);
 // Controllers (API Layer)
 //-----------------------------------------------
 const authController = new AuthController(authUseCase);
-const userController = new UserController(userUseCase, userRepository);
+const userController = new UserController(userUseCase);
 const requestFormController = new RequestFormController(requestService);
 const clientController = new ClientController(clientUseCase);
 
