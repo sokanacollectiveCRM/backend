@@ -13,7 +13,6 @@ const authorizeRoles = async (
   allowedRoles: string[]
 ): Promise<void> => {
   try {
-
     if (!req.user || !req.user.email) {
       res.status(401).json({ error: 'Unauthorized: No user found' });
     }

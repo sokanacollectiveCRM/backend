@@ -22,7 +22,6 @@ export class UserUseCase {
 
   async uploadProfilePicture(user: User, profilePicture: MulterFile) {
     const signedUrl = await this.userRepository.uploadProfilePicture(user, profilePicture);
-    console.log(signedUrl);
     return signedUrl;
   }
 

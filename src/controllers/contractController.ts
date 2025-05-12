@@ -6,35 +6,40 @@ import {
   ValidationError
 } from 'domains/errors';
 import { Client } from 'entities/Client';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 
-import { AuthRequest } from 'types';
-import { ClientUseCase } from 'usecase/clientUseCase';
+import { UpdateRequest } from 'types';
+import { ContractUseCase } from 'usecase/contractUseCase';
 
-export class ClientController {
-  private clientUseCase: ClientUseCase;
+export class ContractController {
+  private contractUseCase: ContractUseCase;
 
-  constructor (clientUseCase: ClientUseCase) {
-    this.clientUseCase = clientUseCase;
+  constructor (contractUseCase: ContractUseCase) {
+    this.contractUseCase = contractUseCase;
   };
 
   //
-  // getClients()
+  // uploadTemplate()
   //
-  // Grabs all users specified by role (All for admins, assigned for doulas)
+  // Upload template to storage
   //
   // returns:
-  //    List of users
+  //    none
   //
-  async getClients(
-    req: AuthRequest,
+  async uploadTemplate(
+    req: UpdateRequest,
     res: Response,
   ): Promise<void> {
     try {
-      const { id, role } = req.user;
-      // call use case to grab all users
-      const clients = await this.clientUseCase.getClients(id, role);
-      res.json(clients.map(this.mapToClientSummary));
+      const file = req.file;
+      const name = req.body.name;
+  
+      if (!file) throw new ValidationError('No file uploaded');
+      if (!name) throw new ValidationError('No contract name specified');
+  
+      await this.contractUseCase.uploadTemplate(file, name);
+  
+      res.status(204).send();
     } 
     catch (getError) {
       const error = this.handleError(getError, res);
@@ -46,40 +51,32 @@ export class ClientController {
   }
 
   //
-  // updateClientStatus
-  //
-  // Updates client status in client_info table by grabbing the client to update in the request body
+  // Generete a filled templat
   //
   // returns:
-  //    Client
+  //    none
   //
-  async updateClientStatus(
-    req: AuthRequest,
-    res: Response,
+  async generateTemplate(
+    req: Request,
+    res: Response
   ): Promise<void> {
-    const { clientId, status } = req.body;
-
-    if (!clientId || !status) {
-      res.status(400).json({ message: 'Missing client ID or status' });
-      return;
-    }
-
     try {
-      const client = await this.clientUseCase.updateClientStatus(clientId, status);
-      res.json(this.mapToClientSummary(client));
-    }
-    catch (statusError) {
-      const error = this.handleError(statusError, res);
+      console.log("generating template controller");
+      const { name, fields } = req.body;
 
-      res.status(error.status).json({ error: error.message });
+      if (!name) throw new ValidationError('No template name provided');
+      if (!fields || typeof fields !== 'object') throw new ValidationError('Missing or invalid fields');
+
+      await this.contractUseCase.generateTemplate(name, fields, res); // pass res
+    }
+    catch (genError) {
+      const error = this.handleError(genError, res);
+
+      if (!res.headersSent) {
+        res.status(error.status).json({ error: error.message });
+      }
     }
   }
-  
-
-  //
-  // updateStatus()
-  //
-  // Updates the user's status
 
   // Helper method to handle errors
   private handleError(
