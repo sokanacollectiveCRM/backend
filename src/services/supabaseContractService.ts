@@ -1,9 +1,9 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import Docxtemplater from 'docxtemplater';
-import { NotFoundError } from 'domains/errors';
 import { Response } from 'express';
 import { MulterFile as File } from 'multer';
 import PizZip from 'pizzip';
+import { NotFoundError } from '../domains/errors';
 import { ContractService } from '././interface/contractService';
 
 
