@@ -40,7 +40,7 @@ const contractUseCase = new ContractUseCase(contractService);
 // Controllers (API Layer)
 //-----------------------------------------------
 const authController = new AuthController(authUseCase);
-const userController = new UserController(userUseCase);
+const userController = new UserController(userUseCase, userRepository);
 const requestFormController = new RequestFormController(requestService);
 const clientController = new ClientController(clientUseCase);
 const contractController = new ContractController(contractUseCase);
