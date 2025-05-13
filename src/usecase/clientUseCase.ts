@@ -1,5 +1,5 @@
-import { ClientRepository } from 'repositories/interface/clientRepository';
-import { UserRepository } from 'repositories/interface/userRepository';
+import { ClientRepository } from '../repositories/interface/clientRepository';
+import { UserRepository } from '../repositories/interface/userRepository';
 
 export class ClientUseCase {
   private userRepository: UserRepository;

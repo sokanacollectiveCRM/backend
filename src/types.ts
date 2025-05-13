@@ -1,6 +1,6 @@
-import { User } from 'entities/User';
 import { Request } from 'express';
 import type { File as MulterFile } from 'multer';
+import { User } from './entities/User';
 
 export enum ServiceTypes{
   LABOR_SUPPORT = "Labor Support",

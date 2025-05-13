@@ -1,5 +1,5 @@
 import { NextFunction, Response } from 'express';
-import type { AuthRequest } from 'types';
+import type { AuthRequest } from '../types';
 
 // authorizeRoles
 //

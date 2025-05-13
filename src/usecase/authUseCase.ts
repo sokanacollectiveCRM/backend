@@ -1,12 +1,12 @@
 import { AuthService } from '../services/interface/authService';
 
-import { User } from 'entities/User';
-import { UserRepository } from 'repositories/interface/userRepository';
 import {
   AuthenticationError,
   NotFoundError,
   ValidationError
 } from '../domains/errors';
+import { User } from '../entities/User';
+import { UserRepository } from '../repositories/interface/userRepository';
 
 
 export class AuthUseCase {

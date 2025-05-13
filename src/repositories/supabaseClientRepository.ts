@@ -1,9 +1,9 @@
 // infrastructure/repositories/SupabaseUserRepository.ts
 
 import { SupabaseClient } from '@supabase/supabase-js';
-import { Client } from 'entities/Client';
-import { User } from 'entities/User';
-import { ROLE } from 'types';
+import { Client } from '../entities/Client';
+import { User } from '../entities/User';
+import { ROLE } from '../types';
 
 export class SupabaseClientRepository  {
   private supabaseClient: SupabaseClient;

@@ -1,4 +1,4 @@
-import { User } from 'entities/User';
+import { User } from '../../entities/User';
 
 /**
  * AuthService defines the interface for authentication operations.

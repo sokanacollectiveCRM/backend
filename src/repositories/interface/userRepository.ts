@@ -1,5 +1,5 @@
-import { User } from 'entities/User';
 import type { File as MulterFile } from 'multer';
+import { User } from '../../entities/User';
 
 /**
  * UserRepository defines the interface for user data operations

@@ -1,15 +1,15 @@
+import { Response } from 'express';
 import {
   AuthenticationError,
   AuthorizationError,
   ConflictError,
   NotFoundError,
   ValidationError
-} from 'domains/errors';
-import { Client } from 'entities/Client';
-import { Response } from 'express';
+} from '../domains/errors';
+import { Client } from '../entities/Client';
 
-import { AuthRequest } from 'types';
-import { ClientUseCase } from 'usecase/clientUseCase';
+import { AuthRequest } from '../types';
+import { ClientUseCase } from '../usecase/clientUseCase';
 
 export class ClientController {
   private clientUseCase: ClientUseCase;

@@ -1,7 +1,7 @@
-import { AuthenticationError, AuthorizationError, ConflictError, NotFoundError, ValidationError } from 'domains/errors';
 import { Response } from 'express';
-import { AuthRequest, UpdateRequest } from 'types';
 import { UserUseCase } from "usecase/userUseCase";
+import { AuthenticationError, AuthorizationError, ConflictError, NotFoundError, ValidationError } from '../domains/errors';
+import { AuthRequest, UpdateRequest } from '../types';
 
 export class UserController {
   private userUseCase: UserUseCase;

@@ -4,7 +4,7 @@ import { NotFoundError } from 'domains/errors';
 import { Response } from 'express';
 import { MulterFile as File } from 'multer';
 import PizZip from 'pizzip';
-import { ContractService } from './interface/contractService';
+import { ContractService } from '././interface/contractService';
 
 
 export class SupabaseContractService implements ContractService {

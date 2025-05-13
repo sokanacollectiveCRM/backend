@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { ContractService } from 'services/interface/contractService';
+import { ContractService } from '../services/interface/contractService';
 
 export class ContractUseCase {
   constructor(private readonly contractService: ContractService) {}

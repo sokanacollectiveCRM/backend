@@ -1,11 +1,11 @@
 // infrastructure/repositories/SupabaseUserRepository.ts
 
 import { SupabaseClient } from '@supabase/supabase-js';
-import { Client } from 'entities/Client';
-import { User } from 'entities/User';
 import { File as MulterFile } from 'multer';
-import { UserRepository } from 'repositories/interface/userRepository';
-import { ROLE } from 'types';
+import { Client } from '../entities/Client';
+import { User } from '../entities/User';
+import { UserRepository } from '../repositories/interface/userRepository';
+import { ROLE } from '../types';
 
 export class SupabaseUserRepository implements UserRepository {
   private supabaseClient: SupabaseClient;

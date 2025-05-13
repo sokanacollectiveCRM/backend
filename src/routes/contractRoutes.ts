@@ -1,8 +1,8 @@
 import express, { Router } from 'express';
-import { contractController } from 'index';
-import authMiddleware from 'middleware/authMiddleware';
-import authorizeRoles from 'middleware/authorizeRoles';
 import multer from 'multer';
+import { contractController } from '../index';
+import authMiddleware from '../middleware/authMiddleware';
+import authorizeRoles from '../middleware/authorizeRoles';
 
 
 const clientRoutes: Router = express.Router();

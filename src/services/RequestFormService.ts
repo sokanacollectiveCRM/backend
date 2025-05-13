@@ -1,6 +1,7 @@
 import { ValidationError } from "../domains/errors";
-import { IncomeLevel, Pronouns, RequestForm, ServiceTypes, Sex } from "../entities/RequestForm";
+import { RequestForm } from '../entities/RequestForm';
 import { RequestFormRepository } from "../repositories/requestFormRepository";
+import { IncomeLevel, Pronouns, ServiceTypes, Sex } from "../types";
 
 export class RequestFormService {
   private repository: RequestFormRepository;

@@ -1,15 +1,15 @@
+import { Request, Response } from 'express';
 import {
   AuthenticationError,
   AuthorizationError,
   ConflictError,
   NotFoundError,
   ValidationError
-} from 'domains/errors';
-import { Client } from 'entities/Client';
-import { Request, Response } from 'express';
+} from '../domains/errors';
+import { Client } from '../entities/Client';
 
-import { UpdateRequest } from 'types';
-import { ContractUseCase } from 'usecase/contractUseCase';
+import { UpdateRequest } from '../types';
+import { ContractUseCase } from '../usecase/contractUseCase';
 
 export class ContractController {
   private contractUseCase: ContractUseCase;

@@ -1,8 +1,8 @@
-import { User } from 'entities/User';
 import { NextFunction, Response } from 'express';
-import { authService } from 'index';
 import supabase from 'supabase';
-import type { AuthRequest } from 'types';
+import { User } from '../entities/User';
+import { authService } from '../index';
+import type { AuthRequest } from '../types';
 
 const authMiddleware = async (
   req: AuthRequest,

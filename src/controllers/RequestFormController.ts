@@ -10,10 +10,11 @@ export class RequestFormController{
         this.service = requestFormService;
     }
 
-    async createForm(req: Request, res: Response){
+    async createForm(req: Request, res: Response): Promise<void>{
         try {
             if (!req.body) {
-              return res.status(400).json({ error: 'No body found in request' });
+              res.status(400).json({ error: 'No body found in request' });
+              return;
             }
             const formData = req.body;
             await this.service.newForm(formData);

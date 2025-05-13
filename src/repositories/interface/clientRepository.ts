@@ -1,4 +1,4 @@
-import { Client } from 'entities/Client';
+import { Client } from '../../entities/Client';
 
 /**
  * ClientRepository defines the interface for client data operations
