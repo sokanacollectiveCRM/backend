@@ -1,4 +1,4 @@
-import supabase from 'supabase';
+import { EmailController } from 'controllers/emailController';
 import { AuthUseCase } from 'usecase/authUseCase';
 import { ClientUseCase } from 'usecase/clientUseCase';
 import { ContractUseCase } from 'usecase/contractUseCase';
@@ -14,6 +14,7 @@ import { SupabaseUserRepository } from './repositories/supabaseUserRepository';
 import { RequestFormService } from './services/RequestFormService';
 import { SupabaseAuthService } from './services/supabaseAuthService';
 import { SupabaseContractService } from './services/supabaseContractService';
+import supabase from './supabase';
 
 //-----------------------------------------------
 // Repositories (Data Access Layer)
@@ -44,8 +45,7 @@ const userController = new UserController(userUseCase, userRepository);
 const requestFormController = new RequestFormController(requestService);
 const clientController = new ClientController(clientUseCase);
 const contractController = new ContractController(contractUseCase);
+const emailController = new EmailController();
 
-export {
-    authController, authService, clientController, contractController, requestFormController, userController, userRepository
-};
+export { authController, authService, clientController, contractController, emailController, requestFormController, userController, userRepository };
 
