@@ -1,4 +1,4 @@
-import { ACCOUNT_STATUS, ROLE, STATE } from "types";
+import { ACCOUNT_STATUS, ROLE, STATE } from '../types';
 
 export class User {
   id: string;

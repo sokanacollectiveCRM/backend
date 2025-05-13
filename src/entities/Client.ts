@@ -1,4 +1,4 @@
-import { ACCOUNT_STATUS, ServiceTypes } from "types";
+import { ACCOUNT_STATUS, ServiceTypes } from '../types';
 import { User } from './User';
 
 export class Client {
