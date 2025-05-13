@@ -1,11 +1,7 @@
-import { EmailController } from 'controllers/emailController';
-import { AuthUseCase } from 'usecase/authUseCase';
-import { ClientUseCase } from 'usecase/clientUseCase';
-import { ContractUseCase } from 'usecase/contractUseCase';
-import { UserUseCase } from 'usecase/userUseCase';
 import { AuthController } from './controllers/authController';
 import { ClientController } from './controllers/clientController';
 import { ContractController } from './controllers/contractController';
+import { EmailController } from './controllers/emailController';
 import { RequestFormController } from './controllers/requestFormController';
 import { UserController } from './controllers/userController';
 import { RequestFormRepository } from './repositories/requestFormRepository';
@@ -15,6 +11,10 @@ import { RequestFormService } from './services/RequestFormService';
 import { SupabaseAuthService } from './services/supabaseAuthService';
 import { SupabaseContractService } from './services/supabaseContractService';
 import supabase from './supabase';
+import { AuthUseCase } from './usecase/authUseCase';
+import { ClientUseCase } from './usecase/clientUseCase';
+import { ContractUseCase } from './usecase/contractUseCase';
+import { UserUseCase } from './usecase/userUseCase';
 
 //-----------------------------------------------
 // Repositories (Data Access Layer)
