@@ -3,14 +3,14 @@
   "trailingSlash": false,
   "builds": [
     {
-      "src": "src/server.js",
+      "src": "src/server.ts",
       "use": "@vercel/node"
     }
   ],
   "rewrites": [
     {
       "source": "/(.*)",
-      "destination": "src/server.js"
+      "destination": "src/server.ts"
     }
   ]
 }
