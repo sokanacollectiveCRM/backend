@@ -64,7 +64,7 @@ app.use('/clients', clientRoutes);
 app.use('/users', userRoutes);
 app.use('/contracts', contractRoutes);
 
-app.get('/health', (_req: Request, res: Response) => {
+app.get('/', (_req: Request, res: Response) => {
   res.status(200).json({ status: 'ok' });
 });
 
