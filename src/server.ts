@@ -2,12 +2,12 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express, { Express, NextFunction, Request, Response } from 'express';
-import authRoutes from 'routes/authRoutes';
 import clientRoutes from 'routes/clientRoutes';
 import contractRoutes from 'routes/contractRoutes';
 import emailRoutes from 'routes/EmailRoutes';
 import requestRouter from 'routes/requestRoute';
 import userRoutes from 'routes/specificUserRoutes';
+import authRoutes from './routes/authRoutes';
 
 dotenv.config();
 
