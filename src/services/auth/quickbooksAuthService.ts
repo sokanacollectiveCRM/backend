@@ -2,7 +2,12 @@
 
 import OAuthClient from 'intuit-oauth';
 import { URL } from 'url';
-import { saveTokens, TokenStore } from '../../utils/tokenUtils';
+import {
+  deleteTokens,
+  getTokens,
+  saveTokens,
+  TokenStore
+} from '../../utils/tokenUtils';
 
 const {
   QB_CLIENT_ID     = '',
@@ -32,10 +37,12 @@ export function generateConsentUrl(state: string): string {
  * Handle Intuit’s callback:
  *   1) Exchange the code for tokens
  *   2) Extract realmId (from the JSON or the URL query)
- *   3) Persist tokens
+ *   3) Persist tokens for the given userId
  *   4) Return them
  */
-export async function handleAuthCallback(callbackUrl: string): Promise<TokenStore> {
+export async function handleAuthCallback(
+  callbackUrl: string
+): Promise<TokenStore> {
   // Exchange code for tokens
   const authResponse = await oauthClient.createToken(callbackUrl);
   const json = authResponse.getJson() as {
@@ -45,16 +52,14 @@ export async function handleAuthCallback(callbackUrl: string): Promise<TokenStor
     realmId?:      string;
   };
 
-  // Intuit sometimes returns realmId in the JSON, but it’s
-  // also passed as a query param — grab whichever is set.
-  const realmId = json.realmId
-    ?? new URL(callbackUrl).searchParams.get('realmId');
+  // Intuit sometimes returns realmId in JSON or URL query
+  const realmId = json.realmId ?? new URL(callbackUrl).searchParams.get('realmId');
 
   if (!realmId) {
     throw new Error('Missing realmId in QuickBooks callback');
   }
 
-  // Build our token store object
+  // Build TokenStore
   const tokens: TokenStore = {
     realmId,
     accessToken:  json.access_token,
@@ -62,7 +67,24 @@ export async function handleAuthCallback(callbackUrl: string): Promise<TokenStor
     expiresAt:    new Date(Date.now() + json.expires_in * 1000).toISOString()
   };
 
-  // Persist into Supabase
+  // Persist global tokens (no per-user scoping)
   await saveTokens(tokens);
   return tokens;
 }
+
+/**
+ * Check if connected (tokens exist & are not expired).
+ */
+export async function isConnected(): Promise<boolean> {
+  const tokens = await getTokens();
+  if (!tokens) return false;
+  return new Date(tokens.expiresAt) > new Date();
+}
+
+/**
+ * Disconnect QuickBooks by deleting stored tokens.
+ */
+export async function disconnectQuickBooks(): Promise<void> {
+  await deleteTokens();
+}
+
