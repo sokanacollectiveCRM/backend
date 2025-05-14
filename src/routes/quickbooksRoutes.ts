@@ -1,33 +1,30 @@
 // src/features/quickbooks/routes/quickbooksRoutes.ts
-
-import { Router } from 'express';
+import { Router } from 'express'
 import {
   connectQuickBooks,
   createInvoice,
   handleQuickBooksCallback,
   quickBooksAuthUrl,
   quickBooksDisconnect,
-  quickBooksStatus,
-} from '../controllers/quickbooksController';
+  quickBooksStatus
+} from '../controllers/quickbooksController'
+import authMiddleware from '../middleware/authMiddleware'
+import authorizeRoles from '../middleware/authorizeRoles'
 
-const router = Router();
+const router = Router()
 
-// // Require authenticated users…
-// router.use(authMiddleware);
+// 1️⃣ Public OAuth endpoints (no auth required for redirect/callback)
+router.get('/auth',     connectQuickBooks)
+router.get('/callback', handleQuickBooksCallback)
 
-// // …and then only allow admins
-// router.use(adminMiddleware);
-// OAuth status & disconnect routes
-router.get('/status', quickBooksStatus);
-router.post('/disconnect', quickBooksDisconnect);
-// Invoice route (admin only)
-router.post('/invoice', createInvoice);
+// 2️⃣ Now apply auth + admin guard to the rest
+router.use(authMiddleware)
+router.use((req, res, next) => authorizeRoles(req, res, next, ['admin']))
 
-// QuickBooks OAuth routes (also behind auth/admin if you wish)
-router.get('/auth/url', quickBooksAuthUrl)  // ← JSON URL for AJAX
-router.get('/auth',     connectQuickBooks);
-router.get('/callback', handleQuickBooksCallback);
-// **QuickBooks OAuth routes**:
+// 3️⃣ Protected AJAX endpoints
+router.get('/auth/url',  quickBooksAuthUrl)
+router.get('/status',    quickBooksStatus)
+router.post('/disconnect', quickBooksDisconnect)
+router.post('/invoice',  createInvoice)
 
-
-export default router;
+export default router

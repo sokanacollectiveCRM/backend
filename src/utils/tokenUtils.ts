@@ -64,13 +64,12 @@ export async function saveTokens(tokens: TokenStore): Promise<void> {
   }
 }
 
-/**
- * Delete all QuickBooks OAuth tokens.
- */
+/** Delete all QuickBooks tokens (the single row) */
 export async function deleteTokens(): Promise<void> {
   const { error } = await supabase
     .from('quickbooks_tokens')
     .delete()
+    .not('realm_id', 'is', null)    // <-- must have at least one WHERE clause
 
   if (error) {
     throw new Error(`Failed to delete QuickBooks tokens: ${error.message}`)

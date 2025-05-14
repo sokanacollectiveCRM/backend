@@ -16,7 +16,7 @@ import {
   NotFoundError,
   ValidationError
 } from '../domains/errors';
-
+import supabase from '../supabase';
 
 export class AuthController {
   private authUseCase: AuthUseCase;
@@ -83,21 +83,46 @@ export class AuthController {
   // returns:
   //    User
   //
-  async getMe(
-    req: Request,
-    res: Response
-  ): Promise<void> {
+  async getMe(req: Request, res: Response): Promise<void> {
     try {
-      const token = req.cookies?.session || req.headers.authorization?.split(' ')[1];
-      // call useCase to grab the current user in the session
-      const user = await this.authUseCase.getMe(token);
-      res.json(user);
-    } 
-    catch (getMeError) {
-      const error = this.handleError(getMeError, res);
-      res.status(error.status).json({ error: error.message})
+      const token = req.cookies?.session || req.headers.authorization?.split(' ')[1]
+      if (!token) {
+        res.status(401).json({ error: 'No session token provided' })
+        return
+      }
+  
+      // 1) Get your app user
+      const appUser = await this.authUseCase.getMe(token)
+      if (!appUser) {
+        res.status(404).json({ error: 'User not found' })
+        return
+      }
+      const base = appUser.toJSON()
+  
+      // 2) Fetch Supabase user metadata
+      const { data: sbUser, error } = await supabase.auth.getUser(token)
+      let finalRole = (base as any).role  // fallback to the DB role
+  
+      if (!error && sbUser.user) {
+        const meta = (sbUser.user.user_metadata as any) || {}
+        if (typeof meta.role === 'string') {
+          finalRole = meta.role
+        }
+      }
+  
+      // 3) Merge and return
+      res.json({
+        ...(base as any),
+        role: finalRole
+      })
+    } catch (err: any) {
+      const errorInfo = this.handleError(err, res)
+      res.status(errorInfo.status).json({ error: errorInfo.message })
     }
   }
+  
+  
+
   
   //
   // logout()
