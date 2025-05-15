@@ -19,6 +19,90 @@ export class ContractController {
   };
 
   //
+  // getTemplates
+  //
+  // Get a list of all templates
+  //
+  // returns:
+  //    Templates
+  //
+  async getAllTemplates(
+    req: Request,
+    res: Response,
+  ): Promise<void> {
+    try {
+      const templates = await this.contractUseCase.getAllTemplates();
+      res.status(200).json(templates.map((template) => template.toJson()));
+    }
+    catch (getError) {
+      const error = this.handleError(getError, res);
+
+      if (!res.headersSent) {
+        res.status(error.status).json({ error: error.message})
+      }
+    }
+  }
+
+  //
+  // deleteTemplate
+  //
+  // Delete a template
+  //
+  // returns:
+  //    None
+  //
+  async deleteTemplate(
+    req: Request,
+    res: Response
+  ): Promise<void> {
+    const name = req.params.name;
+
+    try {
+      const result = await this.contractUseCase.deleteTemplate(name);
+      res.status(204).send();
+    }
+    catch (delError) {
+      const error = this.handleError(delError, res);
+
+      if (!res.headersSent) {
+        res.status(error.status).json({ error: error.message})
+      }
+    }
+  }
+
+    //
+  // deleteTemplate
+  //
+  // Delete a template
+  //
+  // returns:
+  //    None
+  //
+  async updateTemplate(
+    req: UpdateRequest,
+    res: Response
+  ): Promise<void> {
+    const name = req.params.name;
+    const file = req.file;
+    const { deposit, fee } = req.body;
+
+    console.log("name: ", name, " file: ", file, " deposit fee", deposit, " ", fee);
+    console.log(req.headers['content-type']);
+
+    try {
+      const result = await this.contractUseCase.updateTemplate(name, deposit, fee, file);
+      res.status(204).send();
+    }
+    catch (delError) {
+      const error = this.handleError(delError, res);
+
+      if (!res.headersSent) {
+        res.status(error.status).json({ error: error.message})
+      }
+    }
+  }
+
+  //
   // uploadTemplate()
   //
   // Upload template to storage
@@ -32,14 +116,14 @@ export class ContractController {
   ): Promise<void> {
     try {
       const file = req.file;
-      const name = req.body.name;
+      const { name, deposit, fee } = req.body;
   
       if (!file) throw new ValidationError('No file uploaded');
       if (!name) throw new ValidationError('No contract name specified');
   
-      await this.contractUseCase.uploadTemplate(file, name);
+      await this.contractUseCase.uploadTemplate(file, name, deposit, fee);
   
-      res.status(204).send();
+      res.status(201).json({ success: true });
     } 
     catch (getError) {
       const error = this.handleError(getError, res);
@@ -50,8 +134,9 @@ export class ContractController {
     }
   }
 
+
   //
-  // Generete a filled templat
+  // Generate a filled template
   //
   // returns:
   //    none
@@ -61,13 +146,24 @@ export class ContractController {
     res: Response
   ): Promise<void> {
     try {
-      console.log("generating template controller");
       const { name, fields } = req.body;
+      const download = req.query.download === 'true';
 
       if (!name) throw new ValidationError('No template name provided');
-      if (!fields || typeof fields !== 'object') throw new ValidationError('Missing or invalid fields');
 
-      await this.contractUseCase.generateTemplate(name, fields, res); // pass res
+      // generate the template as pdf
+      const pdfBuffer = await this.contractUseCase.generateTemplate(name, fields ?? {}, res);
+      
+      if (download) {
+        res.setHeader('Content-Disposition', `attachment; filename=${fields.clientname}-${name}.pdf`);
+        res.setHeader('Content-Type', 'application/pdf');
+      }
+      else {
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename=${fields.clientname}-${name}-preview.pdf`);
+      }
+
+      res.send(pdfBuffer);
     }
     catch (genError) {
       const error = this.handleError(genError, res);

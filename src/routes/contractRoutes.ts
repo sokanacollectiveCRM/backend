@@ -7,12 +7,35 @@ import authorizeRoles from '../middleware/authorizeRoles';
 
 const clientRoutes: Router = express.Router();
 
-// upload a template
 const upload = multer({ 
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
  });
-clientRoutes.post('/', 
+ 
+// get the list of templates
+clientRoutes.get('/templates',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
+  (req, res) => contractController.getAllTemplates(req, res),
+)
+
+// delete a template
+clientRoutes.delete('/templates/:name',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
+  (req, res) => contractController.deleteTemplate(req, res),
+)
+
+// update a template
+clientRoutes.put('/templates/:name',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
+  upload.single('contract'),
+  (req, res) => contractController.updateTemplate(req, res),
+)
+
+// upload a template
+clientRoutes.post('/templates', 
   authMiddleware,
   (req, res, next) => authorizeRoles(req, res, next, ['admin']), 
   upload.single('contract'),
@@ -20,12 +43,11 @@ clientRoutes.post('/',
 );
 
 // request a filled template
-clientRoutes.post('/generate',
+clientRoutes.post('/templates/generate',
   authMiddleware,
   (req, res, next) => authorizeRoles(req, res, next, ['admin']),
   (req, res) => contractController.generateTemplate(req, res),
 )
-
 
 
 export default clientRoutes;
