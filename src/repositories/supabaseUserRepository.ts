@@ -43,24 +43,66 @@ export class SupabaseUserRepository implements UserRepository {
     return data.map(this.mapToUser);
   }
 
-  async findClientsAll(): Promise<any> {
-    const { data, error } = await this.supabaseClient
-      .from('client_info')
-      .select('first_name, last_name, service_needed, requested, updated_at, status');
+  // async findClientsAll(): Promise<any> {
+  //   const { data, error } = await this.supabaseClient
+  //     .from('client_info')
+  //     .select('first_name, last_name, service_needed, requested, updated_at, status');
 
-    if (error) {
-      throw new Error(`Failed to fetch clients: ${error.message}`);
-    }
+  //   if (error) {
+  //     throw new Error(`Failed to fetch clients: ${error.message}`);
+  //   }
 
-    return data.map((client) => ({
-      firstName: client.first_name,
-      lastName: client.last_name,
-      serviceNeeded: client.service_needed,
-      requestedAt: new Date(client.requested), // Ensure it's a Date object
-      updatedAt: new Date(client.updated_at), // Ensure it's a Date object
-      status: client.status,
-    }));
+  //   return data.map((client) => ({
+  //     firstName: client.first_name,
+  //     lastName: client.last_name,
+  //     serviceNeeded: client.service_needed,
+  //     requestedAt: new Date(client.requested), // Ensure it's a Date object
+  //     updatedAt: new Date(client.updated_at), // Ensure it's a Date object
+  //     status: client.status,
+  //   }));
+  // }
+
+// infrastructure/repositories/SupabaseUserRepository.ts
+
+// infrastructure/repositories/SupabaseUserRepository.ts
+
+// infrastructure/repositories/SupabaseUserRepository.ts
+
+// infrastructure/repositories/SupabaseUserRepository.ts
+
+async findClientsAll(): Promise<any[]> {
+  const { data, error } = await this.supabaseClient
+    .from('client_info')
+    .select(`
+      id,
+      user_id,           
+      firstname,
+      lastname,
+      email,
+      service_needed,
+      requested,
+      updated_at,
+      status
+    `)
+
+  if (error) {
+    throw new Error(`Failed to fetch clients: ${error.message}`)
   }
+
+  return (data as any[]).map(client => ({
+    id:            client.id,
+    userId:        client.user_id,        // expose the real UUID
+    firstName:     client.firstname,
+    lastName:      client.lastname,
+    email:         client.email,
+    serviceNeeded: client.service_needed,
+    requestedAt:   new Date(client.requested),
+    updatedAt:     new Date(client.updated_at),
+    status:        client.status,
+  }))
+}
+
+
 
   async findClientsByDoula(doulaId: string): Promise<User[]> {
     const { data: assignments, error: assignmentsError } = await this.supabaseClient
