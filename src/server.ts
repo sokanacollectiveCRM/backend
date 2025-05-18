@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import express, { Express, NextFunction, Request, Response } from 'express';
 import authRoutes from 'routes/authRoutes';
 import clientRoutes from 'routes/clientRoutes';
-import emailRoutes from 'routes/emailRoutes';
+import emailRoutes from 'routes/EmailRoutes';
 import requestRouter from 'routes/requestRoute';
 import userRoutes from 'routes/specificUserRoutes';
 
