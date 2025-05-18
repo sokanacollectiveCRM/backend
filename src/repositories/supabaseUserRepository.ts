@@ -68,13 +68,10 @@ export class SupabaseUserRepository implements UserRepository {
       throw new Error(`${error.message}`);
     }
     
-    console.log("data", data);
-
     return data.map((client) => this.mapToClient(client));
   }
 
   async findClientsByDoula(doulaId: string): Promise<User[]> {
-    // console.log("findClientsByDoula called, doulaID:", doulaId);
     const { data: assignments, error: assignmentsError } = await this.supabaseClient
       .from('assignments')
       .select('client_id')
@@ -89,12 +86,8 @@ export class SupabaseUserRepository implements UserRepository {
       return [];
     }
 
-    // console.log("assignments for this doula-id: ", assignments);
-
     // store out client ids into an array
     const clientIds = assignments.map(assignment => assignment.client_id);
-
-    // console.log("clientIds: ", clientIds);
 
     // grab our users
     const { data: users, error: getUsersError } = await this.supabaseClient
@@ -105,8 +98,6 @@ export class SupabaseUserRepository implements UserRepository {
     if (getUsersError) {
       throw new Error(`${getUsersError.message}`);
     }
-
-    // console.log("users in findClientsByDoula: ", users);
 
     return users.map(this.mapToUser);
   }

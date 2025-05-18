@@ -11,13 +11,6 @@ clientRoutes.get('/',
   (req, res) => clientController.getClients(req, res)
 );
 
-// clientRoutes.get('/assignments',
-//   authMiddleware, 
-//   (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
-//   (req, res) => clientController.
-
-// );
-
 clientRoutes.put('/status', 
   authMiddleware, 
   (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']), 
