@@ -32,9 +32,11 @@ export class ClientController {
   ): Promise<void> {
     try {
       const { id, role } = req.user;
+      console.log("id, role is", id, role);
       // call use case to grab all users
       const clients = await this.clientUseCase.getClients(id, role);
-      res.json(clients.map(this.mapToClientSummary));
+      console.log("clients in clientController:", clients);
+      res.json(clients);
     } 
     catch (getError) {
       const error = this.handleError(getError, res);
