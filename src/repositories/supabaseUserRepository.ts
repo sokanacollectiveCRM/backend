@@ -103,6 +103,20 @@ async findClientsAll(): Promise<any[]> {
 }
 
 
+// Add this method inside the SupabaseUserRepository class
+
+async updateClientStatusToCustomer(userId: string): Promise<void> {
+  console.log('Updating client_info where user_id =', userId);
+
+  const { error } = await this.supabaseClient
+    .from('client_info')
+    .update({ status: 'customer' })      // set the new status
+    .eq('user_id', userId);              // match by user_id (UUID)
+
+  if (error) {
+    throw new Error(`Failed to update client status: ${error.message}`);
+  }
+}
 
   async findClientsByDoula(doulaId: string): Promise<User[]> {
     const { data: assignments, error: assignmentsError } = await this.supabaseClient
