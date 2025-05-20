@@ -3,6 +3,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { File as MulterFile } from 'multer';
 import { Client } from '../entities/Client';
+import { WORK_ENTRY_ROW } from '../entities/Hours';
 import { User } from '../entities/User';
 import { UserRepository } from '../repositories/interface/userRepository';
 import { ROLE } from '../types';
@@ -67,8 +68,6 @@ export class SupabaseUserRepository implements UserRepository {
       throw new Error(`${error.message}`);
     }
     
-    console.log("data", data);
-
     return data.map((client) => this.mapToClient(client));
   }
 
@@ -94,7 +93,7 @@ export class SupabaseUserRepository implements UserRepository {
     const { data: users, error: getUsersError } = await this.supabaseClient
       .from('users')
       .select('*')
-      .eq('id', clientIds);
+      .in('id', clientIds);
 
     if (getUsersError) {
       throw new Error(`${getUsersError.message}`);
@@ -153,7 +152,6 @@ export class SupabaseUserRepository implements UserRepository {
   }
   
   async getHoursById(id: string): Promise<any> {
-    console.log("getHoursById is run");
     try {
       // Get all hours entries for this doula
       const { data: hoursData, error: hoursError } = await this.supabaseClient
@@ -307,5 +305,26 @@ export class SupabaseUserRepository implements UserRepository {
       new Date(data.updated_at),
       data.status
     )
+  }
+
+  async addNewHours(doula_id: string, client_id: string, start_time: Date, end_time: Date): Promise<WORK_ENTRY_ROW> {
+    const { data, error } = await this.supabaseClient
+      .from('hours')
+      .insert([
+        {
+          // id: "123456789",
+          doula_id: doula_id, 
+          client_id: client_id, 
+          start_time: start_time, 
+          end_time: end_time
+        }
+      ])
+      .select();
+
+    if (error) {
+      throw new Error(`Failed to post new user: ${error.message}`);
+    }
+    
+    return data[0];
   }
 }

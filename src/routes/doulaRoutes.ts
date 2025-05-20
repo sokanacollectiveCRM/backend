@@ -1,17 +1,16 @@
 import express, { Router } from 'express';
-import { clientController } from '../index';
-import authMiddleware from '../middleware/authMiddleware';
-import authorizeRoles from '../middleware/authorizeRoles';
+import { clientController } from 'index';
+import authMiddleware from 'middleware/authMiddleware';
+import authorizeRoles from 'middleware/authorizeRoles';
 
-const clientRoutes: Router = express.Router();
+const doulaRoutes: Router = express.Router();
 
-clientRoutes.get('/', 
+doulaRoutes.get('/', 
   authMiddleware,
   (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']), 
   (req, res) => clientController.getClients(req, res)
 );
-
-clientRoutes.put('/status', 
+doulaRoutes.put('/status', 
   authMiddleware, 
   (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']), 
   (req, res) => clientController.updateClientStatus(req, res)
@@ -19,4 +18,4 @@ clientRoutes.put('/status',
 
 
 
-export default clientRoutes;
+export default doulaRoutes;
