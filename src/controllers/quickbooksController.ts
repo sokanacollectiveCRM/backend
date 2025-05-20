@@ -1,14 +1,16 @@
 // src/features/quickbooks/controller/quickbooksController.ts
-import { RequestHandler } from 'express'
+import { RequestHandler } from 'express';
 import {
   disconnectQuickBooks,
   generateConsentUrl,
   handleAuthCallback,
   isConnected
-} from '../services/auth/quickbooksAuthService'
-import createCustomerService, { CreateCustomerParams } from '../services/customer/createCustomer'
-import createInvoiceService from '../services/invoice/createInvoice'
-
+} from '../services/auth/quickbooksAuthService';
+import createCustomerService, { CreateCustomerParams } from '../services/customer/createCustomer';
+import createInvoiceService from '../services/invoice/createInvoice';
+import supabase from '../supabase';
+// ← 1) Import your invoiceable-customers logic
+import getInvoiceableCustomers from '../services/customer/getInvoiceableCustomers';
 // Ensure you have SUPABASE_JWT_SECRET in your env
 const JWT_SECRET = process.env.SUPABASE_JWT_SECRET!
 
@@ -74,6 +76,23 @@ export const createInvoice: RequestHandler = async (req, res, next) => {
     next(err)
   }
 }
+
+
+
+/**
+ * GET /quickbooks/customers/invoiceable
+ * Returns all internal customers with role = 'customer'
+ */
+
+export const getInvoiceableCustomersController: RequestHandler = async (_req, res, next) => {
+  try {
+    const customers = await getInvoiceableCustomers(supabase);
+    res.json(customers);
+  } catch (err: any) {
+    next(err);
+  }
+};
+
 
 /**
  * Create a customer
