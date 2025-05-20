@@ -32,6 +32,7 @@ export class ContractController {
   ): Promise<void> {
     try {
       const templates = await this.contractUseCase.getAllTemplates();
+      console.log(templates);
       res.status(200).json(templates.map((template) => template.toJson()));
     }
     catch (getError) {
