@@ -39,6 +39,11 @@ export interface UserRepository {
    * Get all users
    */
   findAll(): Promise<User[]>;
+
+  /**
+   * Get all team members
+   */
+  findAllTeamMembers(): Promise<User[]>;
   
   /**
    * Find a user by ID

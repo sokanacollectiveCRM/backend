@@ -31,6 +31,14 @@ export class UserController {
       this.handleError(error, res);
     }
   }
+  async getAllTeamMembers(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const users = await this.userUseCase.getAllTeamMembers();
+      res.status(200).json(users.map(user => user.toJSON()));
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
 
   async getHoursById(req: AuthRequest, res: Response): Promise<void> {
     try {

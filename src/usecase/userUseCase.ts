@@ -47,5 +47,9 @@ export class UserUseCase {
   async getAllUsers(): Promise<User[]> {
     return this.userRepository.findAll();
   }
+
+  async getAllTeamMembers(): Promise<User[]> {
+    return this.userRepository.findAllTeamMembers();
+  }
 }
 

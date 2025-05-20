@@ -162,6 +162,19 @@ export class SupabaseUserRepository implements UserRepository {
     
     return data.map(this.mapToUser);
   }
+
+  async findAllTeamMembers(): Promise<User[]> {
+    const { data, error } = await this.supabaseClient
+    .from('users')
+    .select('firstname, lastname, email, role, account_status')
+    .in('role', ['doula','admin'])
+
+    if (error) {
+      throw new Error(`Failed to fetch team members: ${error.message}`);
+    }
+
+    return data.map(this.mapToUser);
+  }
   
   async getHoursById(id: string): Promise<any> {
     console.log("getHoursById is run");
