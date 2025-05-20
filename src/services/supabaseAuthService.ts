@@ -3,7 +3,8 @@ import { User } from '../entities/User';
 import { UserRepository } from '../repositories/interface/userRepository';
 import { AuthService } from '../services/interface/authService';
 import {
-  AuthenticationError
+  AuthenticationError,
+  AuthorizationError
 } from './../domains/errors';
 
 export class SupabaseAuthService implements AuthService {
@@ -19,41 +20,40 @@ export class SupabaseAuthService implements AuthService {
   async signup(
     email: string,
     password: string,
-    username: string,
     firstname: string,
     lastname: string
   ): Promise<User> {
-
-    // First, create the auth account in Supabase
+    // Create the auth account in Supabase
     const { data, error } = await this.supabaseClient.auth.signUp({
       email,
       password,
     });
-    
+
     if (error) {
       throw new AuthenticationError(`Authentication error: ${error.message}`);
     }
-    
+
     if (!data.user) {
       throw new AuthenticationError('User creation failed for unknown reasons');
     }
-    
-    // Create the user entity in our domain
-    const user = new User({
-      username,
-      email,
-      firstname: firstname || null,
-      lastname: lastname || null,
-    });
-    
-    // Save the extended user profile to our user repository
+
+    const user = await this.userRepository.findByEmail(email);
+    if (!user) {
+      // This shouldn’t happen, but just in case
+      await this.supabaseClient.auth.admin.deleteUser(data.user.id);
+      throw new AuthorizationError("Signup not allowed — not approved.");
+    }
+
+    user.firstname = firstname || null;
+    user.lastname = lastname || null;
+
+    // update any details if needed
     try {
       await this.userRepository.save(user);
       return user;
     } catch (error) {
-      // If we can't save the user profile, clean up the auth account
       await this.supabaseClient.auth.admin.deleteUser(data.user.id);
-      throw new Error('An account already exists with the provided email');
+      throw new Error("Failed to update user profile during signup");
     }
   }
   

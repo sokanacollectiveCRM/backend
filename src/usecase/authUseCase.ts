@@ -2,6 +2,7 @@ import { AuthService } from '../services/interface/authService';
 
 import {
   AuthenticationError,
+  AuthorizationError,
   NotFoundError,
   ValidationError
 } from '../domains/errors';
@@ -27,12 +28,11 @@ export class AuthUseCase {
   async signup(
     email: string, 
     password: string, 
-    username: string, 
     firstname: string, 
     lastname: string
   ): Promise<User> {
-
-    if (!email || !password || !username) {
+      
+    if (!email || !password) {
       throw new ValidationError("Email, password, and username are required");
     }
 
@@ -40,20 +40,22 @@ export class AuthUseCase {
       throw new ValidationError("Password must be at least 8 characters long");
     }
 
-    try {
-      // Let auth service return the user who signed up
-      const user = await this.authService.signup(
-        email,
-        password,
-        username,
-        firstname,
-        lastname
-      );
-
-      return user;
-    } catch (error) {
-      throw new AuthenticationError(error.message);
+    // Check that the user is pre-approved by an admin
+    const existingUser = await this.userRepository.findByEmail(email);
+    if (!existingUser) {
+      throw new AuthorizationError("You are not authorized to sign up");
     }
+    if (existingUser.account_status !== 'pending') {
+      throw new AuthorizationError("This account already exists");
+    }
+
+    // Continue with signup
+    return await this.authService.signup(
+      email,
+      password,
+      firstname,
+      lastname
+    );
   }
 
   //

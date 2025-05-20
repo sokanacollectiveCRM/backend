@@ -1,6 +1,6 @@
 
-import { Template } from 'entities/Template'
 import { Response } from 'express'
+import { Template } from '../../entities/Template'
 
 export interface ContractService{
 

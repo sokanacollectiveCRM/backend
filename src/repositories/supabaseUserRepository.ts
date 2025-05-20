@@ -45,7 +45,7 @@ export class SupabaseUserRepository implements UserRepository {
     return data.map(this.mapToUser);
   }
 
-  async findClientsAll(): Promise<any> {
+  async findClientsAll(): Promise<Client[]> {
     const { data, error } = await this.supabaseClient
       .from('client_info')
       .select(`
@@ -99,6 +99,8 @@ export class SupabaseUserRepository implements UserRepository {
       throw new Error(`${getUsersError.message}`);
     }
 
+    console.log(users);
+
     return users.map(this.mapToUser);
   }
   
@@ -107,11 +109,10 @@ export class SupabaseUserRepository implements UserRepository {
       .from('users')
       .upsert({
         id: user.id,
-        username: user.username,
         email: user.email,
         firstname: user.firstname,
         lastname: user.lastname,
-      })
+      }, { onConflict: 'email' })
       .select()
       .single();
       

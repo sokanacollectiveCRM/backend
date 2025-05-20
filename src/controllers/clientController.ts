@@ -34,6 +34,7 @@ export class ClientController {
       const { id, role } = req.user;
       // call use case to grab all users
       const clients = await this.clientUseCase.getClients(id, role);
+      console.log(clients.map(this.mapToClientSummary))
       res.json(clients.map(this.mapToClientSummary));
     } 
     catch (getError) {

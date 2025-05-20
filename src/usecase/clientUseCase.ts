@@ -22,7 +22,11 @@ export class ClientUseCase {
   ): Promise<any> {
 
     try {
-      if (role === "admin" || role === "doula") {
+      if (role === "admin") {
+        let clients = await this.userRepository.findClientsAll();
+        return clients;
+      }
+      if (role === "doula") {
         let clients = await this.userRepository.findClientsByDoula(id);
         return clients;
       }
