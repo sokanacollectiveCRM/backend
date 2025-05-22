@@ -22,8 +22,15 @@ export class ClientUseCase {
   ): Promise<any> {
 
     try {
-      if (role === "admin" || role === "doula") {
+      if (role === "doula") {
+        console.log("calling findClientsByDoula");
         let clients = await this.userRepository.findClientsByDoula(id);
+        console.log("in clientUseCase, after findClientsByDoula call");
+        return clients;
+      }
+      else if (role === "admin") {
+        console.log("calling findClientsAll");
+        let clients = await this.userRepository.findClientsAll();
         return clients;
       }
     }

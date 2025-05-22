@@ -1,6 +1,7 @@
 import { User } from 'entities/User';
 import { WORK_ENTRY, WORK_ENTRY_ROW } from 'entities/Hours';
 import type { File as MulterFile } from 'multer';
+import { Client } from 'entities/Client';
 
 /**
  * UserRepository defines the interface for user data operations
@@ -19,7 +20,7 @@ export interface UserRepository {
   /**
    * Get all clients by Doula
    */
-  findClientsByDoula(doulaId: string): Promise<User[]>;
+  findClientsByDoula(doulaId: string): Promise<Client[]>;
 
   /**
    * FOR SHOWCASE ONLY
