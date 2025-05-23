@@ -1,12 +1,12 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import Docxtemplater from 'docxtemplater';
-import { Template } from 'entities/Template';
 import { Response } from 'express';
 import fs from 'fs/promises';
 import { MulterFile as File } from 'multer';
 import PizZip from 'pizzip';
 import { fileSync } from 'tmp';
 import { NotFoundError } from '../domains/errors';
+import { Template } from '../entities/Template';
 import convertToPdf from '../utils/convertToPdf';
 import { ContractService } from '././interface/contractService';
 
