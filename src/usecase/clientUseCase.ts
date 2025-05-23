@@ -1,43 +1,40 @@
-import { ClientRepository } from 'repositories/interface/clientRepository';
-import { UserRepository } from 'repositories/interface/userRepository';
+import { Client } from 'entities/Client';
+import { ClientRepository } from '../repositories/interface/clientRepository';
 
 export class ClientUseCase {
-  private userRepository: UserRepository;
   private clientRepository: ClientRepository;
 
-  constructor (userRepository: UserRepository, clientRepository: ClientRepository) {
-    this.userRepository = userRepository;
+  constructor (clientRepository: ClientRepository) {
     this.clientRepository = clientRepository;
   }
 
-  //
-  // forward to repository to grab clients based on role
-  //
-  // returns:
-  //    users
-  //
-  async getClients(
-    id: string,
-    role: string
-  ): Promise<any> {
-
-    try {
-      if (role === "admin") {
-        let clients = await this.userRepository.findClientsAll();
-        return clients;
-      }
-    }
-    catch (error) {
-      throw new Error(`Could not return clients: ${error.message}`);
+  // Summary of clients for use in brief list of clients
+  async getClientsLite(id: string, role: string): Promise<Client[]> {
+    if (role === 'admin') {
+      return this.clientRepository.findClientsLiteAll();
+    } else {
+      return this.clientRepository.findClientsLiteByDoula(id);
     }
   }
 
-  //
-  // forward to repository to update client status in client_info
-  //
-  // returns:
-  //    client
-  //
+  // Detailed view of clients for profile
+  async getClientsDetailed(id: string, role: string): Promise<Client[]> {
+    if (role === 'admin') {
+      return this.clientRepository.findClientsDetailedAll();
+    } else {
+      return this.clientRepository.findClientsDetailedByDoula(id);
+    }
+  }
+
+  async getClientLite(clientId: string): Promise<Client> {
+    return this.clientRepository.findClientLiteById(clientId);
+  }
+
+  async getClientDetailed(clientId: string): Promise<Client> {
+    return this.clientRepository.findClientDetailedById(clientId);
+  }
+
+  // updates a client's status
   async updateClientStatus(
     clientId: string,
     status: string

@@ -1,6 +1,7 @@
 import { ValidationError } from "../domains/errors";
-import { IncomeLevel, Pronouns, RequestForm, ServiceTypes, Sex } from "../entities/RequestForm";
+import { RequestForm } from '../entities/RequestForm';
 import { RequestFormRepository } from "../repositories/requestFormRepository";
+import { IncomeLevel, Pronouns, ServiceTypes, Sex } from "../types";
 
 export class RequestFormService {
   private repository: RequestFormRepository;
@@ -10,8 +11,8 @@ export class RequestFormService {
   }
 
   async newForm(formData: {
-    first_name: string;
-    last_name: string;
+    firstname: string;
+    lastname: string;
     email: string;
     phone_number: string;
     children_expected: string;
@@ -29,8 +30,12 @@ export class RequestFormService {
     annual_income: IncomeLevel;
     service_specifics: string;
   }): Promise<RequestForm> {
-    if (!formData.first_name || !formData.last_name || !formData.service_needed) {
-      throw new ValidationError("Missing required fields: name and service type");
+    if (!formData.firstname || !formData.lastname || !formData.service_needed) {
+      throw new ValidationError("Missing required fields: first name or last name");
+    }
+
+    if (!formData.service_needed) {
+      throw new ValidationError("Missing required field: service_needed");
     }
     
     if (!formData.email || !formData.email.includes('@')) {
@@ -43,8 +48,8 @@ export class RequestFormService {
 
     // Create request form entity
     const requestForm = new RequestForm(
-      formData.first_name,
-      formData.last_name,
+      formData.firstname,
+      formData.lastname,
       formData.email,
       formData.phone_number,
       formData.children_expected,

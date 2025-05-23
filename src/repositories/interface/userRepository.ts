@@ -1,5 +1,6 @@
-import { User } from 'entities/User';
 import type { File as MulterFile } from 'multer';
+import { WORK_ENTRY, WORK_ENTRY_ROW } from '../../entities/Hours';
+import { User } from '../../entities/User';
 
 /**
  * UserRepository defines the interface for user data operations
@@ -58,5 +59,10 @@ export interface UserRepository {
   /**
    * Get this user's work hours
    */
-  getHoursById(id: string): Promise<void>;
+  getHoursById(id: string): Promise<WORK_ENTRY[]>;
+  
+  /**
+   * Add a new doula work session entry 
+   */
+  addNewHours(doula_id: string, client_id: string, start_time: Date, end_time: Date): Promise<WORK_ENTRY_ROW>;
 }

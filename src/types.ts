@@ -1,6 +1,6 @@
-import { User } from 'entities/User';
 import { Request } from 'express';
 import type { File as MulterFile } from 'multer';
+import { User } from './entities/User';
 
 export enum ServiceTypes{
   LABOR_SUPPORT = "Labor Support",
@@ -44,7 +44,6 @@ export interface UpdateRequest extends Request {
 
 export interface UserData {
   id?: string;
-  username?: string;
   email?: string;
   firstname?: string;
   lastname?: string;
@@ -65,7 +64,6 @@ export interface UserData {
 export interface SignupBody {
   email: string;
   password: string;
-  username: string;
   firstname?: string;
   lastname?: string;
 }

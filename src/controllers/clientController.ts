@@ -1,15 +1,15 @@
+import { Response } from 'express';
 import {
   AuthenticationError,
   AuthorizationError,
   ConflictError,
   NotFoundError,
   ValidationError
-} from 'domains/errors';
-import { Client } from 'entities/Client';
-import { Response } from 'express';
+} from '../domains/errors';
+import { Client } from '../entities/Client';
 
-import { AuthRequest } from 'types';
-import { ClientUseCase } from 'usecase/clientUseCase';
+import { AuthRequest } from '../types';
+import { ClientUseCase } from '../usecase/clientUseCase';
 
 export class ClientController {
   private clientUseCase: ClientUseCase;
@@ -21,29 +21,61 @@ export class ClientController {
   //
   // getClients()
   //
-  // Grabs all users specified by role (All for admins, assigned for doulas)
+  // Grabs all clients (lite or detailed) based on role or query param
   //
   // returns:
-  //    List of users
+  //    Clients[]
   //
-  async getClients(
-    req: AuthRequest,
-    res: Response,
-  ): Promise<void> {
+  async getClients(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { id, role } = req.user;
-      // call use case to grab all users
-      const clients = await this.clientUseCase.getClients(id, role);
-      res.json(clients.map(this.mapToClientSummary));
-    } 
-    catch (getError) {
-      const error = this.handleError(getError, res);
+      const { detailed } = req.query;
 
+      const clients = detailed === 'true'
+        ? await this.clientUseCase.getClientsDetailed(id, role)
+        : await this.clientUseCase.getClientsLite(id, role);
+
+      res.json(clients.map(client => client.toJson()));
+    } catch (getError) {
+      const error = this.handleError(getError, res);
       if (!res.headersSent) {
-        res.status(error.status).json({ error: error.message})
+        res.status(error.status).json({ error: error.message });
       }
     }
   }
+
+  //
+  // getClientById()
+  //
+  // Grab a specific client with detailed information
+  //
+  // returns:
+  //    Client
+  //
+  async getClientById(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { detailed } = req.query;
+
+    if (!id) {
+      res.status(400).json({ error: 'Missing client ID' });
+      return;
+    }
+
+    const client = detailed === 'true'
+      ? await this.clientUseCase.getClientDetailed(id)
+      : await this.clientUseCase.getClientLite(id);
+
+    res.json(client.toJson());
+  } catch (error) {
+    const err = this.handleError(error, res);
+    if (!res.headersSent) {
+      res.status(err.status).json({ error: err.message });
+    }
+  }
+}
+
+
 
   //
   // updateClientStatus
@@ -58,10 +90,13 @@ export class ClientController {
     res: Response,
   ): Promise<void> {
     const { clientId, status } = req.body;
+    console.log(clientId, status);
 
     if (!clientId || !status) {
       res.status(400).json({ message: 'Missing client ID or status' });
+      return;
     }
+
 
     try {
       const client = await this.clientUseCase.updateClientStatus(clientId, status);

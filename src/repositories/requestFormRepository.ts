@@ -15,8 +15,8 @@ export class RequestFormRepository{
              .from('client_info') 
              .insert([
                 {
-                    first_name: formData.first_name,
-                    last_name: formData.last_name,
+                    firstname: formData.firstname,
+                    lastname: formData.lastname,
                     email: formData.email,
                     phone_number: formData.phone_number,
                     children_expected: formData.children_expected,

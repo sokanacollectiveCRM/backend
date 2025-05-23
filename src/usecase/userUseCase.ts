@@ -1,7 +1,8 @@
-import { NotFoundError } from 'domains/errors';
-import { User } from 'entities/User';
 import { File as MulterFile } from 'multer';
 import { UserRepository } from 'repositories/interface/userRepository';
+import { NotFoundError } from '../domains/errors';
+import { WORK_ENTRY } from '../entities/Hours';
+import { User } from '../entities/User';
 
 export class UserUseCase {
   private userRepository: UserRepository;
@@ -19,10 +20,25 @@ export class UserUseCase {
 
     return user;
   }
+  
+  async getHoursById(targetUserId: string): Promise<WORK_ENTRY[]> {
+    const hours = await this.userRepository.getHoursById(targetUserId);
+    
+    if(!hours) {
+      throw new NotFoundError("Could not get hours based on Id");
+    }
+
+    return hours;
+  }
+
+  async addNewHours(doula_id: string, client_id: string, start_time: Date, end_time: Date) {
+    const newWorkEntry = await this.userRepository.addNewHours(doula_id, client_id, start_time, end_time);
+
+    return newWorkEntry;
+  }
 
   async uploadProfilePicture(user: User, profilePicture: MulterFile) {
     const signedUrl = await this.userRepository.uploadProfilePicture(user, profilePicture);
-    console.log(signedUrl);
     return signedUrl;
   }
 
@@ -38,8 +54,6 @@ export class UserUseCase {
     if (Object.keys(fieldsToUpdate).length === 0) {
       return user; // Nothing to update
     }
-
-    console.log('fields to update', fieldsToUpdate);
 
     return this.userRepository.update(user.id, fieldsToUpdate);
   }
