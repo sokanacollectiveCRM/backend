@@ -1,12 +1,12 @@
 // infrastructure/repositories/SupabaseUserRepository.ts
 
 import { SupabaseClient } from '@supabase/supabase-js';
-import { Client } from 'entities/Client';
-import { User } from 'entities/User';
 import { File as MulterFile } from 'multer';
-import { UserRepository } from 'repositories/interface/userRepository';
-import { ROLE } from 'types';
-import { WORK_ENTRY, WORK_ENTRY_ROW } from 'entities/Hours';
+import { Client } from '../entities/Client';
+import { WORK_ENTRY_ROW } from '../entities/Hours';
+import { User } from '../entities/User';
+import { UserRepository } from '../repositories/interface/userRepository';
+import { ROLE } from '../types';
 
 export class SupabaseUserRepository implements UserRepository {
   private supabaseClient: SupabaseClient;
@@ -45,13 +45,14 @@ export class SupabaseUserRepository implements UserRepository {
     return data.map(this.mapToUser);
   }
 
-  async findClientsAll(): Promise<any> {
+  async findClientsAll(): Promise<Client[]> {
     const { data, error } = await this.supabaseClient
       .from('client_info')
       .select(`
         id,
         firstname,
         lastname,
+        email,
         service_needed,
         requested,
         updated_at,
@@ -111,16 +112,14 @@ export class SupabaseUserRepository implements UserRepository {
       .from('users')
       .upsert({
         id: user.id,
-        username: user.username,
         email: user.email,
         firstname: user.firstname,
         lastname: user.lastname,
-      })
+      }, { onConflict: 'email' })
       .select()
       .single();
       
     if (error) {
-      console.log(error.message)
       throw new Error(error.message);
     }
     
@@ -136,7 +135,6 @@ export class SupabaseUserRepository implements UserRepository {
       .select()
       .single()
 
-    console.log(updatedUserError);
 
     if (updatedUserError) throw new Error(updatedUserError.message);
     return this.mapToUser(updatedUser);
@@ -145,8 +143,8 @@ export class SupabaseUserRepository implements UserRepository {
   async findAll(): Promise<User[]> {
     const { data, error } = await this.supabaseClient
     .from('users')
-    .select('username, email, firstname, lastname')
-    .order('username', { ascending: true });
+    .select('email, firstname, lastname')
+    .order('firstname', { ascending: true });
     
     if (error) {
       throw new Error(`Failed to fetch users: ${error.message}`);
@@ -165,7 +163,6 @@ export class SupabaseUserRepository implements UserRepository {
       
       if (hoursError) throw new Error(hoursError.message);
       if (!hoursData) {
-        console.log("there's no hours data so returning []");
         return []
       };
       
@@ -193,8 +190,6 @@ export class SupabaseUserRepository implements UserRepository {
           } : null
         };
       }));
-
-      console.log("about to return result", result);
       
       return result;
     } catch (error) {
@@ -248,8 +243,6 @@ export class SupabaseUserRepository implements UserRepository {
       .from('profile-pictures')
       .getPublicUrl(filePath);
 
-    console.log("this is the data", publicUrl);
-
     return publicUrl;
   }
 
@@ -257,7 +250,6 @@ export class SupabaseUserRepository implements UserRepository {
   private mapToUser(data: any): User {
     return new User({
       id: data.id,
-      username: data.username,
       email: data.email,
       firstname: data.firstname,
       lastname: data.lastname,

@@ -2,11 +2,12 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express, { Express, NextFunction, Request, Response } from 'express';
-import authRoutes from 'routes/authRoutes';
-import clientRoutes from 'routes/clientRoutes';
-import emailRoutes from 'routes/EmailRoutes';
-import requestRouter from 'routes/requestRoute';
-import userRoutes from 'routes/specificUserRoutes';
+import authRoutes from './routes/authRoutes';
+import clientRoutes from './routes/clientRoutes';
+import contractRoutes from './routes/contractRoutes';
+import emailRoutes from './routes/EmailRoutes';
+import requestRouter from './routes/requestRoute';
+import userRoutes from './routes/specificUserRoutes';
 
 dotenv.config();
 
@@ -61,8 +62,9 @@ app.use('/email', emailRoutes);
 app.use('/requestService', requestRouter);
 app.use('/clients', clientRoutes);
 app.use('/users', userRoutes);
+app.use('/contracts', contractRoutes);
 
-app.get('/health', (_req: Request, res: Response) => {
+app.get('/', (_req: Request, res: Response) => {
   res.status(200).json({ status: 'ok' });
 });
 
@@ -82,13 +84,6 @@ app.use((err: AppError, _req: Request, res: Response, _next: NextFunction) => {
     error: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message,
   });
 });
-
-if (process.env.NODE_ENV !== 'production') {
-  console.log('CORS Configuration:', {
-    allowedOrigins: [process.env.FRONTEND_URL, process.env.FRONTEND_URL_DEV],
-    credentials: true,
-  });
-}
 
 const PORT: number = parseInt(process.env.PORT || '3001', 10);
 app.listen(PORT, () => {

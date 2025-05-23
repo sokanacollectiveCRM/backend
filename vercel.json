@@ -1,16 +1,15 @@
 {
   "version": 2,
-  "trailingSlash": false,
   "builds": [
     {
-      "src": "src/server.js",
+      "src": "src/server.ts",
       "use": "@vercel/node"
     }
   ],
-  "rewrites": [
+  "routes": [
     {
-      "source": "/(.*)",
-      "destination": "src/server.js"
+      "src": "/(.*)",
+      "dest": "src/server.ts"
     }
   ]
 }
