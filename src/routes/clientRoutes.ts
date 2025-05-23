@@ -32,6 +32,15 @@ clientRoutes.get('/team',
   (req, res) => userController.getAllTeamMembers(req, res)
 );
 
+clientRoutes.delete('/team/:id',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
+  (req, res) => userController.deleteMember(req, res)
+);
 
-
+clientRoutes.post("/team/add",
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
+  (req, res) => userController.addTeamMember(req, res)
+)
 export default clientRoutes;

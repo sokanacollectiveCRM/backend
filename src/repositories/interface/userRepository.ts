@@ -44,7 +44,7 @@ export interface UserRepository {
    * Get all team members
    */
   findAllTeamMembers(): Promise<User[]>;
-  
+
   /**
    * Find a user by ID
    */
@@ -54,6 +54,11 @@ export interface UserRepository {
    * Delete a user
    */
   delete(id: string): Promise<void>;
+
+  /**
+   * Add a user
+   */
+  addMember(firstname: string, lastname: string, userEmail: string, userRole: string): Promise<User>;
 
   /**
    * Upload a user profile picture

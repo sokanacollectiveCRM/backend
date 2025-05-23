@@ -13,4 +13,9 @@ emailRoutes.post('/client-approval', (req, res) =>
   emailController.sendClientApproval(req, res)
 );
 
+// Route for sending team invite emails
+emailRoutes.post('/team-invite', (req, res) => 
+  emailController.sendTeamInvite(req, res)
+);
+
 export default emailRoutes;

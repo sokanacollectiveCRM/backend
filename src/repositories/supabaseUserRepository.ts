@@ -164,18 +164,48 @@ export class SupabaseUserRepository implements UserRepository {
   }
 
   async findAllTeamMembers(): Promise<User[]> {
-    const { data, error } = await this.supabaseClient
-    .from('users')
-    .select('firstname, lastname, email, role, account_status')
-    .in('role', ['doula','admin'])
+    try {
+      const { data, error } = await this.supabaseClient
+      .from('users')
+      .select('id, firstname, lastname, email, role, bio')
+      .in('role', ['doula','admin'])
 
-    if (error) {
-      throw new Error(`Failed to fetch team members: ${error.message}`);
+      if (error) {
+        throw new Error(`Failed to retrieve team members: ${error.message}`);
+      }
+
+      const mappedUsers = data.map(this.mapToUser);
+      return mappedUsers;
+    } catch (err) {
+      throw new Error(`Failed to fetch team members: ${err.message}`);
     }
-
-    return data.map(this.mapToUser);
   }
-  
+
+  async addMember(firstname: string, lastname: string, userEmail: string, userRole: string): Promise<User> {
+    try {
+      const { data, error } = await this.supabaseClient
+        .from('users')
+        .insert([
+          { 
+            firstname:firstname,
+            lastname:lastname,
+            email: userEmail, 
+            role: userRole
+          },
+        ])
+        .select()
+        .single()
+
+      if (error) {
+        throw new Error(`Failed to add member: ${error.message}`);
+      }
+
+      return this.mapToUser(data);
+    } catch (err) {
+      throw new Error(`Failed to add member: ${err.message}`);
+    }
+  }
+
   async getHoursById(id: string): Promise<any> {
     console.log("getHoursById is run");
     try {
