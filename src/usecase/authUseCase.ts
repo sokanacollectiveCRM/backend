@@ -20,7 +20,7 @@ export class AuthUseCase {
   }
 
   //
-  // forward to authService for signing up and return the new user
+  // Sign up the user if they are already in the users table
   //
   // returns:
   //    user
@@ -33,7 +33,7 @@ export class AuthUseCase {
   ): Promise<User> {
       
     if (!email || !password) {
-      throw new ValidationError("Email, password, and username are required");
+      throw new ValidationError("Email and password are required");
     }
 
     if (password.length < 8) {
@@ -43,7 +43,7 @@ export class AuthUseCase {
     // Check that the user is pre-approved by an admin
     const existingUser = await this.userRepository.findByEmail(email);
     if (!existingUser) {
-      throw new AuthorizationError("You are not authorized to sign up");
+      throw new AuthorizationError("You are not authorized to sign up. Please email the office if the issue persists.");
     }
     if (existingUser.account_status !== 'pending') {
       throw new AuthorizationError("This account already exists");
@@ -59,7 +59,7 @@ export class AuthUseCase {
   }
 
   //
-  // forward to authService to authenticate and return our user
+  // login if valid credentials
   //
   // returns:
   //    user
@@ -74,6 +74,10 @@ export class AuthUseCase {
     }
 
     try {
+      const existingUser = await this.userRepository.findByEmail(email);
+      if (!existingUser) {
+        throw new AuthorizationError("Invalid credentials. Please try again or contact the office.");
+      }
       // let auth service return the user who just logged in alongside the session token
       const { user, token } = await this.authService.login(
         email,
@@ -121,7 +125,7 @@ export class AuthUseCase {
   }
 
   //
-  // forward to authService to authenticate and return our user
+  // redirect user to our custom verification page with a valid supabase otp
   //
   // returns:
   //    user
@@ -151,7 +155,7 @@ export class AuthUseCase {
   }
 
   //
-  // forward to authService to authenticate and return our user
+  // get all users
   //
   // returns:
   //    user
@@ -166,7 +170,7 @@ export class AuthUseCase {
   }
 
   //
-  // forward to authService to authenticate and return our user
+  // redirect to google auth service
   //
   // returns:
   //    user
@@ -183,7 +187,7 @@ export class AuthUseCase {
   }
 
   //
-  // forward to authService to authenticate and return our user
+  // handle response from google oauth
   //
   // returns:
   //    user
@@ -203,21 +207,14 @@ export class AuthUseCase {
       // Check if user exists
       let user = await this.userRepository.findByEmail(userData.email);
       
-      // Create new user if doesn't exist
+      // User should already exist in users table
       if (!user) {
-        const newUser = new User({
-          username: userData.email.split('@')[0],
-          email: userData.email,
-          firstname: userData.user_metadata?.given_name || null,
-          lastname: userData.user_metadata?.family_name || null,
-        });
-        
-        user = await this.userRepository.save(newUser);
+        throw new AuthorizationError('You are not authorized to sign in. Please email the office if the issue persists.');
       }
       
       return { session, user };
     } catch (error) {
-      throw new AuthenticationError(`OAuth callback error: ${error.message}`);
+      throw new AuthenticationError(`${error.message}`);
     }
   }
 
@@ -242,7 +239,6 @@ export class AuthUseCase {
       // Create user if doesn't exist
       if (!user) {
         const newUser = new User({
-          username: user.email.split('@')[0],
           email: user.email,
           firstname: user.user_metadata?.given_name || 
                     user.user_metadata?.name?.split(' ')[0] || 

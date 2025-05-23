@@ -69,7 +69,6 @@ export class SupabaseContractService implements ContractService {
       });
   
       if (uploadError) {
-        console.log('Upload error', uploadError);
         throw new Error('failed to upload new template');
       }
     }

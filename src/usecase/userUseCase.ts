@@ -55,8 +55,6 @@ export class UserUseCase {
       return user; // Nothing to update
     }
 
-    console.log('fields to update', fieldsToUpdate);
-
     return this.userRepository.update(user.id, fieldsToUpdate);
   }
 

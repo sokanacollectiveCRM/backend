@@ -164,6 +164,8 @@ export class SupabaseAuthService implements AuthService {
   async getGoogleAuthUrl(
     redirectTo: string
   ): Promise<string> {
+
+
     const { data, error } = await this.supabaseClient.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -192,6 +194,7 @@ export class SupabaseAuthService implements AuthService {
   }
 
   async exchangeCodeForSession(code: string): Promise<{session: any, userData: any}> {
+
     const { data, error } = await this.supabaseClient.auth.exchangeCodeForSession(code);
 
     if (error) {

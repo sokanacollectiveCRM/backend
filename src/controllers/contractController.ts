@@ -32,7 +32,6 @@ export class ContractController {
   ): Promise<void> {
     try {
       const templates = await this.contractUseCase.getAllTemplates();
-      console.log(templates);
       res.status(200).json(templates.map((template) => template.toJson()));
     }
     catch (getError) {
@@ -86,9 +85,6 @@ export class ContractController {
     const name = req.params.name;
     const file = req.file;
     const { deposit, fee } = req.body;
-
-    console.log("name: ", name, " file: ", file, " deposit fee", deposit, " ", fee);
-    console.log(req.headers['content-type']);
 
     try {
       const result = await this.contractUseCase.updateTemplate(name, deposit, fee, file);

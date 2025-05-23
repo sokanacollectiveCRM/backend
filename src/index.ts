@@ -34,7 +34,7 @@ const contractService = new SupabaseContractService(supabase);
 //-----------------------------------------------
 const authUseCase = new AuthUseCase(authService, userRepository);
 const userUseCase = new UserUseCase(userRepository);
-const clientUseCase = new ClientUseCase(userRepository, clientRepository);
+const clientUseCase = new ClientUseCase(clientRepository);
 const contractUseCase = new ContractUseCase(contractService);
 
 //-----------------------------------------------

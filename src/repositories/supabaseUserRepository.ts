@@ -52,6 +52,7 @@ export class SupabaseUserRepository implements UserRepository {
         id,
         firstname,
         lastname,
+        email,
         service_needed,
         requested,
         updated_at,
@@ -99,8 +100,6 @@ export class SupabaseUserRepository implements UserRepository {
       throw new Error(`${getUsersError.message}`);
     }
 
-    console.log(users);
-
     return users.map(this.mapToUser);
   }
   
@@ -117,7 +116,6 @@ export class SupabaseUserRepository implements UserRepository {
       .single();
       
     if (error) {
-      console.log(error.message)
       throw new Error(error.message);
     }
     
@@ -133,7 +131,6 @@ export class SupabaseUserRepository implements UserRepository {
       .select()
       .single()
 
-    console.log(updatedUserError);
 
     if (updatedUserError) throw new Error(updatedUserError.message);
     return this.mapToUser(updatedUser);
@@ -142,8 +139,8 @@ export class SupabaseUserRepository implements UserRepository {
   async findAll(): Promise<User[]> {
     const { data, error } = await this.supabaseClient
     .from('users')
-    .select('username, email, firstname, lastname')
-    .order('username', { ascending: true });
+    .select('email, firstname, lastname')
+    .order('firstname', { ascending: true });
     
     if (error) {
       throw new Error(`Failed to fetch users: ${error.message}`);
@@ -162,7 +159,6 @@ export class SupabaseUserRepository implements UserRepository {
       
       if (hoursError) throw new Error(hoursError.message);
       if (!hoursData) {
-        console.log("there's no hours data so returning []");
         return []
       };
       
@@ -190,8 +186,6 @@ export class SupabaseUserRepository implements UserRepository {
           } : null
         };
       }));
-
-      console.log("about to return result", result);
       
       return result;
     } catch (error) {
@@ -245,8 +239,6 @@ export class SupabaseUserRepository implements UserRepository {
       .from('profile-pictures')
       .getPublicUrl(filePath);
 
-    console.log("this is the data", publicUrl);
-
     return publicUrl;
   }
 
@@ -254,7 +246,6 @@ export class SupabaseUserRepository implements UserRepository {
   private mapToUser(data: any): User {
     return new User({
       id: data.id,
-      username: data.username,
       email: data.email,
       firstname: data.firstname,
       lastname: data.lastname,
