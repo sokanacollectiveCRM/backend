@@ -26,6 +26,27 @@ export class ClientUseCase {
     }
   }
 
+
+    //
+  // // forward to repository to Fetch csv client data
+  // //
+  // // returns:
+  // //    CSV data of Client
+  // //
+  // getCSV = async(role:string): Promise<any> => {
+  //   try {
+  //     if (role == "admin"|| role == "client"){
+  //       const csvData = await this.supabaseuserRepository.exportCSV()
+  //       if (!csvData) {
+  //         throw new Error("No data available for CSV export");
+  //       }
+  //       return csvData;
+  //     }
+  //   } catch (error) {
+  //     throw new Error(`Failed to retrive CSV data ${error.message}`)
+  //   }
+  // }
+
   async getClientLite(clientId: string): Promise<Client> {
     return this.clientRepository.findClientLiteById(clientId);
   }
