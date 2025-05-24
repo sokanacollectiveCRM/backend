@@ -311,12 +311,11 @@ export class SupabaseUserRepository implements UserRepository {
     )
   }
 
-  async addNewHours(doula_id: string, client_id: string, start_time: Date, end_time: Date): Promise<WORK_ENTRY_ROW> {
-    const { data, error } = await this.supabaseClient
+  async addNewHours(doula_id: string, client_id: string, start_time: Date, end_time: Date, note: string): Promise<WORK_ENTRY_ROW> {
+    const { data: hoursData, error: hoursError } = await this.supabaseClient
       .from('hours')
       .insert([
         {
-          // id: "123456789",
           doula_id: doula_id, 
           client_id: client_id, 
           start_time: start_time, 
@@ -324,11 +323,33 @@ export class SupabaseUserRepository implements UserRepository {
         }
       ])
       .select();
+      
+      if (hoursError) {
+        throw new Error(`Failed to post new user: ${hoursError.message}`);
+      }
 
-    if (error) {
-      throw new Error(`Failed to post new user: ${error.message}`);
+      console.log("hoursData is" , hoursData);
+      console.log("the id contained in hoursData is", hoursData[0].id);
+
+    if(note != "") {
+      console.log("note is not empty and about to call https call, note is", note);
+      const { data: noteData, error: noteError } = await this.supabaseClient
+      .from('notes')
+      .insert([
+        {
+          content: note,
+          created_by: doula_id,
+          work_log_id: hoursData[0].id,
+          visibility: "public"
+        }
+      ])
+      .select();
+      
+      if(noteError) {
+        throw new Error(`The note field is nonempty but failed to add note, ${noteError.message}`);
+      }
     }
     
-    return data[0];
+    return hoursData[0];
   }
 }

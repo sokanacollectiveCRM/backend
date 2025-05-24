@@ -43,14 +43,14 @@ export class UserController {
 
   async addNewHours(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { doula_id, client_id, start_time, end_time } = req.body;
+      const { doula_id, client_id, start_time, end_time, note } = req.body;
 
       if(!doula_id || !client_id || !start_time|| !end_time) {
         console.log(`${doula_id}, ${client_id}, ${start_time}, ${end_time}`);
         throw new Error(`Error: missing doula_id, client_id, start_time, or end_time`);
       }
 
-      const newWorkEntry = await this.userUseCase.addNewHours(doula_id, client_id, new Date(start_time), new Date(end_time));
+      const newWorkEntry = await this.userUseCase.addNewHours(doula_id, client_id, new Date(start_time), new Date(end_time), note);
       res.status(200).json(newWorkEntry);
     } catch (error) {
       console.log("Error trying to add new work entry");

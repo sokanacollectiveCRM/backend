@@ -31,8 +31,8 @@ export class UserUseCase {
     return hours;
   }
 
-  async addNewHours(doula_id: string, client_id: string, start_time: Date, end_time: Date) {
-    const newWorkEntry = await this.userRepository.addNewHours(doula_id, client_id, start_time, end_time);
+  async addNewHours(doula_id: string, client_id: string, start_time: Date, end_time: Date, note: string) {
+    const newWorkEntry = await this.userRepository.addNewHours(doula_id, client_id, start_time, end_time, note);
 
     return newWorkEntry;
   }
