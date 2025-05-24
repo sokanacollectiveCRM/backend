@@ -1,8 +1,8 @@
-import { NotFoundError } from 'domains/errors';
-import { User } from 'entities/User';
 import { File as MulterFile } from 'multer';
 import { UserRepository } from 'repositories/interface/userRepository';
-import { WORK_ENTRY } from 'entities/Hours';
+import { NotFoundError } from '../domains/errors';
+import { WORK_ENTRY } from '../entities/Hours';
+import { User } from '../entities/User';
 
 export class UserUseCase {
   private userRepository: UserRepository;
@@ -39,7 +39,6 @@ export class UserUseCase {
 
   async uploadProfilePicture(user: User, profilePicture: MulterFile) {
     const signedUrl = await this.userRepository.uploadProfilePicture(user, profilePicture);
-    console.log(signedUrl);
     return signedUrl;
   }
 
@@ -55,8 +54,6 @@ export class UserUseCase {
     if (Object.keys(fieldsToUpdate).length === 0) {
       return user; // Nothing to update
     }
-
-    console.log('fields to update', fieldsToUpdate);
 
     return this.userRepository.update(user.id, fieldsToUpdate);
   }

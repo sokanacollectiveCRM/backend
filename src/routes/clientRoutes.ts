@@ -1,9 +1,15 @@
 import express, { Router } from 'express';
-import { clientController } from 'index';
-import authMiddleware from 'middleware/authMiddleware';
-import authorizeRoles from 'middleware/authorizeRoles';
+import { clientController } from '../index';
+import authMiddleware from '../middleware/authMiddleware';
+import authorizeRoles from '../middleware/authorizeRoles';
 
 const clientRoutes: Router = express.Router();
+
+clientRoutes.get('/:id',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula', 'client']),
+  (req, res) => clientController.getClientById(req, res)
+);
 
 clientRoutes.get('/', 
   authMiddleware,

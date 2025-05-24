@@ -1,7 +1,7 @@
-import { User } from 'entities/User';
-import { WORK_ENTRY, WORK_ENTRY_ROW } from 'entities/Hours';
 import type { File as MulterFile } from 'multer';
-import { Client } from 'entities/Client';
+import { Client } from '../../entities/Client';
+import { WORK_ENTRY, WORK_ENTRY_ROW } from '../../entities/Hours';
+import { User } from '../../entities/User';
 
 /**
  * UserRepository defines the interface for user data operations

@@ -1,7 +1,7 @@
 import express, { Router } from 'express';
-import { userController } from 'index';
-import authMiddleware from 'middleware/authMiddleware';
 import multer from 'multer';
+import { userController } from '../index';
+import authMiddleware from '../middleware/authMiddleware';
 
 const userRoutes: Router = express.Router();
 

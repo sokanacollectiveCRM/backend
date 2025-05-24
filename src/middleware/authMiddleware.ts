@@ -1,8 +1,8 @@
-import { User } from 'entities/User';
 import { NextFunction, Response } from 'express';
-import { authService } from 'index';
-import supabase from 'supabase';
-import type { AuthRequest } from 'types';
+import { User } from '../entities/User';
+import { authService } from '../index';
+import supabase from '../supabase';
+import type { AuthRequest } from '../types';
 
 const authMiddleware = async (
   req: AuthRequest,
@@ -35,7 +35,7 @@ const authMiddleware = async (
     req.user = user_entity;
     next();
   } catch {
-    // console.error('Auth middleware error:', error);
+    console.error('Auth middleware error:');
     res.status(500).json({ error: 'Internal server error' });
   }
 };
