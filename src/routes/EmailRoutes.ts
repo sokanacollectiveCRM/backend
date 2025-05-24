@@ -1,8 +1,7 @@
 import express, { Router } from 'express';
-import { EmailController } from '../controllers/emailController';
+import { emailController } from '../index';
 import authMiddleware from '../middleware/authMiddleware';
 
-const emailController = new EmailController();
 const emailRoutes: Router = express.Router();
 
 // Protect all email routes with authentication

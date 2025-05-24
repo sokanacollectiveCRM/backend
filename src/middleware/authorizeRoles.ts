@@ -1,5 +1,5 @@
 import { NextFunction, Response } from 'express';
-import type { AuthRequest } from 'types';
+import type { AuthRequest } from '../types';
 
 // authorizeRoles
 //
@@ -13,7 +13,6 @@ const authorizeRoles = async (
   allowedRoles: string[]
 ): Promise<void> => {
   try {
-
     if (!req.user || !req.user.email) {
       res.status(401).json({ error: 'Unauthorized: No user found' });
     }

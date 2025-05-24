@@ -1,4 +1,4 @@
-import { IncomeLevel, Pronouns, ServiceTypes, Sex } from "types";
+import { IncomeLevel, Pronouns, ServiceTypes, Sex } from '../types';
 
 export class RequestForm{
   

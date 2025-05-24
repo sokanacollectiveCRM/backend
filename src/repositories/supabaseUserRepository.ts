@@ -1,11 +1,12 @@
 // infrastructure/repositories/SupabaseUserRepository.ts
 
 import { SupabaseClient } from '@supabase/supabase-js';
-import { Client } from 'entities/Client';
-import { User } from 'entities/User';
 import { File as MulterFile } from 'multer';
-import { UserRepository } from 'repositories/interface/userRepository';
-import { ROLE } from 'types';
+import { Client } from '../entities/Client';
+import { WORK_ENTRY_ROW } from '../entities/Hours';
+import { User } from '../entities/User';
+import { UserRepository } from '../repositories/interface/userRepository';
+import { ROLE } from '../types';
 
 export class SupabaseUserRepository implements UserRepository {
   private supabaseClient: SupabaseClient;
@@ -55,13 +56,14 @@ export class SupabaseUserRepository implements UserRepository {
     return data.map(this.mapToUser);
   }
 
-  async findClientsAll(): Promise<any> {
+  async findClientsAll(): Promise<Client[]> {
     const { data, error } = await this.supabaseClient
       .from('client_info')
       .select(`
         id,
         firstname,
         lastname,
+        email,
         service_needed,
         requested,
         updated_at,
@@ -78,12 +80,11 @@ export class SupabaseUserRepository implements UserRepository {
       throw new Error(`${error.message}`);
     }
     
-    console.log("data", data);
-
     return data.map((client) => this.mapToClient(client));
   }
 
-  async findClientsByDoula(doulaId: string): Promise<User[]> {
+  async findClientsByDoula(doulaId: string): Promise<Client[]> {
+    console.log("in findClientsByDoula");
     const { data: assignments, error: assignmentsError } = await this.supabaseClient
       .from('assignments')
       .select('client_id')
@@ -101,17 +102,20 @@ export class SupabaseUserRepository implements UserRepository {
     // store out client ids into an array
     const clientIds = assignments.map(assignment => assignment.client_id);
 
+    console.log("clientIds are ", clientIds);
+
     // grab our users
     const { data: users, error: getUsersError } = await this.supabaseClient
-      .from('users')
+      .from('client_info')
       .select('*')
-      .eq('id', clientIds);
+      .in('id', clientIds);
 
     if (getUsersError) {
       throw new Error(`${getUsersError.message}`);
     }
+    console.log("after call to client_info");
 
-    return users.map(this.mapToUser);
+    return users.map(user => this.mapToClient(user));
   }
   
   async save(user: User): Promise<User> {
@@ -119,16 +123,14 @@ export class SupabaseUserRepository implements UserRepository {
       .from('users')
       .upsert({
         id: user.id,
-        username: user.username,
         email: user.email,
         firstname: user.firstname,
         lastname: user.lastname,
-      })
+      }, { onConflict: 'email' })
       .select()
       .single();
       
     if (error) {
-      console.log(error.message)
       throw new Error(error.message);
     }
     
@@ -144,7 +146,6 @@ export class SupabaseUserRepository implements UserRepository {
       .select()
       .single()
 
-    console.log(updatedUserError);
 
     if (updatedUserError) throw new Error(updatedUserError.message);
     return this.mapToUser(updatedUser);
@@ -153,8 +154,8 @@ export class SupabaseUserRepository implements UserRepository {
   async findAll(): Promise<User[]> {
     const { data, error } = await this.supabaseClient
     .from('users')
-    .select('username, email, firstname, lastname')
-    .order('username', { ascending: true });
+    .select('email, firstname, lastname')
+    .order('firstname', { ascending: true });
     
     if (error) {
       throw new Error(`Failed to fetch users: ${error.message}`);
@@ -207,7 +208,6 @@ export class SupabaseUserRepository implements UserRepository {
   }
 
   async getHoursById(id: string): Promise<any> {
-    console.log("getHoursById is run");
     try {
       // Get all hours entries for this doula
       const { data: hoursData, error: hoursError } = await this.supabaseClient
@@ -217,7 +217,6 @@ export class SupabaseUserRepository implements UserRepository {
       
       if (hoursError) throw new Error(hoursError.message);
       if (!hoursData) {
-        console.log("there's no hours data so returning []");
         return []
       };
       
@@ -245,8 +244,6 @@ export class SupabaseUserRepository implements UserRepository {
           } : null
         };
       }));
-
-      console.log("about to return result", result);
       
       return result;
     } catch (error) {
@@ -300,8 +297,6 @@ export class SupabaseUserRepository implements UserRepository {
       .from('profile-pictures')
       .getPublicUrl(filePath);
 
-    console.log("this is the data", publicUrl);
-
     return publicUrl;
   }
 
@@ -309,7 +304,6 @@ export class SupabaseUserRepository implements UserRepository {
   private mapToUser(data: any): User {
     return new User({
       id: data.id,
-      username: data.username,
       email: data.email,
       firstname: data.firstname,
       lastname: data.lastname,
@@ -361,5 +355,26 @@ export class SupabaseUserRepository implements UserRepository {
       new Date(data.updated_at),
       data.status
     )
+  }
+
+  async addNewHours(doula_id: string, client_id: string, start_time: Date, end_time: Date): Promise<WORK_ENTRY_ROW> {
+    const { data, error } = await this.supabaseClient
+      .from('hours')
+      .insert([
+        {
+          // id: "123456789",
+          doula_id: doula_id, 
+          client_id: client_id, 
+          start_time: start_time, 
+          end_time: end_time
+        }
+      ])
+      .select();
+
+    if (error) {
+      throw new Error(`Failed to post new user: ${error.message}`);
+    }
+    
+    return data[0];
   }
 }

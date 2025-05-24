@@ -1,8 +1,7 @@
-import { ACCOUNT_STATUS, ROLE, STATE } from "types";
+import { ACCOUNT_STATUS, ROLE, STATE } from '../types';
 
 export class User {
   id: string;
-  username?: string;
   email?: string;
   firstname?: string;
   lastname?: string;
@@ -21,7 +20,6 @@ export class User {
 
   constructor(data: {
     id?: string;
-    username?: string;
     email?: string;
     firstname?: string;
     lastname?: string;
@@ -39,7 +37,6 @@ export class User {
     bio?: string;  
     }) {
       this.id = data.id;
-      this.username = data.username || "";
       this.email = data.email || "";
       this.firstname = data.firstname || '';
       this.lastname = data.lastname || '';
@@ -64,7 +61,6 @@ export class User {
   toJSON(): object {
     return {
       id: this.id,
-      username: this.username,
       email: this.email,
       firstname: this.firstname,
       lastname: this.lastname,

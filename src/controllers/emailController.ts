@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { NodemailerService } from '../services/EmailService';
+import { NodemailerService } from '../services/emailService';
 
 export class EmailController {
   private emailService: NodemailerService;
