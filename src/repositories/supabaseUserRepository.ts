@@ -7,6 +7,7 @@ import { WORK_ENTRY_ROW } from '../entities/Hours';
 import { User } from '../entities/User';
 import { UserRepository } from '../repositories/interface/userRepository';
 import { ROLE } from '../types';
+import { NOTE, VISIBILITY } from '../entities/Note';
 
 export class SupabaseUserRepository implements UserRepository {
   private supabaseClient: SupabaseClient;
@@ -173,6 +174,7 @@ export class SupabaseUserRepository implements UserRepository {
       // Process each hour entry to include client data
       const result = await Promise.all(hoursData.map(async (entry) => {
         const clientData = await this.findById(entry.client_id);
+        const noteData = await this.findNoteByWorkLogId(entry.id);
         
         return {
           id: entry.id,
@@ -187,7 +189,8 @@ export class SupabaseUserRepository implements UserRepository {
             id: clientData.id,
             firstname: clientData.firstname,
             lastname: clientData.lastname
-          } : null
+          } : null,
+          note: noteData ? noteData : null
         };
       }));
       
@@ -209,6 +212,20 @@ export class SupabaseUserRepository implements UserRepository {
     }
     
     return this.mapToUser(data);
+  }
+
+  async findNoteByWorkLogId(id: string): Promise<NOTE | null> {
+    
+    const { data, error } = await this.supabaseClient
+    .from('notes')
+    .select('*')
+    .eq('work_log_id', id)
+
+    if(error) {
+      console.log(`Given this work_log_id: ${id} error finding note correspimonding to it: ${error.message}`);
+    }
+
+    return data[0];
   }
   
   async delete(id: string): Promise<void> {
