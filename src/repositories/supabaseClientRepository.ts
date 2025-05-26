@@ -32,8 +32,6 @@ export class SupabaseClientRepository  {
         )
       `);
 
-    console.log(data);
-
     if (error) throw new Error(error.message);
     return data.map(row => this.mapToClient(row));
   }
@@ -60,7 +58,8 @@ export class SupabaseClientRepository  {
       .in('id', clientIds);
 
     if (error) throw new Error(error.message);
-    return data.map(this.mapToClient);
+    // return data.map(this.mapToClient);
+    return data.map(user => this.mapToClient(user));
   }
 
   async findClientsDetailedAll(): Promise<Client[]> {
@@ -71,17 +70,18 @@ export class SupabaseClientRepository  {
         users (
           *
         )
-      `);
-
-    if (error) throw new Error(error.message);
-    return data.map(this.mapToClient);
-  }
-
-  async findClientsDetailedByDoula(userId: string): Promise<Client[]> {
-    const clientIds = await this.getClientIdsAssignedToDoula(userId);
-
-    if (clientIds.length === 0) return [];
-
+        `);
+        
+        if (error) throw new Error(error.message);
+        console.log("data right before calling this.mapToClient(data): ", data);
+        return data.map(user => this.mapToClient(user));
+      }
+      
+      async findClientsDetailedByDoula(userId: string): Promise<Client[]> {
+        const clientIds = await this.getClientIdsAssignedToDoula(userId);
+        
+        if (clientIds.length === 0) return [];
+        
     const { data, error } = await this.supabaseClient
       .from('client_info')
       .select(`
@@ -93,9 +93,10 @@ export class SupabaseClientRepository  {
       .in('id', clientIds);
 
     if (error) throw new Error(error.message);
-    return data.map(this.mapToClient);
+    // return data.map(this.mapToClient);
+    return data.map(user => this.mapToClient(user));
   }
-
+  
   async findClientLiteById(clientId: string): Promise<Client> {
     const { data, error } = await this.supabaseClient
       .from('client_info')
