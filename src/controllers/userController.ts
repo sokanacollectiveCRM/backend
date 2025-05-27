@@ -3,6 +3,7 @@ import { AuthenticationError, AuthorizationError, ConflictError, NotFoundError, 
 import { AuthRequest, UpdateRequest } from '../types';
 import { UserUseCase } from "../usecase/userUseCase";
 
+
 export class UserController {
   private userUseCase: UserUseCase;
 
@@ -27,6 +28,36 @@ export class UserController {
       res.status(200).json(users.map(user => user.toJSON()));
     } catch (error) {
       this.handleError(error, res);
+    }
+  }
+  async getAllTeamMembers(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const users = await this.userUseCase.getAllTeamMembers();
+      res.status(200).json(users.map(user => user.toJSON()));
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
+  async deleteMember(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.params.id;
+      await this.userUseCase.deleteMember(userId);
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
+  async addMember(req: AuthRequest, res: Response): Promise<void>{
+    try{
+      const userName = req.params.firstname
+      const userEmail = req.params.email
+      const userRole = req.params.role
+      const userBio = req.params.bio
+      const user = await this.userUseCase.addMember(userName, userEmail, userRole, userBio)
+      res.status(200).json(user.toJSON())
+    } catch (error) {
+      this.handleError(error, res)
     }
   }
 
@@ -84,6 +115,22 @@ export class UserController {
     }
   }
 
+  async addTeamMember(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { firstname, lastname, email, role } = req.body;
+
+      if (!firstname || !lastname || !email || !role) {
+        res.status(400).json({ error: 'Missing required fields' });
+        return;
+      }
+
+      const newMember = await this.userUseCase.addMember(firstname, lastname, email, role);
+      res.status(201).json(newMember);
+    } catch (error) {
+      console.error('Error adding team member:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
 
   private handleError(error: Error, res: Response): void {
     console.error('Error:', error.message);

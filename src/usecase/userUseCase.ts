@@ -71,5 +71,19 @@ export class UserUseCase {
   async getAllUsers(): Promise<User[]> {
     return this.userRepository.findAll();
   }
+
+  async getAllTeamMembers(): Promise<User[]> {
+    return this.userRepository.findAllTeamMembers();
+  }
+
+  async deleteMember(userId: string): Promise<void> {
+    return this.userRepository.delete(userId);
+  }
+
+  async addMember(firstname: string, lastname: string, userEmail: string, userRole: string): Promise<User> {
+    return this.userRepository.addMember(firstname, lastname, userEmail, userRole);
+  }
+
+ 
 }
 
