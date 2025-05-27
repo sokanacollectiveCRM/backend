@@ -37,9 +37,14 @@ export class SupabaseClientRepository  {
   }
 
   async findClientsLiteByDoula(userId: string): Promise<Client[]> {
+    console.log("in findclientlitebyDOIULA ADSFASD");
     const clientIds = await this.getClientIdsAssignedToDoula(userId);
-
-    if (clientIds.length === 0) return [];
+    
+    if (clientIds.length === 0) {
+      console.log("clientIDs.length is 0");
+      return [];
+    }
+    console.log("clientIds is ", clientIds);
 
     const { data, error } = await this.supabaseClient
       .from('client_info')
@@ -58,7 +63,7 @@ export class SupabaseClientRepository  {
       .in('id', clientIds);
 
     if (error) throw new Error(error.message);
-    // return data.map(this.mapToClient);
+    console.log("return value is ", data);
     return data.map(user => this.mapToClient(user));
   }
 

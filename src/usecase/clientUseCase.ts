@@ -13,6 +13,7 @@ export class ClientUseCase {
     if (role === 'admin') {
       return this.clientRepository.findClientsLiteAll();
     } else {
+      console.log("calling findClientsLiteByDoula in clientUseCase ");
       return this.clientRepository.findClientsLiteByDoula(id);
     }
   }

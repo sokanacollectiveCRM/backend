@@ -84,6 +84,39 @@ export class SupabaseUserRepository implements UserRepository {
     return data.map((client) => this.mapToClient(client));
   }
 
+  async findClientsById(id: string): Promise<any> {
+    const { data, error } = await this.supabaseClient
+      .from('client_info')
+      .select(`
+        id,
+        firstname,
+        lastname,
+        email,
+        service_needed,
+        requested,
+        updated_at,
+        status,
+        user_id,
+        users (
+          profile_picture,
+          firstname,
+          lastname
+        )
+      `)
+      .eq('id', id);
+
+    if (error) {
+      throw new Error(`${error.message}`);
+    }
+
+    if (!data || data.length === 0) {
+      console.log("GOING TO EERROR: NO DATA, client id is", id);
+      return null;
+    }
+    
+    return this.mapToClient(data[0]); 
+  }
+
   async findClientsByDoula(doulaId: string): Promise<Client[]> {
     console.log("in findClientsByDoula");
     const { data: assignments, error: assignmentsError } = await this.supabaseClient
@@ -227,9 +260,15 @@ export class SupabaseUserRepository implements UserRepository {
       
       // Process each hour entry to include client data
       const result = await Promise.all(hoursData.map(async (entry) => {
-        const clientData = await this.findById(entry.client_id);
+        const clientData = await this.findClientsById(entry.client_id);
+        if(!clientData) {
+          console.log("clientData is null, entry is", entry);
+        }
+        console.log("in getHoursById in supabaseUsersRepository, clientData (to which we are accessing clientData.firstname) is ", clientData);
         const noteData = await this.findNoteByWorkLogId(entry.id);
+
         
+
         return {
           id: entry.id,
           start_time: entry.start_time,
@@ -240,9 +279,9 @@ export class SupabaseUserRepository implements UserRepository {
             lastname: doulaData.lastname
           },
           client: clientData ? {
-            id: clientData.id,
-            firstname: clientData.firstname,
-            lastname: clientData.lastname
+            id: clientData.user.id,
+            firstname: clientData.user.firstname,
+            lastname: clientData.user.lastname
           } : null,
           note: noteData ? noteData : null
         };
@@ -269,10 +308,15 @@ export class SupabaseUserRepository implements UserRepository {
       // Process each hour entry to include client data
       const result = await Promise.all(hoursData.map(async (entry) => {
         // console.log("entry is", entry);
-        const clientData = await this.findById(entry.client_id);
+        const clientData = await this.findClientsById(entry.client_id);
         const noteData = await this.findNoteByWorkLogId(entry.id);
         const doulaData = await this.findById(entry.doula_id);
         if (!doulaData) throw new Error(`Doula with the ID ${entry.doula_id} not found, inside getAllHours()`);
+
+        if(!clientData) {
+          console.log("clientData is null in getAllHours, entry is", entry);
+        }
+
         
         return {
           id: entry.id,
@@ -285,8 +329,8 @@ export class SupabaseUserRepository implements UserRepository {
           },
           client: clientData ? {
             id: clientData.id,
-            firstname: clientData.firstname,
-            lastname: clientData.lastname
+            firstname: clientData.user.firstname,
+            lastname: clientData.user.lastname
           } : null,
           note: noteData ? noteData : null
         };
