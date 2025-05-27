@@ -30,11 +30,16 @@ export class UserController {
     }
   }
 
-  async getHoursById(req: AuthRequest, res: Response): Promise<void> {
+  async getHours(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const userId = req.params.id;
-      const hoursData = await this.userUseCase.getHoursById(userId);
-      res.status(200).json(hoursData);
+      const { id, role } = req.user;
+      if(role === "admin") {
+        const allHoursData = await this.userUseCase.getAllHours();
+        res.status(200).json(allHoursData);
+      } else {
+        const specificHoursData = await this.userUseCase.getHoursById(id);
+        res.status(200).json(specificHoursData);
+      }
     } catch (error) {
       console.log("Error when retrieving user's work data");
       this.handleError(error, res);

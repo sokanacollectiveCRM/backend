@@ -31,6 +31,16 @@ export class UserUseCase {
     return hours;
   }
 
+  async getAllHours(): Promise<WORK_ENTRY[]> {
+    const hours = await this.userRepository.getAllHours();
+
+    if(!hours) {
+      throw new NotFoundError("Could not retrieve all work entries");
+    }
+
+    return hours;
+  }
+
   async addNewHours(doula_id: string, client_id: string, start_time: Date, end_time: Date, note: string) {
     const newWorkEntry = await this.userRepository.addNewHours(doula_id, client_id, start_time, end_time, note);
 

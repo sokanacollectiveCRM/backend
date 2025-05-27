@@ -199,6 +199,50 @@ export class SupabaseUserRepository implements UserRepository {
       throw new Error(`Failed to get user's hours: ${error.message}`);
     }
   }
+
+  async getAllHours(): Promise<any> {
+    try {
+      // Get all hours entries for this doula
+      const { data: hoursData, error: hoursError } = await this.supabaseClient
+        .from('hours')
+        .select('*')
+      
+      if (hoursError) throw new Error(hoursError.message);
+      if (!hoursData) {
+        return []
+      };
+      
+      // Process each hour entry to include client data
+      const result = await Promise.all(hoursData.map(async (entry) => {
+        // console.log("entry is", entry);
+        const clientData = await this.findById(entry.client_id);
+        const noteData = await this.findNoteByWorkLogId(entry.id);
+        const doulaData = await this.findById(entry.doula_id);
+        if (!doulaData) throw new Error(`Doula with the ID ${entry.doula_id} not found, inside getAllHours()`);
+        
+        return {
+          id: entry.id,
+          start_time: entry.start_time,
+          end_time: entry.end_time,
+          doula: {
+            id: doulaData.id,
+            firstname: doulaData.firstname,
+            lastname: doulaData.lastname
+          },
+          client: clientData ? {
+            id: clientData.id,
+            firstname: clientData.firstname,
+            lastname: clientData.lastname
+          } : null,
+          note: noteData ? noteData : null
+        };
+      }));
+      
+      return result;
+    } catch (error) {
+      throw new Error(`Failed to get all hours: ${error.message}`);
+    }
+  }
   
   async findById(id: string): Promise<User | null> {
     const { data, error } = await this.supabaseClient
@@ -312,6 +356,7 @@ export class SupabaseUserRepository implements UserRepository {
     })
 
     return new Client(
+      user.id,
       user,
       data.service_needed,
       new Date(data.requested),
