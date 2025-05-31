@@ -8,7 +8,7 @@ const userRoutes: Router = express.Router();
 // route for retrieving specific user's information
 userRoutes.get('/:id', authMiddleware, (req, res) => userController.getUserById(req, res));
 
-userRoutes.get('/:id/hours', authMiddleware, (req, res) => userController.getHoursById(req, res));
+userRoutes.get('/:id/hours', authMiddleware, (req, res) => userController.getHours(req, res));
 
 userRoutes.post('/:id/addhours', authMiddleware, (req, res) => userController.addNewHours(req, res));
 

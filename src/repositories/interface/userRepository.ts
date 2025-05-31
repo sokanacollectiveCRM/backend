@@ -71,9 +71,14 @@ export interface UserRepository {
    * Get this user's work hours
    */
   getHoursById(id: string): Promise<WORK_ENTRY[]>;
+
+  /**
+   * Get all work hours
+   */
+  getAllHours(): Promise<WORK_ENTRY[]>;
   
   /**
    * Add a new doula work session entry 
    */
-  addNewHours(doula_id: string, client_id: string, start_time: Date, end_time: Date): Promise<WORK_ENTRY_ROW>;
+  addNewHours(doula_id: string, client_id: string, start_time: Date, end_time: Date, note: string): Promise<WORK_ENTRY_ROW>;
 }
