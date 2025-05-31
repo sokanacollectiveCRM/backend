@@ -35,4 +35,6 @@ export interface ClientRepository {
    * Update client status with their client id
    */
   updateStatus(clientId: string, status: string): Promise<Client>;
+
+  exportCSV(): Promise<string | null>;
 }

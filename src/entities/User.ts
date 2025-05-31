@@ -13,6 +13,15 @@ export class User {
   state?: STATE;
   country?: string;
   zip_code?: number;
+  children_expected?:string;
+  pronouns?:string;
+  health_history?:string;
+  allergies?:string;
+  due_date?:string;
+  annual_income?:string;
+  status?:string;
+  hospital?:string;
+  service_needed?:string;
   profile_picture?: File;  
   account_status?: ACCOUNT_STATUS;
   business?: string;
@@ -27,6 +36,15 @@ export class User {
     updated_at?: Date;
     role?: ROLE;
     address?: string;
+    children_expected?:string;
+    service_needed?:string;
+    pronouns?:string;
+    health_history?:string;
+    allergies?:string;
+    due_date?:string;
+    annual_income?:string;
+    status?:string;
+    hospital?:string;
     city?: string;
     state?: STATE;
     country?: string;
@@ -43,6 +61,14 @@ export class User {
       this.created_at = data.created_at || new Date();
       this.updated_at = data.updated_at || new Date();
       this.role = data.role || ROLE.CLIENT;
+      this.children_expected = data.children_expected || "";
+      this.service_needed = data.service_needed ||"";
+      this.health_history = data.health_history || "";
+      this.allergies = data.allergies || "";
+      this.due_date = data.due_date || "";
+      this.annual_income = data.annual_income || "";
+      this.status = data.status || "";
+      this.hospital = data.hospital || "";
       this.address = data.address || "";
       this.city = data.city || "";
       this.state = data.state || STATE.IL;
@@ -52,6 +78,7 @@ export class User {
       this.account_status = data.account_status || ACCOUNT_STATUS.PENDING; 
       this.business = data.business || "";
       this.bio = data.bio || "";    
+      this.service_needed = data.service_needed || "";
   }
 
   getFullName(): string {
@@ -65,6 +92,14 @@ export class User {
       firstname: this.firstname,
       lastname: this.lastname,
       fullName: this.getFullName(),
+      children_expected: this.children_expected,
+      service_needed: this.service_needed,
+      health_history: this.health_history,
+      allergies: this.allergies,
+      due_date:this.due_date,
+      annual_income:this.annual_income,
+      status:this.status,
+      hospital:this.hospital,
       created_at: this.created_at,
       updatedAt: this.updated_at,
       role: this.role,
