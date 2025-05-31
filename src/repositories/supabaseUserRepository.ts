@@ -32,16 +32,6 @@ export class SupabaseUserRepository implements UserRepository {
     return this.mapToUser(data);
   }
 
-  async exportCSV():Promise<string | null>{
-    const {data,error} = await this.supabaseClient
-    .from('users')
-    .select('*')
-    .csv()
-    if(error || !data){
-      throw new Error(`Failed to fetch CSV Data ${error.message}`);
-    }
-    return data;
-  }
 
   async findByRole(role: string): Promise<User[]> {
     const { data, error } = await this.supabaseClient

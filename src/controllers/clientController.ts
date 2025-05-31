@@ -51,13 +51,13 @@ export class ClientController {
   // returns:
   //    CSV of users
   //
-  async getCSVClients(
+  async exportCSV(
     req: AuthRequest,
     res: Response,
   ): Promise<void> {
     try {
       const {role} = req.user;
-      const clientsCSV = await this.clientUseCase.getCSV(role);
+      const clientsCSV = await this.clientUseCase.exportCSV(role);
       res.header("Content-Type", "text/csv");
       res.attachment("clients.csv");
 

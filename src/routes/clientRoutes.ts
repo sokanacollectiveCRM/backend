@@ -28,7 +28,7 @@ clientRoutes.post("/team/add",
 clientRoutes.get('/fetchCSV', 
   authMiddleware,
   (req, res, next) => authorizeRoles(req, res, next, ['admin','client']), 
-  (req, res) => clientController.getCSVClients(req, res)
+  (req, res) => clientController.exportCSV(req, res)
 );
 
 clientRoutes.get('/', 

@@ -23,6 +23,7 @@ export class SupabaseClientRepository  {
         lastname,
         email,
         status,
+        service_needed,
         requested,
         updated_at,
         users (
@@ -34,6 +35,18 @@ export class SupabaseClientRepository  {
 
     if (error) throw new Error(error.message);
     return data.map(row => this.mapToClient(row));
+  }
+
+  async exportCSV():Promise<string | null>{
+    const {data,error} = await this.supabaseClient
+    .from('client_info')
+    .select('firstname,lastname,zip_code,annual_income,pronouns')
+    .csv()
+
+    if(error || !data){
+      throw new Error(`Failed to fetch CSV Data ${error.message}`);
+    }
+    return data;
   }
 
   async findClientsLiteByDoula(userId: string): Promise<Client[]> {
@@ -193,7 +206,16 @@ export class SupabaseClientRepository  {
       profile_picture: data.profile_picture,
       account_status: data.account_status,
       business: data.business,
-      bio: data.bio
+      bio: data.bio,
+      children_expected: data.children_expected,
+      service_needed: data.service_needed,
+      health_history: data.health_history,
+      allergies: data.allergies,
+      due_date: data.due_date,
+      annual_income:data.annual_income,
+      status: data.status,
+      hospital:data.hospital,
+
     });
   }
 
@@ -217,6 +239,16 @@ export class SupabaseClientRepository  {
       account_status: userRecord.account_status || null,
       business: userRecord.business || null,
       bio: userRecord.bio || '',
+      children_expected: userRecord.children_expected || data.children_expected || '',
+      service_needed: userRecord.service_needed || data.service_needed || '',
+      health_history: userRecord.health_history || data.health_history || '',
+      allergies: userRecord.allergies || data.allergies || '',
+      due_date: userRecord.due_date || data.due_date || '',
+      annual_income: userRecord.annual_income || data.annual_income || '',
+      status: userRecord.status || data.status || '',
+      hospital: userRecord.hospital || data.hospital|| ''
+
+
     });
 
     return new Client(
