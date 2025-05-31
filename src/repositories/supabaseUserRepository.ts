@@ -118,7 +118,6 @@ export class SupabaseUserRepository implements UserRepository {
   }
 
   async findClientsByDoula(doulaId: string): Promise<Client[]> {
-    console.log("in findClientsByDoula");
     const { data: assignments, error: assignmentsError } = await this.supabaseClient
       .from('assignments')
       .select('client_id')
@@ -136,7 +135,7 @@ export class SupabaseUserRepository implements UserRepository {
     // store out client ids into an array
     const clientIds = assignments.map(assignment => assignment.client_id);
 
-    console.log("clientIds are ", clientIds);
+    // console.log("clientIds are ", clientIds);
 
     // grab our users
     const { data: users, error: getUsersError } = await this.supabaseClient
@@ -147,7 +146,7 @@ export class SupabaseUserRepository implements UserRepository {
     if (getUsersError) {
       throw new Error(`${getUsersError.message}`);
     }
-    console.log("after call to client_info");
+    // console.log("after call to client_info");
 
     return users.map(user => this.mapToClient(user));
   }
@@ -264,7 +263,7 @@ export class SupabaseUserRepository implements UserRepository {
         if(!clientData) {
           console.log("clientData is null, entry is", entry);
         }
-        console.log("in getHoursById in supabaseUsersRepository, clientData (to which we are accessing clientData.firstname) is ", clientData);
+        // console.log("in getHoursById in supabaseUsersRepository, clientData (to which we are accessing clientData.firstname) is ", clientData);
         const noteData = await this.findNoteByWorkLogId(entry.id);
 
         
@@ -480,11 +479,11 @@ export class SupabaseUserRepository implements UserRepository {
         throw new Error(`Failed to post new user: ${hoursError.message}`);
       }
 
-      console.log("hoursData is" , hoursData);
-      console.log("the id contained in hoursData is", hoursData[0].id);
+      // console.log("hoursData is" , hoursData);
+      // console.log("the id contained in hoursData is", hoursData[0].id);
 
     if(note != "") {
-      console.log("note is not empty and about to call https call, note is", note);
+      // console.log("note is not empty and about to call https call, note is", note);
       const { data: noteData, error: noteError } = await this.supabaseClient
       .from('notes')
       .insert([
