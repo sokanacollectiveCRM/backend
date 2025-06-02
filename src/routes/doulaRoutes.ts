@@ -1,7 +1,7 @@
 import express, { Router } from 'express';
-import { clientController } from 'index';
-import authMiddleware from 'middleware/authMiddleware';
-import authorizeRoles from 'middleware/authorizeRoles';
+import { clientController } from '../index';
+import authMiddleware from '../middleware/authMiddleware';
+import authorizeRoles from '../middleware/authorizeRoles';
 
 const doulaRoutes: Router = express.Router();
 

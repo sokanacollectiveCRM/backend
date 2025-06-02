@@ -1,8 +1,28 @@
 
-import { Response } from 'express'
-import { Template } from '../../entities/Template'
+import { Contract } from '../../entities/Contract';
+import { Template } from '../../entities/Template';
 
 export interface ContractService{
+
+  /**
+   * Create a new contract with an established template
+   */
+  createContract(
+    templateId: string,
+    clientId: string,
+    fields: Record<string, string>,
+    generatedBy: string,
+    note?: string,
+    fee?: string,
+    deposit?: string,
+  ): Promise<Contract>
+
+  /**
+   * Get an existing contract from storage
+   */
+  fetchContractPDF(
+    contractId: string
+  ): Promise<{ buffer: Buffer; filename: string }>
 
   /**
    * Get all templates
@@ -40,14 +60,5 @@ export interface ContractService{
   generateTemplate(
     buffer: Buffer,
     fields: Record<string, string>,
-    res: Response,
   ): Promise<Buffer>
-
-  /**
-   * Populate a template a generate as a buffer (not download)
-   */
-  // generateTemplateAsBuffer(
-  //   buffer: Buffer,
-  //   fields: Record<string, string>,
-  // ): Promise<Buffer>
 }

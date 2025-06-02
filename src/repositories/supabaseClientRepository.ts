@@ -61,6 +61,7 @@ export class SupabaseClientRepository  {
       `)
       .in('id', clientIds);
 
+
     if (error) throw new Error(error.message);
     return data.map(user => this.mapToClient(user));
   }
@@ -225,7 +226,18 @@ export class SupabaseClientRepository  {
       data.service_needed ?? null,
       data.requested ? new Date(data.requested) : null,
       data.updated_at ? new Date(data.updated_at) : new Date(),
-      data.status ?? 'lead'
+      data.status ?? 'lead',
+
+      // Optional detailed fields
+      data.children_expected ?? undefined,
+      data.pronouns ?? undefined,
+      data.health_history ?? undefined,
+      data.allergies ?? undefined,
+      data.due_date ? new Date(data.due_date) : undefined,
+      data.hospital ?? undefined,
+      data.baby_sex ?? undefined,
+      data.annual_income ?? undefined,
+      data.service_specifics ?? undefined
     );
   }
 }

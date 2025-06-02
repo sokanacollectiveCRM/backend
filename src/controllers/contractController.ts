@@ -19,6 +19,61 @@ export class ContractController {
   };
 
   //
+  // Generate and save a contract (finalized)
+  //
+  async generateContract(
+    req: UpdateRequest, 
+    res: Response
+  ): Promise<void> {
+    try {
+      const { templateId, clientId, fields, note, fee, deposit } = req.body;
+
+      if (!templateId || !clientId || !fields) {
+        throw new ValidationError('Missing required fields.');
+      }
+
+      // Delegate to use case for PDF generation + upload + DB write
+      const contract = await this.contractUseCase.createContract({
+        templateId,
+        clientId,
+        fields,
+        note,
+        fee,
+        deposit,
+        generatedBy: req.user.id,
+      });
+
+      res.status(201).json(contract);
+    } catch (err) {
+      const error = this.handleError(err, res);
+      if (!res.headersSent) {
+        res.status(error.status).json({ error: error.message });
+      }
+    }
+  }
+
+  //
+  // Preview a generated contract PDF
+  //
+  async previewContract(req: Request, res: Response): Promise<void> {
+    try {
+      const contractId = req.params.id;
+      if (!contractId) throw new ValidationError('Missing contract ID');
+
+      const { buffer, filename } = await this.contractUseCase.fetchContractPDF(contractId);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename=${filename}`);
+      res.send(buffer);
+    } catch (err) {
+      const error = this.handleError(err, res);
+      if (!res.headersSent) {
+        res.status(error.status).json({ error: error.message });
+      }
+    }
+  }
+
+  //
   // getTemplates
   //
   // Get a list of all templates
@@ -149,7 +204,7 @@ export class ContractController {
       if (!name) throw new ValidationError('No template name provided');
 
       // generate the template as pdf
-      const pdfBuffer = await this.contractUseCase.generateTemplate(name, fields ?? {}, res);
+      const pdfBuffer = await this.contractUseCase.generateTemplate(name, fields ?? {});
       
       if (download) {
         res.setHeader('Content-Disposition', `attachment; filename=${fields.clientname}-${name}.pdf`);

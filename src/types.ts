@@ -99,6 +99,17 @@ export interface SupabaseUserMetadata {
   [key: string]: unknown;
 }
 
+export enum CLIENT_STATUS {
+  LEAD = 'lead',
+  CONTACTED = 'contacted',
+  MATCHING = 'matching',
+  INTERVIEWING = 'interviewing',
+  'FOLLOW UP' = 'follow up',
+  CONTRACT = 'contract',
+  ACTIVE = 'active',
+  COMPLETE = 'complete',
+};
+
 export enum ACCOUNT_STATUS {
   PENDING = "pending",
   APPROVED = "approved"

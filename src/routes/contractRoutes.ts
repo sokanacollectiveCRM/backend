@@ -12,10 +12,24 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
  });
  
+// generate a contract for a client given a template
+clientRoutes.post('/',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
+  (req, res) => contractController.generateContract(req, res)
+)
+
+// get a preview of an already generated contract
+clientRoutes.get('/:id/preview',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula', 'client']),
+  (req, res) => contractController.previewContract(req, res)
+)
+
 // get the list of templates
 clientRoutes.get('/templates',
   authMiddleware,
-  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
+  (req, res, next) => authorizeRoles(req, res, next, ['doula', 'admin']),
   (req, res) => contractController.getAllTemplates(req, res),
 )
 
