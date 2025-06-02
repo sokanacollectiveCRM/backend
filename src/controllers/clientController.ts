@@ -35,6 +35,8 @@ export class ClientController {
         ? await this.clientUseCase.getClientsDetailed(id, role)
         : await this.clientUseCase.getClientsLite(id, role);
 
+      console.log("clients:", clients);
+
       res.json(clients.map(client => client.toJson()));
     } catch (getError) {
       const error = this.handleError(getError, res);

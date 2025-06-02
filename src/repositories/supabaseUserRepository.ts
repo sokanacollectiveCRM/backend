@@ -4,10 +4,10 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { File as MulterFile } from 'multer';
 import { Client } from '../entities/Client';
 import { WORK_ENTRY_ROW } from '../entities/Hours';
+import { NOTE } from '../entities/Note';
 import { User } from '../entities/User';
 import { UserRepository } from '../repositories/interface/userRepository';
 import { ROLE } from '../types';
-import { NOTE, VISIBILITY } from '../entities/Note';
 
 export class SupabaseUserRepository implements UserRepository {
   private supabaseClient: SupabaseClient;
@@ -443,7 +443,7 @@ export class SupabaseUserRepository implements UserRepository {
     })
 
     return new Client(
-      user.id,
+      data.id,
       user,
       data.service_needed,
       new Date(data.requested),

@@ -1,8 +1,8 @@
 import { File as MulterFile } from 'multer';
-import { UserRepository } from 'repositories/interface/userRepository';
 import { NotFoundError } from '../domains/errors';
 import { WORK_ENTRY } from '../entities/Hours';
 import { User } from '../entities/User';
+import { UserRepository } from '../repositories/interface/userRepository';
 
 export class UserUseCase {
   private userRepository: UserRepository;
