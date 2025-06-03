@@ -3,6 +3,7 @@ import { Router } from 'express'
 import {
   connectQuickBooks,
   createInvoice,
+  getInvoices,
   handleQuickBooksCallback,
   quickBooksAuthUrl,
   quickBooksDisconnect,
@@ -24,6 +25,7 @@ router.use((req, res, next) => authorizeRoles(req, res, next, ['admin']))
 // 3️⃣ Protected AJAX endpoints
 router.get('/auth/url',  quickBooksAuthUrl)
 router.get('/status',    quickBooksStatus)
+router.get('/invoices', getInvoices)
 router.post('/disconnect', quickBooksDisconnect)
 router.post('/invoice',  createInvoice)
 

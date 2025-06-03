@@ -35,7 +35,7 @@ export default async function createInvoiceService(
   }
   const qboCustomerId = cust.qbo_customer_id;
 
-  // 2) Build the payload using the QBO ID
+  // 2) Build the payload using the QBO ID 
   const payload = buildInvoicePayload(qboCustomerId, {
     lineItems,
     dueDate,

@@ -1,41 +1,27 @@
 // src/features/quickbooks/services/invoice/buildInvoicePayload.ts
-
-export interface SalesItemLineDetail {
-  ItemRef: { value: string };
-  UnitPrice?: number;
-  Qty: number;
-}
-
-export interface InvoiceLineItem {
+export interface RawLineItem {
   DetailType: string;
   Amount: number;
   Description?: string;
-  SalesItemLineDetail: SalesItemLineDetail;
+  SalesItemLineDetail: {
+    ItemRef: { value: string };
+    UnitPrice: number;
+    Qty: number;
+  };
 }
 
-export interface BuildInvoicePayloadOptions {
-  lineItems: InvoiceLineItem[];
-  dueDate: string;
-  memo?: string;
-}
-
+/**
+ * Construct a QuickBooks Invoice payload with the correct QBO customer reference
+ */
 export default function buildInvoicePayload(
-  customerId: string,
-  { lineItems, dueDate, memo }: BuildInvoicePayloadOptions
+  qboCustomerId: string,
+  opts: { lineItems: RawLineItem[]; dueDate: string; memo?: string }
 ) {
+  const { lineItems, dueDate, memo } = opts;
   return {
-    CustomerRef: { value: customerId },
-    Line: lineItems.map(item => ({
-      DetailType: item.DetailType,
-      Amount:     item.Amount,
-      Description:item.Description,
-      SalesItemLineDetail: {
-        ItemRef:   item.SalesItemLineDetail.ItemRef,
-        UnitPrice: item.SalesItemLineDetail.UnitPrice ?? item.Amount,
-        Qty:       item.SalesItemLineDetail.Qty
-      }
-    })),
-    DueDate:     dueDate,
-    PrivateNote: memo
+    CustomerRef: { value: qboCustomerId },
+    Line: lineItems,
+    TxnDate: dueDate,
+    PrivateNote: memo || "",
   };
 }
