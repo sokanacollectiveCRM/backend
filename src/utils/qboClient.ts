@@ -3,22 +3,14 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { Buffer } from 'buffer';
 import fetch, { RequestInit } from 'node-fetch';
-import { loadTokens, saveTokens } from './tokenUtils';
+import { getTokenFromDatabase, refreshQuickBooksToken } from './tokenUtils';
 
 const {
   QB_CLIENT_ID = '',
   QB_CLIENT_SECRET = '',
   QBO_ENV = 'production'
 } = process.env;
-
-interface TokenStore {
-  realmId: string;
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: string;
-}
 
 interface AccessTokenResult {
   accessToken: string;
@@ -29,40 +21,24 @@ interface AccessTokenResult {
  * Retrieve (and refresh, if needed) the current OAuth tokens & realm ID.
  */
 export async function getAccessToken(): Promise<AccessTokenResult> {
-  let { accessToken, refreshToken, expiresAt, realmId } =
-    (await loadTokens()) as TokenStore;
-
-  if (new Date() >= new Date(expiresAt)) {
-    const url = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
-    const auth = Buffer.from(`${QB_CLIENT_ID}:${QB_CLIENT_SECRET}`).toString('base64');
-    const body = new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken
-    });
-
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${auth}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: body.toString()
-    });
-
-    const text = await resp.text();
-    if (!resp.ok) {
-      throw new Error(`Failed to refresh token: ${resp.status} — ${text}`);
-    }
-
-    const json = JSON.parse(text);
-    accessToken = json.access_token;
-    refreshToken = json.refresh_token;
-    expiresAt = new Date(Date.now() + json.expires_in * 1000).toISOString();
-
-    await saveTokens({ realmId, accessToken, refreshToken, expiresAt });
+  const tokens = await getTokenFromDatabase();
+  if (!tokens) {
+    throw new Error('No QuickBooks tokens found');
   }
 
-  return { accessToken, realmId };
+  // Check if token is expired or will expire in the next minute
+  if (new Date(tokens.expiresAt) <= new Date(Date.now() + 60000)) {
+    const newTokens = await refreshQuickBooksToken(tokens.refreshToken);
+    return {
+      accessToken: newTokens.accessToken,
+      realmId: newTokens.realmId
+    };
+  }
+
+  return {
+    accessToken: tokens.accessToken,
+    realmId: tokens.realmId
+  };
 }
 
 /**

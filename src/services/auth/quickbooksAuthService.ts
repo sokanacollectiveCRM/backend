@@ -3,10 +3,10 @@
 import OAuthClient from 'intuit-oauth';
 import { URL } from 'url';
 import {
-  deleteTokens,
-  getTokens,
-  saveTokens,
-  TokenStore
+    deleteTokens,
+    getTokens,
+    saveTokens,
+    TokenStore
 } from '../../utils/tokenUtils';
 
 const {
@@ -34,15 +34,15 @@ export function generateConsentUrl(state: string): string {
 }
 
 /**
- * Handle Intuit’s callback:
+ * Handle Intuit's callback:
  *   1) Exchange the code for tokens
  *   2) Extract realmId (from the JSON or the URL query)
- *   3) Persist tokens for the given userId
+ *   3) Persist tokens
  *   4) Return them
  */
 export async function handleAuthCallback(
   callbackUrl: string
-): Promise<TokenStore> {
+): Promise<Omit<TokenStore, 'userId'>> {
   // Exchange code for tokens
   const authResponse = await oauthClient.createToken(callbackUrl);
   const json = authResponse.getJson() as {
@@ -67,7 +67,7 @@ export async function handleAuthCallback(
     expiresAt:    new Date(Date.now() + json.expires_in * 1000).toISOString()
   };
 
-  // Persist global tokens (no per-user scoping)
+  // Persist tokens
   await saveTokens(tokens);
   return tokens;
 }

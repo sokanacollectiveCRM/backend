@@ -2,7 +2,6 @@
 import supabase from '../supabase';
 
 export interface TokenStore {
-  userId: string;
   realmId: string;
   accessToken: string;
   refreshToken: string;
@@ -10,13 +9,12 @@ export interface TokenStore {
 }
 
 /**
- * Load the QuickBooks OAuth tokens for a specific user.
+ * Load the QuickBooks OAuth tokens.
  */
-export async function getTokenFromDatabase(userId: string): Promise<TokenStore | null> {
+export async function getTokenFromDatabase(): Promise<TokenStore | null> {
   const { data, error } = await supabase
     .from('quickbooks_tokens')
-    .select('user_id, realm_id, access_token, refresh_token, expires_at')
-    .eq('user_id', userId)
+    .select('realm_id, access_token, refresh_token, expires_at')
     .single();
 
   if (error) {
@@ -27,7 +25,6 @@ export async function getTokenFromDatabase(userId: string): Promise<TokenStore |
   }
 
   return {
-    userId: data.user_id,
     realmId: data.realm_id,
     accessToken: data.access_token,
     refreshToken: data.refresh_token,
@@ -38,7 +35,7 @@ export async function getTokenFromDatabase(userId: string): Promise<TokenStore |
 /**
  * Refresh QuickBooks access token using the refresh token.
  */
-export async function refreshQuickBooksToken(userId: string, refreshToken: string): Promise<TokenStore> {
+export async function refreshQuickBooksToken(refreshToken: string): Promise<TokenStore> {
   const url = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
   const auth = Buffer.from(`${process.env.QB_CLIENT_ID}:${process.env.QB_CLIENT_SECRET}`).toString('base64');
   const body = new URLSearchParams({
@@ -63,38 +60,34 @@ export async function refreshQuickBooksToken(userId: string, refreshToken: strin
   const json = await resp.json();
   
   // Get the existing token data to preserve the realmId
-  const existingToken = await getTokenFromDatabase(userId);
+  const existingToken = await getTokenFromDatabase();
   if (!existingToken) {
-    throw new Error('No existing token found for user');
+    throw new Error('No existing token found');
   }
 
   const tokenData: TokenStore = {
-    userId,
     realmId: existingToken.realmId,
     accessToken: json.access_token,
     refreshToken: json.refresh_token,
     expiresAt: new Date(Date.now() + json.expires_in * 1000).toISOString()
   };
 
-  await saveTokensToDatabase(userId, tokenData);
+  await saveTokensToDatabase(tokenData);
   return tokenData;
 }
 
 /**
- * Save QuickBooks tokens to the database for a specific user.
+ * Save QuickBooks tokens to the database.
  */
-export async function saveTokensToDatabase(userId: string, tokens: TokenStore): Promise<void> {
+export async function saveTokensToDatabase(tokens: TokenStore): Promise<void> {
   const { error } = await supabase
     .from('quickbooks_tokens')
     .upsert({
-      user_id: userId,
       realm_id: tokens.realmId,
       access_token: tokens.accessToken,
       refresh_token: tokens.refreshToken,
       expires_at: tokens.expiresAt,
       updated_at: new Date().toISOString(),
-    }, {
-      onConflict: 'user_id'
     });
 
   if (error) {
@@ -102,32 +95,17 @@ export async function saveTokensToDatabase(userId: string, tokens: TokenStore): 
   }
 }
 
-/**
- * Get a valid access token for a user, refreshing if necessary.
- */
-export async function getValidAccessToken(userId: string): Promise<string> {
-  const tokens = await getTokenFromDatabase(userId);
-  if (!tokens) {
-    throw new Error('No QuickBooks tokens found for user');
-  }
-
-  // Check if token is expired or will expire in the next minute
-  if (new Date(tokens.expiresAt) <= new Date(Date.now() + 60000)) {
-    const newTokens = await refreshQuickBooksToken(userId, tokens.refreshToken);
-    return newTokens.accessToken;
-  }
-
-  return tokens.accessToken;
-}
-
-/** Delete QuickBooks tokens for a specific user */
-export async function deleteUserTokens(userId: string): Promise<void> {
+/** Delete QuickBooks tokens */
+export async function deleteTokens(): Promise<void> {
   const { error } = await supabase
     .from('quickbooks_tokens')
-    .delete()
-    .eq('user_id', userId);
+    .delete();
 
   if (error) {
     throw new Error(`Failed to delete QuickBooks tokens: ${error.message}`);
   }
 }
+
+// Add these exports for the QuickBooks service
+export const getTokens = getTokenFromDatabase;
+export const saveTokens = saveTokensToDatabase;

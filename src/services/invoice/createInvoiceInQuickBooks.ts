@@ -2,7 +2,9 @@
 
 import { qboRequest } from '../../utils/qboClient';
 
-export default async function createInvoiceInQuickBooks(payload: any): Promise<any> {
+export default async function createInvoiceInQuickBooks(
+  payload: any
+): Promise<any> {
   // Create invoice in QuickBooks
   const { Invoice } = await qboRequest(
     '/invoice?minorversion=65',
