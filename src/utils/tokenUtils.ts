@@ -34,46 +34,68 @@ export async function getTokenFromDatabase(): Promise<TokenStore | null> {
 
 /**
  * Refresh QuickBooks access token using the refresh token.
+ * Returns the new access token or null if refresh fails.
  */
-export async function refreshQuickBooksToken(refreshToken: string): Promise<TokenStore> {
+export async function refreshQuickBooksToken(): Promise<string | null> {
+  const tokens = await getTokenFromDatabase();
+  if (!tokens) {
+    return null;
+  }
+
   const url = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
   const auth = Buffer.from(`${process.env.QB_CLIENT_ID}:${process.env.QB_CLIENT_SECRET}`).toString('base64');
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
-    refresh_token: refreshToken
+    refresh_token: tokens.refreshToken
   });
 
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Basic ${auth}`,
-      'Content-Type': 'application/x-www-form-urlencoded'
-    },
-    body: body.toString()
-  });
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${auth}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: body.toString()
+    });
 
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Failed to refresh token: ${resp.status} — ${text}`);
+    if (!resp.ok) {
+      throw new Error(`Failed to refresh token: ${resp.status}`);
+    }
+
+    const json = await resp.json();
+    
+    const tokenData: TokenStore = {
+      realmId: tokens.realmId,
+      accessToken: json.access_token,
+      refreshToken: json.refresh_token,
+      expiresAt: new Date(Date.now() + json.expires_in * 1000).toISOString()
+    };
+
+    await saveTokensToDatabase(tokenData);
+    return tokenData.accessToken;
+  } catch (error) {
+    console.error('Error refreshing token:', error);
+    return null;
+  }
+}
+
+/**
+ * Get a valid access token, refreshing if necessary.
+ * Returns null if no token exists or refresh fails.
+ */
+export async function getValidAccessToken(): Promise<string | null> {
+  const tokens = await getTokenFromDatabase();
+  if (!tokens) {
+    return null;
   }
 
-  const json = await resp.json();
-  
-  // Get the existing token data to preserve the realmId
-  const existingToken = await getTokenFromDatabase();
-  if (!existingToken) {
-    throw new Error('No existing token found');
+  // Check if token is expired or will expire in the next minute
+  if (new Date(tokens.expiresAt) <= new Date(Date.now() + 60000)) {
+    return refreshQuickBooksToken();
   }
 
-  const tokenData: TokenStore = {
-    realmId: existingToken.realmId,
-    accessToken: json.access_token,
-    refreshToken: json.refresh_token,
-    expiresAt: new Date(Date.now() + json.expires_in * 1000).toISOString()
-  };
-
-  await saveTokensToDatabase(tokenData);
-  return tokenData;
+  return tokens.accessToken;
 }
 
 /**
@@ -99,7 +121,8 @@ export async function saveTokensToDatabase(tokens: TokenStore): Promise<void> {
 export async function deleteTokens(): Promise<void> {
   const { error } = await supabase
     .from('quickbooks_tokens')
-    .delete();
+    .delete()
+    .gt('realm_id', ''); // Delete all rows where realm_id > '' (which means all rows)
 
   if (error) {
     throw new Error(`Failed to delete QuickBooks tokens: ${error.message}`);
