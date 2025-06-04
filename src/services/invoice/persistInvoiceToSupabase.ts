@@ -7,42 +7,28 @@ export default async function persistInvoiceToSupabase(
 ): Promise<void> {
   // Destructure only the fields your table defines
   const {
-    Id: quickbooks_id,
-    DocNumber: doc_number,
-    TxnDate: txn_date,
     DueDate: due_date,
-    TotalAmt: total_amt,
     PrivateNote: memo,
     Line: line_items,
     Balance,
-    MetaData,
   } = invoice;
 
-  // Determine invoice status
-  const status = Balance === 0 ? 'paid' : 'sent';
+  // Determine invoice status based on balance
+  const status = Balance === 0 ? 'paid' : 'pending';
 
-  // Grab the metadata timestamps if you want them
-  const created_at = MetaData?.CreateTime;
-  const updated_at = MetaData?.LastUpdatedTime;
+  const now = new Date().toISOString();
 
   const { error } = await supabase
-    .from('quickbooks_invoices')
-    .upsert(
-      {
-        quickbooks_id,      // PK/unique key
-        customer_id: internalCustomerId,
-        doc_number,
-        txn_date,
-        due_date,
-        total_amt,
-        memo,
-        status,
-        line_items,         // JSONB array of line items
-        created_at,
-        updated_at,
-      },
-      { onConflict: 'quickbooks_id' }
-    );
+    .from('invoices')
+    .insert({
+      customer_id: internalCustomerId,
+      line_items,                  // JSONB array of line items
+      due_date,
+      memo: memo || null,
+      status,
+      created_at: now,
+      updated_at: now
+    });
 
   if (error) {
     throw new Error(`Supabase error saving invoice: ${error.message}`);

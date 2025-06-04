@@ -14,10 +14,10 @@ const {
 } = process.env;
 
 interface TokenStore {
+  realmId: string;
   accessToken: string;
   refreshToken: string;
   expiresAt: string;
-  realmId: string;
 }
 
 interface AccessTokenResult {
@@ -33,15 +33,15 @@ export async function getAccessToken(): Promise<AccessTokenResult> {
     (await loadTokens()) as TokenStore;
 
   if (new Date() >= new Date(expiresAt)) {
-    const url  = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
+    const url = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
     const auth = Buffer.from(`${QB_CLIENT_ID}:${QB_CLIENT_SECRET}`).toString('base64');
     const body = new URLSearchParams({
-      grant_type:    'refresh_token',
+      grant_type: 'refresh_token',
       refresh_token: refreshToken
     });
 
     const resp = await fetch(url, {
-      method:  'POST',
+      method: 'POST',
       headers: {
         Authorization: `Basic ${auth}`,
         'Content-Type': 'application/x-www-form-urlencoded'
@@ -55,9 +55,9 @@ export async function getAccessToken(): Promise<AccessTokenResult> {
     }
 
     const json = JSON.parse(text);
-    accessToken  = json.access_token;
+    accessToken = json.access_token;
     refreshToken = json.refresh_token;
-    expiresAt    = new Date(Date.now() + json.expires_in * 1000).toISOString();
+    expiresAt = new Date(Date.now() + json.expires_in * 1000).toISOString();
 
     await saveTokens({ realmId, accessToken, refreshToken, expiresAt });
   }
@@ -87,8 +87,8 @@ export async function qboRequest<T = any>(
     ...options,
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      Accept:        'application/json',
-      'Content-Type':'application/json',
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
       ...(options.headers as Record<string, string>)
     }
   });
