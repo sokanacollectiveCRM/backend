@@ -5,23 +5,41 @@ export default async function persistInvoiceToSupabase(
   internalCustomerId: string,
   invoice: any
 ): Promise<void> {
-  // Destructure only the fields your table defines
+  console.log('💾 [Invoice] Persisting invoice data to Supabase...');
+  console.log('📋 [Invoice] QuickBooks invoice data:', JSON.stringify(invoice, null, 2));
+  
+  // Destructure the fields from QuickBooks invoice response
   const {
+    DocNumber: doc_number,
+    TotalAmt: total_amount,
+    Balance: balance,
     DueDate: due_date,
     PrivateNote: memo,
     Line: line_items,
-    Balance,
   } = invoice;
 
   // Determine invoice status based on balance
-  const status = Balance === 0 ? 'paid' : 'pending';
+  const status = balance === 0 ? 'paid' : 'pending';
 
   const now = new Date().toISOString();
+
+  console.log('📊 [Invoice] Saving invoice with fields:', {
+    customer_id: internalCustomerId,
+    doc_number,
+    total_amount,
+    balance,
+    due_date,
+    status,
+    line_items_count: line_items?.length || 0
+  });
 
   const { error } = await supabase
     .from('invoices')
     .insert({
       customer_id: internalCustomerId,
+      doc_number,                  // QuickBooks document number
+      total_amount,                // Total invoice amount
+      balance,                     // Outstanding balance
       line_items,                  // JSONB array of line items
       due_date,
       memo: memo || null,
@@ -31,6 +49,9 @@ export default async function persistInvoiceToSupabase(
     });
 
   if (error) {
+    console.error('❌ [Invoice] Supabase error:', error);
     throw new Error(`Supabase error saving invoice: ${error.message}`);
   }
+  
+  console.log('✅ [Invoice] Invoice saved successfully to Supabase');
 }

@@ -74,11 +74,37 @@ export async function handleAuthCallback(
 
 /**
  * Check if connected (tokens exist & are not expired).
+ * If tokens are expired, attempt to refresh them.
  */
 export async function isConnected(): Promise<boolean> {
+  console.log('🔍 [QB Auth] Checking if QuickBooks is connected...');
+  
   const tokens = await getTokens();
-  if (!tokens) return false;
-  return new Date(tokens.expiresAt) > new Date();
+  if (!tokens) {
+    console.log('❌ [QB Auth] No tokens found - not connected');
+    return false;
+  }
+  
+  const now = new Date();
+  const expiresAt = new Date(tokens.expiresAt);
+  const isExpired = expiresAt <= now;
+  
+  console.log('⏰ [QB Auth] Current time:', now.toISOString());
+  console.log('📅 [QB Auth] Token expires at:', expiresAt.toISOString());
+  console.log('🔍 [QB Auth] Token expired?', isExpired);
+  
+  if (isExpired) {
+    console.log('🔄 [QB Auth] Token expired, attempting refresh...');
+    // Import and use getValidAccessToken which handles refresh
+    const { getValidAccessToken } = await import('../../utils/tokenUtils');
+    const validToken = await getValidAccessToken();
+    const refreshSuccessful = !!validToken;
+    console.log('📊 [QB Auth] Refresh successful?', refreshSuccessful);
+    return refreshSuccessful;
+  }
+  
+  console.log('📊 [QB Auth] Connected? true (token valid)');
+  return true;
 }
 
 /**

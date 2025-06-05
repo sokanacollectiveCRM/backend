@@ -12,6 +12,8 @@ export interface TokenStore {
  * Load the QuickBooks OAuth tokens.
  */
 export async function getTokenFromDatabase(): Promise<TokenStore | null> {
+  console.log('🔍 [QB] Loading tokens from database...');
+  
   const { data, error } = await supabase
     .from('quickbooks_tokens')
     .select('realm_id, access_token, refresh_token, expires_at')
@@ -19,17 +21,26 @@ export async function getTokenFromDatabase(): Promise<TokenStore | null> {
 
   if (error) {
     if (error.code === 'PGRST116') { // no rows found
+      console.log('❌ [QB] No tokens found in database');
       return null;
     }
+    console.error('❌ [QB] Database error loading tokens:', error.message);
     throw new Error(`Could not load QuickBooks tokens: ${error.message}`);
   }
 
-  return {
+  const tokens = {
     realmId: data.realm_id,
     accessToken: data.access_token,
     refreshToken: data.refresh_token,
     expiresAt: data.expires_at,
   };
+  
+  console.log('✅ [QB] Tokens loaded successfully');
+  console.log('📅 [QB] Token expires at:', tokens.expiresAt);
+  console.log('⏰ [QB] Current time:', new Date().toISOString());
+  console.log('🔍 [QB] Token expired?', new Date(tokens.expiresAt) <= new Date());
+  
+  return tokens;
 }
 
 /**
@@ -37,8 +48,11 @@ export async function getTokenFromDatabase(): Promise<TokenStore | null> {
  * Returns the new access token or null if refresh fails.
  */
 export async function refreshQuickBooksToken(): Promise<string | null> {
+  console.log('🔄 [QB] Starting token refresh...');
+  
   const tokens = await getTokenFromDatabase();
   if (!tokens) {
+    console.log('❌ [QB] No tokens to refresh');
     return null;
   }
 
@@ -48,6 +62,8 @@ export async function refreshQuickBooksToken(): Promise<string | null> {
     grant_type: 'refresh_token',
     refresh_token: tokens.refreshToken
   });
+
+  console.log('📤 [QB] Making refresh request to:', url);
 
   try {
     const resp = await fetch(url, {
@@ -59,11 +75,16 @@ export async function refreshQuickBooksToken(): Promise<string | null> {
       body: body.toString()
     });
 
+    console.log('📥 [QB] Refresh response status:', resp.status);
+
     if (!resp.ok) {
+      const errorText = await resp.text();
+      console.error('❌ [QB] Refresh failed:', resp.status, errorText);
       throw new Error(`Failed to refresh token: ${resp.status}`);
     }
 
     const json = await resp.json();
+    console.log('✅ [QB] Refresh successful, expires in:', json.expires_in, 'seconds');
     
     const tokenData: TokenStore = {
       realmId: tokens.realmId,
@@ -72,10 +93,13 @@ export async function refreshQuickBooksToken(): Promise<string | null> {
       expiresAt: new Date(Date.now() + json.expires_in * 1000).toISOString()
     };
 
+    console.log('💾 [QB] Saving refreshed tokens...');
     await saveTokensToDatabase(tokenData);
+    console.log('✅ [QB] Refreshed tokens saved successfully');
+    
     return tokenData.accessToken;
   } catch (error) {
-    console.error('Error refreshing token:', error);
+    console.error('❌ [QB] Error refreshing token:', error);
     return null;
   }
 }
@@ -85,16 +109,27 @@ export async function refreshQuickBooksToken(): Promise<string | null> {
  * Returns null if no token exists or refresh fails.
  */
 export async function getValidAccessToken(): Promise<string | null> {
+  console.log('🎯 [QB] Getting valid access token...');
+  
   const tokens = await getTokenFromDatabase();
   if (!tokens) {
+    console.log('❌ [QB] No tokens available');
     return null;
   }
 
+  const now = Date.now();
+  const expiresAt = new Date(tokens.expiresAt).getTime();
+  const timeUntilExpiry = expiresAt - now;
+  
+  console.log('⏱️ [QB] Time until expiry:', Math.round(timeUntilExpiry / 1000), 'seconds');
+
   // Check if token is expired or will expire in the next minute
   if (new Date(tokens.expiresAt) <= new Date(Date.now() + 60000)) {
+    console.log('🔄 [QB] Token expired or expiring soon, refreshing...');
     return refreshQuickBooksToken();
   }
 
+  console.log('✅ [QB] Using existing valid token');
   return tokens.accessToken;
 }
 
@@ -102,6 +137,8 @@ export async function getValidAccessToken(): Promise<string | null> {
  * Save QuickBooks tokens to the database.
  */
 export async function saveTokensToDatabase(tokens: TokenStore): Promise<void> {
+  console.log('💾 [QB] Saving tokens to database...');
+  
   const { error } = await supabase
     .from('quickbooks_tokens')
     .upsert({
@@ -113,20 +150,28 @@ export async function saveTokensToDatabase(tokens: TokenStore): Promise<void> {
     });
 
   if (error) {
+    console.error('❌ [QB] Failed to save tokens:', error.message);
     throw new Error(`Failed to save QuickBooks tokens: ${error.message}`);
   }
+  
+  console.log('✅ [QB] Tokens saved successfully');
 }
 
 /** Delete QuickBooks tokens */
 export async function deleteTokens(): Promise<void> {
+  console.log('🗑️ [QB] Deleting tokens...');
+  
   const { error } = await supabase
     .from('quickbooks_tokens')
     .delete()
     .gt('realm_id', ''); // Delete all rows where realm_id > '' (which means all rows)
 
   if (error) {
+    console.error('❌ [QB] Failed to delete tokens:', error.message);
     throw new Error(`Failed to delete QuickBooks tokens: ${error.message}`);
   }
+  
+  console.log('✅ [QB] Tokens deleted successfully');
 }
 
 // Add these exports for the QuickBooks service

@@ -1,10 +1,10 @@
 // src/features/quickbooks/controller/quickbooksController.ts
 import { RequestHandler } from 'express';
 import {
-  disconnectQuickBooks,
-  generateConsentUrl,
-  handleAuthCallback,
-  isConnected
+    disconnectQuickBooks,
+    generateConsentUrl,
+    handleAuthCallback,
+    isConnected
 } from '../services/auth/quickbooksAuthService';
 import createCustomerService, { CreateCustomerParams } from '../services/customer/createCustomer';
 import createInvoiceService from '../services/invoice/createInvoice';
@@ -114,10 +114,13 @@ export const createCustomer: RequestHandler = async (req, res, next) => {
  */
 export const quickBooksStatus: RequestHandler = async (req, res, next) => {
   try {
-    const connected = await isConnected()
-    res.json({ connected })
+    console.log('🔍 [QB Status] Checking connection status...');
+    const connected = await isConnected();
+    console.log('📊 [QB Status] Connection result:', connected);
+    res.json({ connected });
   } catch (err) {
-    next(err)
+    console.error('❌ [QB Status] Error checking status:', err);
+    next(err);
   }
 }
 
