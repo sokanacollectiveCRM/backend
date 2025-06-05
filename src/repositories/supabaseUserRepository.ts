@@ -47,65 +47,113 @@ export class SupabaseUserRepository implements UserRepository {
     return data.map(this.mapToUser);
   }
 
-  async findClientsAll(): Promise<Client[]> {
-    const { data, error } = await this.supabaseClient
-      .from('client_info')
-      .select(`
-        id,
-        firstname,
-        lastname,
-        email,
-        service_needed,
-        requested,
-        updated_at,
-        status,
-        user_id,
-        users (
-          profile_picture,
-          firstname,
-          lastname
-        )
-      `);
+  // async findClientsAll(): Promise<any> {
+  //   const { data, error } = await this.supabaseClient
+  //     .from('client_info')
+  //     .select('first_name, last_name, service_needed, requested, updated_at, status');
 
-    if (error) {
-      throw new Error(`${error.message}`);
-    }
-    
-    return data.map((client) => this.mapToClient(client));
+  //   if (error) {
+  //     throw new Error(`Failed to fetch clients: ${error.message}`);
+  //   }
+
+  //   return data.map((client) => ({
+  //     firstName: client.first_name,
+  //     lastName: client.last_name,
+  //     serviceNeeded: client.service_needed,
+  //     requestedAt: new Date(client.requested), // Ensure it's a Date object
+  //     updatedAt: new Date(client.updated_at), // Ensure it's a Date object
+  //     status: client.status,
+  //   }));
+  // }
+
+// infrastructure/repositories/SupabaseUserRepository.ts
+
+// infrastructure/repositories/SupabaseUserRepository.ts
+
+// infrastructure/repositories/SupabaseUserRepository.ts
+
+// infrastructure/repositories/SupabaseUserRepository.ts
+
+async findClientsAll(): Promise<any[]> {
+  const { data, error } = await this.supabaseClient
+    .from('client_info')
+    .select(`
+      id,
+      user_id,           
+      firstname,
+      lastname,
+      email,
+      service_needed,
+      requested,
+      updated_at,
+      status
+    `)
+
+  if (error) {
+    throw new Error(`Failed to fetch clients: ${error.message}`)
   }
 
-  async findClientsById(id: string): Promise<any> {
-    const { data, error } = await this.supabaseClient
-      .from('client_info')
-      .select(`
-        id,
-        firstname,
-        lastname,
-        email,
-        service_needed,
-        requested,
-        updated_at,
-        status,
-        user_id,
-        users (
-          profile_picture,
-          firstname,
-          lastname
-        )
-      `)
-      .eq('id', id);
+  return (data as any[]).map(client => ({
+    id:            client.id,
+    userId:        client.user_id,        // expose the real UUID
+    firstName:     client.firstname,
+    lastName:      client.lastname,
+    email:         client.email,
+    serviceNeeded: client.service_needed,
+    requestedAt:   new Date(client.requested),
+    updatedAt:     new Date(client.updated_at),
+    status:        client.status,
+  }))
+}
 
-    if (error) {
-      throw new Error(`${error.message}`);
-    }
 
-    if (!data || data.length === 0) {
-      console.log("GOING TO EERROR: NO DATA, client id is", id);
-      return null;
-    }
-    
-    return this.mapToClient(data[0]); 
+// Add this method inside the SupabaseUserRepository class
+
+async updateClientStatusToCustomer(userId: string): Promise<void> {
+  console.log('Updating client_info where user_id =', userId);
+
+  const { error } = await this.supabaseClient
+    .from('client_info')
+    .update({ status: 'customer' })      // set the new status
+    .eq('user_id', userId);              // match by user_id (UUID)
+
+  if (error) {
+    throw new Error(`Failed to update client status: ${error.message}`);
   }
+}
+async findClientsById(id: string): Promise<any> {
+  const { data, error } = await this.supabaseClient
+    .from('client_info')
+    .select(`
+      id,
+      firstname,
+      lastname,
+      email,
+      service_needed,
+      requested,
+      updated_at,
+      status,
+      user_id,
+      users (
+        profile_picture,
+        firstname,
+        lastname
+      )
+    `)
+    .eq('id', id);
+
+  if (error) {
+    throw new Error(`${error.message}`);
+  }
+
+  if (!data || data.length === 0) {
+    console.log("GOING TO EERROR: NO DATA, client id is", id);
+    return null;
+  }
+  
+  return this.mapToClient(data[0]); 
+}
+
 
   async findClientsByDoula(doulaId: string): Promise<Client[]> {
     const { data: assignments, error: assignmentsError } = await this.supabaseClient

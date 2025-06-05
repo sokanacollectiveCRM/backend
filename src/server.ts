@@ -4,10 +4,16 @@ import dotenv from 'dotenv';
 import express, { Express, NextFunction, Request, Response } from 'express';
 import authRoutes from './routes/authRoutes';
 import clientRoutes from './routes/clientRoutes';
-import contractRoutes from './routes/contractRoutes';
+import customersRoutes from './routes/customersRoutes';
 import emailRoutes from './routes/EmailRoutes';
+import quickbookRoutes from './routes/quickbooksRoutes';
 import requestRouter from './routes/requestRoute';
 import userRoutes from './routes/specificUserRoutes';
+
+import contractRoutes from './routes/contractRoutes';
+
+
+
 
 dotenv.config();
 
@@ -61,6 +67,8 @@ app.use('/auth', authRoutes);
 app.use('/email', emailRoutes);
 app.use('/requestService', requestRouter);
 app.use('/clients', clientRoutes);
+app.use('/quickbooks', quickbookRoutes)
+app.use('/quickbooks/customers', customersRoutes);
 app.use('/users', userRoutes);
 app.use('/contracts', contractRoutes);
 

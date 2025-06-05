@@ -66,6 +66,12 @@ export interface UserRepository {
    * Upload a user profile picture
    */
   uploadProfilePicture(user: User, profilePicture: MulterFile): Promise<string>;
+
+    /**
+   * Update the status for a client in client_info
+   */
+    updateClientStatusToCustomer(userId: string): Promise<void>;
+
     
   /**
    * Get this user's work hours
