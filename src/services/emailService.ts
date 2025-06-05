@@ -1,5 +1,5 @@
 import nodemailer from 'nodemailer';
-import { EmailService } from './interface/EmailServiceInterface';
+import { EmailService } from './interface/emailServiceInterface';
 
 export class NodemailerService implements EmailService {
   private transporter: nodemailer.Transporter;
@@ -42,6 +42,94 @@ export class NodemailerService implements EmailService {
     } catch (error) {
       console.error('Failed to send email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
+    }
+  }
+
+  async sendInvoiceEmail(
+    to: string,
+    customerName: string,
+    invoiceNumber: string,
+    amount: string,
+    dueDate: string,
+    invoicePdfBuffer: Buffer
+  ): Promise<void> {
+    const subject = `Invoice ${invoiceNumber} from Sokana CRM`;
+    const text = `Dear ${customerName},
+
+Please find attached invoice ${invoiceNumber} for ${amount}.
+
+Invoice Details:
+- Invoice Number: ${invoiceNumber}
+- Amount: ${amount}
+- Due Date: ${dueDate}
+
+Please remit payment by the due date. If you have any questions about this invoice, please contact us.
+
+Thank you for your business!
+
+Best regards,
+The Sokana Team`;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Invoice ${invoiceNumber}</h2>
+        <p>Dear ${customerName},</p>
+        <p>Please find attached your invoice for <strong>${amount}</strong>.</p>
+        
+        <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <h3>Invoice Details:</h3>
+          <ul style="list-style: none; padding: 0;">
+            <li><strong>Invoice Number:</strong> ${invoiceNumber}</li>
+            <li><strong>Amount:</strong> ${amount}</li>
+            <li><strong>Due Date:</strong> ${dueDate}</li>
+          </ul>
+        </div>
+        
+        <p>Please remit payment by the due date. If you have any questions about this invoice, please contact us.</p>
+        <p>Thank you for your business!</p>
+        <p>Best regards,<br>The Sokana Team</p>
+      </div>
+    `;
+
+    // Check if we're in test mode
+    if (process.env.USE_TEST_EMAIL === 'true') {
+      console.log('Test email mode enabled - email with attachment not sent');
+      console.log({
+        to,
+        subject,
+        text,
+        html: 'HTML content available',
+        attachments: [
+          {
+            filename: `invoice-${invoiceNumber}.pdf`,
+            content: `Buffer with ${invoicePdfBuffer.length} bytes`
+          }
+        ]
+      });
+      return;
+    }
+
+    try {
+      const mailOptions = {
+        from: process.env.EMAIL_FROM || 'Sokana CRM <noreply@sokanacrm.org>',
+        to,
+        subject,
+        text,
+        html,
+        attachments: [
+          {
+            filename: `invoice-${invoiceNumber}.pdf`,
+            content: invoicePdfBuffer,
+            contentType: 'application/pdf'
+          }
+        ]
+      };
+
+      const info = await this.transporter.sendMail(mailOptions);
+      console.log('Invoice email sent successfully:', info.messageId);
+    } catch (error) {
+      console.error('Failed to send invoice email:', error);
+      throw new Error(`Failed to send invoice email: ${error.message}`);
     }
   }
 
