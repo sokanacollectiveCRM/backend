@@ -1,4 +1,4 @@
-import { User } from 'entities/User';
+import { User } from '../../entities/User';
 
 /**
  * AuthService defines the interface for authentication operations.
@@ -12,7 +12,6 @@ export interface AuthService {
   signup(
     email: string,
     password: string,
-    username: string,
     firstname: string,
     lastname: string
   ): Promise<User>;

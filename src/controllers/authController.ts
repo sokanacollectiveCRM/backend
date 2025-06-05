@@ -1,15 +1,6 @@
 import { Request, Response } from 'express';
 
 import {
-  AuthRequest,
-  LoginBody,
-  PasswordResetBody,
-  SignupBody,
-  TokenBody,
-  UpdatePasswordBody,
-} from 'types';
-import { AuthUseCase } from 'usecase/authUseCase.js';
-import {
   AuthenticationError,
   AuthorizationError,
   ConflictError,
@@ -17,6 +8,16 @@ import {
   ValidationError
 } from '../domains/errors';
 import supabase from '../supabase';
+import {
+  AuthRequest,
+  LoginBody,
+  PasswordResetBody,
+  SignupBody,
+  TokenBody,
+  UpdatePasswordBody,
+} from '../types';
+import { AuthUseCase } from '../usecase/authUseCase.js';
+
 
 export class AuthController {
   private authUseCase: AuthUseCase;
@@ -39,9 +40,9 @@ export class AuthController {
     res: Response
   ): Promise<void> {
     try {
-      const { email, password, username, firstname, lastname } = req.body;
+      const { email, password, firstname, lastname } = req.body;
       // call useCase to grab newly created user
-      const user = await this.authUseCase.signup(email, password, username, firstname, lastname);
+      const user = await this.authUseCase.signup(email, password, firstname, lastname);
       res.status(201).json({ message: 'User created successfully', user: user.toJSON() })
     } 
     catch (signUpError) {

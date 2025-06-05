@@ -153,4 +153,26 @@ The Sokana Team`;
     
     await this.sendEmail(to, subject, text, html);
   }
+
+  async sendTeamInviteEmail(to: string, firstname: string, lastname: string, role: string): Promise<void> {
+    const signupUrl = `${process.env.FRONTEND_URL}/signup`;
+    const subject = 'Welcome to the Sokana CRM Team!';
+    const text = `Dear ${firstname} ${lastname},\n\nYou have been invited to join the Sokana CRM team as a ${role}. Please fill out the sign up form to create an account and make sure to use this same email address.${signupUrl}\n\nBest regards,\nThe Sokana Team`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Welcome to the Sokana Team!</h2>
+        <p>Dear ${firstname} ${lastname},</p>
+        <p>We're excited to have you join our team as a ${role}!</p>
+        <div>    
+        <p>Please fill out the</p>
+        <a href="${signupUrl}" style="font-weight: bold;">Sign Up Form</a>
+        <p> to create a new account and make sure to use this same email address.</p>
+        </div>
+        <p>If you have any questions, please don't hesitate to reach out.</p>
+        <p>Best regards,<br>The Sokana Team</p>
+      </div>
+    `;
+    
+    await this.sendEmail(to, subject, text, html);
+  }
 }

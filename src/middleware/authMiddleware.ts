@@ -1,8 +1,7 @@
-// src/common/middleware/authMiddleware.ts
-import { NextFunction, Response } from 'express'
-import { authService } from 'index'
-import supabase from 'supabase'
-import type { AuthRequest } from 'types'
+import { NextFunction, Response } from 'express';
+import { authService } from '../index';
+import supabase from '../supabase';
+import type { AuthRequest } from '../types';
 
 const authMiddleware = async (
   req: AuthRequest,
@@ -31,19 +30,14 @@ const authMiddleware = async (
 
     // Your app’s user object
     const user_entity = await authService.getUserFromToken(token)
-
-    // Only override if Supabase provided a role
-    const meta = user.user_metadata as Record<string, any> | undefined
-    if (meta && typeof meta.role === 'string') {
-      user_entity.role = meta.role
-    }
-
-    req.user = user_entity
-    next()
-  } catch (err) {
-    console.error('Auth middleware error:', err)
-    res.status(500).json({ error: 'Internal server error' })
+    req.user = user_entity;
+    next();
+  } catch {
+    console.error('Auth middleware error:');
+    res.status(500).json({ error: 'Internal server error' });
   }
-}
+};
+
+
 
 export default authMiddleware

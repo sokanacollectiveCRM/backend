@@ -1,6 +1,10 @@
-// src/common/middleware/authorizeRoles.ts
-import { NextFunction, Response } from 'express'
-import type { AuthRequest } from 'types'
+import { NextFunction, Response } from 'express';
+import type { AuthRequest } from '../types';
+
+// authorizeRoles
+//
+// Takes in an array of authorized roles (in lowercase) of 'patient', 'doula', 'admin'.
+//
 
 const authorizeRoles = async (
   req: AuthRequest,

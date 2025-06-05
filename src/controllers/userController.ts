@@ -1,21 +1,18 @@
-import { UserUseCase } from "@/usecase/userUseCase";
-import { AuthenticationError, AuthorizationError, ConflictError, NotFoundError, ValidationError } from 'domains/errors';
 import { Response } from 'express';
-import { UserRepository } from 'repositories/interface/userRepository';
-import { AuthRequest, UpdateRequest } from 'types';
+import { AuthenticationError, AuthorizationError, ConflictError, NotFoundError, ValidationError } from '../domains/errors';
+import { AuthRequest, UpdateRequest } from '../types';
+import { UserUseCase } from "../usecase/userUseCase";
+
 
 export class UserController {
   private userUseCase: UserUseCase;
-  private userRepository: UserRepository;
 
-  constructor(userUseCase: UserUseCase, userRepository: UserRepository) {
+  constructor(userUseCase: UserUseCase) {
     this.userUseCase = userUseCase;
-    this.userRepository = userRepository
   }
 
   async getUserById(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { id, role } = req.user;
       const targetUserId = req.params.id;
 
       const user = await this.userUseCase.getUserById(targetUserId);
@@ -30,6 +27,69 @@ export class UserController {
       const users = await this.userUseCase.getAllUsers();
       res.status(200).json(users.map(user => user.toJSON()));
     } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+  async getAllTeamMembers(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const users = await this.userUseCase.getAllTeamMembers();
+      res.status(200).json(users.map(user => user.toJSON()));
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
+  async deleteMember(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.params.id;
+      await this.userUseCase.deleteMember(userId);
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
+  async addMember(req: AuthRequest, res: Response): Promise<void>{
+    try{
+      const userName = req.params.firstname
+      const userEmail = req.params.email
+      const userRole = req.params.role
+      const userBio = req.params.bio
+      const user = await this.userUseCase.addMember(userName, userEmail, userRole, userBio)
+      res.status(200).json(user.toJSON())
+    } catch (error) {
+      this.handleError(error, res)
+    }
+  }
+
+  async getHours(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id, role } = req.user;
+      if(role === "admin") {
+        const allHoursData = await this.userUseCase.getAllHours();
+        res.status(200).json(allHoursData);
+      } else {
+        const specificHoursData = await this.userUseCase.getHoursById(id);
+        res.status(200).json(specificHoursData);
+      }
+    } catch (error) {
+      console.log("Error when retrieving user's work data");
+      this.handleError(error, res);
+    }
+  }
+
+  async addNewHours(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { doula_id, client_id, start_time, end_time, note } = req.body;
+
+      if(!doula_id || !client_id || !start_time|| !end_time) {
+        console.log(`${doula_id}, ${client_id}, ${start_time}, ${end_time}`);
+        throw new Error(`Error: missing doula_id, client_id, start_time, or end_time`);
+      }
+
+      const newWorkEntry = await this.userUseCase.addNewHours(doula_id, client_id, new Date(start_time), new Date(end_time), note);
+      res.status(200).json(newWorkEntry);
+    } catch (error) {
+      console.log("Error trying to add new work entry");
       this.handleError(error, res);
     }
   }
@@ -52,6 +112,23 @@ export class UserController {
       res.status(200).json(updatedUser.toJSON());
     } catch(error) {
       res.status(400).json({ error: error.message});
+    }
+  }
+
+  async addTeamMember(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { firstname, lastname, email, role } = req.body;
+
+      if (!firstname || !lastname || !email || !role) {
+        res.status(400).json({ error: 'Missing required fields' });
+        return;
+      }
+
+      const newMember = await this.userUseCase.addMember(firstname, lastname, email, role);
+      res.status(201).json(newMember);
+    } catch (error) {
+      console.error('Error adding team member:', error);
+      res.status(500).json({ error: error.message });
     }
   }
 

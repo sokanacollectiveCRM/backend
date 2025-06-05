@@ -9,14 +9,12 @@ export class RequestFormRepository{
 
     async saveData(formData){
         try {
-            console.log("supabase:", this.supabaseClient);
-            console.log(" Attempting to insert form data:", formData);
             const { data,error } = await this.supabaseClient 
              .from('client_info') 
              .insert([
                 {
-                    first_name: formData.first_name,
-                    last_name: formData.last_name,
+                    firstname: formData.firstname,
+                    lastname: formData.lastname,
                     email: formData.email,
                     phone_number: formData.phone_number,
                     children_expected: formData.children_expected,

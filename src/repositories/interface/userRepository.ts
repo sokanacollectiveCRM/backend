@@ -1,5 +1,7 @@
-import { User } from 'entities/User';
 import type { File as MulterFile } from 'multer';
+import { Client } from '../../entities/Client';
+import { WORK_ENTRY, WORK_ENTRY_ROW } from '../../entities/Hours';
+import { User } from '../../entities/User';
 
 /**
  * UserRepository defines the interface for user data operations
@@ -18,7 +20,7 @@ export interface UserRepository {
   /**
    * Get all clients by Doula
    */
-  findClientsByDoula(doulaId: string): Promise<User[]>;
+  findClientsByDoula(doulaId: string): Promise<Client[]>;
 
   /**
    * FOR SHOWCASE ONLY
@@ -39,7 +41,12 @@ export interface UserRepository {
    * Get all users
    */
   findAll(): Promise<User[]>;
-  
+
+  /**
+   * Get all team members
+   */
+  findAllTeamMembers(): Promise<User[]>;
+
   /**
    * Find a user by ID
    */
@@ -51,6 +58,11 @@ export interface UserRepository {
   delete(id: string): Promise<void>;
 
   /**
+   * Add a user
+   */
+  addMember(firstname: string, lastname: string, userEmail: string, userRole: string): Promise<User>;
+
+  /**
    * Upload a user profile picture
    */
   uploadProfilePicture(user: User, profilePicture: MulterFile): Promise<string>;
@@ -60,4 +72,19 @@ export interface UserRepository {
    */
     updateClientStatusToCustomer(userId: string): Promise<void>;
 
+    
+  /**
+   * Get this user's work hours
+   */
+  getHoursById(id: string): Promise<WORK_ENTRY[]>;
+
+  /**
+   * Get all work hours
+   */
+  getAllHours(): Promise<WORK_ENTRY[]>;
+  
+  /**
+   * Add a new doula work session entry 
+   */
+  addNewHours(doula_id: string, client_id: string, start_time: Date, end_time: Date, note: string): Promise<WORK_ENTRY_ROW>;
 }

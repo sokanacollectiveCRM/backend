@@ -1,6 +1,37 @@
-import { User } from 'entities/User';
 import { Request } from 'express';
 import type { File as MulterFile } from 'multer';
+import { User } from './entities/User';
+
+export enum ServiceTypes{
+  LABOR_SUPPORT = "Labor Support",
+  POSTPARTUM_SUPPORT= "Postpartum Support",
+  PERINATAL_EDUCATION= "Perinatal Education",
+  FIRST_NIGHT = "First Night Care",
+  LACTATION_SUPPORT = "Lactation Support",
+  PHOTOGRAPHY = "Photography",
+  OTHER = "Other"
+}
+
+export enum Pronouns{
+  HE_HIM = "he/him",
+  SHE_HER = "she/her",
+  THEY_THEM = "they/them",
+  OTHER = "other",
+}
+
+export enum Sex{
+  MALE = "Male",
+  FEMALE = "Female"
+}
+
+export enum IncomeLevel{
+  FROM_0_TO_24999 = "$0 - $24,999",
+  FROM_25000_TO_44999 = "$25,000 - $44,999",
+  FROM_45000_TO_64999 = "$45,000 - $64,999",
+  FROM_65000_TO_84999 = "$65,000 - $84,999",
+  FROM_85000_TO_99999 = "$85,000 - $99,999",
+  ABOVE_100000 = "$100,000 and above"
+}
 
 export interface AuthRequest extends Request {
   user?: User;
@@ -13,7 +44,6 @@ export interface UpdateRequest extends Request {
 
 export interface UserData {
   id?: string;
-  username?: string;
   email?: string;
   firstname?: string;
   lastname?: string;
@@ -34,7 +64,6 @@ export interface UserData {
 export interface SignupBody {
   email: string;
   password: string;
-  username: string;
   firstname?: string;
   lastname?: string;
 }
@@ -69,6 +98,17 @@ export interface SupabaseUserMetadata {
   name?: string;
   [key: string]: unknown;
 }
+
+export enum CLIENT_STATUS {
+  LEAD = 'lead',
+  CONTACTED = 'contacted',
+  MATCHING = 'matching',
+  INTERVIEWING = 'interviewing',
+  'FOLLOW UP' = 'follow up',
+  CONTRACT = 'contract',
+  ACTIVE = 'active',
+  COMPLETE = 'complete',
+};
 
 export enum ACCOUNT_STATUS {
   PENDING = "pending",
