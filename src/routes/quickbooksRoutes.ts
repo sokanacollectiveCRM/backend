@@ -10,6 +10,7 @@ import {
   quickBooksStatus
 } from '../controllers/quickbooksController'
 import authMiddleware from '../middleware/authMiddleware'
+import { simulatePaymentController } from '../services/payments/paymentsController'
 
 const router = Router()
 
@@ -26,5 +27,8 @@ router.get('/status', quickBooksStatus)
 router.get('/invoices', getInvoices)
 router.post('/disconnect', quickBooksDisconnect)
 router.post('/invoice', createInvoice)
+
+// Simulate payment endpoint
+router.post('/simulate-payment', simulatePaymentController)
 
 export default router

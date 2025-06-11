@@ -31,7 +31,8 @@
     "node-fetch": "^3.3.2",
     "nodemailer": "^6.10.0",
     "pdfkit": "^0.17.1",
-     "pizzip": "^3.2.0"
+    "pizzip": "^3.2.0",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@eslint/js": "latest",
@@ -40,6 +41,7 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/node": "^22.13.5",
+    "@types/uuid": "^10.0.0",
     "eslint": "latest",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-import": "latest",

@@ -48,6 +48,7 @@ export default async function createInvoiceService(
     lineItems,
     dueDate,
     memo,
+    customerEmail
   });
 
   // 3) Send it to QuickBooks

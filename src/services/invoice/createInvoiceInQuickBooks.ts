@@ -14,5 +14,13 @@ export default async function createInvoiceInQuickBooks(
     }
   );
 
-  return Invoice;
+  // Fetch the invoice again with the payment link
+  const { Invoice: InvoiceWithLink } = await qboRequest(
+    `/invoice/${Invoice.Id}?minorversion=65&include=invoiceLink`,
+    {
+      method: 'GET'
+    }
+  );
+
+  return InvoiceWithLink;
 }
