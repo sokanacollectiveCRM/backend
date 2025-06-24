@@ -32,7 +32,9 @@
     "nodemailer": "^6.10.0",
     "pdfkit": "^0.17.1",
     "pizzip": "^3.2.0",
-    "uuid": "^11.1.0"
+    "stripe": "^14.20.0",
+    "uuid": "^11.1.0",
+    "zod": "^3.25.67"
   },
   "devDependencies": {
     "@eslint/js": "latest",
