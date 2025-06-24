@@ -3,7 +3,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import fetch, { RequestInit } from 'node-fetch';
+import { RequestInit } from 'node-fetch';
 import { getTokenFromDatabase, refreshQuickBooksToken } from './tokenUtils';
 
 const {
@@ -58,6 +58,9 @@ export async function qboRequest<T = any>(
 
   const url = `${host}/v3/company/${realmId}${path}`;
   console.log('QBO URL →', url);
+
+  // Use dynamic import for node-fetch
+  const fetch = (await import('node-fetch')).default;
 
   const resp = await fetch(url, {
     ...options,
