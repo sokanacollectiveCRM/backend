@@ -12,7 +12,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "build": "tsc && tsc-alias",
+    "create-admin": "tsx scripts/createAdmin.ts"
   },
   "keywords": [],
   "author": "",
