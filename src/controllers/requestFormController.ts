@@ -204,7 +204,20 @@ export class RequestFormController {
             try {
                 const subject = 'New Lead Submitted via Request Form';
                 const text = `A new lead has been submitted.\n\nName: ${savedForm.firstname} ${savedForm.lastname}\nEmail: ${savedForm.email}\nPhone: ${savedForm.phone_number}\nService Needed: ${savedForm.service_needed}\nCity/State: ${savedForm.city}, ${savedForm.state}\n\nLog into Sokana Collective for details.`;
-                await emailService.sendEmail(notificationEmail, subject, text);
+                const html = `
+                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #4CAF50;">New Lead Submitted</h2>
+                    <table style="width: 100%; border-collapse: collapse;">
+                      <tr><td style="font-weight: bold; padding: 8px;">Name:</td><td style="padding: 8px;">${savedForm.firstname} ${savedForm.lastname}</td></tr>
+                      <tr><td style="font-weight: bold; padding: 8px;">Email:</td><td style="padding: 8px;">${savedForm.email}</td></tr>
+                      <tr><td style="font-weight: bold; padding: 8px;">Phone:</td><td style="padding: 8px;">${savedForm.phone_number}</td></tr>
+                      <tr><td style="font-weight: bold; padding: 8px;">Service Needed:</td><td style="padding: 8px;">${savedForm.service_needed}</td></tr>
+                      <tr><td style="font-weight: bold; padding: 8px;">City/State:</td><td style="padding: 8px;">${savedForm.city}, ${savedForm.state}</td></tr>
+                    </table>
+                    <p style="margin-top: 24px;">Log into <b>Sokana Collective</b> for details.</p>
+                  </div>
+                `;
+                await emailService.sendEmail(notificationEmail, subject, text, html);
             } catch (emailError) {
                 console.error('Failed to send notification email:', emailError);
                 // Do not block form submission if email fails
