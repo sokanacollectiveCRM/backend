@@ -47,7 +47,7 @@ export async function getTokenFromDatabase(): Promise<TokenStore | null> {
  * Refresh QuickBooks access token using the refresh token.
  * Returns the new access token or null if refresh fails.
  */
-export async function refreshQuickBooksToken(): Promise<string | null> {
+export async function refreshQuickBooksToken(): Promise<TokenStore | null> {
   console.log('🔄 [QB] Starting token refresh...');
   
   const tokens = await getTokenFromDatabase();
@@ -97,7 +97,7 @@ export async function refreshQuickBooksToken(): Promise<string | null> {
     await saveTokensToDatabase(tokenData);
     console.log('✅ [QB] Refreshed tokens saved successfully');
     
-    return tokenData.accessToken;
+    return tokenData;
   } catch (error) {
     console.error('❌ [QB] Error refreshing token:', error);
     return null;
@@ -126,7 +126,8 @@ export async function getValidAccessToken(): Promise<string | null> {
   // Check if token is expired or will expire in the next minute
   if (new Date(tokens.expiresAt) <= new Date(Date.now() + 60000)) {
     console.log('🔄 [QB] Token expired or expiring soon, refreshing...');
-    return refreshQuickBooksToken();
+    const refreshed = await refreshQuickBooksToken();
+    return refreshed ? refreshed.accessToken : null;
   }
 
   console.log('✅ [QB] Using existing valid token');

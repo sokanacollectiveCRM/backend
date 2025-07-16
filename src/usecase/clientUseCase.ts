@@ -60,14 +60,33 @@ export class ClientUseCase {
   async updateClientStatus(
     clientId: string,
     status: string
-  ): Promise<any> {
+  ): Promise<Client> {
 
     try {
+      // Update the client status directly
       const client = await this.clientRepository.updateStatus(clientId, status);
+
       return client;
     }
     catch (error) {
       throw new Error(`Could not update client: ${error.message}`);
+    }
+  }
+
+  // updates client profile fields
+  async updateClientProfile(
+    clientId: string,
+    fieldsToUpdate: Partial<Client>
+  ): Promise<Client> {
+
+    try {
+      // Update the client directly
+      const client = await this.clientRepository.updateClient(clientId, fieldsToUpdate);
+
+      return client;
+    }
+    catch (error) {
+      throw new Error(`Could not update client profile: ${error.message}`);
     }
   }
 }

@@ -1,10 +1,10 @@
 import { Response } from 'express';
 import {
-  AuthenticationError,
-  AuthorizationError,
-  ConflictError,
-  NotFoundError,
-  ValidationError
+    AuthenticationError,
+    AuthorizationError,
+    ConflictError,
+    NotFoundError,
+    ValidationError
 } from '../domains/errors';
 import { Client } from '../entities/Client';
 
@@ -113,7 +113,7 @@ export class ClientController {
   // Updates client status in client_info table by grabbing the client to update in the request body
   //
   // returns:
-  //    Client
+  //    Client with updatedAt timestamp
   //
   async updateClientStatus(
     req: AuthRequest,
@@ -127,23 +127,106 @@ export class ClientController {
       return;
     }
 
-
     try {
+      // Update client status directly in client_info table
       const client = await this.clientUseCase.updateClientStatus(clientId, status);
-      res.json(this.mapToClientSummary(client));
+      
+      res.json({
+        success: true,
+        client: {
+          id: client.id,
+          status: client.status,
+          updatedAt: client.updatedAt,
+          firstname: client.user.firstname,
+          lastname: client.user.lastname,
+          email: client.user.email,
+          role: client.user.role,
+          serviceNeeded: client.serviceNeeded,
+          requestedAt: client.requestedAt
+        }
+      });
     }
     catch (statusError) {
       const error = this.handleError(statusError, res);
-
       res.status(error.status).json({ error: error.message });
     }
   }
-  
 
   //
-  // updateStatus()
+  // updateClient
   //
-  // Updates the user's status
+  // Updates client profile fields
+  //
+  // returns:
+  //    Client with updatedAt timestamp
+  //
+  async updateClient(
+    req: AuthRequest,
+    res: Response,
+  ): Promise<void> {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    console.log('Controller: Request details:', {
+      method: req.method,
+      url: req.url,
+      originalUrl: req.originalUrl,
+      path: req.path,
+      params: req.params,
+      id,
+      idType: typeof id
+    });
+
+    if (!id) {
+      res.status(400).json({ error: 'Missing client ID' });
+      return;
+    }
+
+    // Validate that id looks like a UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      console.error('Controller: Invalid client ID format:', id);
+      res.status(400).json({ error: `Invalid client ID format: ${id}. Expected UUID format.` });
+      return;
+    }
+
+    console.log('Controller: Updating client:', { 
+      id, 
+      idType: typeof id,
+      updateData,
+      updateDataKeys: Object.keys(updateData)
+    });
+
+    try {
+      const client = await this.clientUseCase.updateClientProfile(
+        id,
+        updateData
+      );
+      
+      console.log('Controller: Client updated successfully:', client.id);
+      
+      res.json({
+        success: true,
+        client: {
+          id: client.id,
+          updatedAt: client.updatedAt,
+          firstname: client.user.firstname,
+          lastname: client.user.lastname,
+          email: client.user.email,
+          phoneNumber: client.phoneNumber, // Get from Client entity
+          role: client.user.role,
+          status: client.status,
+          serviceNeeded: client.serviceNeeded,
+          requestedAt: client.requestedAt
+        }
+      });
+    }
+    catch (error) {
+      console.error('Controller: Error updating client:', error);
+      const err = this.handleError(error, res);
+      res.status(err.status).json({ error: err.message });
+    }
+  }
 
   // Helper method to handle errors
   private handleError(

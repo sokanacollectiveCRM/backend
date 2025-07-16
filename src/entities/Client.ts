@@ -20,6 +20,7 @@ export class Client {
     public baby_sex?: string,
     public annual_income?: string,
     public service_specifics?: string,
+    public phoneNumber?: string, // Add phone number field
   ) {}
 
   toJson(): Object {
@@ -41,7 +42,8 @@ export class Client {
         ...(this.hospital && { hospital: this.hospital }),
         ...(this.baby_sex && { baby_sex: this.baby_sex }),
         ...(this.annual_income && { annual_income: this.annual_income }),
-        ...(this.service_specifics && { service_specifics: this.service_specifics })
+        ...(this.service_specifics && { service_specifics: this.service_specifics }),
+        ...(this.phoneNumber && { phoneNumber: this.phoneNumber }) // Include phone number in JSON
       }
     );
   }

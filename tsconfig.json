@@ -4,6 +4,8 @@
     "module": "CommonJS",
     "target": "ES2020",
     "esModuleInterop": true,
+    "skipLibCheck": true,
+    "outDir": "dist",
     "paths": {
       "@/*": ["src/*"]
     }

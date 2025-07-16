@@ -14,18 +14,6 @@ import getInvoiceableCustomers from '../services/customer/getInvoiceableCustomer
 // Ensure you have SUPABASE_JWT_SECRET in your env
 const JWT_SECRET = process.env.SUPABASE_JWT_SECRET!
 
-// Extend Express Request to include user
-declare global {
-  namespace Express {
-    interface Request {
-      user?: {
-        id: string;
-        role?: string;
-      };
-    }
-  }
-}
-
 /**
  * JSON endpoint: return the Intuit consent URL for AJAX calls.
  */

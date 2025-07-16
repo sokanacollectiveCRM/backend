@@ -26,7 +26,7 @@ export class RequestFormController {
             }
 
             const formData: RequestFormData = req.body;
-            const result = await this.service.createRequest(formData, req.user.id);
+            const result = await this.service.createRequest(formData);
             
             res.status(201).json({
                 message: "Request form submitted successfully",

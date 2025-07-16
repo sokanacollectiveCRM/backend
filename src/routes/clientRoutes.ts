@@ -1,5 +1,5 @@
 import express, { Router } from 'express';
-import { clientController,userController } from '../index';
+import { clientController, userController } from '../index';
 import authMiddleware from '../middleware/authMiddleware';
 import authorizeRoles from '../middleware/authorizeRoles';
 
@@ -24,7 +24,7 @@ clientRoutes.post("/team/add",
   (req, res) => userController.addTeamMember(req, res)
 );
 
-// Client specific routes
+// Client specific routes - ORDER MATTERS! Specific routes first
 clientRoutes.get('/fetchCSV', 
   authMiddleware,
   (req, res, next) => authorizeRoles(req, res, next, ['admin','client']), 
@@ -37,16 +37,24 @@ clientRoutes.get('/',
   (req, res) => clientController.getClients(req, res)
 );
 
+// Specific routes must come before generic /:id route
+clientRoutes.put('/status',
+  authMiddleware, 
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']), 
+  (req, res) => clientController.updateClientStatus(req, res)
+);
+
+// Generic routes last
 clientRoutes.get('/:id',
   authMiddleware,
   (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula', 'client']),
   (req, res) => clientController.getClientById(req, res)
 );
 
-clientRoutes.put('/status',
-  authMiddleware, 
-  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']), 
-  (req, res) => clientController.updateClientStatus(req, res)
+clientRoutes.put('/:id',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
+  (req, res) => clientController.updateClient(req, res)
 );
 
 export default clientRoutes;

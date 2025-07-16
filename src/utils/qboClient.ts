@@ -28,7 +28,7 @@ export async function getAccessToken(): Promise<AccessTokenResult> {
 
   // Check if token is expired or will expire in the next minute
   if (new Date(tokens.expiresAt) <= new Date(Date.now() + 60000)) {
-    const newTokens = await refreshQuickBooksToken(tokens.refreshToken);
+    const newTokens = await refreshQuickBooksToken();
     return {
       accessToken: newTokens.accessToken,
       realmId: newTokens.realmId
