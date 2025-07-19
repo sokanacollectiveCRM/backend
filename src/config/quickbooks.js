@@ -10,7 +10,7 @@ module.exports = {
   redirectUri: process.env.QB_REDIRECT_URI,
   scopes: [
     'com.intuit.quickbooks.accounting',
-    'com.intuit.quickbooks.payment'
+    'com.intuit.quickbooks.payment',
     // add 'openid', 'profile', etc., here only if you need them
-  ]
+  ],
 };

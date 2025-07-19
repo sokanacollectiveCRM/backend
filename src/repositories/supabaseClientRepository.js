@@ -1,18 +1,17 @@
-"use strict";
+'use strict';
 // infrastructure/repositories/SupabaseUserRepository.ts
-Object.defineProperty(exports, "__esModule", { value: true });
+Object.defineProperty(exports, '__esModule', { value: true });
 exports.SupabaseClientRepository = void 0;
-const Client_1 = require("../entities/Client");
-const User_1 = require("../entities/User");
-const types_1 = require("../types");
+const Client_1 = require('../entities/Client');
+const User_1 = require('../entities/User');
+const types_1 = require('../types');
 class SupabaseClientRepository {
-    constructor(supabaseClient) {
-        this.supabaseClient = supabaseClient;
-    }
-    async findClientsLiteAll() {
-        const { data, error } = await this.supabaseClient
-            .from('client_info')
-            .select(`
+  constructor(supabaseClient) {
+    this.supabaseClient = supabaseClient;
+  }
+  async findClientsLiteAll() {
+    const { data, error } = await this.supabaseClient.from('client_info')
+      .select(`
         id,
         firstname,
         lastname,
@@ -27,30 +26,30 @@ class SupabaseClientRepository {
           profile_picture
         )
       `);
-        if (error)
-            throw new Error(error.message);
-        return data.map(row => this.mapToClient(row));
+    if (error) throw new Error(error.message);
+    return data.map((row) => this.mapToClient(row));
+  }
+  async exportCSV() {
+    const { data, error } = await this.supabaseClient
+      .from('client_info')
+      .select('firstname,lastname,zip_code,annual_income,pronouns')
+      .csv();
+    if (error || !data) {
+      throw new Error(`Failed to fetch CSV Data ${error.message}`);
     }
-    async exportCSV() {
-        const { data, error } = await this.supabaseClient
-            .from('client_info')
-            .select('firstname,lastname,zip_code,annual_income,pronouns')
-            .csv();
-        if (error || !data) {
-            throw new Error(`Failed to fetch CSV Data ${error.message}`);
-        }
-        return data;
+    return data;
+  }
+  async findClientsLiteByDoula(userId) {
+    const clientIds = await this.getClientIdsAssignedToDoula(userId);
+    if (clientIds.length === 0) {
+      console.log('clientIDs.length is 0');
+      return [];
     }
-    async findClientsLiteByDoula(userId) {
-        const clientIds = await this.getClientIdsAssignedToDoula(userId);
-        if (clientIds.length === 0) {
-            console.log("clientIDs.length is 0");
-            return [];
-        }
-        // console.log("clientIds is ", clientIds);
-        const { data, error } = await this.supabaseClient
-            .from('client_info')
-            .select(`
+    // console.log("clientIds is ", clientIds);
+    const { data, error } = await this.supabaseClient
+      .from('client_info')
+      .select(
+        `
         id,
         firstname,
         lastname,
@@ -61,47 +60,46 @@ class SupabaseClientRepository {
           lastname,
           profile_picture
         )
-      `)
-            .in('id', clientIds);
-        if (error)
-            throw new Error(error.message);
-        return data.map(user => this.mapToClient(user));
-    }
-    async findClientsDetailedAll() {
-        const { data, error } = await this.supabaseClient
-            .from('client_info')
-            .select(`
+      `
+      )
+      .in('id', clientIds);
+    if (error) throw new Error(error.message);
+    return data.map((user) => this.mapToClient(user));
+  }
+  async findClientsDetailedAll() {
+    const { data, error } = await this.supabaseClient.from('client_info')
+      .select(`
         *,
         users (
           *
         )
         `);
-        if (error)
-            throw new Error(error.message);
-        return data.map(user => this.mapToClient(user));
-    }
-    async findClientsDetailedByDoula(userId) {
-        const clientIds = await this.getClientIdsAssignedToDoula(userId);
-        if (clientIds.length === 0)
-            return [];
-        const { data, error } = await this.supabaseClient
-            .from('client_info')
-            .select(`
+    if (error) throw new Error(error.message);
+    return data.map((user) => this.mapToClient(user));
+  }
+  async findClientsDetailedByDoula(userId) {
+    const clientIds = await this.getClientIdsAssignedToDoula(userId);
+    if (clientIds.length === 0) return [];
+    const { data, error } = await this.supabaseClient
+      .from('client_info')
+      .select(
+        `
         *,
         users (
           *
         )
-      `)
-            .in('id', clientIds);
-        if (error)
-            throw new Error(error.message);
-        // return data.map(this.mapToClient);
-        return data.map(user => this.mapToClient(user));
-    }
-    async findClientLiteById(clientId) {
-        const { data, error } = await this.supabaseClient
-            .from('client_info')
-            .select(`
+      `
+      )
+      .in('id', clientIds);
+    if (error) throw new Error(error.message);
+    // return data.map(this.mapToClient);
+    return data.map((user) => this.mapToClient(user));
+  }
+  async findClientLiteById(clientId) {
+    const { data, error } = await this.supabaseClient
+      .from('client_info')
+      .select(
+        `
         id,
         firstname,
         lastname,
@@ -112,32 +110,34 @@ class SupabaseClientRepository {
           lastname,
           profile_picture
         )
-      `)
-            .eq('id', clientId)
-            .single();
-        if (error)
-            throw new Error(error.message);
-        return this.mapToClient(data);
-    }
-    async findClientDetailedById(clientId) {
-        const { data, error } = await this.supabaseClient
-            .from('client_info')
-            .select(`
+      `
+      )
+      .eq('id', clientId)
+      .single();
+    if (error) throw new Error(error.message);
+    return this.mapToClient(data);
+  }
+  async findClientDetailedById(clientId) {
+    const { data, error } = await this.supabaseClient
+      .from('client_info')
+      .select(
+        `
         *,
         users (*)
-      `)
-            .eq('id', clientId)
-            .single();
-        if (error)
-            throw new Error(error.message);
-        return this.mapToClient(data);
-    }
-    async updateStatus(clientId, status) {
-        const { data, error } = await this.supabaseClient
-            .from('client_info')
-            .update({ status })
-            .eq('id', clientId)
-            .select(`
+      `
+      )
+      .eq('id', clientId)
+      .single();
+    if (error) throw new Error(error.message);
+    return this.mapToClient(data);
+  }
+  async updateStatus(clientId, status) {
+    const { data, error } = await this.supabaseClient
+      .from('client_info')
+      .update({ status })
+      .eq('id', clientId)
+      .select(
+        `
         id,
         firstname,
         lastname,
@@ -151,126 +151,144 @@ class SupabaseClientRepository {
           firstname,
           lastname
         )
-      `)
-            .single();
-        if (error) {
-            throw new Error(`${error.message}`);
-        }
-        return this.mapToClient(data);
+      `
+      )
+      .single();
+    if (error) {
+      throw new Error(`${error.message}`);
     }
-    async updateClient(clientId, fieldsToUpdate) {
-        // Map Client entity fields to database column names
-        const updateData = {};
-        if (fieldsToUpdate.user?.firstname !== undefined)
-            updateData.firstname = fieldsToUpdate.user.firstname;
-        if (fieldsToUpdate.user?.lastname !== undefined)
-            updateData.lastname = fieldsToUpdate.user.lastname;
-        if (fieldsToUpdate.user?.email !== undefined)
-            updateData.email = fieldsToUpdate.user.email;
-        if (fieldsToUpdate.user?.role !== undefined)
-            updateData.role = fieldsToUpdate.user.role;
-        if (fieldsToUpdate.serviceNeeded !== undefined)
-            updateData.service_needed = fieldsToUpdate.serviceNeeded;
-        if (fieldsToUpdate.childrenExpected !== undefined)
-            updateData.children_expected = fieldsToUpdate.childrenExpected;
-        if (fieldsToUpdate.pronouns !== undefined)
-            updateData.pronouns = fieldsToUpdate.pronouns;
-        if (fieldsToUpdate.health_history !== undefined)
-            updateData.health_history = fieldsToUpdate.health_history;
-        if (fieldsToUpdate.allergies !== undefined)
-            updateData.allergies = fieldsToUpdate.allergies;
-        if (fieldsToUpdate.due_date !== undefined)
-            updateData.due_date = fieldsToUpdate.due_date;
-        if (fieldsToUpdate.hospital !== undefined)
-            updateData.hospital = fieldsToUpdate.hospital;
-        if (fieldsToUpdate.annual_income !== undefined)
-            updateData.annual_income = fieldsToUpdate.annual_income;
-        if (fieldsToUpdate.service_specifics !== undefined)
-            updateData.service_specifics = fieldsToUpdate.service_specifics;
-        const { data, error } = await this.supabaseClient
-            .from('client_info')
-            .update(updateData)
-            .eq('id', clientId)
-            .select(`
+    return this.mapToClient(data);
+  }
+  async updateClient(clientId, fieldsToUpdate) {
+    // Map Client entity fields to database column names
+    const updateData = {};
+    if (fieldsToUpdate.user?.firstname !== undefined)
+      updateData.firstname = fieldsToUpdate.user.firstname;
+    if (fieldsToUpdate.user?.lastname !== undefined)
+      updateData.lastname = fieldsToUpdate.user.lastname;
+    if (fieldsToUpdate.user?.email !== undefined)
+      updateData.email = fieldsToUpdate.user.email;
+    if (fieldsToUpdate.user?.role !== undefined)
+      updateData.role = fieldsToUpdate.user.role;
+    if (fieldsToUpdate.serviceNeeded !== undefined)
+      updateData.service_needed = fieldsToUpdate.serviceNeeded;
+    if (fieldsToUpdate.childrenExpected !== undefined)
+      updateData.children_expected = fieldsToUpdate.childrenExpected;
+    if (fieldsToUpdate.pronouns !== undefined)
+      updateData.pronouns = fieldsToUpdate.pronouns;
+    if (fieldsToUpdate.health_history !== undefined)
+      updateData.health_history = fieldsToUpdate.health_history;
+    if (fieldsToUpdate.allergies !== undefined)
+      updateData.allergies = fieldsToUpdate.allergies;
+    if (fieldsToUpdate.due_date !== undefined)
+      updateData.due_date = fieldsToUpdate.due_date;
+    if (fieldsToUpdate.hospital !== undefined)
+      updateData.hospital = fieldsToUpdate.hospital;
+    if (fieldsToUpdate.annual_income !== undefined)
+      updateData.annual_income = fieldsToUpdate.annual_income;
+    if (fieldsToUpdate.service_specifics !== undefined)
+      updateData.service_specifics = fieldsToUpdate.service_specifics;
+    const { data, error } = await this.supabaseClient
+      .from('client_info')
+      .update(updateData)
+      .eq('id', clientId)
+      .select(
+        `
         *,
         users (*)
-      `)
-            .single();
-        if (error) {
-            throw new Error(`Failed to update client: ${error.message}`);
-        }
-        return this.mapToClient(data);
+      `
+      )
+      .single();
+    if (error) {
+      throw new Error(`Failed to update client: ${error.message}`);
     }
-    // Helper to find client id's for a given doula
-    async getClientIdsAssignedToDoula(doulaId) {
-        const { data, error } = await this.supabaseClient
-            .from('assignments')
-            .select('client_id')
-            .eq('doula_id', doulaId);
-        if (error)
-            throw new Error(error.message);
-        return data.map(entry => entry.client_id);
-    }
-    // Helper to map database user to domain User
-    mapToUser(data) {
-        return new User_1.User({
-            id: data.id,
-            email: data.email,
-            firstname: data.firstname,
-            lastname: data.lastname,
-            created_at: new Date(data.created_at || Date.now()),
-            updated_at: new Date(data.updated_at || Date.now()),
-            role: data.role || types_1.ROLE.CLIENT,
-            address: data.address,
-            city: data.city,
-            state: data.state,
-            country: data.country,
-            zip_code: data.zip_code,
-            profile_picture: data.profile_picture,
-            account_status: data.account_status,
-            business: data.business,
-            bio: data.bio,
-            children_expected: data.children_expected,
-            service_needed: data.service_needed,
-            health_history: data.health_history,
-            allergies: data.allergies,
-            due_date: data.due_date,
-            annual_income: data.annual_income,
-            status: data.status,
-            hospital: data.hospital,
-        });
-    }
-    mapToClient(data) {
-        const userRecord = data.users ?? {};
-        const user = this.mapToUser({
-            id: userRecord.id || data.user_id || data.id,
-            email: userRecord.email || data.email || '',
-            firstname: userRecord.firstname || data.firstname || '',
-            lastname: userRecord.lastname || data.lastname || '',
-            created_at: userRecord.created_at || data.created_at,
-            updated_at: userRecord.updated_at || data.updated_at,
-            role: userRecord.role || 'client',
-            address: userRecord.address || data.address || '',
-            city: userRecord.city || data.city || '',
-            state: userRecord.state || data.state || '',
-            country: userRecord.country || data.country || '',
-            zip_code: userRecord.zip_code || data.zip_code || '',
-            profile_picture: userRecord.profile_picture || '',
-            account_status: userRecord.account_status || null,
-            business: userRecord.business || null,
-            bio: userRecord.bio || '',
-            children_expected: userRecord.children_expected || data.children_expected || '',
-            service_needed: userRecord.service_needed || data.service_needed || '',
-            health_history: userRecord.health_history || data.health_history || '',
-            allergies: userRecord.allergies || data.allergies || '',
-            due_date: userRecord.due_date || data.due_date || '',
-            annual_income: userRecord.annual_income || data.annual_income || '',
-            status: userRecord.status || data.status || '',
-            hospital: userRecord.hospital || data.hospital || ''
-        });
-        return new Client_1.Client(data.id, user, data.service_needed ?? null, data.requested ? new Date(data.requested) : null, data.updated_at ? new Date(data.updated_at) : new Date(), data.status ?? 'lead', 
-        // Optional detailed fields
-        data.children_expected ?? undefined, data.pronouns ?? undefined, data.health_history ?? undefined, data.allergies ?? undefined, data.due_date ? new Date(data.due_date) : undefined, data.hospital ?? undefined, data.baby_sex ?? undefined, data.annual_income ?? undefined, data.service_specifics ?? undefined);
-    }
+    return this.mapToClient(data);
+  }
+  // Helper to find client id's for a given doula
+  async getClientIdsAssignedToDoula(doulaId) {
+    const { data, error } = await this.supabaseClient
+      .from('assignments')
+      .select('client_id')
+      .eq('doula_id', doulaId);
+    if (error) throw new Error(error.message);
+    return data.map((entry) => entry.client_id);
+  }
+  // Helper to map database user to domain User
+  mapToUser(data) {
+    return new User_1.User({
+      id: data.id,
+      email: data.email,
+      firstname: data.firstname,
+      lastname: data.lastname,
+      created_at: new Date(data.created_at || Date.now()),
+      updated_at: new Date(data.updated_at || Date.now()),
+      role: data.role || types_1.ROLE.CLIENT,
+      address: data.address,
+      city: data.city,
+      state: data.state,
+      country: data.country,
+      zip_code: data.zip_code,
+      profile_picture: data.profile_picture,
+      account_status: data.account_status,
+      business: data.business,
+      bio: data.bio,
+      children_expected: data.children_expected,
+      service_needed: data.service_needed,
+      health_history: data.health_history,
+      allergies: data.allergies,
+      due_date: data.due_date,
+      annual_income: data.annual_income,
+      status: data.status,
+      hospital: data.hospital,
+    });
+  }
+  mapToClient(data) {
+    const userRecord = data.users ?? {};
+    const user = this.mapToUser({
+      id: userRecord.id || data.user_id || data.id,
+      email: userRecord.email || data.email || '',
+      firstname: userRecord.firstname || data.firstname || '',
+      lastname: userRecord.lastname || data.lastname || '',
+      created_at: userRecord.created_at || data.created_at,
+      updated_at: userRecord.updated_at || data.updated_at,
+      role: userRecord.role || 'client',
+      address: userRecord.address || data.address || '',
+      city: userRecord.city || data.city || '',
+      state: userRecord.state || data.state || '',
+      country: userRecord.country || data.country || '',
+      zip_code: userRecord.zip_code || data.zip_code || '',
+      profile_picture: userRecord.profile_picture || '',
+      account_status: userRecord.account_status || null,
+      business: userRecord.business || null,
+      bio: userRecord.bio || '',
+      children_expected:
+        userRecord.children_expected || data.children_expected || '',
+      service_needed: userRecord.service_needed || data.service_needed || '',
+      health_history: userRecord.health_history || data.health_history || '',
+      allergies: userRecord.allergies || data.allergies || '',
+      due_date: userRecord.due_date || data.due_date || '',
+      annual_income: userRecord.annual_income || data.annual_income || '',
+      status: userRecord.status || data.status || '',
+      hospital: userRecord.hospital || data.hospital || '',
+    });
+    return new Client_1.Client(
+      data.id,
+      user,
+      data.service_needed ?? null,
+      data.requested ? new Date(data.requested) : null,
+      data.updated_at ? new Date(data.updated_at) : new Date(),
+      data.status ?? 'lead',
+      // Optional detailed fields
+      data.children_expected ?? undefined,
+      data.pronouns ?? undefined,
+      data.health_history ?? undefined,
+      data.allergies ?? undefined,
+      data.due_date ? new Date(data.due_date) : undefined,
+      data.hospital ?? undefined,
+      data.baby_sex ?? undefined,
+      data.annual_income ?? undefined,
+      data.service_specifics ?? undefined
+    );
+  }
 }
 exports.SupabaseClientRepository = SupabaseClientRepository;

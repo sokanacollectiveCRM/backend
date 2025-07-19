@@ -134,6 +134,7 @@ export interface RequestFormData {
   phone_number: string;
   pronouns?: Pronouns;
   pronouns_other?: string;
+  children_expected?: string;
   
   // Step 2: Home Details
   address: string;
@@ -176,6 +177,8 @@ export interface RequestFormData {
   baby_name?: string;
   provider_type?: ProviderType;
   pregnancy_number?: number;
+  hospital?: string;
+  baby_sex?: string;
   
   // Step 8: Past Pregnancies
   had_previous_pregnancies?: boolean;
@@ -198,6 +201,7 @@ export interface RequestFormData {
 export interface RequestFormResponse {
   id: string;
   status: RequestStatus;
+  requested?: string;
   created_at: string;
   updated_at: string;
   user_id: string;
@@ -208,6 +212,7 @@ export interface RequestFormResponse {
   phone_number: string;
   pronouns?: Pronouns;
   pronouns_other?: string;
+  children_expected?: string;
   address: string;
   city: string;
   state: STATE;
@@ -238,6 +243,8 @@ export interface RequestFormResponse {
   baby_name?: string;
   provider_type?: ProviderType;
   pregnancy_number?: number;
+  hospital?: string;
+  baby_sex?: string;
   had_previous_pregnancies?: boolean;
   previous_pregnancies_count?: number;
   living_children_count?: number;

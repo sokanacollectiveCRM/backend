@@ -1,154 +1,165 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.STATE = exports.ROLE = exports.ACCOUNT_STATUS = exports.CLIENT_STATUS = exports.IncomeLevel = exports.Sex = exports.Pronouns = exports.ClientAgeRange = exports.ProviderType = exports.RelationshipStatus = exports.HomeType = exports.RequestStatus = exports.ServiceTypes = void 0;
+'use strict';
+Object.defineProperty(exports, '__esModule', { value: true });
+exports.STATE =
+  exports.ROLE =
+  exports.ACCOUNT_STATUS =
+  exports.CLIENT_STATUS =
+  exports.IncomeLevel =
+  exports.Sex =
+  exports.Pronouns =
+  exports.ClientAgeRange =
+  exports.ProviderType =
+  exports.RelationshipStatus =
+  exports.HomeType =
+  exports.RequestStatus =
+  exports.ServiceTypes =
+    void 0;
 var ServiceTypes;
 (function (ServiceTypes) {
-    ServiceTypes["LABOR_SUPPORT"] = "Labor Support";
-    ServiceTypes["POSTPARTUM_SUPPORT"] = "Postpartum Support";
-    ServiceTypes["PERINATAL_EDUCATION"] = "Perinatal Education";
-    ServiceTypes["FIRST_NIGHT"] = "First Night Care";
-    ServiceTypes["LACTATION_SUPPORT"] = "Lactation Support";
-    ServiceTypes["PHOTOGRAPHY"] = "Photography";
-    ServiceTypes["OTHER"] = "Other";
+  ServiceTypes['LABOR_SUPPORT'] = 'Labor Support';
+  ServiceTypes['POSTPARTUM_SUPPORT'] = 'Postpartum Support';
+  ServiceTypes['PERINATAL_EDUCATION'] = 'Perinatal Education';
+  ServiceTypes['FIRST_NIGHT'] = 'First Night Care';
+  ServiceTypes['LACTATION_SUPPORT'] = 'Lactation Support';
+  ServiceTypes['PHOTOGRAPHY'] = 'Photography';
+  ServiceTypes['OTHER'] = 'Other';
 })(ServiceTypes || (exports.ServiceTypes = ServiceTypes = {}));
 var RequestStatus;
 (function (RequestStatus) {
-    RequestStatus["PENDING"] = "pending";
-    RequestStatus["REVIEWING"] = "reviewing";
-    RequestStatus["APPROVED"] = "approved";
-    RequestStatus["REJECTED"] = "rejected";
-    RequestStatus["COMPLETED"] = "completed";
+  RequestStatus['PENDING'] = 'pending';
+  RequestStatus['REVIEWING'] = 'reviewing';
+  RequestStatus['APPROVED'] = 'approved';
+  RequestStatus['REJECTED'] = 'rejected';
+  RequestStatus['COMPLETED'] = 'completed';
 })(RequestStatus || (exports.RequestStatus = RequestStatus = {}));
 var HomeType;
 (function (HomeType) {
-    HomeType["HOUSE"] = "House";
-    HomeType["APARTMENT"] = "Apartment";
-    HomeType["CONDO"] = "Condo";
-    HomeType["TOWNHOUSE"] = "Townhouse";
-    HomeType["OTHER"] = "Other";
+  HomeType['HOUSE'] = 'House';
+  HomeType['APARTMENT'] = 'Apartment';
+  HomeType['CONDO'] = 'Condo';
+  HomeType['TOWNHOUSE'] = 'Townhouse';
+  HomeType['OTHER'] = 'Other';
 })(HomeType || (exports.HomeType = HomeType = {}));
 var RelationshipStatus;
 (function (RelationshipStatus) {
-    RelationshipStatus["SINGLE"] = "Single";
-    RelationshipStatus["MARRIED"] = "Married";
-    RelationshipStatus["PARTNERED"] = "Partnered";
-    RelationshipStatus["DIVORCED"] = "Divorced";
-    RelationshipStatus["WIDOWED"] = "Widowed";
-    RelationshipStatus["OTHER"] = "Other";
-})(RelationshipStatus || (exports.RelationshipStatus = RelationshipStatus = {}));
+  RelationshipStatus['SINGLE'] = 'Single';
+  RelationshipStatus['MARRIED'] = 'Married';
+  RelationshipStatus['PARTNERED'] = 'Partnered';
+  RelationshipStatus['DIVORCED'] = 'Divorced';
+  RelationshipStatus['WIDOWED'] = 'Widowed';
+  RelationshipStatus['OTHER'] = 'Other';
+})(
+  RelationshipStatus || (exports.RelationshipStatus = RelationshipStatus = {})
+);
 var ProviderType;
 (function (ProviderType) {
-    ProviderType["OB"] = "OB";
-    ProviderType["MIDWIFE"] = "Midwife";
-    ProviderType["FAMILY_PHYSICIAN"] = "Family Physician";
-    ProviderType["OTHER"] = "Other";
+  ProviderType['OB'] = 'OB';
+  ProviderType['MIDWIFE'] = 'Midwife';
+  ProviderType['FAMILY_PHYSICIAN'] = 'Family Physician';
+  ProviderType['OTHER'] = 'Other';
 })(ProviderType || (exports.ProviderType = ProviderType = {}));
 var ClientAgeRange;
 (function (ClientAgeRange) {
-    ClientAgeRange["UNDER_18"] = "Under 18";
-    ClientAgeRange["AGE_18_24"] = "18-24";
-    ClientAgeRange["AGE_25_34"] = "25-34";
-    ClientAgeRange["AGE_35_44"] = "35-44";
-    ClientAgeRange["AGE_45_54"] = "45-54";
-    ClientAgeRange["AGE_55_PLUS"] = "55+";
+  ClientAgeRange['UNDER_18'] = 'Under 18';
+  ClientAgeRange['AGE_18_24'] = '18-24';
+  ClientAgeRange['AGE_25_34'] = '25-34';
+  ClientAgeRange['AGE_35_44'] = '35-44';
+  ClientAgeRange['AGE_45_54'] = '45-54';
+  ClientAgeRange['AGE_55_PLUS'] = '55+';
 })(ClientAgeRange || (exports.ClientAgeRange = ClientAgeRange = {}));
 var Pronouns;
 (function (Pronouns) {
-    Pronouns["HE_HIM"] = "he/him";
-    Pronouns["SHE_HER"] = "she/her";
-    Pronouns["THEY_THEM"] = "they/them";
-    Pronouns["OTHER"] = "other";
+  Pronouns['HE_HIM'] = 'he/him';
+  Pronouns['SHE_HER'] = 'she/her';
+  Pronouns['THEY_THEM'] = 'they/them';
+  Pronouns['OTHER'] = 'other';
 })(Pronouns || (exports.Pronouns = Pronouns = {}));
 var Sex;
 (function (Sex) {
-    Sex["MALE"] = "Male";
-    Sex["FEMALE"] = "Female";
+  Sex['MALE'] = 'Male';
+  Sex['FEMALE'] = 'Female';
 })(Sex || (exports.Sex = Sex = {}));
 var IncomeLevel;
 (function (IncomeLevel) {
-    IncomeLevel["FROM_0_TO_24999"] = "$0 - $24,999";
-    IncomeLevel["FROM_25000_TO_44999"] = "$25,000 - $44,999";
-    IncomeLevel["FROM_45000_TO_64999"] = "$45,000 - $64,999";
-    IncomeLevel["FROM_65000_TO_84999"] = "$65,000 - $84,999";
-    IncomeLevel["FROM_85000_TO_99999"] = "$85,000 - $99,999";
-    IncomeLevel["ABOVE_100000"] = "$100,000 and above";
+  IncomeLevel['FROM_0_TO_24999'] = '$0 - $24,999';
+  IncomeLevel['FROM_25000_TO_44999'] = '$25,000 - $44,999';
+  IncomeLevel['FROM_45000_TO_64999'] = '$45,000 - $64,999';
+  IncomeLevel['FROM_65000_TO_84999'] = '$65,000 - $84,999';
+  IncomeLevel['FROM_85000_TO_99999'] = '$85,000 - $99,999';
+  IncomeLevel['ABOVE_100000'] = '$100,000 and above';
 })(IncomeLevel || (exports.IncomeLevel = IncomeLevel = {}));
 var CLIENT_STATUS;
 (function (CLIENT_STATUS) {
-    CLIENT_STATUS["LEAD"] = "lead";
-    CLIENT_STATUS["CONTACTED"] = "contacted";
-    CLIENT_STATUS["MATCHING"] = "matching";
-    CLIENT_STATUS["INTERVIEWING"] = "interviewing";
-    CLIENT_STATUS["FOLLOW UP"] = "follow up";
-    CLIENT_STATUS["CONTRACT"] = "contract";
-    CLIENT_STATUS["ACTIVE"] = "active";
-    CLIENT_STATUS["COMPLETE"] = "complete";
+  CLIENT_STATUS['LEAD'] = 'lead';
+  CLIENT_STATUS['CONTACTED'] = 'contacted';
+  CLIENT_STATUS['MATCHING'] = 'matching';
+  CLIENT_STATUS['INTERVIEWING'] = 'interviewing';
+  CLIENT_STATUS['FOLLOW UP'] = 'follow up';
+  CLIENT_STATUS['CONTRACT'] = 'contract';
+  CLIENT_STATUS['ACTIVE'] = 'active';
+  CLIENT_STATUS['COMPLETE'] = 'complete';
 })(CLIENT_STATUS || (exports.CLIENT_STATUS = CLIENT_STATUS = {}));
-;
 var ACCOUNT_STATUS;
 (function (ACCOUNT_STATUS) {
-    ACCOUNT_STATUS["PENDING"] = "pending";
-    ACCOUNT_STATUS["APPROVED"] = "approved";
+  ACCOUNT_STATUS['PENDING'] = 'pending';
+  ACCOUNT_STATUS['APPROVED'] = 'approved';
 })(ACCOUNT_STATUS || (exports.ACCOUNT_STATUS = ACCOUNT_STATUS = {}));
-;
 var ROLE;
 (function (ROLE) {
-    ROLE["ADMIN"] = "admin";
-    ROLE["DOULA"] = "doula";
-    ROLE["CLIENT"] = "client";
+  ROLE['ADMIN'] = 'admin';
+  ROLE['DOULA'] = 'doula';
+  ROLE['CLIENT'] = 'client';
 })(ROLE || (exports.ROLE = ROLE = {}));
-;
 var STATE;
 (function (STATE) {
-    STATE["AL"] = "AL";
-    STATE["AK"] = "AK";
-    STATE["AZ"] = "AZ";
-    STATE["AR"] = "AR";
-    STATE["CA"] = "CA";
-    STATE["CO"] = "CO";
-    STATE["CT"] = "CT";
-    STATE["DE"] = "DE";
-    STATE["FL"] = "FL";
-    STATE["GA"] = "GA";
-    STATE["HI"] = "HI";
-    STATE["ID"] = "ID";
-    STATE["IL"] = "IL";
-    STATE["IN"] = "IN";
-    STATE["IA"] = "IA";
-    STATE["KS"] = "KS";
-    STATE["KY"] = "KY";
-    STATE["LA"] = "LA";
-    STATE["ME"] = "ME";
-    STATE["MD"] = "MD";
-    STATE["MA"] = "MA";
-    STATE["MI"] = "MI";
-    STATE["MN"] = "MN";
-    STATE["MS"] = "MS";
-    STATE["MO"] = "MO";
-    STATE["MT"] = "MT";
-    STATE["NE"] = "NE";
-    STATE["NV"] = "NV";
-    STATE["NH"] = "NH";
-    STATE["NJ"] = "NJ";
-    STATE["NM"] = "NM";
-    STATE["NY"] = "NY";
-    STATE["NC"] = "NC";
-    STATE["ND"] = "ND";
-    STATE["OH"] = "OH";
-    STATE["OK"] = "OK";
-    STATE["OR"] = "OR";
-    STATE["PA"] = "PA";
-    STATE["RI"] = "RI";
-    STATE["SC"] = "SC";
-    STATE["SD"] = "SD";
-    STATE["TN"] = "TN";
-    STATE["TX"] = "TX";
-    STATE["UT"] = "UT";
-    STATE["VT"] = "VT";
-    STATE["VA"] = "VA";
-    STATE["WA"] = "WA";
-    STATE["WV"] = "WV";
-    STATE["WI"] = "WI";
-    STATE["WY"] = "WY";
+  STATE['AL'] = 'AL';
+  STATE['AK'] = 'AK';
+  STATE['AZ'] = 'AZ';
+  STATE['AR'] = 'AR';
+  STATE['CA'] = 'CA';
+  STATE['CO'] = 'CO';
+  STATE['CT'] = 'CT';
+  STATE['DE'] = 'DE';
+  STATE['FL'] = 'FL';
+  STATE['GA'] = 'GA';
+  STATE['HI'] = 'HI';
+  STATE['ID'] = 'ID';
+  STATE['IL'] = 'IL';
+  STATE['IN'] = 'IN';
+  STATE['IA'] = 'IA';
+  STATE['KS'] = 'KS';
+  STATE['KY'] = 'KY';
+  STATE['LA'] = 'LA';
+  STATE['ME'] = 'ME';
+  STATE['MD'] = 'MD';
+  STATE['MA'] = 'MA';
+  STATE['MI'] = 'MI';
+  STATE['MN'] = 'MN';
+  STATE['MS'] = 'MS';
+  STATE['MO'] = 'MO';
+  STATE['MT'] = 'MT';
+  STATE['NE'] = 'NE';
+  STATE['NV'] = 'NV';
+  STATE['NH'] = 'NH';
+  STATE['NJ'] = 'NJ';
+  STATE['NM'] = 'NM';
+  STATE['NY'] = 'NY';
+  STATE['NC'] = 'NC';
+  STATE['ND'] = 'ND';
+  STATE['OH'] = 'OH';
+  STATE['OK'] = 'OK';
+  STATE['OR'] = 'OR';
+  STATE['PA'] = 'PA';
+  STATE['RI'] = 'RI';
+  STATE['SC'] = 'SC';
+  STATE['SD'] = 'SD';
+  STATE['TN'] = 'TN';
+  STATE['TX'] = 'TX';
+  STATE['UT'] = 'UT';
+  STATE['VT'] = 'VT';
+  STATE['VA'] = 'VA';
+  STATE['WA'] = 'WA';
+  STATE['WV'] = 'WV';
+  STATE['WI'] = 'WI';
+  STATE['WY'] = 'WY';
 })(STATE || (exports.STATE = STATE = {}));
-;

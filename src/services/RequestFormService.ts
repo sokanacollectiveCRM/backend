@@ -199,7 +199,7 @@ export class RequestFormService {
       // Save to repository (no userId)
       const response = await this.repository.saveData(newFormData);
       
-      // Convert response back to old format for backward compatibility
+      // Return the complete RequestForm with all fields
       return new RequestForm(
         response.firstname,
         response.lastname,
@@ -209,7 +209,48 @@ export class RequestFormService {
         response.address,
         response.city,
         response.state,
-        response.zip_code
+        response.zip_code,
+        response.pronouns,
+        response.pronouns_other,
+        response.children_expected,
+        response.home_phone,
+        response.home_type,
+        response.home_access,
+        response.pets,
+        response.relationship_status,
+        response.first_name,
+        response.last_name,
+        response.middle_name,
+        response.mobile_phone,
+        response.work_phone,
+        response.referral_source,
+        response.referral_name,
+        response.referral_email,
+        response.health_history,
+        response.allergies,
+        response.health_notes,
+        response.annual_income,
+        response.service_specifics,
+        response.due_date ? new Date(response.due_date) : undefined,
+        response.birth_location,
+        response.birth_hospital,
+        response.number_of_babies,
+        response.baby_name,
+        response.provider_type,
+        response.pregnancy_number,
+        response.hospital,
+        response.baby_sex,
+        response.had_previous_pregnancies,
+        response.previous_pregnancies_count,
+        response.living_children_count,
+        response.past_pregnancy_experience,
+        response.services_interested,
+        response.service_support_details,
+        response.race_ethnicity,
+        response.primary_language,
+        response.client_age_range,
+        response.insurance,
+        response.demographics_multi
       );
     } catch (error) {
       console.error("Error in newForm:", error);
