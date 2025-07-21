@@ -3,7 +3,7 @@ import { NodemailerService } from '../services/emailService';
 import { RequestFormService } from "../services/RequestFormService";
 import { AuthRequest, RequestFormData, RequestStatus } from "../types";
 
-const notificationEmail = 'jerrybony5@gmail.com';
+const notificationEmail = 'info@sokanacollective.com';
 const emailService = new NodemailerService();
 
 export class RequestFormController {
@@ -27,7 +27,7 @@ export class RequestFormController {
 
             const formData: RequestFormData = req.body;
             const result = await this.service.createRequest(formData);
-            
+
             res.status(201).json({
                 message: "Request form submitted successfully",
                 data: result
@@ -172,7 +172,7 @@ export class RequestFormController {
 
             const validStatuses = Object.values(RequestStatus);
             if (!validStatuses.includes(status)) {
-                res.status(400).json({ 
+                res.status(400).json({
                     error: 'Invalid status value',
                     validStatuses: validStatuses
                 });
@@ -203,7 +203,7 @@ export class RequestFormController {
             // Send notification email
             try {
                 const subject = 'New Lead Submitted via Request Form';
-                
+
                 // Create comprehensive text version
                 const text = `A new lead has been submitted via the request form.
 
@@ -283,7 +283,7 @@ Status: lead`;
                   <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; background-color: #f9f9f9; padding: 20px;">
                     <div style="background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
                       <h1 style="color: #4CAF50; text-align: center; margin-bottom: 30px; border-bottom: 3px solid #4CAF50; padding-bottom: 10px;">New Lead Submitted</h1>
-                      
+
                       <div style="margin-bottom: 25px;">
                         <h2 style="color: #333; background-color: #e8f5e8; padding: 10px; border-radius: 5px;">👤 Client Details</h2>
                         <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
@@ -400,7 +400,7 @@ Status: lead`;
                 `;
 
 
-                
+
                 await emailService.sendEmail(notificationEmail, subject, text, html);
             } catch (emailError) {
                 console.error('Failed to send notification email:', emailError);
@@ -410,7 +410,7 @@ Status: lead`;
             // Send confirmation email to the person who submitted the request
             try {
                 const confirmationSubject = 'Request Received - We\'re Working on Your Match';
-                
+
                 const confirmationText = `Dear ${savedForm.firstname} ${savedForm.lastname},
 
 Thank you for submitting your request for doula services. We have received your information and are working on finding the perfect match for you.
@@ -422,13 +422,13 @@ The Sokana Collective Team`;
                   <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f9f9f9; padding: 20px;">
                     <div style="background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
                       <h1 style="color: #4CAF50; text-align: center; margin-bottom: 30px; border-bottom: 3px solid #4CAF50; padding-bottom: 10px;">Request Received</h1>
-                      
+
                       <p style="font-size: 18px; color: #333; margin-bottom: 20px;">Dear ${savedForm.firstname} ${savedForm.lastname},</p>
-                      
+
                       <p style="font-size: 16px; color: #555; line-height: 1.6; margin-bottom: 20px;">
                         Thank you for submitting your request for doula services. We have received your information and are working on finding the perfect match for you.
                       </p>
-                      
+
                       <div style="text-align: center; margin-top: 30px; padding: 20px; background-color: #f5f5f5; border-radius: 5px;">
                         <p style="margin: 0; font-weight: bold; color: #333;">Best regards,</p>
                         <p style="margin: 5px 0 0 0; color: #4CAF50; font-weight: bold;">The Sokana Collective Team</p>
@@ -436,7 +436,7 @@ The Sokana Collective Team`;
                     </div>
                   </div>
                 `;
-                
+
                 await emailService.sendEmail(savedForm.email, confirmationSubject, confirmationText, confirmationHtml);
             } catch (confirmationEmailError) {
                 console.error('Failed to send confirmation email:', confirmationEmailError);
