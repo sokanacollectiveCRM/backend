@@ -41,5 +41,10 @@ export interface ClientRepository {
    */
   updateClient(clientId: string, fieldsToUpdate: Partial<Client>): Promise<Client>;
 
+  /**
+   * Delete a client by their id
+   */
+  deleteClient(clientId: string): Promise<void>;
+
   exportCSV(): Promise<string | null>;
 }

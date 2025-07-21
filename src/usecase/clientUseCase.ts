@@ -56,6 +56,10 @@ export class ClientUseCase {
     return this.clientRepository.findClientDetailedById(clientId);
   }
 
+  async deleteClient(clientId: string): Promise<void> {
+    return this.clientRepository.deleteClient(clientId);
+  }
+
   // updates a client's status
   async updateClientStatus(
     clientId: string,
