@@ -64,7 +64,7 @@ export class ClientController {
       res.attachment("clients.csv");
 
       res.send(clientsCSV);
-    } 
+    }
     catch (getError) {
       const error = this.handleError(getError, res);
 
@@ -105,7 +105,24 @@ export class ClientController {
   }
 }
 
-
+  async deleteClient(req: AuthRequest, res: Response): Promise<void> {
+    const { id } = req.body;
+    console.log('DELETE /clients/delete called with id:', id);
+    if (!id) {
+      console.log('No client ID provided');
+      res.status(400).json({ error: 'Missing client ID' });
+      return;
+    }
+    try {
+      await this.clientUseCase.deleteClient(id);
+      console.log('Client deleted successfully:', id);
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting client:', error);
+      const err = this.handleError(error, res);
+      res.status(err.status).json({ error: err.message });
+    }
+  }
 
   //
   // updateClientStatus
@@ -130,7 +147,7 @@ export class ClientController {
     try {
       // Update client status directly in client_info table
       const client = await this.clientUseCase.updateClientStatus(clientId, status);
-      
+
       res.json({
         success: true,
         client: {
@@ -190,8 +207,8 @@ export class ClientController {
       return;
     }
 
-    console.log('Controller: Updating client:', { 
-      id, 
+    console.log('Controller: Updating client:', {
+      id,
       idType: typeof id,
       updateData,
       updateDataKeys: Object.keys(updateData)
@@ -202,9 +219,9 @@ export class ClientController {
         id,
         updateData
       );
-      
+
       console.log('Controller: Client updated successfully:', client.id);
-      
+
       res.json({
         success: true,
         client: {
@@ -230,11 +247,11 @@ export class ClientController {
 
   // Helper method to handle errors
   private handleError(
-    error: Error, 
+    error: Error,
     res: Response
   ): { status: number, message: string } {
     console.error('Error:', error.message);
-    
+
     if (error instanceof ValidationError) {
       return { status: 400, message: error.message};
     } else if (error instanceof ConflictError) {

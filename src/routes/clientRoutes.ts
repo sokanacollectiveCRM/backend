@@ -25,23 +25,29 @@ clientRoutes.post("/team/add",
 );
 
 // Client specific routes - ORDER MATTERS! Specific routes first
-clientRoutes.get('/fetchCSV', 
+clientRoutes.get('/fetchCSV',
   authMiddleware,
-  (req, res, next) => authorizeRoles(req, res, next, ['admin','client']), 
+  (req, res, next) => authorizeRoles(req, res, next, ['admin','client']),
   (req, res) => clientController.exportCSV(req, res)
 );
 
-clientRoutes.get('/', 
+clientRoutes.get('/',
   authMiddleware,
-  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']), 
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
   (req, res) => clientController.getClients(req, res)
 );
 
 // Specific routes must come before generic /:id route
 clientRoutes.put('/status',
-  authMiddleware, 
-  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']), 
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
   (req, res) => clientController.updateClientStatus(req, res)
+);
+
+clientRoutes.delete('/delete',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
+  (req, res) => clientController.deleteClient(req, res)
 );
 
 // Generic routes last

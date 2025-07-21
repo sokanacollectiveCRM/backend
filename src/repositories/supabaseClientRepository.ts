@@ -7,7 +7,7 @@ import { ROLE } from '../types';
 
 export class SupabaseClientRepository  {
   private supabaseClient: SupabaseClient;
-  
+
   constructor(
     supabaseClient: SupabaseClient
   ) {
@@ -52,7 +52,7 @@ export class SupabaseClientRepository  {
 
   async findClientsLiteByDoula(userId: string): Promise<Client[]> {
     const clientIds = await this.getClientIdsAssignedToDoula(userId);
-    
+
     if (clientIds.length === 0) {
       console.log("clientIDs.length is 0");
       return [];
@@ -90,16 +90,16 @@ export class SupabaseClientRepository  {
           *
         )
         `);
-        
+
         if (error) throw new Error(error.message);
         return data.map(user => this.mapToClient(user));
       }
-      
+
       async findClientsDetailedByDoula(userId: string): Promise<Client[]> {
         const clientIds = await this.getClientIdsAssignedToDoula(userId);
-        
+
         if (clientIds.length === 0) return [];
-        
+
     const { data, error } = await this.supabaseClient
       .from('client_info')
       .select(`
@@ -114,7 +114,7 @@ export class SupabaseClientRepository  {
     // return data.map(this.mapToClient);
     return data.map(user => this.mapToClient(user));
   }
-  
+
   async findClientLiteById(clientId: string): Promise<Client> {
     const { data, error } = await this.supabaseClient
       .from('client_info')
@@ -185,10 +185,10 @@ export class SupabaseClientRepository  {
   async updateClient(clientId: string, fieldsToUpdate: any): Promise<Client> {
     console.log('Repository: Updating client with ID:', clientId);
     console.log('Repository: Fields to update:', JSON.stringify(fieldsToUpdate, null, 2));
-    
+
     // Map request body fields to database column names
     const updateData: any = {};
-    
+
     // Map the fields from the request body to database columns
     if (fieldsToUpdate.user?.firstname !== undefined) updateData.firstname = fieldsToUpdate.user.firstname;
     if (fieldsToUpdate.user?.lastname !== undefined) updateData.lastname = fieldsToUpdate.user.lastname;
@@ -274,6 +274,14 @@ export class SupabaseClientRepository  {
     console.log('Repository: Raw database response after update:', data);
     console.log('Repository: Update successful, mapping data');
     return this.mapToClient(data);
+  }
+
+  async deleteClient(clientId: string): Promise<void> {
+    const { error } = await this.supabaseClient
+      .from('client_info')
+      .delete()
+      .eq('id', clientId);
+    if (error) throw new Error(error.message);
   }
 
   // Helper to find client id's for a given doula
