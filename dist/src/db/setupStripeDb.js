@@ -1,13 +1,11 @@
-'use strict';
-var __importDefault =
-  (this && this.__importDefault) ||
-  function (mod) {
-    return mod && mod.__esModule ? mod : { default: mod };
-  };
-Object.defineProperty(exports, '__esModule', { value: true });
-const supabase_1 = __importDefault(require('../supabase'));
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const supabase_1 = __importDefault(require("../supabase"));
 async function setupStripeDb() {
-  const sql = `
+    const sql = `
     -- First, create the update_updated_at_column function if it doesn't exist
     create or replace function update_updated_at_column()
     returns trigger as $$
@@ -66,14 +64,16 @@ async function setupStripeDb() {
         for each row
         execute procedure update_updated_at_column();
   `;
-  try {
-    const { error } = await supabase_1.default.rpc('exec_sql', { sql });
-    if (error) throw error;
-    console.log('Successfully set up Stripe database tables');
-  } catch (error) {
-    console.error('Error setting up Stripe database:', error);
-    throw error;
-  }
+    try {
+        const { error } = await supabase_1.default.rpc('exec_sql', { sql });
+        if (error)
+            throw error;
+        console.log('Successfully set up Stripe database tables');
+    }
+    catch (error) {
+        console.error('Error setting up Stripe database:', error);
+        throw error;
+    }
 }
 // Run the setup
 setupStripeDb().catch(console.error);

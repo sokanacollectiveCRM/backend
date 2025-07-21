@@ -1,6 +1,8 @@
 import express from 'express';
 import request from 'supertest';
 import { RequestFormController } from '../controllers/requestFormController';
+import { RequestFormRepository } from '../repositories/requestFormRepository';
+import { NodemailerService } from '../services/emailService';
 import { RequestFormService } from '../services/RequestFormService';
 import { ClientAgeRange, HomeType, IncomeLevel, Pronouns, ProviderType, RelationshipStatus, ServiceTypes, STATE } from '../types';
 
@@ -30,6 +32,8 @@ describe('Request Endpoint Tests', () => {
   let app: express.Application;
   let requestFormController: RequestFormController;
   let requestFormService: RequestFormService;
+  let requestFormRepository: RequestFormRepository;
+  let emailService: NodemailerService;
 
   const mockFormData = {
     // Step 1: Client Details
@@ -39,7 +43,7 @@ describe('Request Endpoint Tests', () => {
     phone_number: '555-123-4567',
     pronouns: Pronouns.SHE_HER,
     pronouns_other: '',
-    
+
     // Step 2: Home Details
     address: '123 Main St',
     city: 'Anytown',
@@ -49,7 +53,7 @@ describe('Request Endpoint Tests', () => {
     home_type: HomeType.HOUSE,
     home_access: 'Front door accessible',
     pets: '2 dogs, 1 cat',
-    
+
     // Step 3: Family Members
     relationship_status: RelationshipStatus.MARRIED,
     first_name: 'John',
@@ -57,22 +61,22 @@ describe('Request Endpoint Tests', () => {
     middle_name: 'Michael',
     mobile_phone: '555-456-7890',
     work_phone: '555-789-0123',
-    
+
     // Step 4: Referral
     referral_source: 'Friend',
     referral_name: 'Sarah Smith',
     referral_email: 'sarah@example.com',
-    
+
     // Step 5: Health History
     health_history: 'Previous C-section',
     allergies: 'Latex allergy',
     health_notes: 'Gestational diabetes',
-    
+
     // Step 6: Payment Info
     annual_income: IncomeLevel.FROM_45000_TO_64999,
     service_needed: ServiceTypes.LABOR_SUPPORT,
     service_specifics: 'Need overnight support',
-    
+
     // Step 7: Pregnancy/Baby
     due_date: new Date('2024-06-15'), // Use Date object
     birth_location: 'Hospital',
@@ -81,17 +85,17 @@ describe('Request Endpoint Tests', () => {
     baby_name: 'Baby Doe',
     provider_type: ProviderType.OB,
     pregnancy_number: 2,
-    
+
     // Step 8: Past Pregnancies
     had_previous_pregnancies: true,
     previous_pregnancies_count: 1,
     living_children_count: 1,
     past_pregnancy_experience: 'Emergency C-section',
-    
+
     // Step 9: Services Interested
     services_interested: [ServiceTypes.LABOR_SUPPORT, ServiceTypes.POSTPARTUM_SUPPORT],
     service_support_details: 'Need help with breastfeeding',
-    
+
     // Step 10: Client Demographics
     race_ethnicity: 'Caucasian',
     primary_language: 'English',
@@ -103,17 +107,19 @@ describe('Request Endpoint Tests', () => {
   beforeEach(() => {
     // Reset all mocks
     jest.clearAllMocks();
-    
+
     // Create fresh instances
-    requestFormService = new RequestFormService({} as any);
+    requestFormRepository = new RequestFormRepository({} as any);
+    requestFormService = new RequestFormService(requestFormRepository);
     requestFormController = new RequestFormController(requestFormService);
-    
+    emailService = new NodemailerService();
+
     // Create Express app for testing
     app = express();
     app.use(express.json());
-    
+
     // Mount the request route
-    app.post('/requestService/requestSubmission', 
+    app.post('/requestService/requestSubmission',
       (req, res) => requestFormController.createForm(req, res));
   });
 
@@ -130,7 +136,7 @@ describe('Request Endpoint Tests', () => {
       expect(response.body).toEqual({
         message: 'Form data received, onto processing'
       });
-      
+
       // Check that the service was called with the form data
       expect(requestFormService.newForm).toHaveBeenCalledWith(expect.objectContaining({
         firstname: 'Jane',
@@ -174,7 +180,7 @@ describe('Request Endpoint Tests', () => {
     it('should handle email sending errors without blocking form submission', async () => {
       // Mock successful form save but failed email
       jest.spyOn(requestFormService, 'newForm').mockResolvedValue(mockFormData);
-      
+
       // Mock email service to throw error
       const nodemailer = require('nodemailer');
       nodemailer.createTransport().sendMail.mockRejectedValue(
@@ -217,7 +223,7 @@ describe('Request Endpoint Tests', () => {
   describe('Email functionality', () => {
     it('should send email with correct recipient', async () => {
       jest.spyOn(requestFormService, 'newForm').mockResolvedValue(mockFormData);
-      
+
       const nodemailer = require('nodemailer');
       const mockSendMail = jest.fn().mockResolvedValue({
         messageId: 'test-message-id'
@@ -239,7 +245,7 @@ describe('Request Endpoint Tests', () => {
 
     it('should include form data in email', async () => {
       jest.spyOn(requestFormService, 'newForm').mockResolvedValue(mockFormData);
-      
+
       const nodemailer = require('nodemailer');
       const mockSendMail = jest.fn().mockResolvedValue({
         messageId: 'test-message-id'
@@ -252,7 +258,7 @@ describe('Request Endpoint Tests', () => {
         .expect(200);
 
       const emailCall = mockSendMail.mock.calls[0][0];
-      
+
       // Check that email contains key form data
       expect(emailCall.text).toContain('Jane Doe');
       expect(emailCall.text).toContain('jane.doe@example.com');
@@ -260,7 +266,7 @@ describe('Request Endpoint Tests', () => {
       expect(emailCall.text).toContain('Labor Support');
       expect(emailCall.text).toContain('Anytown');
       expect(emailCall.text).toContain('CA');
-      
+
       // Check HTML version
       expect(emailCall.html).toContain('Jane Doe');
       expect(emailCall.html).toContain('jane.doe@example.com');
@@ -270,7 +276,7 @@ describe('Request Endpoint Tests', () => {
 
     it('should send confirmation email to the person who submitted the request', async () => {
       jest.spyOn(requestFormService, 'newForm').mockResolvedValue(mockFormData);
-      
+
       const nodemailer = require('nodemailer');
       const mockSendMail = jest.fn().mockResolvedValue({
         messageId: 'test-message-id'
@@ -284,7 +290,7 @@ describe('Request Endpoint Tests', () => {
 
       // Check that two emails were sent (notification + confirmation)
       expect(mockSendMail).toHaveBeenCalledTimes(2);
-      
+
       // Check the confirmation email (second call)
       const confirmationEmailCall = mockSendMail.mock.calls[1][0];
       expect(confirmationEmailCall.to).toBe('jane.doe@example.com');
@@ -353,4 +359,224 @@ describe('Request Endpoint Tests', () => {
       expect(response.body.message).toBe('Form data received, onto processing');
     });
   });
-}); 
+
+  // NEW: Service Layer Tests
+  describe('RequestFormService Tests', () => {
+    it('should validate required fields correctly', async () => {
+      const invalidData = {
+        // Missing firstname and lastname
+        email: 'test@example.com',
+        phone_number: '555-123-4567',
+        service_needed: ServiceTypes.LABOR_SUPPORT,
+        address: '123 Main St',
+        city: 'Anytown',
+        state: STATE.CA,
+        zip_code: '90210'
+      };
+
+      await expect(requestFormService.newForm(invalidData)).rejects.toThrow(
+        'Missing required fields: first name and last name'
+      );
+    });
+
+    it('should validate email format correctly', async () => {
+      const invalidEmailData = {
+        ...mockFormData,
+        email: 'invalid-email'
+      };
+
+      await expect(requestFormService.newForm(invalidEmailData)).rejects.toThrow(
+        'Valid email is required'
+      );
+    });
+
+    it('should validate phone number format correctly', async () => {
+      const invalidPhoneData = {
+        ...mockFormData,
+        phone_number: 'invalid-phone'
+      };
+
+      await expect(requestFormService.newForm(invalidPhoneData)).rejects.toThrow(
+        'Invalid phone number format'
+      );
+    });
+
+    it('should validate zip code format correctly', async () => {
+      const invalidZipData = {
+        ...mockFormData,
+        zip_code: 'invalid-zip'
+      };
+
+      await expect(requestFormService.newForm(invalidZipData)).rejects.toThrow(
+        'Invalid zip code format'
+      );
+    });
+
+    it('should validate complete address is provided', async () => {
+      const incompleteAddressData = {
+        ...mockFormData,
+        address: '', // Missing address
+        city: 'Anytown',
+        state: STATE.CA,
+        zip_code: '90210'
+      };
+
+      await expect(requestFormService.newForm(incompleteAddressData)).rejects.toThrow(
+        'Complete address is required'
+      );
+    });
+
+    it('should validate service_needed is provided', async () => {
+      const missingServiceData = {
+        ...mockFormData,
+        service_needed: undefined
+      };
+
+      await expect(requestFormService.newForm(missingServiceData)).rejects.toThrow(
+        'Missing required field: service_needed'
+      );
+    });
+
+    it('should successfully process valid form data', async () => {
+      // Mock the repository to return success
+      jest.spyOn(requestFormRepository, 'saveData').mockResolvedValue(mockFormData as any);
+
+      const result = await requestFormService.newForm(mockFormData);
+
+      expect(result).toBeDefined();
+      expect(requestFormRepository.saveData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          firstname: 'Jane',
+          lastname: 'Doe',
+          email: 'jane.doe@example.com',
+          service_needed: ServiceTypes.LABOR_SUPPORT
+        })
+      );
+    });
+  });
+
+  // NEW: Repository Layer Tests
+  describe('RequestFormRepository Tests', () => {
+    it('should save form data to database successfully', async () => {
+      const mockSupabaseClient = {
+        from: jest.fn().mockReturnThis(),
+        insert: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: mockFormData,
+          error: null
+        })
+      };
+
+      const repository = new RequestFormRepository(mockSupabaseClient as any);
+      const result = await repository.saveData(mockFormData);
+
+      expect(result).toEqual(mockFormData);
+      expect(mockSupabaseClient.from).toHaveBeenCalledWith('client_info');
+      expect(mockSupabaseClient.insert).toHaveBeenCalledWith([
+        expect.objectContaining({
+          firstname: 'Jane',
+          lastname: 'Doe',
+          email: 'jane.doe@example.com',
+          status: 'lead'
+        })
+      ]);
+    });
+
+    it('should handle database errors gracefully', async () => {
+      const mockSupabaseClient = {
+        from: jest.fn().mockReturnThis(),
+        insert: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: null,
+          error: { message: 'Database connection failed' }
+        })
+      };
+
+      const repository = new RequestFormRepository(mockSupabaseClient as any);
+
+      await expect(repository.saveData(mockFormData)).rejects.toThrow(
+        'Database insertion failed: Database connection failed'
+      );
+    });
+
+    it('should include all form fields in database insert', async () => {
+      const mockSupabaseClient = {
+        from: jest.fn().mockReturnThis(),
+        insert: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({
+          data: mockFormData,
+          error: null
+        })
+      };
+
+      const repository = new RequestFormRepository(mockSupabaseClient as any);
+      await repository.saveData(mockFormData);
+
+      const insertCall = mockSupabaseClient.insert.mock.calls[0][0][0];
+
+      // Check that all form fields are included
+      expect(insertCall).toHaveProperty('firstname');
+      expect(insertCall).toHaveProperty('lastname');
+      expect(insertCall).toHaveProperty('email');
+      expect(insertCall).toHaveProperty('phone_number');
+      expect(insertCall).toHaveProperty('address');
+      expect(insertCall).toHaveProperty('city');
+      expect(insertCall).toHaveProperty('state');
+      expect(insertCall).toHaveProperty('zip_code');
+      expect(insertCall).toHaveProperty('service_needed');
+      expect(insertCall).toHaveProperty('status', 'lead');
+
+      // Check optional fields
+      expect(insertCall).toHaveProperty('pronouns');
+      expect(insertCall).toHaveProperty('home_phone');
+      expect(insertCall).toHaveProperty('health_history');
+      expect(insertCall).toHaveProperty('services_interested');
+      expect(insertCall).toHaveProperty('demographics_multi');
+    });
+  });
+
+  // NEW: Email Service Tests
+  describe('Email Service Tests', () => {
+    it('should send email with correct configuration', async () => {
+      const mockTransporter = {
+        sendMail: jest.fn().mockResolvedValue({ messageId: 'test-id' })
+      };
+
+      const emailService = new NodemailerService();
+      (emailService as any).transporter = mockTransporter;
+
+      await emailService.sendEmail(
+        'test@example.com',
+        'Test Subject',
+        'Test text content',
+        '<p>Test HTML content</p>'
+      );
+
+      expect(mockTransporter.sendMail).toHaveBeenCalledWith({
+        from: expect.any(String),
+        to: 'test@example.com',
+        subject: 'Test Subject',
+        text: 'Test text content',
+        html: '<p>Test HTML content</p>'
+      });
+    });
+
+    it('should handle email sending errors', async () => {
+      const mockTransporter = {
+        sendMail: jest.fn().mockRejectedValue(new Error('SMTP error'))
+      };
+
+      const emailService = new NodemailerService();
+      (emailService as any).transporter = mockTransporter;
+
+      await expect(emailService.sendEmail(
+        'test@example.com',
+        'Test Subject',
+        'Test content'
+      )).rejects.toThrow('Failed to send email: SMTP error');
+    });
+  });
+});

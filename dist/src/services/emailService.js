@@ -1,65 +1,53 @@
-'use strict';
-var __importDefault =
-  (this && this.__importDefault) ||
-  function (mod) {
-    return mod && mod.__esModule ? mod : { default: mod };
-  };
-Object.defineProperty(exports, '__esModule', { value: true });
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
 exports.NodemailerService = void 0;
-const nodemailer_1 = __importDefault(require('nodemailer'));
+const nodemailer_1 = __importDefault(require("nodemailer"));
 class NodemailerService {
-  constructor() {
-    this.transporter = nodemailer_1.default.createTransport({
-      host: process.env.EMAIL_HOST,
-      port: parseInt(process.env.EMAIL_PORT || '587'),
-      secure: process.env.EMAIL_SECURE === 'true',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASSWORD,
-      },
-    });
-  }
-  async sendEmail(to, subject, text, html) {
-    // Check if we're in test mode
-    if (process.env.USE_TEST_EMAIL === 'true') {
-      console.log('Test email mode enabled - email not sent');
-      console.log({
-        to,
-        subject,
-        text,
-        html: html ? 'HTML content available' : 'No HTML content',
-      });
-      return;
+    constructor() {
+        this.transporter = nodemailer_1.default.createTransport({
+            host: process.env.EMAIL_HOST,
+            port: parseInt(process.env.EMAIL_PORT || '587'),
+            secure: process.env.EMAIL_SECURE === 'true',
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASSWORD,
+            },
+        });
     }
-    try {
-      const mailOptions = {
-        from: process.env.EMAIL_FROM || 'Sokana CRM <noreply@sokanacrm.org>',
-        to,
-        subject,
-        text,
-        html: html || undefined,
-      };
-      const info = await this.transporter.sendMail(mailOptions);
-    } catch (error) {
-      console.error('Failed to send email:', error);
-      throw new Error(`Failed to send email: ${error.message}`);
+    async sendEmail(to, subject, text, html) {
+        // Check if we're in test mode
+        if (process.env.USE_TEST_EMAIL === 'true') {
+            console.log('Test email mode enabled - email not sent');
+            console.log({
+                to,
+                subject,
+                text,
+                html: html ? 'HTML content available' : 'No HTML content'
+            });
+            return;
+        }
+        try {
+            const mailOptions = {
+                from: process.env.EMAIL_FROM || 'Sokana CRM <noreply@sokanacrm.org>',
+                to,
+                subject,
+                text,
+                html: html || undefined,
+            };
+            const info = await this.transporter.sendMail(mailOptions);
+        }
+        catch (error) {
+            console.error('Failed to send email:', error);
+            throw new Error(`Failed to send email: ${error.message}`);
+        }
     }
-  }
-  async sendInvoiceEmail(
-    to,
-    customerName,
-    invoiceNumber,
-    amount,
-    dueDate,
-    invoicePdfBuffer,
-    customHtml,
-    customText
-  ) {
-    const subject = `Invoice ${invoiceNumber} from Sokana CRM`;
-    // Use custom text content if provided, otherwise use default
-    const text =
-      customText ||
-      `Dear ${customerName},
+    async sendInvoiceEmail(to, customerName, invoiceNumber, amount, dueDate, invoicePdfBuffer, customHtml, customText) {
+        const subject = `Invoice ${invoiceNumber} from Sokana CRM`;
+        // Use custom text content if provided, otherwise use default
+        const text = customText || `Dear ${customerName},
 
 Please find attached invoice ${invoiceNumber} for ${amount}.
 
@@ -74,10 +62,8 @@ Thank you for your business!
 
 Best regards,
 The Sokana Team`;
-    // Use custom HTML content if provided, otherwise use default
-    const html =
-      customHtml ||
-      `
+        // Use custom HTML content if provided, otherwise use default
+        const html = customHtml || `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #333;">Invoice ${invoiceNumber}</h2>
         <p>Dear ${customerName},</p>
@@ -106,49 +92,50 @@ The Sokana Team`;
         <p>Best regards,<br>The Sokana Team</p>
       </div>
     `;
-    // Check if we're in test mode
-    if (process.env.USE_TEST_EMAIL === 'true') {
-      console.log('Test email mode enabled - email with attachment not sent');
-      console.log({
-        to,
-        subject,
-        text,
-        html: 'HTML content available',
-        attachments: [
-          {
-            filename: `invoice-${invoiceNumber}.pdf`,
-            content: `Buffer with ${invoicePdfBuffer.length} bytes`,
-          },
-        ],
-      });
-      return;
+        // Check if we're in test mode
+        if (process.env.USE_TEST_EMAIL === 'true') {
+            console.log('Test email mode enabled - email with attachment not sent');
+            console.log({
+                to,
+                subject,
+                text,
+                html: 'HTML content available',
+                attachments: [
+                    {
+                        filename: `invoice-${invoiceNumber}.pdf`,
+                        content: `Buffer with ${invoicePdfBuffer.length} bytes`
+                    }
+                ]
+            });
+            return;
+        }
+        try {
+            const mailOptions = {
+                from: process.env.EMAIL_FROM || 'Sokana CRM <noreply@sokanacrm.org>',
+                to,
+                subject,
+                text,
+                html,
+                attachments: [
+                    {
+                        filename: `invoice-${invoiceNumber}.pdf`,
+                        content: invoicePdfBuffer,
+                        contentType: 'application/pdf'
+                    }
+                ]
+            };
+            const info = await this.transporter.sendMail(mailOptions);
+            console.log('Invoice email sent successfully:', info.messageId);
+        }
+        catch (error) {
+            console.error('Failed to send invoice email:', error);
+            throw new Error(`Failed to send invoice email: ${error.message}`);
+        }
     }
-    try {
-      const mailOptions = {
-        from: process.env.EMAIL_FROM || 'Sokana CRM <noreply@sokanacrm.org>',
-        to,
-        subject,
-        text,
-        html,
-        attachments: [
-          {
-            filename: `invoice-${invoiceNumber}.pdf`,
-            content: invoicePdfBuffer,
-            contentType: 'application/pdf',
-          },
-        ],
-      };
-      const info = await this.transporter.sendMail(mailOptions);
-      console.log('Invoice email sent successfully:', info.messageId);
-    } catch (error) {
-      console.error('Failed to send invoice email:', error);
-      throw new Error(`Failed to send invoice email: ${error.message}`);
-    }
-  }
-  async sendClientApprovalEmail(to, name, signupUrl) {
-    const subject = 'Your Sokana CRM Account Request Has Been Approved';
-    const text = `Dear ${name},\n\nYour request for Sokana services has been approved! You can now create an account using the following link: ${signupUrl}\n\nBest regards,\nThe Sokana Team`;
-    const html = `
+    async sendClientApprovalEmail(to, name, signupUrl) {
+        const subject = 'Your Sokana CRM Account Request Has Been Approved';
+        const text = `Dear ${name},\n\nYour request for Sokana services has been approved! You can now create an account using the following link: ${signupUrl}\n\nBest regards,\nThe Sokana Team`;
+        const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2>Welcome to Sokana!</h2>
         <p>Dear ${name},</p>
@@ -162,13 +149,13 @@ The Sokana Team`;
         <p>Best regards,<br>The Sokana Team</p>
       </div>
     `;
-    await this.sendEmail(to, subject, text, html);
-  }
-  async sendTeamInviteEmail(to, firstname, lastname, role) {
-    const signupUrl = `${process.env.FRONTEND_URL}/signup`;
-    const subject = 'Welcome to the Sokana CRM Team!';
-    const text = `Dear ${firstname} ${lastname},\n\nYou have been invited to join the Sokana CRM team as a ${role}. Please fill out the sign up form to create an account and make sure to use this same email address.${signupUrl}\n\nBest regards,\nThe Sokana Team`;
-    const html = `
+        await this.sendEmail(to, subject, text, html);
+    }
+    async sendTeamInviteEmail(to, firstname, lastname, role) {
+        const signupUrl = `${process.env.FRONTEND_URL}/signup`;
+        const subject = 'Welcome to the Sokana CRM Team!';
+        const text = `Dear ${firstname} ${lastname},\n\nYou have been invited to join the Sokana CRM team as a ${role}. Please fill out the sign up form to create an account and make sure to use this same email address.${signupUrl}\n\nBest regards,\nThe Sokana Team`;
+        const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2>Welcome to the Sokana Team!</h2>
         <p>Dear ${firstname} ${lastname},</p>
@@ -182,7 +169,7 @@ The Sokana Team`;
         <p>Best regards,<br>The Sokana Team</p>
       </div>
     `;
-    await this.sendEmail(to, subject, text, html);
-  }
+        await this.sendEmail(to, subject, text, html);
+    }
 }
 exports.NodemailerService = NodemailerService;
