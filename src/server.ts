@@ -64,6 +64,7 @@ app.use('/auth', authRoutes);
 app.use('/email', emailRoutes);
 app.use('/requestService', requestRouter);
 app.use('/clients', clientRoutes);
+app.use('/client', clientRoutes); // Add alias for singular form
 app.use('/quickbooks', quickbookRoutes)
 app.use('/quickbooks/customers', customersRoutes);
 app.use('/users', userRoutes);

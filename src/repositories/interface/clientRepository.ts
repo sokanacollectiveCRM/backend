@@ -36,5 +36,10 @@ export interface ClientRepository {
    */
   updateStatus(clientId: string, status: string): Promise<Client>;
 
+  /**
+   * Update client profile fields
+   */
+  updateClient(clientId: string, fieldsToUpdate: Partial<Client>): Promise<Client>;
+
   exportCSV(): Promise<string | null>;
 }

@@ -3,17 +3,20 @@ import { getValidAccessToken } from '../utils/tokenUtils';
 
 const router = express.Router();
 
-router.post('/api/simulate-payment', async (req, res) => {
+// Change the route path to match the router mount in server.ts
+router.post('/simulate-payment', async (req, res) => {
   try {
     const { amount, card } = req.body;
     if (!amount || !card) {
-      return res.status(400).json({ error: 'Missing amount or card details' });
+      res.status(400).json({ error: 'Missing amount or card details' });
+      return;
     }
 
     // Get access token (hardcoded or from user context)
     const accessToken = await getValidAccessToken();
     if (!accessToken) {
-      return res.status(401).json({ error: 'Could not get QuickBooks access token' });
+      res.status(401).json({ error: 'Could not get QuickBooks access token' });
+      return;
     }
 
     // Prepare payload for QuickBooks Payments API
@@ -44,12 +47,13 @@ router.post('/api/simulate-payment', async (req, res) => {
 
     const data = await response.json();
     if (!response.ok) {
-      return res.status(response.status).json({ error: data });
+      res.status(response.status).json({ error: data });
+      return;
     }
-    return res.json(data);
+    res.json(data);
   } catch (error) {
     console.error('Simulate payment error:', error);
-    return res.status(500).json({ error: error.message || 'Internal server error' });
+    res.status(500).json({ error: error.message || 'Internal server error' });
   }
 });
 

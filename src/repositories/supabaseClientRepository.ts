@@ -22,6 +22,7 @@ export class SupabaseClientRepository  {
         firstname,
         lastname,
         email,
+        phone_number,
         status,
         service_needed,
         requested,
@@ -65,6 +66,7 @@ export class SupabaseClientRepository  {
         firstname,
         lastname,
         email,
+        phone_number,
         status,
         users (
           firstname,
@@ -121,6 +123,7 @@ export class SupabaseClientRepository  {
         firstname,
         lastname,
         email,
+        phone_number,
         status,
         users (
           firstname,
@@ -158,6 +161,7 @@ export class SupabaseClientRepository  {
         id,
         firstname,
         lastname,
+        phone_number,
         service_needed,
         requested,
         updated_at,
@@ -175,6 +179,100 @@ export class SupabaseClientRepository  {
       throw new Error(`${error.message}`);
     }
 
+    return this.mapToClient(data);
+  }
+
+  async updateClient(clientId: string, fieldsToUpdate: any): Promise<Client> {
+    console.log('Repository: Updating client with ID:', clientId);
+    console.log('Repository: Fields to update:', JSON.stringify(fieldsToUpdate, null, 2));
+    
+    // Map request body fields to database column names
+    const updateData: any = {};
+    
+    // Map the fields from the request body to database columns
+    if (fieldsToUpdate.user?.firstname !== undefined) updateData.firstname = fieldsToUpdate.user.firstname;
+    if (fieldsToUpdate.user?.lastname !== undefined) updateData.lastname = fieldsToUpdate.user.lastname;
+    if (fieldsToUpdate.user?.email !== undefined) updateData.email = fieldsToUpdate.user.email;
+    if (fieldsToUpdate.user?.role !== undefined) updateData.role = fieldsToUpdate.user.role;
+    if (fieldsToUpdate.serviceNeeded !== undefined) updateData.service_needed = fieldsToUpdate.serviceNeeded;
+    if (fieldsToUpdate.childrenExpected !== undefined) updateData.children_expected = fieldsToUpdate.childrenExpected;
+    if (fieldsToUpdate.pronouns !== undefined) updateData.pronouns = fieldsToUpdate.pronouns;
+    if (fieldsToUpdate.health_history !== undefined) updateData.health_history = fieldsToUpdate.health_history;
+    if (fieldsToUpdate.allergies !== undefined) updateData.allergies = fieldsToUpdate.allergies;
+    if (fieldsToUpdate.due_date !== undefined) updateData.due_date = fieldsToUpdate.due_date;
+    if (fieldsToUpdate.hospital !== undefined) updateData.hospital = fieldsToUpdate.hospital;
+    if (fieldsToUpdate.annual_income !== undefined) updateData.annual_income = fieldsToUpdate.annual_income;
+    if (fieldsToUpdate.service_specifics !== undefined) updateData.service_specifics = fieldsToUpdate.service_specifics;
+
+    // Handle direct field mappings from request body
+    if (fieldsToUpdate.firstname !== undefined) updateData.firstname = fieldsToUpdate.firstname;
+    if (fieldsToUpdate.lastname !== undefined) updateData.lastname = fieldsToUpdate.lastname;
+    if (fieldsToUpdate.email !== undefined) updateData.email = fieldsToUpdate.email;
+    if (fieldsToUpdate.phoneNumber !== undefined) updateData.phone_number = fieldsToUpdate.phoneNumber;
+    if (fieldsToUpdate.phone_number !== undefined) updateData.phone_number = fieldsToUpdate.phone_number;
+    if (fieldsToUpdate.status !== undefined) updateData.status = fieldsToUpdate.status;
+
+    console.log('Repository: phoneNumber field check:', {
+      hasPhoneNumber: 'phoneNumber' in fieldsToUpdate,
+      phoneNumberValue: fieldsToUpdate.phoneNumber,
+      phoneNumberType: typeof fieldsToUpdate.phoneNumber
+    });
+    console.log('Repository: Mapped update data:', updateData);
+
+    // Check if client exists first
+    const { data: existingClient, error: checkError } = await this.supabaseClient
+      .from('client_info')
+      .select('id, firstname, lastname, phone_number')
+      .eq('id', clientId)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error('Repository: Error checking client existence:', checkError);
+      throw new Error(`Error checking client existence: ${checkError.message}`);
+    }
+
+    if (!existingClient) {
+      console.error('Repository: Client not found with ID:', clientId);
+      throw new Error(`Client not found with ID: ${clientId}`);
+    }
+
+    console.log('Repository: Found existing client:', existingClient);
+
+    // Perform the update
+    const { data: updateResult, error: updateError } = await this.supabaseClient
+      .from('client_info')
+      .update(updateData)
+      .eq('id', clientId);
+
+    if (updateError) {
+      console.error('Repository: Update error:', updateError);
+      throw new Error(`Failed to update client: ${updateError.message}`);
+    }
+
+    console.log('Repository: Update completed, fetching updated data');
+
+    // Fetch the updated client data
+    const { data, error: fetchError } = await this.supabaseClient
+      .from('client_info')
+      .select(`
+        *,
+        users (*)
+      `)
+      .eq('id', clientId)
+      .single();
+
+    if (fetchError) {
+      console.error('Repository: Error fetching updated client:', fetchError);
+      throw new Error(`Failed to fetch updated client: ${fetchError.message}`);
+    }
+
+    if (!data) {
+      console.error('Repository: No data returned after update');
+      throw new Error(`No data returned after update for client ID: ${clientId}`);
+    }
+
+    console.log('Repository: Raw database response after update:', data);
+    console.log('Repository: Update successful, mapping data');
     return this.mapToClient(data);
   }
 
@@ -269,7 +367,8 @@ export class SupabaseClientRepository  {
       data.hospital ?? undefined,
       data.baby_sex ?? undefined,
       data.annual_income ?? undefined,
-      data.service_specifics ?? undefined
+      data.service_specifics ?? undefined,
+      data.phone_number ?? undefined // Add phone number mapping
     );
   }
 }

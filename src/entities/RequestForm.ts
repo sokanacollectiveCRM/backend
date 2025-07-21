@@ -16,6 +16,7 @@ export class RequestForm {
   public user_id?: string;
   public created_at?: Date;
   public updated_at?: Date;
+  public requested?: string;
   
   constructor(
     // Step 1: Client Details (Required)
@@ -34,6 +35,7 @@ export class RequestForm {
     // Step 1: Client Details (Optional)
     public pronouns?: Pronouns,
     public pronouns_other?: string,
+    public children_expected?: string,
     
     // Step 2: Home Details (Optional)
     public home_phone?: string,
@@ -71,6 +73,8 @@ export class RequestForm {
     public baby_name?: string,
     public provider_type?: ProviderType,
     public pregnancy_number?: number,
+    public hospital?: string,
+    public baby_sex?: string,
     
     // Step 8: Past Pregnancies
     public had_previous_pregnancies?: boolean,

@@ -2,18 +2,6 @@ import { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 
-// Extend Express Request type to include user
-declare global {
-  namespace Express {
-    interface Request {
-      user: {
-        id: string;
-        role?: string;
-      };
-    }
-  }
-}
-
 export const authenticateUser = async (
   req: Request,
   res: Response,
@@ -34,7 +22,13 @@ export const authenticateUser = async (
       role?: string;
     };
 
-    req.user = decoded;
+    // Create a User instance from the decoded token data
+    req.user = {
+      id: decoded.id,
+      role: decoded.role,
+      getFullName: () => '',
+      toJSON: () => ({ id: decoded.id, role: decoded.role })
+    } as any;
     next();
   } catch (error) {
     console.error('Authentication error:', error);
