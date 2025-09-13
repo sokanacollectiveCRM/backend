@@ -259,6 +259,14 @@ class SupabaseClientRepository {
         console.log('Repository: Update successful, mapping data');
         return this.mapToClient(data);
     }
+    async deleteClient(clientId) {
+        const { error } = await this.supabaseClient
+            .from('client_info')
+            .delete()
+            .eq('id', clientId);
+        if (error)
+            throw new Error(error.message);
+    }
     // Helper to find client id's for a given doula
     async getClientIdsAssignedToDoula(doulaId) {
         const { data, error } = await this.supabaseClient

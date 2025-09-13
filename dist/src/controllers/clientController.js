@@ -83,6 +83,25 @@ class ClientController {
             }
         }
     }
+    async deleteClient(req, res) {
+        const { id } = req.body;
+        console.log('DELETE /clients/delete called with id:', id);
+        if (!id) {
+            console.log('No client ID provided');
+            res.status(400).json({ error: 'Missing client ID' });
+            return;
+        }
+        try {
+            await this.clientUseCase.deleteClient(id);
+            console.log('Client deleted successfully:', id);
+            res.status(204).send();
+        }
+        catch (error) {
+            console.error('Error deleting client:', error);
+            const err = this.handleError(error, res);
+            res.status(err.status).json({ error: err.message });
+        }
+    }
     //
     // updateClientStatus
     //

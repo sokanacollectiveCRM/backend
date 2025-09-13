@@ -3,7 +3,7 @@ import { NodemailerService } from '../services/emailService';
 import { RequestFormService } from "../services/RequestFormService";
 import { AuthRequest, RequestFormData, RequestStatus } from "../types";
 
-const notificationEmail = 'info@sokanacollective.com';
+const notificationEmail = 'jerrybony5@gmail.com';
 const emailService = new NodemailerService();
 
 export class RequestFormController {

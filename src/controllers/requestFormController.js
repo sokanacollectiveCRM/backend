@@ -256,7 +256,7 @@ User ID: ${savedForm.user_id || 'Not specified'}`;
                   <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; background-color: #f9f9f9; padding: 20px;">
                     <div style="background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
                       <h1 style="color: #4CAF50; text-align: center; margin-bottom: 30px; border-bottom: 3px solid #4CAF50; padding-bottom: 10px;">New Lead Submitted</h1>
-                      
+
                       <div style="margin-bottom: 25px;">
                         <h2 style="color: #333; background-color: #e8f5e8; padding: 10px; border-radius: 5px;">👤 Client Details</h2>
                         <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
@@ -398,13 +398,13 @@ The Sokana Collective Team`;
                   <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f9f9f9; padding: 20px;">
                     <div style="background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
                       <h1 style="color: #4CAF50; text-align: center; margin-bottom: 30px; border-bottom: 3px solid #4CAF50; padding-bottom: 10px;">Request Received</h1>
-                      
+
                       <p style="font-size: 18px; color: #333; margin-bottom: 20px;">Dear ${savedForm.firstname} ${savedForm.lastname},</p>
-                      
+
                       <p style="font-size: 16px; color: #555; line-height: 1.6; margin-bottom: 20px;">
                         Thank you for submitting your request for doula services. We have received your information and are working on finding the perfect match for you.
                       </p>
-                      
+
                       <div style="text-align: center; margin-top: 30px; padding: 20px; background-color: #f5f5f5; border-radius: 5px;">
                         <p style="margin: 0; font-weight: bold; color: #333;">Best regards,</p>
                         <p style="margin: 5px 0 0 0; color: #4CAF50; font-weight: bold;">The Sokana Collective Team</p>

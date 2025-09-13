@@ -1,30 +1,141 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = __importDefault(require("express"));
-const multer_1 = __importDefault(require("multer"));
-const index_1 = require("../index");
-const authMiddleware_1 = __importDefault(require("../middleware/authMiddleware"));
-const authorizeRoles_1 = __importDefault(require("../middleware/authorizeRoles"));
-const clientRoutes = express_1.default.Router();
-const upload = (0, multer_1.default)({
-    storage: multer_1.default.memoryStorage(),
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+const express_1 = require("express");
+const docusignService_1 = require("../services/docusignService");
+const calculateContract_1 = require("../services/postpartum/calculateContract");
+const signNowService_1 = require("../services/signNowService");
+const router = (0, express_1.Router)();
+router.post('/postpartum/calculate', async (req, res) => {
+    try {
+        const input = req.body;
+        const amounts = (0, calculateContract_1.calculatePostpartumContract)(input);
+        const signNowFields = (0, calculateContract_1.formatForSignNow)(input, amounts);
+        res.json({
+            success: true,
+            amounts,
+            fields: signNowFields
+        });
+    }
+    catch (error) {
+        if (error instanceof calculateContract_1.ValidationError) {
+            res.status(400).json({
+                success: false,
+                error: error.message
+            });
+        }
+        else {
+            console.error('Contract calculation failed:', error);
+            res.status(500).json({
+                success: false,
+                error: 'Failed to calculate contract amounts'
+            });
+        }
+    }
 });
-// generate a contract for a client given a template
-clientRoutes.post('/', authMiddleware_1.default, (req, res, next) => (0, authorizeRoles_1.default)(req, res, next, ['admin']), (req, res) => index_1.contractController.generateContract(req, res));
-// get a preview of an already generated contract
-clientRoutes.get('/:id/preview', authMiddleware_1.default, (req, res, next) => (0, authorizeRoles_1.default)(req, res, next, ['admin', 'doula', 'client']), (req, res) => index_1.contractController.previewContract(req, res));
-// get the list of templates
-clientRoutes.get('/templates', authMiddleware_1.default, (req, res, next) => (0, authorizeRoles_1.default)(req, res, next, ['doula', 'admin']), (req, res) => index_1.contractController.getAllTemplates(req, res));
-// delete a template
-clientRoutes.delete('/templates/:name', authMiddleware_1.default, (req, res, next) => (0, authorizeRoles_1.default)(req, res, next, ['admin']), (req, res) => index_1.contractController.deleteTemplate(req, res));
-// update a template
-clientRoutes.put('/templates/:name', authMiddleware_1.default, (req, res, next) => (0, authorizeRoles_1.default)(req, res, next, ['admin']), upload.single('contract'), (req, res) => index_1.contractController.updateTemplate(req, res));
-// upload a template
-clientRoutes.post('/templates', authMiddleware_1.default, (req, res, next) => (0, authorizeRoles_1.default)(req, res, next, ['admin']), upload.single('contract'), (req, res) => index_1.contractController.uploadTemplate(req, res));
-// request a filled template
-clientRoutes.post('/templates/generate', authMiddleware_1.default, (req, res, next) => (0, authorizeRoles_1.default)(req, res, next, ['admin']), (req, res) => index_1.contractController.generateTemplate(req, res));
-exports.default = clientRoutes;
+router.post('/postpartum/send', async (req, res) => {
+    try {
+        const { contract_input, client } = req.body;
+        if (!contract_input || !client || !client.email || !client.name) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields'
+            });
+        }
+        // Calculate amounts and format for SignNow
+        const amounts = (0, calculateContract_1.calculatePostpartumContract)(contract_input);
+        const signNowFields = (0, calculateContract_1.formatForSignNow)(contract_input, amounts);
+        // Clone template WITH prefilled field values
+        console.log('Cloning template with prefilled field values...');
+        // Convert SignNow fields to the correct format for field_values
+        const fieldValues = [
+            { field_name: "total_hours", value: signNowFields.total_hours },
+            { field_name: "hourly_rate_fee", value: signNowFields.hourly_rate_fee },
+            { field_name: "deposit", value: signNowFields.deposit },
+            { field_name: "overnight_fee_amount", value: signNowFields.overnight_fee_amount },
+            { field_name: "total_amount", value: signNowFields.total_amount }
+        ];
+        // Create DocuSign envelope with prefilled fields
+        console.log('📄 Creating DocuSign envelope with prefilled fields...');
+        const docusignFields = {
+            total_hours: signNowFields.total_hours,
+            hourly_rate_fee: signNowFields.hourly_rate_fee,
+            deposit: signNowFields.deposit,
+            overnight_fee_amount: signNowFields.overnight_fee_amount,
+            total_amount: signNowFields.total_amount
+        };
+        const result = await docusignService_1.docusignService.createEnvelopeWithPrefill('5fa4ef87-0821-48c3-9361-efe32cb22948', // Your actual DocuSign template ID
+        client, docusignFields, {
+            subject: "Your Postpartum Care Contract",
+            message: "Please review and sign your postpartum care contract. The contract amounts have been calculated and prefilled. After signing, you'll be directed to make the deposit payment."
+        });
+        res.json({
+            success: true,
+            message: 'Contract created with prefilled values and sent to client via DocuSign',
+            amounts,
+            envelopeId: result.envelopeId,
+            docusign: result,
+            prefilledValues: docusignFields
+        });
+    }
+    catch (error) {
+        if (error instanceof calculateContract_1.ValidationError) {
+            res.status(400).json({
+                success: false,
+                error: error.message
+            });
+        }
+        else {
+            console.error('Failed to send contract:', {
+                error: error.message,
+                response: error.response?.data,
+                stack: error.stack,
+                config: error.config
+            });
+            res.status(500).json({
+                success: false,
+                error: error.message || 'Failed to send contract',
+                details: error.response?.data
+            });
+        }
+    }
+});
+// Step 2: Send client signing invitation after admin fills fields
+router.post('/postpartum/send-client-invite', async (req, res) => {
+    try {
+        const { documentId, client } = req.body;
+        if (!documentId || !client || !client.email || !client.name) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields: documentId, client.email, client.name'
+            });
+        }
+        console.log('📤 Sending client signing invitation...');
+        // Send invitation to client as Recipient 1 (signer)
+        const result = await signNowService_1.signNowService.createInvitationClientPartner(documentId, client, undefined, {
+            subject: "Your Postpartum Care Contract",
+            message: "Please review and sign your postpartum care contract. After signing, you'll be directed to make the deposit payment.",
+            clientRole: 'Recipient 1' // Client signs as Recipient 1
+        });
+        res.json({
+            success: true,
+            message: 'Client signing invitation sent successfully',
+            client,
+            documentId,
+            signnow: result
+        });
+    }
+    catch (error) {
+        console.error('Failed to send client invitation:', {
+            error: error.message,
+            response: error.response?.data,
+            stack: error.stack,
+            config: error.config
+        });
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to send client invitation',
+            details: error.response?.data
+        });
+    }
+});
+exports.default = router;

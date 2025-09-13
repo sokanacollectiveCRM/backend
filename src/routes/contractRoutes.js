@@ -1,75 +1,124 @@
-'use strict';
-var __importDefault =
-  (this && this.__importDefault) ||
-  function (mod) {
-    return mod && mod.__esModule ? mod : { default: mod };
-  };
-Object.defineProperty(exports, '__esModule', { value: true });
-const express_1 = __importDefault(require('express'));
-const multer_1 = __importDefault(require('multer'));
-const index_1 = require('../index');
-const authMiddleware_1 = __importDefault(
-  require('../middleware/authMiddleware')
-);
-const authorizeRoles_1 = __importDefault(
-  require('../middleware/authorizeRoles')
-);
-const clientRoutes = express_1.default.Router();
-const upload = (0, multer_1.default)({
-  storage: multer_1.default.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+const express = require('express');
+const { calculatePostpartumContract, formatForSignNow, ValidationError } = require('../services/postpartum/calculateContract');
+const SignNowService = require('../services/signNowService');
+const signNowService = new SignNowService();
+const { DEFAULT_CONFIG } = require('../types/postpartum');
+
+const router = express.Router();
+
+console.log('Setting up postpartum routes...');
+
+router.post('/postpartum/calculate', async (req, res) => {
+  try {
+    const input = req.body;
+    const amounts = calculatePostpartumContract(input);
+    const signNowFields = formatForSignNow(input, amounts);
+
+    res.json({
+      success: true,
+      amounts,
+      fields: signNowFields
+    });
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      res.status(400).json({
+        success: false,
+        error: error.message
+      });
+    } else {
+      console.error('Contract calculation failed:', error);
+    res.status(500).json({
+      success: false,
+        error: 'Failed to calculate contract amounts'
+      });
+    }
+  }
 });
-// generate a contract for a client given a template
-clientRoutes.post(
-  '/',
-  authMiddleware_1.default,
-  (req, res, next) => (0, authorizeRoles_1.default)(req, res, next, ['admin']),
-  (req, res) => index_1.contractController.generateContract(req, res)
-);
-// get a preview of an already generated contract
-clientRoutes.get(
-  '/:id/preview',
-  authMiddleware_1.default,
-  (req, res, next) =>
-    (0, authorizeRoles_1.default)(req, res, next, ['admin', 'doula', 'client']),
-  (req, res) => index_1.contractController.previewContract(req, res)
-);
-// get the list of templates
-clientRoutes.get(
-  '/templates',
-  authMiddleware_1.default,
-  (req, res, next) =>
-    (0, authorizeRoles_1.default)(req, res, next, ['doula', 'admin']),
-  (req, res) => index_1.contractController.getAllTemplates(req, res)
-);
-// delete a template
-clientRoutes.delete(
-  '/templates/:name',
-  authMiddleware_1.default,
-  (req, res, next) => (0, authorizeRoles_1.default)(req, res, next, ['admin']),
-  (req, res) => index_1.contractController.deleteTemplate(req, res)
-);
-// update a template
-clientRoutes.put(
-  '/templates/:name',
-  authMiddleware_1.default,
-  (req, res, next) => (0, authorizeRoles_1.default)(req, res, next, ['admin']),
-  upload.single('contract'),
-  (req, res) => index_1.contractController.updateTemplate(req, res)
-);
-// upload a template
-clientRoutes.post(
-  '/templates',
-  authMiddleware_1.default,
-  (req, res, next) => (0, authorizeRoles_1.default)(req, res, next, ['admin']),
-  upload.single('contract'),
-  (req, res) => index_1.contractController.uploadTemplate(req, res)
-);
-// request a filled template
-clientRoutes.post(
-  '/templates/generate',
-  authMiddleware_1.default,
-  (req, res, next) => (0, authorizeRoles_1.default)(req, res, next, ['admin']),
-  (req, res) => index_1.contractController.generateTemplate(req, res)
-);
-exports.default = clientRoutes;
+
+router.post('/postpartum/send', async (req, res) => {
+  try {
+    const {
+      contract_input,
+      client
+    } = req.body;
+
+    if (!contract_input || !client || !client.email || !client.name) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields'
+      });
+    }
+
+    // Calculate amounts and format for SignNow
+    console.log('Calculating contract amounts for input:', contract_input);
+    const amounts = calculatePostpartumContract(contract_input);
+    console.log('Calculated amounts:', amounts);
+
+    console.log('Formatting for SignNow...');
+    const signNowFields = formatForSignNow(contract_input, amounts);
+    console.log('Formatted fields:', signNowFields);
+
+    console.log('Sending to SignNow:', {
+      templateId: DEFAULT_CONFIG.template_id,
+      client,
+      signNowFields
+    });
+
+    // Send to SignNow
+    const result = await signNowService.createInvitationClientPartner(
+      DEFAULT_CONFIG.template_id,
+      client,
+      undefined, // no partner
+      {
+        subject: "Your Postpartum Care Contract",
+        message: "Please review and sign your postpartum care contract. After signing, you'll be directed to make the deposit payment.",
+        fields: signNowFields
+      }
+    );
+
+    res.json({
+      success: true,
+      amounts,
+      signnow: result
+    });
+
+    } catch (error) {
+      const { logAxiosError } = require('../utils/logAxiosError');
+
+      if (error instanceof ValidationError) {
+        return res.status(400).json({
+          success: false,
+          error: error.message
+        });
+      }
+
+      logAxiosError(error, 'Contract sending failed');
+
+      // Handle specific error cases
+      if (error?.response?.data?.errors) {
+        const dailyLimitError = error.response.data.errors.find(e => e.code === 65639);
+        if (dailyLimitError) {
+          return res.status(429).json({
+            success: false,
+            error: 'Daily invite limit exceeded. Please try again tomorrow.'
+          });
+        }
+      }
+
+      // Send back meaningful error response
+      const status = error?.response?.status ?? 500;
+      const errors = error?.response?.data?.errors;
+      const message = (Array.isArray(errors) && errors[0]?.message) ||
+                     error?.response?.data?.message ||
+                     error?.message || 'Unknown error';
+
+      res.status(status).json({
+        success: false,
+        error: message,
+        details: errors ?? error?.response?.data ?? undefined
+      });
+    }
+  }
+});
+
+module.exports = router;

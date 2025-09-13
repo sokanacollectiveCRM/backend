@@ -1,0 +1,6 @@
+<svg width="200" height="60" xmlns="http://www.w3.org/2000/svg">
+    <rect width="200" height="60" fill="#666" opacity="0.1" stroke="#dee2e6" stroke-width="1"/>
+    <rect x="20" y="15" width="160" height="30" fill="#666" opacity="0.3" rx="5"/>
+    <text x="100" y="35" font-family="Arial, sans-serif" font-size="14" fill="#333" text-anchor="middle" font-weight="bold">Default Signature</text>
+    <path d="M30 45 Q60 35 90 45 T150 45" stroke="#333" stroke-width="2" fill="none" opacity="0.7"/>
+  </svg>

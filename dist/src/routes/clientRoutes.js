@@ -17,6 +17,7 @@ clientRoutes.get('/fetchCSV', authMiddleware_1.default, (req, res, next) => (0, 
 clientRoutes.get('/', authMiddleware_1.default, (req, res, next) => (0, authorizeRoles_1.default)(req, res, next, ['admin', 'doula']), (req, res) => index_1.clientController.getClients(req, res));
 // Specific routes must come before generic /:id route
 clientRoutes.put('/status', authMiddleware_1.default, (req, res, next) => (0, authorizeRoles_1.default)(req, res, next, ['admin', 'doula']), (req, res) => index_1.clientController.updateClientStatus(req, res));
+clientRoutes.delete('/delete', authMiddleware_1.default, (req, res, next) => (0, authorizeRoles_1.default)(req, res, next, ['admin']), (req, res) => index_1.clientController.deleteClient(req, res));
 // Generic routes last
 clientRoutes.get('/:id', authMiddleware_1.default, (req, res, next) => (0, authorizeRoles_1.default)(req, res, next, ['admin', 'doula', 'client']), (req, res) => index_1.clientController.getClientById(req, res));
 clientRoutes.put('/:id', authMiddleware_1.default, (req, res, next) => (0, authorizeRoles_1.default)(req, res, next, ['admin', 'doula']), (req, res) => index_1.clientController.updateClient(req, res));

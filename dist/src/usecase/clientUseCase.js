@@ -50,6 +50,9 @@ class ClientUseCase {
     async getClientDetailed(clientId) {
         return this.clientRepository.findClientDetailedById(clientId);
     }
+    async deleteClient(clientId) {
+        return this.clientRepository.deleteClient(clientId);
+    }
     // updates a client's status
     async updateClientStatus(clientId, status) {
         try {
