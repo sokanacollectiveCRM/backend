@@ -45,6 +45,8 @@
     "node-fetch": "^3.3.2",
     "nodemailer": "^6.10.0",
     "pdf-lib": "^1.17.1",
+    "pdf2json": "^3.2.0",
+    "pdf2pic": "^3.2.0",
     "pdfkit": "^0.17.1",
     "pizzip": "^3.2.0",
     "stripe": "^14.20.0",

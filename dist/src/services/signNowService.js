@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -329,108 +362,38 @@ class SignNowService {
     async createInvitationClientPartner(documentId, client, partner, options = {}) {
         console.log('Creating invitation:', { documentId, client, partner, options });
         try {
-            // Clone the template and prefill fields if provided
-            if (!documentId) {
-                console.log('Cloning template:', this.templateId);
-                const cloneResult = await this.cloneTemplate(this.templateId, `Contract for ${client.name} - ${new Date().toISOString()}`);
-                documentId = cloneResult.documentId;
-                console.log('Template cloned successfully, new document ID:', documentId);
-                // Prefill fields if provided
-                if (options.fields) {
-                    console.log('Prefilling template with fields:', options.fields);
-                    await this.prefillTemplate(documentId, options.fields);
-                    console.log('Fields prefilled successfully');
-                }
-            }
-            else {
-                console.log('Using provided document ID:', documentId);
-                // If fields are provided and we have a document ID, we can still try to prefill
-                if (options.fields) {
-                    console.log('Prefilling fields for existing document:', options.fields);
-                    try {
-                        await this.prefillTemplate(documentId, options.fields);
-                        console.log('Fields prefilled successfully');
-                    }
-                    catch (error) {
-                        console.log('Field prefilling failed, continuing with invitation:', error.message);
-                        // Continue with invitation even if prefilling fails
-                    }
-                }
-            }
             if (!client || !client.email || !client.name) {
                 throw new Error('client {name,email} is required');
             }
             // Get a fresh OAuth token
             await this.authenticate();
             console.log('✅ Got fresh OAuth token');
-            // Get document details to find available roles
-            const { data: docData } = await axios_1.default.get(`${this.baseURL}/document/${documentId}`, {
-                headers: this.getAuthHeaders()
-            });
-            console.log('Document data:', docData);
-            // Find available roles
-            const rolesOnDoc = docData.roles?.map(r => r.name) || [];
-            console.log('Available roles:', rolesOnDoc);
-            const clientRole = options.clientRole || rolesOnDoc.find(r => r === 'Client') || 'Recipient 1'; // Client signs as Recipient 1
-            const sequential = options.sequential !== false;
-            const to = [{
-                    email: client.email,
-                    name: client.name,
-                    role: clientRole,
-                    order: sequential ? 1 : undefined
-                }];
-            console.log('Building invitation payload with roles:', { clientRole });
-            const buildPayload = (includeCustom) => {
-                const APP_URL = process.env.FRONTEND_URL || 'http://localhost:3001';
-                const payload = {
-                    document_id: documentId,
-                    from: 'jerry@techluminateacademy.com',
-                    to,
-                    redirect_uri: `${APP_URL}/payment`,
-                    decline_redirect_uri: `${APP_URL}/dashboard`,
-                    close_redirect_uri: `${APP_URL}/dashboard`,
-                    redirect_target: 'self',
-                    redirect_behavior: 'always'
-                };
-                if (includeCustom) {
-                    if (options.subject)
-                        payload['subject'] = options.subject;
-                    if (options.message)
-                        payload['message'] = options.message;
-                }
-                return payload;
+            // Send field invitation without custom subject/message (plan restriction)
+            console.log('📧 Sending field invitation (no custom subject/message)...');
+            const invitePayload = {
+                document_id: documentId,
+                to: [
+                    {
+                        email: client.email,
+                        role: "Signer 1",
+                        order: 1
+                    }
+                ],
+                from: "jerry@techluminateacademy.com"
+                // No subject/message due to plan restrictions
             };
-            const tryCustom = Boolean(options.subject || options.message);
-            const headers = { headers: this.getAuthHeaders() };
-            try {
-                console.log('Sending invitation request:', buildPayload(tryCustom));
-                const { data } = await axios_1.default.post(`${this.baseURL}/document/${documentId}/invite`, buildPayload(tryCustom), headers);
-                return { success: true, invite: data, rolesUsed: { clientRole }, note: tryCustom ? 'Sent with custom subject/message' : undefined };
-            }
-            catch (err) {
-                const errs = err.response?.data?.errors;
-                const planBlock = Array.isArray(errs) && errs.some(e => Number(e.code) === 65582);
-                if (planBlock && tryCustom) {
-                    const { data } = await axios_1.default.post(`${this.baseURL}/document/${documentId}/invite`, buildPayload(false), headers);
-                    return { success: true, invite: data, rolesUsed: { clientRole }, note: 'Sent without custom subject/message due to plan limits' };
-                }
-                throw err;
-            }
+            console.log('📤 Sending field invitation:', invitePayload);
+            const { data } = await axios_1.default.post(`${this.baseURL}/document/${documentId}/invite`, invitePayload, { headers: this.getAuthHeaders() });
+            console.log('✅ Field invitation sent successfully');
+            return { success: true, invite: data, type: 'field_invite' };
         }
         catch (error) {
-            console.error('Error creating client+partner invitation:', {
-                response: error.response?.data,
-                error: error.message,
-                stack: error.stack,
-                status: error.response?.status,
-                data: error.response?.data,
-                message: error.message,
-                request: {
-                    url: error.config?.url,
-                    method: error.config?.method,
-                    data: error.config?.data
-                }
-            });
+            console.error('❌ Error creating client+partner invitation:');
+            console.error('Status:', error.response?.status);
+            console.error('Data:', JSON.stringify(error.response?.data, null, 2));
+            console.error('Request URL:', error.config?.url);
+            console.error('Request method:', error.config?.method);
+            console.error('Request data:', JSON.stringify(error.config?.data, null, 2));
             // Log the detailed errors from SignNow
             if (error.response?.data?.errors) {
                 console.error('SignNow API errors:', JSON.stringify(error.response.data.errors, null, 2));
@@ -517,6 +480,116 @@ class SignNowService {
         catch (error) {
             console.error('Error cloning template:', error.response?.data || error.message);
             throw new Error(`Failed to clone template: ${error.response?.data?.error || error.message}`);
+        }
+    }
+    async uploadDocument(fileBuffer, fileName) {
+        try {
+            await this.authenticate();
+            console.log(`📤 Uploading document: ${fileName}, size: ${fileBuffer.length} bytes`);
+            const FormData = require('form-data');
+            const formData = new FormData();
+            formData.append('file', fileBuffer, fileName);
+            console.log(`🌐 POST ${this.baseURL}/document`);
+            const response = await axios_1.default.post(`${this.baseURL}/document`, formData, {
+                headers: {
+                    ...this.getAuthHeaders(),
+                    ...formData.getHeaders()
+                }
+            });
+            console.log('✅ Document uploaded successfully:', response.data.id);
+            return {
+                success: true,
+                documentId: response.data.id,
+                document: response.data
+            };
+        }
+        catch (error) {
+            console.error('❌ Document upload failed:');
+            console.error('Status:', error.response?.status);
+            console.error('Data:', JSON.stringify(error.response?.data, null, 2));
+            console.error('Headers:', error.response?.headers);
+            throw new Error(`Failed to upload document: ${error.response?.data?.error || error.message}`);
+        }
+    }
+    async addSignatureFields(documentId, clientName, contractData, pdfPath) {
+        try {
+            await this.authenticate();
+            console.log(`✍️ Adding signature fields to document: ${documentId}`);
+            // Try to analyze PDF for signature position
+            let signatureX = 355; // Fallback
+            let signatureY = 385; // Fallback
+            if (pdfPath) {
+                try {
+                    console.log('🔍 Analyzing PDF for signature position...');
+                    const { getSignatureFieldPosition } = await Promise.resolve().then(() => __importStar(require('../utils/pdfTextAnalyzer')));
+                    const position = await getSignatureFieldPosition(pdfPath);
+                    if (position) {
+                        signatureX = position.x;
+                        signatureY = position.y;
+                        console.log(`✅ Using analyzed position: (${signatureX}, ${signatureY})`);
+                    }
+                    else {
+                        console.log('⚠️ PDF analysis failed, using fallback position');
+                    }
+                }
+                catch (error) {
+                    console.log('⚠️ PDF analysis error, using fallback position:', error.message);
+                }
+            }
+            else {
+                console.log('⚠️ No PDF path provided, using fallback position');
+            }
+            const fieldData = {
+                client_timestamp: Math.floor(Date.now() / 1000),
+                fields: [
+                    {
+                        page_number: 0,
+                        type: "signature",
+                        name: "client_signature",
+                        role: "Signer 1",
+                        required: true,
+                        height: 30,
+                        width: 200,
+                        x: signatureX,
+                        y: signatureY
+                    }
+                ]
+            };
+            console.log(`🌐 PUT ${this.baseURL}/document/${documentId}`);
+            console.log('📋 Field data:', JSON.stringify(fieldData, null, 2));
+            const response = await axios_1.default.put(`${this.baseURL}/document/${documentId}`, fieldData, { headers: this.getAuthHeaders() });
+            console.log('✅ Signature fields added successfully');
+            return {
+                success: true,
+                response: response.data
+            };
+        }
+        catch (error) {
+            console.error('❌ Failed to add signature fields:');
+            console.error('Status:', error.response?.status);
+            console.error('Data:', JSON.stringify(error.response?.data, null, 2));
+            // Try alternative approach - use roles endpoint
+            console.log('🔄 Trying alternative approach - adding roles...');
+            try {
+                const rolesData = {
+                    roles: [
+                        {
+                            name: 'Recipient 1',
+                            signing_order: 1
+                        }
+                    ]
+                };
+                const rolesResponse = await axios_1.default.put(`${this.baseURL}/document/${documentId}/roles`, rolesData, { headers: this.getAuthHeaders() });
+                console.log('✅ Roles added successfully');
+                return {
+                    success: true,
+                    response: rolesResponse.data
+                };
+            }
+            catch (rolesError) {
+                console.error('❌ Roles approach also failed:', rolesError.response?.data);
+                throw new Error(`Failed to add signature fields: ${error.response?.data?.error || error.message}`);
+            }
         }
     }
 }

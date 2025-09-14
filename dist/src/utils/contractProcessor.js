@@ -34,7 +34,7 @@ async function generateContractDocx(contractData, contractId) {
         // Ensure directories exist
         await fs_extra_1.default.ensureDir(TEMPLATE_DIR);
         await fs_extra_1.default.ensureDir(GENERATED_DIR);
-        const templatePath = '/Users/jerrybony/Documents/GitHub/backend/generated/Agreement for Postpartum Doula Services (2).docx';
+        const templatePath = '/Users/jerrybony/Documents/GitHub/backend/generated/Agreement for Postpartum Doula Services (3).docx';
         const outputPath = path_1.default.join(GENERATED_DIR, `contract-${contractId}.docx`);
         // Check if template exists
         if (!await fs_extra_1.default.pathExists(templatePath)) {
@@ -53,41 +53,24 @@ async function generateContractDocx(contractData, contractId) {
         const dueDate = contractData.dueDate || '2024-03-15';
         const startDate = contractData.startDate || '2024-02-15';
         const endDate = contractData.endDate || '2024-04-15';
-        doc.setData({
-            // Basic contract info - ONLY fill price values, leave signature fields as placeholders
-            partnerName: contractData.partnerName || 'Michael Johnson',
-            dueDate: dueDate,
-            contractDate: contractDate,
-            startDate: startDate,
-            endDate: endDate,
-            // Provider info
-            providerName: contractData.providerName || 'Sokana Collective',
-            providerAddress: contractData.providerAddress || '[Provider Address]',
-            providerPhone: contractData.providerPhone || '[Provider Phone]',
-            providerEmail: contractData.providerEmail || '[Provider Email]',
-            // Client contact info
-            clientPhone: contractData.clientPhone || '(555) 123-4567',
-            clientEmail: contractData.clientEmail || 'jerry@techluminateacademy.com',
-            // Service details
-            serviceType: contractData.serviceType || 'Labor Support Doula Services',
-            servicePackage: contractData.servicePackage || 'Complete Labor Support Package',
-            totalInvestment: contractData.totalInvestment || '$1,200.00',
-            paymentTerms: contractData.paymentTerms || '50% deposit, balance due 2 weeks before due date',
-            // Payment breakdown
-            depositAmount: contractData.depositAmount || '$600.00',
-            remainingBalance: contractData.remainingBalance || '$600.00',
-            depositDueDate: contractData.depositDueDate || 'Upon signing',
-            balanceDueDate: contractData.balanceDueDate || '2024-03-01',
-            // Contract ID
-            contractId: contractId,
-            // Remove signature placeholders completely - they will be replaced by SignNow fields
-            clientName: '',
-            clientInitials: '',
-            clientSignature: '',
-            date: '',
-            // Additional data from contractData (but exclude signature fields)
-            ...Object.fromEntries(Object.entries(contractData).filter(([key]) => !['clientName', 'clientInitials', 'clientSignature', 'date'].includes(key)))
-        });
+        // Map input data to template placeholders
+        // Template expects: {totalHours}, {deposit}, {hourlyRate}, {overnightFee}, {totalAmount}, {clientInitials}, {clientName}, {clientSignature}, {date}
+        const templateData = {
+            // Required template variables
+            totalHours: contractData.totalHours || '120', // Default to 120 hours
+            deposit: contractData.depositAmount?.replace('$', '') || contractData.deposit || '600.00',
+            hourlyRate: contractData.hourlyRate || '35.00',
+            overnightFee: contractData.overnightFee || '0.00',
+            totalAmount: contractData.totalInvestment?.replace('$', '') || contractData.totalAmount || '4,200.00',
+            clientInitials: contractData.clientInitials || contractData.clientName?.split(' ').map(n => n[0]).join('') || 'JB',
+            clientName: contractData.clientName || 'Jerry Bony',
+            clientSignature: contractData.clientSignature || contractData.clientName || 'Jerry Bony',
+            date: contractData.contractDate || contractData.date || new Date().toLocaleDateString(),
+            // Additional data from contractData (in case template has more placeholders)
+            ...contractData
+        };
+        console.log('📋 Template data being used:', templateData);
+        doc.setData(templateData);
         // Render the document
         doc.render();
         // Generate output
@@ -331,17 +314,9 @@ async function processAndUploadContract(contractData) {
         const signedPdfPath = await addSignatureOverlay(pdfPath, data, contractId);
         // Step 4: Upload to Supabase Storage
         const signedUrl = await uploadToSupabaseStorage(signedPdfPath, contractId);
-        // Step 5: Send email if client email is provided
-        let emailSent = false;
-        if (clientEmail) {
-            try {
-                await sendContractEmail(clientEmail, data, signedUrl, contractId);
-                emailSent = true;
-            }
-            catch (emailError) {
-                console.warn('Email sending failed, but contract processing completed:', emailError instanceof Error ? emailError.message : 'Unknown error');
-            }
-        }
+        // Step 5: Skip email sending - SignNow will handle this
+        console.log('📧 Skipping email - SignNow will send signature invitation');
+        const emailSent = false;
         // Return all relevant information
         const result = {
             contractId,
