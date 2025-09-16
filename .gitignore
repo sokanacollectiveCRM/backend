@@ -1,3 +1,15 @@
 .DS_STORE
 .env
+.env.backup
+.env.local
+.env.development
+.env.production
+.env.staging
+*.env
 node_modules/
+dist/
+coverage/
+generated/
+*.log
+*.tmp
+*.temp
