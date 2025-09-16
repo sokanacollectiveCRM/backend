@@ -34,14 +34,20 @@ async function generateContractDocx(contractData, contractId) {
         // Ensure directories exist
         await fs_extra_1.default.ensureDir(TEMPLATE_DIR);
         await fs_extra_1.default.ensureDir(GENERATED_DIR);
-        const templatePath = '/Users/jerrybony/Documents/GitHub/backend/generated/Agreement for Postpartum Doula Services (3).docx';
         const outputPath = path_1.default.join(GENERATED_DIR, `contract-${contractId}.docx`);
-        // Check if template exists
-        if (!await fs_extra_1.default.pathExists(templatePath)) {
-            throw new Error(`Template not found at ${templatePath}`);
+        // Download template from Supabase Storage
+        console.log('📥 Downloading template from Supabase Storage...');
+        const { data: templateBlob, error: downloadError } = await supabase_1.default.storage
+            .from('contract-templates')
+            .download('Agreement for Postpartum Doula Services.docx');
+        if (downloadError) {
+            throw new Error(`Failed to download template from Supabase Storage: ${downloadError.message}`);
         }
-        // Read template file
-        const content = await fs_extra_1.default.readFile(templatePath);
+        if (!templateBlob) {
+            throw new Error('Template data is null from Supabase Storage');
+        }
+        // Convert Blob to Buffer
+        const content = Buffer.from(await templateBlob.arrayBuffer());
         const zip = new pizzip_1.default(content);
         // Create docxtemplater instance
         const doc = new docxtemplater_1.default(zip, {
@@ -54,8 +60,8 @@ async function generateContractDocx(contractData, contractId) {
         const startDate = contractData.startDate || '2024-02-15';
         const endDate = contractData.endDate || '2024-04-15';
         // Map input data to template placeholders
-        // Template expects: {totalHours}, {deposit}, {hourlyRate}, {overnightFee}, {totalAmount}, {clientInitials}, {clientName}, {clientSignature}, {date}
-        const templateData = {
+        // Template expects: {totalHours}, {deposit}, {hourlyRate}, {overnightFee}, {totalAmount}, {clientInitials}, {clientName}
+        const templateVariables = {
             // Required template variables
             totalHours: contractData.totalHours || '120', // Default to 120 hours
             deposit: contractData.depositAmount?.replace('$', '') || contractData.deposit || '600.00',
@@ -64,13 +70,11 @@ async function generateContractDocx(contractData, contractId) {
             totalAmount: contractData.totalInvestment?.replace('$', '') || contractData.totalAmount || '4,200.00',
             clientInitials: contractData.clientInitials || contractData.clientName?.split(' ').map(n => n[0]).join('') || 'JB',
             clientName: contractData.clientName || 'Jerry Bony',
-            clientSignature: contractData.clientSignature || contractData.clientName || 'Jerry Bony',
-            date: contractData.contractDate || contractData.date || new Date().toLocaleDateString(),
             // Additional data from contractData (in case template has more placeholders)
             ...contractData
         };
-        console.log('📋 Template data being used:', templateData);
-        doc.setData(templateData);
+        console.log('📋 Template data being used:', templateVariables);
+        doc.setData(templateVariables);
         // Render the document
         doc.render();
         // Generate output

@@ -1,8 +1,8 @@
 import { Request, Response, Router } from 'express';
-import { docusignService, DocuSignContractFields } from '../services/docusignService';
+import { DocuSignContractFields, docusignService } from '../services/docusignService';
 import { calculatePostpartumContract, formatForSignNow, ValidationError } from '../services/postpartum/calculateContract';
-import { PostpartumContractInput } from '../types/postpartum';
 import { signNowService } from '../services/signNowService';
+import { PostpartumContractInput } from '../types/postpartum';
 
 const router = Router();
 
@@ -33,7 +33,7 @@ router.post('/postpartum/calculate', async (req, res) => {
   }
 });
 
-router.post('/postpartum/send', async (req, res) => {
+router.post('/postpartum/send', async (req: Request, res: Response): Promise<void> => {
   try {
     const {
       contract_input,
@@ -41,7 +41,7 @@ router.post('/postpartum/send', async (req, res) => {
     } = req.body;
 
     if (!contract_input || !client || !client.email || !client.name) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Missing required fields'
       });
@@ -116,12 +116,12 @@ router.post('/postpartum/send', async (req, res) => {
 });
 
 // Step 2: Send client signing invitation after admin fills fields
-router.post('/postpartum/send-client-invite', async (req, res) => {
+router.post('/postpartum/send-client-invite', async (req: Request, res: Response): Promise<void> => {
   try {
     const { documentId, client } = req.body;
 
     if (!documentId || !client || !client.email || !client.name) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Missing required fields: documentId, client.email, client.name'
       });

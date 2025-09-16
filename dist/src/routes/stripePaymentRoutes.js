@@ -23,10 +23,10 @@ router.post('/contract/:contractId/create-payment', async (req, res) => {
             .eq('id', contractId)
             .single();
         if (contractError || !contract) {
-            return res.status(404).json({ success: false, error: 'Contract not found' });
+            res.status(404).json({ success: false, error: 'Contract not found' });
         }
         if (contract.status !== 'signed') {
-            return res.status(400).json({
+            res.status(400).json({
                 success: false,
                 error: 'Contract must be signed before processing payment'
             });
@@ -34,7 +34,7 @@ router.post('/contract/:contractId/create-payment', async (req, res) => {
         // Create payment intent for next payment
         const paymentResult = await stripeService.createNextPaymentIntent(contractId);
         if (!paymentResult) {
-            return res.status(400).json({
+            res.status(400).json({
                 success: false,
                 error: 'No pending payments found for this contract'
             });
@@ -61,7 +61,7 @@ router.post('/contract/:contractId/payment/:paymentId/create', async (req, res) 
         const { contractId, paymentId } = req.params;
         const { amount, description, metadata } = req.body;
         if (!amount) {
-            return res.status(400).json({ success: false, error: 'Amount is required' });
+            res.status(400).json({ success: false, error: 'Amount is required' });
         }
         const paymentResult = await stripeService.createPaymentIntent({
             contract_id: contractId,
@@ -93,10 +93,12 @@ router.post('/webhook', express_1.default.raw({ type: 'application/json' }), asy
         const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
         if (!webhookSecret) {
             console.error('❌ STRIPE_WEBHOOK_SECRET not configured');
-            return res.status(500).json({ success: false, error: 'Webhook secret not configured' });
+            res.status(500).json({ success: false, error: 'Webhook secret not configured' });
         }
+        // Ensure body is a Buffer for signature verification
+        const body = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body));
         // Verify webhook signature
-        const event = stripeService.verifyWebhookSignature(req.body, signature, webhookSecret);
+        const event = stripeService.verifyWebhookSignature(body, signature, webhookSecret);
         // Handle the webhook event
         await stripeService.handlePaymentWebhook(event);
         res.json({ success: true, message: 'Webhook processed successfully' });
@@ -133,7 +135,7 @@ router.get('/contract/:contractId/next-payment', async (req, res) => {
         const { contractId } = req.params;
         const nextPayment = await stripeService.getNextPayment(contractId);
         if (!nextPayment) {
-            return res.json({ success: true, data: null, message: 'No pending payments' });
+            res.json({ success: true, data: null, message: 'No pending payments' });
         }
         res.json({ success: true, data: nextPayment });
     }

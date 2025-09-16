@@ -1,37 +1,4 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -359,6 +326,59 @@ class SignNowService {
             throw error;
         }
     }
+    async getDocumentFields(documentId, token) {
+        try {
+            // If no token provided, authenticate to get one
+            if (!token) {
+                await this.authenticate();
+                token = this.apiToken;
+                if (!token) {
+                    throw new Error('Failed to acquire SignNow access token');
+                }
+            }
+            // Log token (masked for security)
+            const maskedToken = `${token.slice(0, 8)}...${token.slice(-4)}`;
+            console.log(`🔍 Getting field coordinates from document: ${documentId}`);
+            console.log(`🔑 Using token: ${maskedToken}`);
+            // Make the request to the SignNow API using standard auth headers
+            const response = await axios_1.default.get(`${this.baseURL}/document/${documentId}`, {
+                headers: this.getAuthHeaders()
+            });
+            // Log success and field data
+            if (response.data.fields?.length > 0) {
+                console.log(`✅ Found ${response.data.fields.length} fields:`);
+                response.data.fields.forEach((field) => {
+                    console.log(JSON.stringify({
+                        name: field.name,
+                        type: field.type,
+                        page: field.page_number,
+                        x: field.x,
+                        y: field.y,
+                        width: field.width,
+                        height: field.height,
+                        role: field.role
+                    }, null, 2));
+                });
+            }
+            else {
+                console.log('ℹ️ No fields found in document');
+            }
+            return response.data.fields || [];
+        }
+        catch (error) {
+            // Log detailed error information
+            const errorDetails = {
+                status: error.response?.status,
+                statusText: error.response?.statusText,
+                data: error.response?.data,
+                message: error.message,
+                url: `${this.baseURL}/document/${documentId}`,
+                token: this.apiToken ? `${this.apiToken.slice(0, 8)}...` : 'undefined'
+            };
+            console.error('❌ SignNow API Error:', errorDetails);
+            throw new Error(`Failed to get document fields: ${error.response?.status} - ${JSON.stringify(error.response?.data || error.message)}`);
+        }
+    }
     async createInvitationClientPartner(documentId, client, partner, options = {}) {
         console.log('Creating invitation:', { documentId, client, partner, options });
         try {
@@ -370,30 +390,37 @@ class SignNowService {
             console.log('✅ Got fresh OAuth token');
             // Send field invitation without custom subject/message (plan restriction)
             console.log('📧 Sending field invitation (no custom subject/message)...');
+            // Fix redirect URL construction to prevent undefined contractId
+            const baseUrl = process.env.FRONTEND_URL || 'https://jerrybony.me';
+            const contractId = options.contractId || documentId; // Use documentId as fallback
             const invitePayload = {
-                document_id: documentId,
-                to: [
-                    {
+                to: [{
                         email: client.email,
                         role: "Signer 1",
                         order: 1
-                    }
-                ],
-                from: "jerry@techluminateacademy.com"
-                // No subject/message due to plan restrictions
+                    }],
+                from: "jerry@techluminateacademy.com",
+                // Fixed redirect URLs with proper validation
+                redirect_uri: options.redirectUrl || `${baseUrl}/payment?contract_id=${contractId}`,
+                decline_redirect_uri: options.declineUrl || `${baseUrl}/`
             };
             console.log('📤 Sending field invitation:', invitePayload);
+            console.log('🔗 Redirect URLs:');
+            console.log('  Success:', invitePayload.redirect_uri);
+            console.log('  Decline:', invitePayload.decline_redirect_uri);
             const { data } = await axios_1.default.post(`${this.baseURL}/document/${documentId}/invite`, invitePayload, { headers: this.getAuthHeaders() });
             console.log('✅ Field invitation sent successfully');
             return { success: true, invite: data, type: 'field_invite' };
         }
         catch (error) {
-            console.error('❌ Error creating client+partner invitation:');
-            console.error('Status:', error.response?.status);
-            console.error('Data:', JSON.stringify(error.response?.data, null, 2));
-            console.error('Request URL:', error.config?.url);
-            console.error('Request method:', error.config?.method);
-            console.error('Request data:', JSON.stringify(error.config?.data, null, 2));
+            console.error('❌ Error creating invitation:', {
+                status: error.response?.status,
+                data: error.response?.data,
+                url: `${this.baseURL}/document/${documentId}/invite`,
+                method: 'POST',
+                token: this.apiToken ? `${this.apiToken.slice(0, 8)}...` : 'undefined',
+                headers: this.getAuthHeaders()
+            });
             // Log the detailed errors from SignNow
             if (error.response?.data?.errors) {
                 console.error('SignNow API errors:', JSON.stringify(error.response.data.errors, null, 2));
@@ -514,44 +541,128 @@ class SignNowService {
     async addSignatureFields(documentId, clientName, contractData, pdfPath) {
         try {
             await this.authenticate();
-            console.log(`✍️ Adding signature fields to document: ${documentId}`);
-            // Try to analyze PDF for signature position
-            let signatureX = 355; // Fallback
-            let signatureY = 385; // Fallback
-            if (pdfPath) {
-                try {
-                    console.log('🔍 Analyzing PDF for signature position...');
-                    const { getSignatureFieldPosition } = await Promise.resolve().then(() => __importStar(require('../utils/pdfTextAnalyzer')));
-                    const position = await getSignatureFieldPosition(pdfPath);
-                    if (position) {
-                        signatureX = position.x;
-                        signatureY = position.y;
-                        console.log(`✅ Using analyzed position: (${signatureX}, ${signatureY})`);
-                    }
-                    else {
-                        console.log('⚠️ PDF analysis failed, using fallback position');
-                    }
-                }
-                catch (error) {
-                    console.log('⚠️ PDF analysis error, using fallback position:', error.message);
-                }
-            }
-            else {
-                console.log('⚠️ No PDF path provided, using fallback position');
-            }
+            console.log(`✍️ Adding signature and initials fields to document: ${documentId}`);
+            // Apply SignNow coordinate formula from PDF analysis
+            // PDF found: "Client Signature:" at (3.2, 30.3) on page 2
+            // SignNow formula: SignNow_X = PDF_X, SignNow_Y = 792 - PDF_Y
+            const pageNumber = 2; // Last page (0-indexed)
+            const pdfX = 3.2; // PDF X coordinate
+            const pdfY = 30.3; // PDF Y coordinate
+            const pageHeight = 792; // US Letter height in points
+            // SignNow uses top-left origin, Y increases downward
+            // Position signature field to the right of "Client Signature:" text without covering it
+            const signatureX = Math.round(pdfX + 150); // Move further right to avoid covering text
+            const signatureY = 650; // Position in lower part of page where signature typically appears
+            const dateX = Math.round(pdfX + 410); // Move even further right for better spacing
+            const dateY = signatureY; // Same line
+            // Calculate positions for initials fields next to financial amounts
+            // Apply proper SignNow coordinate conversion: SignNow_Y = 792 - PDF_Y
+            // Based on typical doula contract structure, financial amounts appear in upper portion
+            // Need to use actual PDF coordinates and convert them properly
+            const initialsFieldWidth = 40;
+            const initialsFieldHeight = 20;
+            // Financial amounts positioning using SignNow coordinate system
+            // Based on contract analysis - only 2 financial amounts exist:
+            // - Total contract amount: "The total amount for your care is 1,200.00"
+            // - Deposit amount: "A non-refundable deposit of 600.00"
+            // Note: No monthly payment section exists (contract uses bi-weekly billing)
+            // These positions need to place initials right after the dollar amounts
+            // Total amount line: "The total amount for your care is 1,200.00" - initials after "1,200.00"
+            // Deposit line: "A non-refundable deposit of 600.00" - initials after "600.00"
+            // Position initials fields horizontally next to the dollar amounts on the same line
+            // Need to find where the dollar amounts end and position initials immediately after
+            // Based on typical text flow: "The total amount for your care is 1,200.00" [INITIALS HERE]
+            // And: "A non-refundable deposit of 600.00" [INITIALS HERE]
+            // SYSTEMATIC COORDINATE TESTING APPROACH
+            // Step 1: Place initials in obvious test positions to see where they appear
+            // Step 2: Adjust based on visual feedback
+            // TEST PATTERN 2: Try positions based on typical contract layout
+            // Financial amounts usually appear in upper-middle section
+            // Need to be on same line as the amounts but after them
+            // Use coordinates from manually positioned fields in SignNow editor
+            const totalAmountX = 253; // Total amount initials X coordinate
+            const totalAmountY = 421; // Total amount initials Y coordinate
+            const depositAmountX = 397; // Deposit amount initials X coordinate
+            const depositAmountY = 108; // Deposit amount initials Y coordinate
+            console.log(`📍 SignNow formula applied: PDF(${pdfX}, ${pdfY}) → SignNow(${signatureX}, ${signatureY})`);
+            console.log('🎯 Using manually positioned coordinates:');
+            console.log(`  Total amount initials: page 1, x=${totalAmountX}, y=${totalAmountY}`);
+            console.log(`  Deposit amount initials: page 2, x=${depositAmountX}, y=${depositAmountY}`);
             const fieldData = {
                 client_timestamp: Math.floor(Date.now() / 1000),
                 fields: [
+                    // Signature and date fields (existing)
                     {
-                        page_number: 0,
+                        page_number: pageNumber,
                         type: "signature",
                         name: "client_signature",
                         role: "Signer 1",
                         required: true,
-                        height: 30,
-                        width: 200,
+                        height: 25,
+                        width: 150,
                         x: signatureX,
                         y: signatureY
+                    },
+                    {
+                        page_number: pageNumber,
+                        type: "text", // Use text field for date entry (from working git history)
+                        name: "signature_date",
+                        role: "Signer 1",
+                        required: true,
+                        height: 25,
+                        width: 120,
+                        x: dateX,
+                        y: dateY,
+                        label: "Date"
+                    },
+                    // Initials fields next to financial amounts and additional positions (from manual positioning)
+                    {
+                        page_number: 1, // Total amount initials on page 1
+                        type: "initials",
+                        name: "total_amount_initials",
+                        role: "Signer 1",
+                        required: true,
+                        height: 21,
+                        width: 69,
+                        x: 253,
+                        y: 421,
+                        label: "Initials"
+                    },
+                    {
+                        page_number: 2, // Deposit amount initials on page 2
+                        type: "initials",
+                        name: "deposit_amount_initials",
+                        role: "Signer 1",
+                        required: true,
+                        height: 21,
+                        width: 69,
+                        x: 397,
+                        y: 108,
+                        label: "Initials"
+                    },
+                    {
+                        page_number: 1, // Additional initials field 1
+                        type: "initials",
+                        name: "additional_initials_1",
+                        role: "Signer 1",
+                        required: true,
+                        height: 21,
+                        width: 69,
+                        x: 245,
+                        y: 649,
+                        label: "Initials"
+                    },
+                    {
+                        page_number: 2, // Additional initials field 2
+                        type: "initials",
+                        name: "additional_initials_2",
+                        role: "Signer 1",
+                        required: true,
+                        height: 21,
+                        width: 69,
+                        x: 329,
+                        y: 70,
+                        label: "Initials"
                     }
                 ]
             };

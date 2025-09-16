@@ -54,13 +54,16 @@ if (process.env.NODE_ENV !== 'production') {
     });
 }
 app.use((0, cookie_parser_1.default)());
+// ---- Mount webhook routes BEFORE JSON parsing ----
+// Stripe webhook needs raw body data
+app.use('/api/stripe', asMiddleware(stripePaymentRoutes_1.default));
 app.use(express_1.default.json());
 // normalize duplicate slashes
 app.use((req, _res, next) => {
     req.url = req.url.replace(/\/+/g, '/');
     next();
 });
-// ---- Mount routes (wrapped for ESM/CJS compatibility) ----
+// ---- Mount other routes (wrapped for ESM/CJS compatibility) ----
 app.use('/auth', asMiddleware(authRoutes_1.default));
 app.use('/email', asMiddleware(EmailRoutes_1.default));
 app.use('/requestService', asMiddleware(requestRoute_1.default));
@@ -74,7 +77,6 @@ app.use('/api/contract-signing', asMiddleware(contractSigningRoutes_1.default));
 app.use('/api/payments', asMiddleware(paymentRoutes_1.default));
 app.use('/api/signnow', asMiddleware(signNowRoutes_1.default));
 app.use('/api/contract-payment', asMiddleware(contractPaymentRoutes_1.default));
-app.use('/api/stripe', asMiddleware(stripePaymentRoutes_1.default));
 app.use('/api/docusign', asMiddleware(docusignRoutes_1.default));
 app.get('/', (_req, res) => {
     res.status(200).json({ status: 'ok' });

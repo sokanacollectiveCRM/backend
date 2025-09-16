@@ -9,7 +9,7 @@ const stripeService = new StripePaymentService();
 const contractService = new ContractClientService();
 
 // Create payment intent for next payment after contract signing
-router.post('/contract/:contractId/create-payment', async (req: Request, res: Response) => {
+router.post('/contract/:contractId/create-payment', async (req: Request, res: Response): Promise<void> => {
   try {
     const { contractId } = req.params;
 
@@ -23,11 +23,11 @@ router.post('/contract/:contractId/create-payment', async (req: Request, res: Re
       .single();
 
     if (contractError || !contract) {
-      return res.status(404).json({ success: false, error: 'Contract not found' });
+      res.status(404).json({ success: false, error: 'Contract not found' });
     }
 
     if (contract.status !== 'signed') {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Contract must be signed before processing payment'
       });
@@ -37,7 +37,7 @@ router.post('/contract/:contractId/create-payment', async (req: Request, res: Re
     const paymentResult = await stripeService.createNextPaymentIntent(contractId);
 
     if (!paymentResult) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'No pending payments found for this contract'
       });
@@ -61,13 +61,13 @@ router.post('/contract/:contractId/create-payment', async (req: Request, res: Re
 });
 
 // Create payment intent for specific payment
-router.post('/contract/:contractId/payment/:paymentId/create', async (req: Request, res: Response) => {
+router.post('/contract/:contractId/payment/:paymentId/create', async (req: Request, res: Response): Promise<void> => {
   try {
     const { contractId, paymentId } = req.params;
     const { amount, description, metadata } = req.body;
 
     if (!amount) {
-      return res.status(400).json({ success: false, error: 'Amount is required' });
+      res.status(400).json({ success: false, error: 'Amount is required' });
     }
 
     const paymentResult = await stripeService.createPaymentIntent({
@@ -96,14 +96,14 @@ router.post('/contract/:contractId/payment/:paymentId/create', async (req: Reque
 });
 
 // Handle Stripe webhook
-router.post('/webhook', express.raw({type: 'application/json'}), async (req: Request, res: Response) => {
+router.post('/webhook', express.raw({type: 'application/json'}), async (req: Request, res: Response): Promise<void> => {
   try {
     const signature = req.headers['stripe-signature'] as string;
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
     if (!webhookSecret) {
       console.error('❌ STRIPE_WEBHOOK_SECRET not configured');
-      return res.status(500).json({ success: false, error: 'Webhook secret not configured' });
+      res.status(500).json({ success: false, error: 'Webhook secret not configured' });
     }
 
     // Ensure body is a Buffer for signature verification
@@ -148,14 +148,14 @@ router.get('/payment-intent/:paymentIntentId/status', async (req, res) => {
 });
 
 // Get next payment for contract
-router.get('/contract/:contractId/next-payment', async (req: Request, res: Response) => {
+router.get('/contract/:contractId/next-payment', async (req: Request, res: Response): Promise<void> => {
   try {
     const { contractId } = req.params;
 
     const nextPayment = await stripeService.getNextPayment(contractId);
 
     if (!nextPayment) {
-      return res.json({ success: true, data: null, message: 'No pending payments' });
+      res.json({ success: true, data: null, message: 'No pending payments' });
     }
 
     res.json({ success: true, data: nextPayment });

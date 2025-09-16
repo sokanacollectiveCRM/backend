@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { ContractClientService } from '../services/contractClientService';
 import { SimplePaymentService } from '../services/simplePaymentService';
 
@@ -65,13 +65,13 @@ router.get('/contract/:contractId/history', async (req, res) => {
 });
 
 // Update payment status
-router.put('/payment/:paymentId/status', async (req, res) => {
+router.put('/payment/:paymentId/status', async (req: Request, res: Response): Promise<void> => {
   try {
     const { paymentId } = req.params;
     const { status, stripe_payment_intent_id, notes } = req.body;
 
     if (!status) {
-      return res.status(400).json({ success: false, error: 'Status is required' });
+      res.status(400).json({ success: false, error: 'Status is required' });
     }
 
     const payment = await paymentService.updatePaymentStatus(
@@ -89,10 +89,10 @@ router.put('/payment/:paymentId/status', async (req, res) => {
 });
 
 // Get payments by status
-router.get('/status/:status', async (req, res) => {
+router.get('/status/:status', async (req: Request, res: Response): Promise<void> => {
   try {
     const { status } = req.params;
-    const payments = await paymentService.getPaymentsByStatus(status);
+    const payments = await paymentService.getPaymentsByStatus(status as 'pending' | 'succeeded' | 'failed' | 'canceled' | 'refunded');
     res.json({ success: true, data: payments });
   } catch (error) {
     console.error('Error getting payments by status:', error);
@@ -101,12 +101,12 @@ router.get('/status/:status', async (req, res) => {
 });
 
 // Get payments due within a date range
-router.get('/due-between', async (req, res) => {
+router.get('/due-between', async (req: Request, res: Response): Promise<void> => {
   try {
     const { start_date, end_date } = req.query;
 
     if (!start_date || !end_date) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'start_date and end_date query parameters are required'
       });

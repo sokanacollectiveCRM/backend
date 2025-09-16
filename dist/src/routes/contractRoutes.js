@@ -36,7 +36,7 @@ router.post('/postpartum/send', async (req, res) => {
     try {
         const { contract_input, client } = req.body;
         if (!contract_input || !client || !client.email || !client.name) {
-            return res.status(400).json({
+            res.status(400).json({
                 success: false,
                 error: 'Missing required fields'
             });
@@ -104,7 +104,7 @@ router.post('/postpartum/send-client-invite', async (req, res) => {
     try {
         const { documentId, client } = req.body;
         if (!documentId || !client || !client.email || !client.name) {
-            return res.status(400).json({
+            res.status(400).json({
                 success: false,
                 error: 'Missing required fields: documentId, client.email, client.name'
             });

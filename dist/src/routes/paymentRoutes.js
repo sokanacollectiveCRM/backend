@@ -73,7 +73,7 @@ router.put('/payment/:paymentId/status', async (req, res) => {
         const { paymentId } = req.params;
         const { status, stripe_payment_intent_id, notes } = req.body;
         if (!status) {
-            return res.status(400).json({ success: false, error: 'Status is required' });
+            res.status(400).json({ success: false, error: 'Status is required' });
         }
         const payment = await paymentService.updatePaymentStatus(paymentId, status, stripe_payment_intent_id, notes);
         res.json({ success: true, data: payment });
@@ -100,7 +100,7 @@ router.get('/due-between', async (req, res) => {
     try {
         const { start_date, end_date } = req.query;
         if (!start_date || !end_date) {
-            return res.status(400).json({
+            res.status(400).json({
                 success: false,
                 error: 'start_date and end_date query parameters are required'
             });
