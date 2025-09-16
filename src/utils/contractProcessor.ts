@@ -34,8 +34,7 @@ export interface ProcessingResult {
 }
 
 // Ensure directories exist
-const TEMPLATE_DIR = './templates';
-const GENERATED_DIR = './generated';
+const GENERATED_DIR = path.join(process.cwd(), 'generated');
 
 /**
  * Generate a contract document from template
@@ -45,8 +44,7 @@ const GENERATED_DIR = './generated';
  */
 async function generateContractDocx(contractData: Omit<ContractData, 'contractId'>, contractId: string): Promise<string> {
   try {
-    // Ensure directories exist
-    await fs.ensureDir(TEMPLATE_DIR);
+    // Ensure generated directory exists
     await fs.ensureDir(GENERATED_DIR);
 
     const outputPath = path.join(GENERATED_DIR, `contract-${contractId}.docx`);

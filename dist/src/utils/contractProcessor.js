@@ -21,8 +21,7 @@ const pizzip_1 = __importDefault(require("pizzip"));
 const emailService_1 = require("../services/emailService");
 const supabase_1 = __importDefault(require("../supabase"));
 // Ensure directories exist
-const TEMPLATE_DIR = './templates';
-const GENERATED_DIR = './generated';
+const GENERATED_DIR = path_1.default.join(process.cwd(), 'generated');
 /**
  * Generate a contract document from template
  * @param contractData - Contract data with placeholders
@@ -31,8 +30,7 @@ const GENERATED_DIR = './generated';
  */
 async function generateContractDocx(contractData, contractId) {
     try {
-        // Ensure directories exist
-        await fs_extra_1.default.ensureDir(TEMPLATE_DIR);
+        // Ensure generated directory exists
         await fs_extra_1.default.ensureDir(GENERATED_DIR);
         const outputPath = path_1.default.join(GENERATED_DIR, `contract-${contractId}.docx`);
         // Download template from Supabase Storage
