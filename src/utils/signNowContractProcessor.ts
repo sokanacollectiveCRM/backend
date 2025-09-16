@@ -158,7 +158,7 @@ export async function processContractWithSignNow(
         .insert({
           id: contractId,
           client_id: client.id,
-          status: 'active',
+          status: 'signed',
           fee: contractData.totalInvestment,
           deposit: contractData.depositAmount,
           signnow_document_id: documentId
@@ -207,7 +207,7 @@ export async function processContractWithSignNow(
         undefined, // partner
         {
           contractId: contractId,
-          redirectUrl: `${process.env.FRONTEND_URL || 'https://jerrybony.me'}/?contract_id=${contractId}`,
+          redirectUrl: `${process.env.FRONTEND_URL || 'https://jerrybony.me'}/payment?contract_id=${contractId}`,
           declineUrl: `${process.env.FRONTEND_URL || 'https://jerrybony.me'}/`
         }
       );

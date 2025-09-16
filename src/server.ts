@@ -69,6 +69,11 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 app.use(cookieParser());
+
+// ---- Mount webhook routes BEFORE JSON parsing ----
+// Stripe webhook needs raw body data
+app.use('/api/stripe', asMiddleware(stripePaymentRoutes));
+
 app.use(express.json());
 
 // normalize duplicate slashes
@@ -77,7 +82,7 @@ app.use((req, _res, next) => {
   next();
 });
 
-// ---- Mount routes (wrapped for ESM/CJS compatibility) ----
+// ---- Mount other routes (wrapped for ESM/CJS compatibility) ----
 app.use('/auth', asMiddleware(authRoutes));
 app.use('/email', asMiddleware(emailRoutes));
 app.use('/requestService', asMiddleware(requestRouter));
@@ -91,7 +96,6 @@ app.use('/api/contract-signing', asMiddleware(contractSigningRoutes));
 app.use('/api/payments', asMiddleware(paymentRoutes));
 app.use('/api/signnow', asMiddleware(signNowRoutes));
 app.use('/api/contract-payment', asMiddleware(contractPaymentRoutes));
-app.use('/api/stripe', asMiddleware(stripePaymentRoutes));
 app.use('/api/docusign', asMiddleware(docusignRoutes));
 
 app.get('/', (_req: Request, res: Response) => {

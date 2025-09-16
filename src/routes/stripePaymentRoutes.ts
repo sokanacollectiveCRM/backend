@@ -106,8 +106,11 @@ router.post('/webhook', express.raw({type: 'application/json'}), async (req: Req
       return res.status(500).json({ success: false, error: 'Webhook secret not configured' });
     }
 
+    // Ensure body is a Buffer for signature verification
+    const body = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body));
+    
     // Verify webhook signature
-    const event = stripeService.verifyWebhookSignature(req.body, signature, webhookSecret);
+    const event = stripeService.verifyWebhookSignature(body, signature, webhookSecret);
 
     // Handle the webhook event
     await stripeService.handlePaymentWebhook(event);

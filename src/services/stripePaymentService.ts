@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import Stripe from 'stripe';
 import supabase from '../supabase';
 import { SimplePaymentService } from './simplePaymentService';
@@ -54,9 +55,12 @@ export class StripePaymentService {
     try {
       // Get contract and client information
       const { data: contractData, error: contractError } = await supabase
-        .from('contracts_with_clients')
-        .select('*')
-        .eq('contract_id', request.contract_id)
+        .from('contracts')
+        .select(`
+          *,
+          client_info!inner(*)
+        `)
+        .eq('id', request.contract_id)
         .single();
 
       if (contractError || !contractData) {
@@ -65,10 +69,13 @@ export class StripePaymentService {
 
       // Get the specific payment record
       const { data: paymentData, error: paymentError } = await supabase
-        .from('contract_payments')
-        .select('*')
+        .from('payment_installments')
+        .select(`
+          *,
+          payment_schedules!inner(contract_id)
+        `)
         .eq('id', request.payment_id)
-        .eq('contract_id', request.contract_id)
+        .eq('payment_schedules.contract_id', request.contract_id)
         .single();
 
       if (paymentError || !paymentData) {
@@ -77,8 +84,8 @@ export class StripePaymentService {
 
       // Create or get Stripe customer
       let customerId = await this.getOrCreateStripeCustomer({
-        email: contractData.client_email,
-        name: `${contractData.client_first_name} ${contractData.client_last_name}`,
+        email: contractData.client_info?.email || 'client@example.com',
+        name: `${contractData.client_info?.first_name || ''} ${contractData.client_info?.last_name || ''}`.trim() || 'Client',
         metadata: {
           contract_id: request.contract_id,
           client_id: contractData.client_id
@@ -90,20 +97,17 @@ export class StripePaymentService {
         amount: request.amount, // Amount in cents
         currency: request.currency || 'usd',
         customer: customerId,
-        receipt_email: contractData.client_email,
+        receipt_email: contractData.client_info?.email || 'client@example.com',
         description: request.description || `Payment for ${contractData.template_title || 'Contract'}`,
         metadata: {
           contract_id: request.contract_id,
           payment_id: request.payment_id,
-          payment_type: paymentData.payment_type,
-          payment_number: paymentData.payment_number.toString(),
+          payment_type: paymentData.payment_type || 'installment',
           ...request.metadata
         },
         automatic_payment_methods: {
           enabled: true,
         },
-        // Set up webhook for payment confirmation
-        confirmation_method: 'automatic',
       });
 
       console.log('✅ Stripe payment intent created:', paymentIntent.id);
@@ -166,6 +170,7 @@ export class StripePaymentService {
         const { error: insertError } = await supabase
           .from('customers')
           .insert({
+            id: crypto.randomUUID(),
             email: customerData.email,
             name: customerData.name,
             stripe_customer_id: customer.id,
@@ -196,6 +201,41 @@ export class StripePaymentService {
     } catch (error) {
       console.error('❌ Error managing Stripe customer:', error);
       throw new Error(`Failed to manage customer: ${error.message}`);
+    }
+  }
+
+  /**
+   * Update payment installment status
+   */
+  private async updatePaymentInstallmentStatus(
+    paymentId: string,
+    status: string,
+    stripePaymentIntentId: string,
+    notes: string
+  ): Promise<void> {
+    try {
+      console.log(`📝 Updating payment installment ${paymentId} to ${status}`);
+
+      const { data, error } = await supabase
+        .from('payment_installments')
+        .update({
+          status: status,
+          stripe_payment_intent_id: stripePaymentIntentId,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', paymentId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Error updating payment installment status:', error);
+        throw new Error(`Failed to update payment installment status: ${error.message}`);
+      }
+
+      console.log('✅ Payment installment status updated successfully');
+    } catch (error) {
+      console.error('❌ Error in updatePaymentInstallmentStatus:', error);
+      throw error;
     }
   }
 
@@ -235,8 +275,8 @@ export class StripePaymentService {
         return;
       }
 
-      // Update payment status in contract payments database
-      await this.paymentService.updatePaymentStatus(
+      // Update payment status in payment installments database
+      await this.updatePaymentInstallmentStatus(
         paymentId,
         'succeeded',
         paymentIntent.id,
@@ -410,9 +450,12 @@ export class StripePaymentService {
 
     try {
       const { data, error } = await supabase
-        .from('contract_payments')
-        .select('*')
-        .eq('contract_id', contractId)
+        .from('payment_installments')
+        .select(`
+          *,
+          payment_schedules!inner(contract_id)
+        `)
+        .eq('payment_schedules.contract_id', contractId)
         .in('status', ['pending', 'failed'])
         .order('due_date', { ascending: true })
         .limit(1)

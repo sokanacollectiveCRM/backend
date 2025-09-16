@@ -482,14 +482,14 @@ export class SignNowService {
         }],
         from: "jerry@techluminateacademy.com",
         // Fixed redirect URLs with proper validation
-        redirect_url: options.redirectUrl || `${baseUrl}/?contract_id=${contractId}`,
-        redirect_decline: options.declineUrl || `${baseUrl}/`
+        redirect_uri: options.redirectUrl || `${baseUrl}/payment?contract_id=${contractId}`,
+        decline_redirect_uri: options.declineUrl || `${baseUrl}/`
       };
 
       console.log('📤 Sending field invitation:', invitePayload);
       console.log('🔗 Redirect URLs:');
-      console.log('  Success:', invitePayload.redirect_url);
-      console.log('  Decline:', invitePayload.redirect_decline);
+      console.log('  Success:', invitePayload.redirect_uri);
+      console.log('  Decline:', invitePayload.decline_redirect_uri);
 
       const { data } = await axios.post(
         `${this.baseURL}/document/${documentId}/invite`,
