@@ -33,8 +33,10 @@ export interface ProcessingResult {
   success: boolean;
 }
 
-// Ensure directories exist
-const GENERATED_DIR = path.join(process.cwd(), 'generated');
+// Ensure directories exist - use /tmp for serverless environments
+const GENERATED_DIR = process.env.NODE_ENV === 'production' && process.env.VERCEL
+  ? '/tmp/generated'
+  : path.join(process.cwd(), 'generated');
 
 /**
  * Generate a contract document from template
@@ -103,10 +105,20 @@ async function generateContractDocx(contractData: Omit<ContractData, 'contractId
 
     // Generate output
     const buffer = doc.getZip().generate({ type: 'nodebuffer' });
-    await fs.writeFile(outputPath, buffer);
 
-    console.log(`Contract document generated: ${outputPath}`);
-    return outputPath;
+    // Check if we're in a serverless environment
+    const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NODE_ENV === 'production';
+
+    if (isServerless) {
+      // In serverless environments, return the buffer directly
+      console.log('🚀 Serverless environment detected, returning buffer for direct upload');
+      return buffer as any; // Return buffer instead of file path
+    } else {
+      // In non-serverless environments, write to local filesystem
+      await fs.writeFile(outputPath, buffer);
+      console.log(`Contract document generated: ${outputPath}`);
+      return outputPath;
+    }
   } catch (error) {
     console.error('Error generating contract document:', error);
     throw error;
@@ -120,6 +132,17 @@ async function generateContractDocx(contractData: Omit<ContractData, 'contractId
  * @returns Path to generated .pdf file
  */
 async function convertDocxToPdf(docxPath: string, contractId: string): Promise<string> {
+  // Check if we're in a serverless environment
+  const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NODE_ENV === 'production';
+
+  if (isServerless || docxPath.startsWith('supabase://')) {
+    // In serverless environments, we'll skip PDF conversion for now
+    // and work directly with the DOCX file
+    console.log('🚀 Serverless environment detected, skipping PDF conversion');
+    console.log('📄 Using DOCX file directly for SignNow');
+    return docxPath; // Return the original DOCX path
+  }
+
   return new Promise((resolve, reject) => {
     const outputDir = path.join(GENERATED_DIR);
     const command = `soffice --headless --convert-to pdf "${docxPath}" --outdir "${outputDir}"`;

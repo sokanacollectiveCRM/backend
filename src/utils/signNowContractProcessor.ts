@@ -62,13 +62,13 @@ export async function processContractWithSignNow(
 
     // Step 1: Generate contract DOCX (no email)
     console.log('📄 Step 1: Generating contract document...');
-    let docxPath: string;
+    let docxPath: string | Buffer;
     try {
       console.log('About to call generateContractDocx with:', { data, contractId });
       console.log('Data object keys:', Object.keys(data));
       console.log('Data object values:', Object.values(data));
       docxPath = await generateContractDocx(data, contractId);
-      console.log(`✅ Contract generated: ${docxPath}`);
+      console.log(`✅ Contract generated: ${typeof docxPath === 'string' ? docxPath : 'Buffer'}`);
     } catch (error) {
       console.error('Error in contract generation:', error);
       console.error('Error details:', {
@@ -81,24 +81,42 @@ export async function processContractWithSignNow(
       throw error;
     }
 
-    // Step 2: Convert to PDF for better SignNow compatibility
+    // Step 2: Convert to PDF for better SignNow compatibility (skip in serverless)
     console.log('📑 Step 2: Converting to PDF...');
-    let pdfPath: string | undefined;
+    let pdfPath: string | Buffer | undefined;
     try {
-      pdfPath = await convertDocxToPdf(docxPath, contractId);
-      console.log(`✅ PDF generated: ${pdfPath}`);
+      if (typeof docxPath === 'string') {
+        pdfPath = await convertDocxToPdf(docxPath, contractId);
+        console.log(`✅ PDF generated: ${pdfPath}`);
+      } else {
+        // In serverless environments, use the DOCX buffer directly
+        console.log('🚀 Using DOCX buffer directly for SignNow');
+        pdfPath = docxPath;
+      }
     } catch (pdfError) {
       console.log('⚠️ PDF conversion failed, using DOCX for SignNow');
       console.error('PDF conversion error:', pdfError);
+      pdfPath = docxPath; // Fallback to DOCX
     }
 
     // Step 3: Upload to SignNow (use PDF if available, otherwise DOCX)
     console.log('☁️ Step 3: Uploading to SignNow...');
     const fileToUpload = pdfPath || docxPath;
-    const fileName = path.basename(fileToUpload);
     let documentId: string;
     try {
-      const fileBuffer = await fs.readFile(fileToUpload);
+      let fileBuffer: Buffer;
+      let fileName: string;
+
+      if (typeof fileToUpload === 'string') {
+        // Local file path
+        fileBuffer = await fs.readFile(fileToUpload);
+        fileName = path.basename(fileToUpload);
+      } else {
+        // Buffer (serverless environment)
+        fileBuffer = fileToUpload;
+        fileName = `contract-${contractId}.docx`;
+      }
+
       const uploadResult = await signNowService.uploadDocument(fileBuffer, fileName);
       documentId = uploadResult.documentId;
       console.log(`✅ Document uploaded to SignNow: ${documentId}`);
