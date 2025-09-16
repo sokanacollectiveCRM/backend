@@ -1,6 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { signNowService } from '../services/signNowService';
+import supabase from '../supabase';
 import { convertDocxToPdf, generateContractDocx } from './contractProcessor';
 
 export interface SignNowContractData {
@@ -61,8 +62,24 @@ export async function processContractWithSignNow(
 
     // Step 1: Generate contract DOCX (no email)
     console.log('📄 Step 1: Generating contract document...');
-    const docxPath = await generateContractDocx(data, contractId);
-    console.log(`✅ Contract generated: ${docxPath}`);
+    let docxPath: string;
+    try {
+      console.log('About to call generateContractDocx with:', { data, contractId });
+      console.log('Data object keys:', Object.keys(data));
+      console.log('Data object values:', Object.values(data));
+      docxPath = await generateContractDocx(data, contractId);
+      console.log(`✅ Contract generated: ${docxPath}`);
+    } catch (error) {
+      console.error('Error in contract generation:', error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        contractId,
+        clientName,
+        clientEmail
+      });
+      throw error;
+    }
 
     // Step 2: Convert to PDF for better SignNow compatibility
     console.log('📑 Step 2: Converting to PDF...');
@@ -72,31 +89,137 @@ export async function processContractWithSignNow(
       console.log(`✅ PDF generated: ${pdfPath}`);
     } catch (pdfError) {
       console.log('⚠️ PDF conversion failed, using DOCX for SignNow');
+      console.error('PDF conversion error:', pdfError);
     }
 
     // Step 3: Upload to SignNow (use PDF if available, otherwise DOCX)
     console.log('☁️ Step 3: Uploading to SignNow...');
     const fileToUpload = pdfPath || docxPath;
     const fileName = path.basename(fileToUpload);
-    const fileBuffer = await fs.readFile(fileToUpload);
-
-    const uploadResult = await signNowService.uploadDocument(fileBuffer, fileName);
-    const documentId = uploadResult.documentId;
-    console.log(`✅ Document uploaded to SignNow: ${documentId}`);
+    let documentId: string;
+    try {
+      const fileBuffer = await fs.readFile(fileToUpload);
+      const uploadResult = await signNowService.uploadDocument(fileBuffer, fileName);
+      documentId = uploadResult.documentId;
+      console.log(`✅ Document uploaded to SignNow: ${documentId}`);
+    } catch (error) {
+      console.error('Error in SignNow upload:', error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      throw error;
+    }
 
     // Step 4: Add signature fields with PDF analysis for positioning
     console.log('✍️ Step 4: Adding signature fields with automatic positioning...');
-    await signNowService.addSignatureFields(documentId, clientName, contractData, fileToUpload);
-    console.log('✅ Signature fields added successfully');
+    try {
+      await signNowService.addSignatureFields(documentId, clientName, contractData, fileToUpload);
+      console.log('✅ Signature fields added successfully');
+    } catch (error) {
+      console.error('Error in signature fields addition:', error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      throw error;
+    }
 
-    // Step 5: SKIP invitation for coordinate testing
-    console.log('📤 Step 5: SKIPPING SignNow invitation for coordinate testing...');
-    const invitationResult = {
-      success: false,
-      message: 'Invitation skipped for testing'
-    };
+    // Step 5: Create client record if not exists
+    console.log('👤 Step 5: Creating client record...');
+    let client;
+    try {
+      const { data: clientData, error: clientError } = await supabase
+        .from('client_info')
+        .upsert({
+          first_name: clientName.split(' ')[0],
+          last_name: clientName.split(' ').slice(1).join(' '),
+          email: clientEmail
+        })
+        .select()
+        .single();
 
-    console.log('⚠️ SignNow invitation SKIPPED for testing');
+      if (clientError) {
+        console.error('Error creating client:', clientError);
+        throw clientError;
+      }
+      client = clientData;
+      console.log('✅ Client record created successfully');
+    } catch (error) {
+      console.error('Error in client creation:', error);
+      throw error;
+    }
+
+    // Step 6: Create contract record in database
+    console.log('💾 Step 6: Creating contract record...');
+    try {
+      const { data: contract, error: contractError } = await supabase
+        .from('contracts')
+        .insert({
+          id: contractId,
+          client_id: client.id,
+          status: 'active',
+          fee: contractData.totalInvestment,
+          deposit: contractData.depositAmount,
+          signnow_document_id: documentId
+        })
+        .select()
+        .single();
+
+      if (contractError) {
+        console.error('Error creating contract:', contractError);
+        throw contractError;
+      }
+      console.log('✅ Contract record created successfully');
+    } catch (error) {
+      console.error('Error in contract creation:', error);
+      throw error;
+    }
+
+    // Step 7: Create payment schedule
+    console.log('💰 Step 7: Creating payment schedule...');
+    try {
+      const paymentSchedule = await createPaymentSchedule({
+        contractId,
+        totalAmount: parseFloat(contractData.totalInvestment?.replace(/[$,]/g, '') || '1200'),
+        depositAmount: parseFloat(contractData.depositAmount?.replace(/[$,]/g, '') || '600'),
+        frequency: 'monthly',
+        startDate: new Date(contractData.startDate || new Date()),
+        numberOfInstallments: 3
+      });
+      console.log('✅ Payment schedule created successfully');
+    } catch (error) {
+      console.error('Error in payment schedule creation:', error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      throw error;
+    }
+
+    // Step 8: Send SignNow invitation with redirect URLs
+    console.log('📤 Step 8: Sending SignNow invitation with payment redirect...');
+    let invitationResult;
+    try {
+      invitationResult = await signNowService.createInvitationClientPartner(
+        documentId,
+        { email: clientEmail, name: clientName },
+        undefined, // partner
+        {
+          contractId: contractId,
+          redirectUrl: `${process.env.FRONTEND_URL || 'https://jerrybony.me'}/?contract_id=${contractId}`,
+          declineUrl: `${process.env.FRONTEND_URL || 'https://jerrybony.me'}/`
+        }
+      );
+      console.log('✅ SignNow invitation sent successfully with payment redirect');
+    } catch (error) {
+      console.error('Error in SignNow invitation:', error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      throw error;
+    }
 
     // Return comprehensive result
     const result: SignNowProcessingResult = {
@@ -131,6 +254,11 @@ export async function processContractWithSignNow(
 
   } catch (error) {
     console.error('❌ SignNow contract processing failed:', error);
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      contractId: contractData.contractId
+    });
 
     return {
       success: false,
@@ -193,5 +321,99 @@ export async function checkSignNowDocumentStatus(documentId: string) {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'
     };
+  }
+}
+
+/**
+ * Create payment schedule for a contract
+ */
+async function createPaymentSchedule({
+  contractId,
+  totalAmount,
+  depositAmount,
+  frequency,
+  startDate,
+  numberOfInstallments
+}: {
+  contractId: string;
+  totalAmount: number;
+  depositAmount: number;
+  frequency: string;
+  startDate: Date;
+  numberOfInstallments: number;
+}) {
+  try {
+    // Create payment schedule
+    const { data: schedule, error: scheduleError } = await supabase
+      .from('payment_schedules')
+      .insert({
+        contract_id: contractId,
+        schedule_name: 'Standard Payment Plan',
+        total_amount: totalAmount,
+        deposit_amount: depositAmount,
+        deposit_due_date: startDate.toISOString().split('T')[0], // Deposit due on start date
+        installment_amount: (totalAmount - depositAmount) / numberOfInstallments,
+        number_of_installments: numberOfInstallments,
+        payment_frequency: frequency,
+        start_date: startDate.toISOString().split('T')[0],
+        end_date: (() => {
+          const endDate = new Date(startDate);
+          endDate.setMonth(endDate.getMonth() + numberOfInstallments + 1); // +1 for the month after deposit
+          return endDate.toISOString().split('T')[0];
+        })(),
+        status: 'active',
+        remaining_balance: totalAmount - depositAmount,
+        frequency: frequency
+      })
+      .select()
+      .single();
+
+    if (scheduleError) {
+      console.error('Error creating payment schedule:', scheduleError);
+      throw scheduleError;
+    }
+
+    // Generate installments with proper date calculations
+    const installmentAmount = (totalAmount - depositAmount) / numberOfInstallments;
+
+    // Calculate the first installment date (30 days after start date for monthly)
+    const firstInstallmentDate = new Date(startDate);
+    firstInstallmentDate.setMonth(firstInstallmentDate.getMonth() + 1); // Add 1 month for first installment
+
+    for (let i = 0; i < numberOfInstallments; i++) {
+      const dueDate = new Date(firstInstallmentDate);
+      dueDate.setMonth(dueDate.getMonth() + i); // Add i months for each subsequent installment
+
+      console.log(`Creating installment ${i + 1}: $${installmentAmount.toFixed(2)} due on ${dueDate.toISOString().split('T')[0]}`);
+
+      const { error: installmentError } = await supabase
+        .from('payment_installments')
+        .insert({
+          schedule_id: schedule.id,
+          amount: installmentAmount,
+          due_date: dueDate.toISOString().split('T')[0],
+          status: 'pending'
+        });
+
+      if (installmentError) {
+        console.error('Error creating installment:', installmentError);
+        throw installmentError;
+      }
+    }
+
+    console.log(`✅ Payment schedule created with ${numberOfInstallments} installments`);
+    return schedule;
+  } catch (error) {
+    console.error('Error creating payment schedule:', error);
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      contractId,
+      totalAmount,
+      depositAmount,
+      frequency,
+      numberOfInstallments
+    });
+    throw error;
   }
 }

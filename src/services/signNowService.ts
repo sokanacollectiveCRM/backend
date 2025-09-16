@@ -470,20 +470,26 @@ export class SignNowService {
       // Send field invitation without custom subject/message (plan restriction)
       console.log('📧 Sending field invitation (no custom subject/message)...');
 
+      // Fix redirect URL construction to prevent undefined contractId
+      const baseUrl = process.env.FRONTEND_URL || 'https://jerrybony.me';
+      const contractId = options.contractId || documentId; // Use documentId as fallback
+
       const invitePayload = {
-        document_id: documentId,
-        to: [
-          {
-            email: client.email,
-            role: "Signer 1",
-            order: 1
-          }
-        ],
-        from: "jerry@techluminateacademy.com"
-        // No subject/message due to plan restrictions
+        to: [{
+          email: client.email,
+          role: "Signer 1",
+          order: 1
+        }],
+        from: "jerry@techluminateacademy.com",
+        // Fixed redirect URLs with proper validation
+        redirect_url: options.redirectUrl || `${baseUrl}/?contract_id=${contractId}`,
+        redirect_decline: options.declineUrl || `${baseUrl}/`
       };
 
       console.log('📤 Sending field invitation:', invitePayload);
+      console.log('🔗 Redirect URLs:');
+      console.log('  Success:', invitePayload.redirect_url);
+      console.log('  Decline:', invitePayload.redirect_decline);
 
       const { data } = await axios.post(
         `${this.baseURL}/document/${documentId}/invite`,
@@ -494,12 +500,14 @@ export class SignNowService {
       console.log('✅ Field invitation sent successfully');
       return { success: true, invite: data, type: 'field_invite' };
     } catch (error) {
-      console.error('❌ Error creating client+partner invitation:');
-      console.error('Status:', error.response?.status);
-      console.error('Data:', JSON.stringify(error.response?.data, null, 2));
-      console.error('Request URL:', error.config?.url);
-      console.error('Request method:', error.config?.method);
-      console.error('Request data:', JSON.stringify(error.config?.data, null, 2));
+      console.error('❌ Error creating invitation:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        url: `${this.baseURL}/document/${documentId}/invite`,
+        method: 'POST',
+        token: this.apiToken ? `${this.apiToken.slice(0, 8)}...` : 'undefined',
+        headers: this.getAuthHeaders()
+      });
 
       // Log the detailed errors from SignNow
       if (error.response?.data?.errors) {
@@ -745,7 +753,7 @@ export class SignNowService {
             y: dateY,
             label: "Date"
           },
-          // Initials fields next to financial amounts (using coordinates from manual positioning)
+          // Initials fields next to financial amounts and additional positions (from manual positioning)
           {
             page_number: 1,  // Total amount initials on page 1
             type: "initials",
@@ -768,6 +776,30 @@ export class SignNowService {
             width: 69,
             x: 397,
             y: 108,
+            label: "Initials"
+          },
+          {
+            page_number: 1,  // Additional initials field 1
+            type: "initials",
+            name: "additional_initials_1",
+            role: "Signer 1",
+            required: true,
+            height: 21,
+            width: 69,
+            x: 245,
+            y: 649,
+            label: "Initials"
+          },
+          {
+            page_number: 2,  // Additional initials field 2
+            type: "initials",
+            name: "additional_initials_2",
+            role: "Signer 1",
+            required: true,
+            height: 21,
+            width: 69,
+            x: 329,
+            y: 70,
             label: "Initials"
           }
         ]

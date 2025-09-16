@@ -49,16 +49,24 @@ async function generateContractDocx(contractData: Omit<ContractData, 'contractId
     await fs.ensureDir(TEMPLATE_DIR);
     await fs.ensureDir(GENERATED_DIR);
 
-    const templatePath = '/Users/jerrybony/Documents/GitHub/backend/generated/Agreement for Postpartum Doula Services.docx';
     const outputPath = path.join(GENERATED_DIR, `contract-${contractId}.docx`);
 
-    // Check if template exists
-    if (!await fs.pathExists(templatePath)) {
-      throw new Error(`Template not found at ${templatePath}`);
+    // Download template from Supabase Storage
+    console.log('📥 Downloading template from Supabase Storage...');
+    const { data: templateBlob, error: downloadError } = await supabase.storage
+      .from('contract-templates')
+      .download('Agreement for Postpartum Doula Services.docx');
+
+    if (downloadError) {
+      throw new Error(`Failed to download template from Supabase Storage: ${downloadError.message}`);
     }
 
-    // Read template file
-    const content = await fs.readFile(templatePath);
+    if (!templateBlob) {
+      throw new Error('Template data is null from Supabase Storage');
+    }
+
+    // Convert Blob to Buffer
+    const content = Buffer.from(await templateBlob.arrayBuffer());
     const zip = new PizZip(content);
 
     // Create docxtemplater instance
@@ -75,7 +83,7 @@ async function generateContractDocx(contractData: Omit<ContractData, 'contractId
 
     // Map input data to template placeholders
     // Template expects: {totalHours}, {deposit}, {hourlyRate}, {overnightFee}, {totalAmount}, {clientInitials}, {clientName}
-    const templateData = {
+    const templateVariables = {
       // Required template variables
       totalHours: contractData.totalHours || '120', // Default to 120 hours
       deposit: contractData.depositAmount?.replace('$', '') || contractData.deposit || '600.00',
@@ -89,8 +97,8 @@ async function generateContractDocx(contractData: Omit<ContractData, 'contractId
       ...contractData
     };
 
-    console.log('📋 Template data being used:', templateData);
-    doc.setData(templateData);
+    console.log('📋 Template data being used:', templateVariables);
+    doc.setData(templateVariables);
 
     // Render the document
     doc.render();

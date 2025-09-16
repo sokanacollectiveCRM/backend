@@ -100,16 +100,60 @@ export class SimplePaymentService {
   async getPaymentSummary(contractId: string): Promise<PaymentSummary> {
     console.log('💰 Getting payment summary for contract:', contractId);
 
-    const { data, error } = await supabase.rpc('get_contract_payment_summary', {
-      p_contract_id: contractId
-    });
+    try {
+      // Get payment schedule
+      const { data: schedule, error: scheduleError } = await supabase
+        .from('payment_schedules')
+        .select('*')
+        .eq('contract_id', contractId)
+        .single();
 
-    if (error) {
+      if (scheduleError) {
+        throw new Error(`Payment schedule not found: ${scheduleError.message}`);
+      }
+
+      // Get installments using schedule_id
+      const { data: installments, error: installmentsError } = await supabase
+        .from('payment_installments')
+        .select('*')
+        .eq('schedule_id', schedule.id)
+        .order('due_date', { ascending: true });
+
+      if (installmentsError) {
+        throw new Error(`Installments not found: ${installmentsError.message}`);
+      }
+
+      // Calculate summary
+      const totalAmount = parseFloat(schedule.total_amount);
+      const totalPaid = installments
+        .filter(inst => inst.status === 'completed')
+        .reduce((sum, inst) => sum + parseFloat(inst.amount), 0);
+      const totalDue = totalAmount - totalPaid;
+
+      // Find next payment
+      const nextPayment = installments.find(inst => inst.status === 'pending');
+      const overduePayments = installments.filter(inst =>
+        inst.status === 'pending' && new Date(inst.due_date) < new Date()
+      );
+
+      const summary: PaymentSummary = {
+        total_amount: totalAmount,
+        total_paid: totalPaid,
+        total_due: totalDue,
+        overdue_amount: overduePayments.reduce((sum, inst) => sum + parseFloat(inst.amount), 0),
+        next_payment_due: nextPayment?.due_date,
+        next_payment_amount: nextPayment ? parseFloat(nextPayment.amount) : 0,
+        payment_count: installments.length,
+        overdue_count: overduePayments.length
+      };
+
+      console.log('✅ Payment summary calculated:', summary);
+      return summary;
+
+    } catch (error) {
       console.error('❌ Error getting payment summary:', error);
       throw new Error(`Failed to get payment summary: ${error.message}`);
     }
-
-    return data[0] as PaymentSummary;
   }
 
   /**
