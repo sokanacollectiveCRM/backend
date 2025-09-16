@@ -1,13 +1,10 @@
-export type DepositType = 'percent' | 'flat';
-export type PaymentCadence = 'biweekly' | 'monthly';
-
 export interface PostpartumContractInput {
   total_hours: number;
   hourly_rate: number;
-  deposit_type: DepositType;
-  deposit_value: number;  // percent (10-20) or flat amount
+  deposit_type: 'percent' | 'fixed';
+  deposit_value: number;
   installments_count: number;
-  cadence: PaymentCadence;
+  cadence: 'monthly' | 'biweekly';
 }
 
 export interface PostpartumContractAmounts {
@@ -25,19 +22,9 @@ export interface SignNowPostpartumFields {
   total_amount: string;
 }
 
-export interface PostpartumContractConfig {
-  min_deposit_percent: number;
-  max_deposit_percent: number;
-  min_installments: number;
-  max_installments: number;
-  template_id: string;
-}
-
-// Default configuration
-export const DEFAULT_CONFIG: PostpartumContractConfig = {
+export const DEFAULT_CONFIG = {
+  min_installments: 1,
+  max_installments: 12,
   min_deposit_percent: 10,
-  max_deposit_percent: 20,
-  min_installments: 2,
-  max_installments: 5,
-  template_id: '3cc4323f75af4986b9a142513185d2b13d300759'
+  max_deposit_percent: 50
 };
