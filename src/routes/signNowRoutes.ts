@@ -37,7 +37,7 @@ router.post('/test-auth', async (_req: Request, res: Response): Promise<void> =>
 // Test template access
 router.post('/test-template', async (_req: Request, res: Response): Promise<void> => {
   try {
-    const templateId = '3cc4323f75af4986b9a142513185d2b13d300759';
+    const templateId = 'f1d8f4d8b2c849f88644b7276b4b466ec6df8620';
     const result = await signNowService.testTemplate(templateId);
     res.json(result);
   } catch (error) {
@@ -66,7 +66,7 @@ router.post('/list-templates', async (_req: Request, res: Response): Promise<voi
 // Get template field details
 router.post('/template-fields', async (_req: Request, res: Response): Promise<void> => {
   try {
-    const templateId = '3cc4323f75af4986b9a142513185d2b13d300759';
+    const templateId = 'f1d8f4d8b2c849f88644b7276b4b466ec6df8620';
     const result = await signNowService.getTemplateFields(templateId);
     res.json(result);
   } catch (error) {
@@ -78,10 +78,25 @@ router.post('/template-fields', async (_req: Request, res: Response): Promise<vo
   }
 });
 
+// Get Postpartum template field details
+router.post('/postpartum-template-fields', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const templateId = '3cc4323f75af4986b9a142513185d2b13d300759';
+    const result = await signNowService.getTemplateFields(templateId);
+    res.json(result);
+  } catch (error) {
+    console.error('Get Postpartum template fields failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Get Postpartum template fields failed'
+    });
+  }
+});
+
 // Debug: Clone and inspect fields
 router.post('/debug-clone-fields', async (_req: Request, res: Response): Promise<void> => {
   try {
-    const templateId = '3cc4323f75af4986b9a142513185d2b13d300759';
+    const templateId = 'f1d8f4d8b2c849f88644b7276b4b466ec6df8620';
 
     // Clone the template
     const cloneResult = await signNowService.createPrefilledDocFromTemplate(

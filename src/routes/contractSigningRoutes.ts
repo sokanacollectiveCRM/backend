@@ -146,7 +146,12 @@ router.post('/generate-contract', async (req: ContractSigningRequest, res: Respo
       contractDate: contractData.contractDate || new Date().toLocaleDateString(),
       dueDate: contractData.dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       startDate: contractData.startDate || new Date().toISOString().split('T')[0],
-      endDate: contractData.endDate || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      endDate: contractData.endDate || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+
+      // Include Postpartum fields if they exist
+      ...(contractData.totalHours && { totalHours: contractData.totalHours }),
+      ...(contractData.hourlyRate && { hourlyRate: contractData.hourlyRate }),
+      ...(contractData.overnightFee && { overnightFee: contractData.overnightFee })
     };
 
     console.log(`🚀 Starting complete contract workflow for ${contractId}`);

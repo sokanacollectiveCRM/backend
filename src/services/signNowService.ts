@@ -667,6 +667,13 @@ export class SignNowService {
 
       console.log(`✍️ Adding signature and initials fields to document: ${documentId}`);
 
+      // Determine contract type for appropriate field positioning
+      const isLaborSupport = contractData?.serviceType?.toLowerCase().includes('labor support') ||
+                            contractData?.serviceType?.toLowerCase().includes('labor') ||
+                            contractData?.serviceType === 'Labor Support Services';
+
+      console.log(`📋 Contract type: ${isLaborSupport ? 'Labor Support Agreement' : 'Postpartum Doula Services'}`);
+
       // Apply SignNow coordinate formula from PDF analysis
       // PDF found: "Client Signature:" at (3.2, 30.3) on page 2
       // SignNow formula: SignNow_X = PDF_X, SignNow_Y = 792 - PDF_Y
@@ -677,12 +684,37 @@ export class SignNowService {
       const pageHeight = 792;  // US Letter height in points
 
       // SignNow uses top-left origin, Y increases downward
-      // Position signature field to the right of "Client Signature:" text without covering it
-      const signatureX = Math.round(pdfX + 150);  // Move further right to avoid covering text
-      const signatureY = 650;  // Position in lower part of page where signature typically appears
+      // Position signature field based on contract type
+      let signatureX, signatureY;
 
-      const dateX = Math.round(pdfX + 410);       // Move even further right for better spacing
-      const dateY = signatureY;                   // Same line
+      if (isLaborSupport) {
+        // Labor Support Agreement signature coordinates (fine-tuned for accurate positioning)
+        // Signature field: Adjusted to avoid text overlap in Labor Support template
+        signatureX = Math.round(pdfX + 200);  // Move further right to avoid covering text
+        signatureY = 680;  // Position lower to avoid text overlap
+        console.log('🎯 Using Labor Support signature coordinates (fine-tuned positioning)');
+      } else {
+        // Postpartum Doula Services signature coordinates (original working values)
+        signatureX = Math.round(pdfX + 150);  // Move further right to avoid covering text
+        signatureY = 650;  // Position in lower part of page where signature typically appears
+        console.log('🎯 Using Postpartum signature coordinates (original working values)');
+      }
+
+      // Date field positioning based on contract type
+      let dateX, dateY;
+
+      if (isLaborSupport) {
+        // Labor Support Agreement date coordinates (fine-tuned for accurate positioning)
+        // Date field: Adjusted to avoid text overlap in Labor Support template
+        dateX = Math.round(pdfX + 460);       // Move even further right for better spacing
+        dateY = signatureY;                   // Same line as signature
+        console.log('🎯 Using Labor Support date coordinates (fine-tuned positioning)');
+      } else {
+        // Postpartum Doula Services date coordinates (original working values)
+        dateX = Math.round(pdfX + 410);       // Move even further right for better spacing
+        dateY = signatureY;                   // Same line
+        console.log('🎯 Using Postpartum date coordinates (original working values)');
+      }
 
       // Calculate positions for initials fields next to financial amounts
       // Apply proper SignNow coordinate conversion: SignNow_Y = 792 - PDF_Y
@@ -715,11 +747,25 @@ export class SignNowService {
       // Financial amounts usually appear in upper-middle section
       // Need to be on same line as the amounts but after them
 
-      // Use coordinates from manually positioned fields in SignNow editor
-      const totalAmountX = 253;    // Total amount initials X coordinate
-      const totalAmountY = 421;    // Total amount initials Y coordinate
-      const depositAmountX = 397;  // Deposit amount initials X coordinate
-      const depositAmountY = 108;  // Deposit amount initials Y coordinate
+      // Use coordinates based on contract type
+        let totalAmountX, totalAmountY, depositAmountX, depositAmountY;
+
+        if (isLaborSupport) {
+          // Labor Support Agreement coordinates (fine-tuned for accurate positioning)
+          // Adjusted coordinates to avoid text overlap in Labor Support template
+          totalAmountX = 280;    // Labor Support total amount initials X coordinate (adjusted)
+          totalAmountY = 450;    // Labor Support total amount initials Y coordinate (adjusted)
+          depositAmountX = 420;   // Labor Support deposit amount initials X coordinate (adjusted)
+          depositAmountY = 120;   // Labor Support deposit amount initials Y coordinate (adjusted)
+          console.log('🎯 Using Labor Support Agreement coordinates (fine-tuned positioning)');
+        } else {
+          // Postpartum Doula Services coordinates (original working values)
+          totalAmountX = 253;    // Total amount initials X coordinate
+          totalAmountY = 421;    // Total amount initials Y coordinate
+          depositAmountX = 397;  // Deposit amount initials X coordinate
+          depositAmountY = 108;  // Deposit amount initials Y coordinate
+          console.log('🎯 Using Postpartum Doula Services coordinates (original working values)');
+        }
 
       console.log(`📍 SignNow formula applied: PDF(${pdfX}, ${pdfY}) → SignNow(${signatureX}, ${signatureY})`);
       console.log('🎯 Using manually positioned coordinates:');

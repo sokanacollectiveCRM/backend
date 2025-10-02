@@ -3,9 +3,9 @@ const path = require('path');
 const Docxtemplater = require('docxtemplater');
 const PizZip = require('pizzip');
 
-async function findTemplatePlaceholders() {
+async function analyzeLatestContract() {
     try {
-        console.log('🔍 Finding Template Placeholders in Generated Contract');
+        console.log('🔍 Analyzing Latest Generated Contract');
         console.log('');
 
         // Find the most recent generated contract
@@ -26,21 +26,22 @@ async function findTemplatePlaceholders() {
 
         const latestContract = files[0];
         console.log(`📄 Analyzing: ${latestContract.name}`);
+        console.log(`📅 Generated: ${latestContract.stats.mtime}`);
+        console.log('');
 
         // Read the contract file
         const content = fs.readFileSync(latestContract.path);
         const zip = new PizZip(content);
         const docXml = zip.file('word/document.xml').asText();
 
-        // Find all placeholder patterns
         console.log('🔍 Searching for all placeholder patterns...');
 
-        // Look for any {variable} patterns
+        // Find all {variable} patterns
         const placeholderPattern = /\{[^}]+\}/g;
         const placeholders = docXml.match(placeholderPattern);
 
         if (placeholders) {
-            console.log('📋 Found placeholders:');
+            console.log('📋 Found placeholders in the document:');
             const uniquePlaceholders = [...new Set(placeholders)];
             uniquePlaceholders.forEach(placeholder => {
                 console.log(`   - ${placeholder}`);
@@ -51,58 +52,47 @@ async function findTemplatePlaceholders() {
 
         console.log('');
 
-        // Look for any text that might be placeholders (even without braces)
-        console.log('🔍 Searching for potential variable text...');
-
-        // Look for common variable patterns
-        const variablePatterns = [
-            /total[_\s]*amount/gi,
-            /deposit[_\s]*amount/gi,
-            /balance[_\s]*amount/gi,
-            /client[_\s]*name/gi,
-            /client[_\s]*initials/gi,
-            /signature/gi,
-            /date/gi
-        ];
-
-        const patternNames = [
-            'total amount',
-            'deposit amount',
-            'balance amount',
-            'client name',
-            'client initials',
-            'signature',
-            'date'
-        ];
-
-        patternNames.forEach((name, index) => {
-            const pattern = variablePatterns[index];
-            const matches = docXml.match(pattern);
-            if (matches) {
-                console.log(`   ✅ Found "${name}" patterns: ${matches.length} instances`);
-            } else {
-                console.log(`   ❌ No "${name}" patterns found`);
-            }
-        });
-
-        console.log('');
-
-        // Look for the specific "undefined" context
+        // Look for "undefined" text and its context
         console.log('🔍 Analyzing "undefined" context...');
         const undefinedContext = docXml.match(/[^>]*undefined[^<]*/g);
         if (undefinedContext) {
             console.log('📋 Context around "undefined":');
             undefinedContext.forEach(context => {
                 const cleanContext = context.replace(/<[^>]*>/g, '').trim();
-                if (cleanContext) {
+                if (cleanContext && cleanContext.includes('undefined')) {
                     console.log(`   - "${cleanContext}"`);
                 }
             });
         }
 
+        console.log('');
+
+        // Look for the specific financial text patterns
+        console.log('🔍 Looking for financial text patterns...');
+        const financialPatterns = [
+            /Doula services:/g,
+            /Today I agree to pay/g,
+            /balance of/g,
+            /Labor Support/g
+        ];
+
+        financialPatterns.forEach(pattern => {
+            const matches = docXml.match(pattern);
+            if (matches) {
+                console.log(`   ✅ Found: "${pattern.source}"`);
+            } else {
+                console.log(`   ❌ Not found: "${pattern.source}"`);
+            }
+        });
+
+        console.log('');
+        console.log('💡 The issue is that the template placeholders don\'t match our variable names');
+        console.log('💡 We need to find out what placeholders the template actually uses');
+
     } catch (error) {
-        console.error('❌ Error analyzing template placeholders:', error.message);
+        console.error('❌ Error analyzing contract:', error.message);
     }
 }
 
-findTemplatePlaceholders();
+analyzeLatestContract();
+

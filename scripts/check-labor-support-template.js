@@ -1,22 +1,30 @@
 const axios = require('axios');
 
-async function analyzeLaborSupportCoordinates() {
+async function checkLaborSupportTemplate() {
     try {
-        console.log('🔍 Analyzing Labor Support Contract Field Coordinates...');
+        console.log('🔍 Checking Labor Support Template...');
         console.log('📋 Document ID: f1d8f4d8b2c849f88644b7276b4b466ec6df8620');
         console.log('🌐 Document URL: https://app.signnow.com/webapp/document/f1d8f4d8b2c849f88644b7276b4b466ec6df8620');
         console.log('');
 
-        const response = await axios.post('http://localhost:5050/api/contract-signing/get-field-coordinates', {
+        // First, let's test authentication
+        console.log('🔐 Testing SignNow authentication...');
+        const authResponse = await axios.post('http://localhost:5050/api/signnow/test-auth');
+        console.log('✅ Authentication successful');
+        console.log('');
+
+        // Now try to get the document fields
+        console.log('📄 Getting document fields...');
+        const fieldResponse = await axios.post('http://localhost:5050/api/contract-signing/get-field-coordinates', {
             documentId: 'f1d8f4d8b2c849f88644b7276b4b466ec6df8620'
         });
 
-        console.log('✅ Field coordinates retrieved successfully!');
+        console.log('✅ Document fields retrieved successfully!');
         console.log('📊 Field Analysis:');
         console.log('==================');
 
-        if (response.data.fields && response.data.fields.length > 0) {
-            response.data.fields.forEach((field, index) => {
+        if (fieldResponse.data.fields && fieldResponse.data.fields.length > 0) {
+            fieldResponse.data.fields.forEach((field, index) => {
                 console.log(`\n📍 Field ${index + 1}:`);
                 console.log(`   Name: ${field.name}`);
                 console.log(`   Type: ${field.type}`);
@@ -27,31 +35,11 @@ async function analyzeLaborSupportCoordinates() {
                 console.log(`   Required: ${field.required}`);
             });
 
-            console.log('\n🎯 Field Summary:');
-            console.log('==================');
-            console.log(`Total Fields Found: ${response.data.fields.length}`);
-
-            // Group fields by type
-            const fieldTypes = {};
-            response.data.fields.forEach(field => {
-                if (!fieldTypes[field.type]) {
-                    fieldTypes[field.type] = [];
-                }
-                fieldTypes[field.type].push(field);
-            });
-
-            Object.keys(fieldTypes).forEach(type => {
-                console.log(`\n${type.toUpperCase()} Fields: ${fieldTypes[type].length}`);
-                fieldTypes[type].forEach(field => {
-                    console.log(`  - ${field.name} at (${field.x}, ${field.y})`);
-                });
-            });
-
-            // Check for specific fields we need for labor support contract
-            console.log('\n🔍 Labor Support Contract Field Analysis:');
+            // Check for labor support specific fields
+            console.log('\n🎯 Labor Support Contract Field Analysis:');
             console.log('==========================================');
 
-            const requiredFields = [
+            const laborSupportFields = [
                 'client_name',
                 'client_signature',
                 'client_signed_date',
@@ -64,8 +52,8 @@ async function analyzeLaborSupportCoordinates() {
             const foundFields = [];
             const missingFields = [];
 
-            requiredFields.forEach(requiredField => {
-                const found = response.data.fields.find(field =>
+            laborSupportFields.forEach(requiredField => {
+                const found = fieldResponse.data.fields.find(field =>
                     field.name.toLowerCase().includes(requiredField.toLowerCase()) ||
                     field.name.toLowerCase().includes(requiredField.replace('_', '').toLowerCase())
                 );
@@ -96,7 +84,7 @@ async function analyzeLaborSupportCoordinates() {
             console.log('\n💰 Financial Fields Analysis:');
             console.log('============================');
 
-            const financialFields = response.data.fields.filter(field =>
+            const financialFields = fieldResponse.data.fields.filter(field =>
                 field.name.toLowerCase().includes('amount') ||
                 field.name.toLowerCase().includes('total') ||
                 field.name.toLowerCase().includes('deposit') ||
@@ -117,10 +105,17 @@ async function analyzeLaborSupportCoordinates() {
         }
 
     } catch (error) {
-        console.error('❌ Error analyzing coordinates:', error.response?.data || error.message);
-        console.log('\n💡 Make sure your server is running on localhost:5050');
-        console.log('💡 Check that the SignNow service is properly configured');
+        console.error('❌ Error checking template:', error.response?.data || error.message);
+
+        if (error.response?.status === 400) {
+            console.log('\n💡 Document access issue. Possible causes:');
+            console.log('   - Document ID might be incorrect');
+            console.log('   - Document might not be accessible with current credentials');
+            console.log('   - Document might be in a different workspace');
+            console.log('\n🔧 Let\'s try to list available documents first...');
+        }
     }
 }
 
-analyzeLaborSupportCoordinates();
+checkLaborSupportTemplate();
+

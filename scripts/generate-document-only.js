@@ -3,9 +3,9 @@ const path = require('path');
 const Docxtemplater = require('docxtemplater');
 const PizZip = require('pizzip');
 
-async function testTemplateProcessingOnly() {
+async function generateDocumentOnly() {
     try {
-        console.log('🧪 Testing Template Processing ONLY');
+        console.log('🧪 Generating Document with Variable Substitution ONLY');
         console.log('📋 Labor Support Agreement template processing');
         console.log('❌ NO SignNow, NO invitations, NO API calls');
         console.log('');
@@ -42,25 +42,24 @@ async function testTemplateProcessingOnly() {
 
         console.log(`📄 Template filename: ${templateFileName}`);
 
-        // Map variables for Labor Support Agreement
+        // Map variables for Labor Support Agreement (corrected)
         const templateVariables = {
-            total_amount: contractData.totalInvestment || '$2,500',
-            deposit_amount: contractData.depositAmount || '$500',
-            balance_amount: contractData.remainingBalance || '$2,000',
+            totalAmount: contractData.totalInvestment || '$2,500',
+            depositAmount: contractData.depositAmount || '$500',
+            balanceAmount: contractData.remainingBalance || '$2,000',
             client_initials: contractData.clientName?.split(' ').map(n => n[0]).join('') || 'JT',
-            client_name: contractData.clientName || 'Jerry Techluminate',
+            clientName: contractData.clientName || 'Jerry Techluminate',
             client_signature: '', // Will be filled by SignNow later
             client_signed_date: '', // Will be filled by SignNow later
             client_intials: contractData.clientName?.split(' ').map(n => n[0]).join('') || 'JT', // Note: template has typo "intials"
         };
 
-        console.log('📋 Template variables being used:');
-        console.log(`   total_amount: "${templateVariables.total_amount}"`);
-        console.log(`   deposit_amount: "${templateVariables.deposit_amount}"`);
-        console.log(`   balance_amount: "${templateVariables.balance_amount}"`);
-        console.log(`   client_name: "${templateVariables.client_name}"`);
+        console.log('📋 Template Variables:');
+        console.log(`   totalAmount: "${templateVariables.totalAmount}"`);
+        console.log(`   depositAmount: "${templateVariables.depositAmount}"`);
+        console.log(`   balanceAmount: "${templateVariables.balanceAmount}"`);
         console.log(`   client_initials: "${templateVariables.client_initials}"`);
-        console.log(`   client_intials: "${templateVariables.client_intials}"`);
+        console.log(`   clientName: "${templateVariables.clientName}"`);
         console.log('');
 
         // Check if we have a local template to test with
@@ -84,7 +83,7 @@ async function testTemplateProcessingOnly() {
 
                 // Generate output
                 const buffer = doc.getZip().generate({ type: 'nodebuffer' });
-                const outputPath = path.join(process.cwd(), 'generated', 'test-template-processing-only.docx');
+                const outputPath = path.join(process.cwd(), 'generated', 'test-document-only.docx');
 
                 // Ensure generated directory exists
                 const generatedDir = path.join(process.cwd(), 'generated');
@@ -97,10 +96,10 @@ async function testTemplateProcessingOnly() {
                 console.log('📄 Check the generated file to verify variable substitution');
                 console.log('');
                 console.log('🔍 Expected variable substitutions:');
-                console.log('   - {total_amount} should show: $2,500');
-                console.log('   - {deposit_amount} should show: $500');
-                console.log('   - {balance_amount} should show: $2,000');
-                console.log('   - {client_name} should show: Jerry Techluminate');
+                console.log('   - {totalAmount} should show: $2,500');
+                console.log('   - {depositAmount} should show: $500');
+                console.log('   - {balanceAmount} should show: $2,000');
+                console.log('   - {clientName} should show: Jerry Techluminate');
                 console.log('   - {client_initials} should show: JT');
 
             } catch (templateError) {
@@ -125,9 +124,10 @@ async function testTemplateProcessingOnly() {
         }
 
     } catch (error) {
-        console.error('❌ Error testing template processing:', error.message);
+        console.error('❌ Error generating document:', error.message);
         console.error(error.stack);
     }
 }
 
-testTemplateProcessingOnly();
+generateDocumentOnly();
+

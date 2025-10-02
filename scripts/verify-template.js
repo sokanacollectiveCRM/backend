@@ -1,8 +1,9 @@
 const { createClient } = require('@supabase/supabase-js');
 
-async function testTemplateDownload() {
+async function verifyTemplate() {
     try {
-        console.log('🧪 Testing Template Download from Supabase Storage');
+        console.log('🔍 Verifying Template in Supabase Storage');
+        console.log('📋 Checking what template exists and what placeholders it has');
         console.log('');
 
         // Initialize Supabase client
@@ -22,7 +23,8 @@ async function testTemplateDownload() {
             'Labor Support Agreement for Service.docx',
             'Labor Support Agreement.docx',
             'Labor Support Agreement for Service',
-            'Labor Support Agreement'
+            'Labor Support Agreement',
+            'Agreement for Postpartum Doula Services.docx'
         ];
 
         console.log('📁 Testing template filenames:');
@@ -40,7 +42,18 @@ async function testTemplateDownload() {
                     console.log(`   ✅ Found template: ${filename}`);
                     console.log(`   📊 File size: ${data.size} bytes`);
                     console.log(`   📄 File type: ${data.type}`);
-                    break; // Found the correct template
+
+                    // If we found the Labor Support template, analyze it
+                    if (filename.includes('Labor Support')) {
+                        console.log(`   🔍 This is the Labor Support template!`);
+                        console.log(`   💡 We need to check if it has the correct placeholders:`);
+                        console.log(`      - {total_amount}`);
+                        console.log(`      - {deposit_amount}`);
+                        console.log(`      - {balance_amount}`);
+                        console.log(`      - {client_initials}`);
+                        console.log(`      - {client_name}`);
+                    }
+                    break; // Found a template
                 } else {
                     console.log(`   ❌ No data returned`);
                 }
@@ -59,6 +72,7 @@ async function testTemplateDownload() {
             if (listError) {
                 console.log(`❌ Error listing files: ${listError.message}`);
             } else if (files && files.length > 0) {
+                console.log('📁 Available templates:');
                 files.forEach(file => {
                     console.log(`   - ${file.name} (${file.size} bytes)`);
                 });
@@ -69,9 +83,16 @@ async function testTemplateDownload() {
             console.log(`❌ Error listing bucket contents: ${listError.message}`);
         }
 
+        console.log('');
+        console.log('💡 Next steps:');
+        console.log('   1. Verify the correct template filename exists');
+        console.log('   2. Check if the template has the expected placeholders');
+        console.log('   3. If not, we need to upload the correct template');
+
     } catch (error) {
-        console.error('❌ Error testing template download:', error.message);
+        console.error('❌ Error verifying template:', error.message);
     }
 }
 
-testTemplateDownload();
+verifyTemplate();
+

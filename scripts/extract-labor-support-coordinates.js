@@ -1,10 +1,25 @@
 const axios = require('axios');
 
-async function getTemplateFields() {
+async function extractLaborSupportCoordinates() {
     try {
-        console.log('🔍 Getting Labor Support Template Field Coordinates...');
-        console.log('📋 Template ID: f1d8f4d8b2c849f88644b7276b4b466ec6df8620');
-        console.log('🌐 Template URL: https://app.signnow.com/webapp/document/f1d8f4d8b2c849f88644b7276b4b466ec6df8620');
+        console.log('🔍 Extracting Labor Support Contract Field Coordinates...');
+        console.log('📋 Document ID: f1d8f4d8b2c849f88644b7276b4b466ec6df8620');
+        console.log('🌐 Document URL: https://app.signnow.com/webapp/document/f1d8f4d8b2c849f88644b7276b4b466ec6df8620');
+        console.log('');
+
+        console.log('📝 INSTRUCTIONS:');
+        console.log('==========');
+        console.log('1. Open the SignNow document in your browser');
+        console.log('2. Add ONLY these 3 client fields manually:');
+        console.log('   - client_initials field (for client to initial)');
+        console.log('   - signature_date field (for client to enter date)');
+        console.log('   - client_signature field (for client to sign)');
+        console.log('3. Position them where they should appear in the contract');
+        console.log('4. Save the document as a template');
+        console.log('5. Run this script to extract the coordinates');
+        console.log('');
+        console.log('💡 NOTE: deposit_amount and balance_amount will be pre-filled by backend');
+        console.log('   Client only needs to initial, date, and sign!');
         console.log('');
 
         // Test authentication first
@@ -13,18 +28,18 @@ async function getTemplateFields() {
         console.log('✅ Authentication successful');
         console.log('');
 
-        // Get template fields using the template route
-        console.log('📄 Getting template fields...');
-        const templateResponse = await axios.post('http://localhost:5050/api/signnow/template-fields', {
-            templateId: 'f1d8f4d8b2c849f88644b7276b4b466ec6df8620'
+        // Try to get field coordinates
+        console.log('📄 Getting field coordinates...');
+        const fieldResponse = await axios.post('http://localhost:5050/api/contract-signing/get-field-coordinates', {
+            documentId: 'f1d8f4d8b2c849f88644b7276b4b466ec6df8620'
         });
 
-        if (templateResponse.data.success && templateResponse.data.fields) {
-            console.log('✅ Template fields retrieved successfully!');
+        if (fieldResponse.data.fields && fieldResponse.data.fields.length > 0) {
+            console.log('✅ Field coordinates extracted successfully!');
             console.log('📊 Field Analysis:');
             console.log('==================');
 
-            templateResponse.data.fields.forEach((field, index) => {
+            fieldResponse.data.fields.forEach((field, index) => {
                 console.log(`\n📍 Field ${index + 1}:`);
                 console.log(`   Name: ${field.name}`);
                 console.log(`   Type: ${field.type}`);
@@ -49,7 +64,7 @@ async function getTemplateFields() {
             const missingFields = [];
 
             laborSupportFields.forEach(requiredField => {
-                const found = templateResponse.data.fields.find(field =>
+                const found = fieldResponse.data.fields.find(field =>
                     field.name.toLowerCase().includes(requiredField.toLowerCase()) ||
                     field.name.toLowerCase().includes(requiredField.replace('_', '').toLowerCase())
                 );
@@ -81,10 +96,10 @@ async function getTemplateFields() {
             console.log('\n💻 Code for SignNow Service:');
             console.log('============================');
             console.log('');
-            console.log('// Labor Support Contract Template Field Coordinates');
-            console.log('const laborSupportTemplateFields = [');
+            console.log('// Labor Support Contract Field Coordinates');
+            console.log('const laborSupportFields = [');
 
-            templateResponse.data.fields.forEach(field => {
+            fieldResponse.data.fields.forEach(field => {
                 console.log(`  {`);
                 console.log(`    page_number: ${field.page_number},`);
                 console.log(`    type: "${field.type}",`);
@@ -103,21 +118,21 @@ async function getTemplateFields() {
             console.log('✅ Use these coordinates in your SignNow service for labor support contracts!');
 
         } else {
-            console.log('❌ No fields found in template');
-            console.log('💡 Make sure the template has the required fields added');
+            console.log('❌ No fields found in document');
+            console.log('💡 Make sure you have added the fields and saved the document');
         }
 
     } catch (error) {
-        console.error('❌ Error getting template fields:', error.response?.data || error.message);
+        console.error('❌ Error extracting coordinates:', error.response?.data || error.message);
 
-        if (error.response?.status === 400) {
-            console.log('\n💡 Template access issue. Possible solutions:');
-            console.log('   1. Make sure the template exists and is accessible');
-            console.log('   2. Check if the template is in the correct workspace');
-            console.log('   3. Ensure you have read permissions for the template');
-            console.log('   4. Try accessing the template directly in SignNow');
+        if (error.response?.status === 400 && error.response?.data?.details?.includes('not readable')) {
+            console.log('\n💡 Document access issue. Possible solutions:');
+            console.log('   1. Make sure the document is saved and accessible');
+            console.log('   2. Check if the document is in the correct workspace');
+            console.log('   3. Ensure you have read permissions for the document');
+            console.log('   4. Try refreshing the document in SignNow and saving again');
         }
     }
 }
 
-getTemplateFields();
+extractLaborSupportCoordinates();
