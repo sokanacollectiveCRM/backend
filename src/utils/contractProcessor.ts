@@ -51,11 +51,21 @@ async function generateContractDocx(contractData: Omit<ContractData, 'contractId
 
     const outputPath = path.join(GENERATED_DIR, `contract-${contractId}.docx`);
 
-    // Download template from Supabase Storage
+    // Determine contract type and download appropriate template
+    const isLaborSupport = contractData.serviceType?.toLowerCase().includes('labor support') ||
+                          contractData.serviceType?.toLowerCase().includes('labor') ||
+                          contractData.serviceType === 'Labor Support Services';
+
+    const templateFileName = isLaborSupport
+      ? 'Labor Support Agreement for Service.docx'
+      : 'Agreement for Postpartum Doula Services.docx';
+
     console.log('📥 Downloading template from Supabase Storage...');
+    console.log(`📋 Using template: ${templateFileName}`);
+    console.log(`📋 Contract type detected: ${isLaborSupport ? 'Labor Support' : 'Postpartum'}`);
     const { data: templateBlob, error: downloadError } = await supabase.storage
       .from('contract-templates')
-      .download('Agreement for Postpartum Doula Services.docx');
+      .download(templateFileName);
 
     if (downloadError) {
       throw new Error(`Failed to download template from Supabase Storage: ${downloadError.message}`);
@@ -81,23 +91,87 @@ async function generateContractDocx(contractData: Omit<ContractData, 'contractId
     const startDate = contractData.startDate || '2024-02-15';
     const endDate = contractData.endDate || '2024-04-15';
 
-    // Map input data to template placeholders
-    // Template expects: {totalHours}, {deposit}, {hourlyRate}, {overnightFee}, {totalAmount}, {clientInitials}, {clientName}
-    const templateVariables = {
-      // Required template variables
-      totalHours: contractData.totalHours || '120', // Default to 120 hours
-      deposit: contractData.depositAmount?.replace('$', '') || contractData.deposit || '600.00',
-      hourlyRate: contractData.hourlyRate || '35.00',
-      overnightFee: contractData.overnightFee || '0.00',
-      totalAmount: contractData.totalInvestment?.replace('$', '') || contractData.totalAmount || '4,200.00',
-      clientInitials: contractData.clientInitials || contractData.clientName?.split(' ').map(n => n[0]).join('') || 'JB',
-      clientName: contractData.clientName || 'Jerry Bony',
+    let templateVariables;
 
-      // Additional data from contractData (in case template has more placeholders)
-      ...contractData
-    };
+    if (isLaborSupport) {
+      // Labor Support Agreement template variables
+      // Template expects: {totalAmount}, {depositAmount}, {balanceAmount}, {client_initials}, {clientName}, {client_signature}, {client_signed_date}, {client_intials}
+      templateVariables = {
+        totalAmount: contractData.totalInvestment || '$2,500',
+        depositAmount: contractData.depositAmount || '$500',
+        balanceAmount: contractData.remainingBalance || '$2,000',
+        client_initials: contractData.clientInitials || contractData.clientName?.split(' ').map(n => n[0]).join('') || 'JT',
+        clientName: contractData.clientName || 'Jerry Techluminate',
+        client_signature: '', // Will be filled by SignNow
+        client_signed_date: '', // Will be filled by SignNow
+        client_intials: contractData.clientInitials || contractData.clientName?.split(' ').map(n => n[0]).join('') || 'JT', // Note: template has typo "intials"
+
+        // Additional data from contractData
+        ...contractData
+      };
+    } else {
+      // Postpartum Doula Services template variables (original)
+      // Template expects: {totalHours}, {deposit}, {hourlyRate}, {overnightFee}, {totalAmount}, {clientInitials}, {clientName}
+
+      // Debug: Log what hours fields are being passed
+      console.log('🔍 Debugging Postpartum hours fields:');
+      console.log('  totalHours:', contractData.totalHours);
+      console.log('  hours:', contractData.hours);
+      console.log('  totalhours:', contractData.totalhours);
+      console.log('  hourlyRate:', contractData.hourlyRate);
+      console.log('  rate:', contractData.rate);
+      console.log('  overnightFee:', contractData.overnightFee);
+      console.log('  overnight:', contractData.overnight);
+      console.log('  All contractData keys:', Object.keys(contractData));
+
+      // Calculate the final values
+      console.log('🔍 Raw contractData values before calculation:');
+      console.log('  contractData.totalHours:', contractData.totalHours);
+      console.log('  contractData.hours:', contractData.hours);
+      console.log('  contractData.totalhours:', contractData.totalhours);
+      console.log('  contractData.hourlyRate:', contractData.hourlyRate);
+      console.log('  contractData.rate:', contractData.rate);
+      console.log('  contractData.overnightFee:', contractData.overnightFee);
+      console.log('  contractData.overnight:', contractData.overnight);
+
+      const finalTotalHours = contractData.totalHours || contractData.hours || contractData.totalhours;
+      const finalHourlyRate = contractData.hourlyRate || contractData.rate;
+      const finalOvernightFee = contractData.overnightFee || contractData.overnight;
+
+      console.log('🎯 Final calculated values:');
+      console.log('  Final totalHours:', finalTotalHours);
+      console.log('  Final hourlyRate:', finalHourlyRate);
+      console.log('  Final overnightFee:', finalOvernightFee);
+
+      templateVariables = {
+        // Additional data from contractData first
+        ...contractData,
+
+        // Then override with calculated values
+        totalHours: finalTotalHours,
+        deposit: contractData.depositAmount?.replace('$', '') || contractData.deposit || '600.00',
+        hourlyRate: finalHourlyRate,
+        overnightFee: finalOvernightFee,
+        totalAmount: contractData.totalInvestment?.replace('$', '') || contractData.totalAmount || '4,200.00',
+        clientInitials: contractData.clientInitials || contractData.clientName?.split(' ').map(n => n[0]).join('') || 'JB',
+        clientName: contractData.clientName || 'Jerry Bony'
+      };
+    }
 
     console.log('📋 Template data being used:', templateVariables);
+    console.log('🔍 Key Postpartum template variables:');
+    console.log('  totalHours:', templateVariables.totalHours);
+    console.log('  hourlyRate:', templateVariables.hourlyRate);
+    console.log('  overnightFee:', templateVariables.overnightFee);
+    console.log('  totalAmount:', templateVariables.totalAmount);
+    console.log('🔍 Key variables for Labor Support:');
+    if (isLaborSupport) {
+      console.log(`   total_amount: "${templateVariables.total_amount}"`);
+      console.log(`   deposit_amount: "${templateVariables.deposit_amount}"`);
+      console.log(`   balance_amount: "${templateVariables.balance_amount}"`);
+      console.log(`   client_name: "${templateVariables.client_name}"`);
+      console.log(`   client_initials: "${templateVariables.client_initials}"`);
+    }
     doc.setData(templateVariables);
 
     // Render the document

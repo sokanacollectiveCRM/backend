@@ -16,3 +16,5 @@ WHERE
     AND t.table_type = 'BASE TABLE'
 ORDER BY
     t.table_name, c.ordinal_position;
+
+

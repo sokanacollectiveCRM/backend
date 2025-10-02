@@ -194,42 +194,61 @@ export async function processContractWithSignNow(
       throw error;
     }
 
-    // Step 7: Create payment schedule
-    console.log('💰 Step 7: Creating payment schedule...');
-    try {
-      const paymentSchedule = await createPaymentSchedule({
-        contractId,
-        totalAmount: parseFloat(contractData.totalInvestment?.replace(/[$,]/g, '') || '1200'),
-        depositAmount: parseFloat(contractData.depositAmount?.replace(/[$,]/g, '') || '600'),
-        frequency: 'monthly',
-        startDate: new Date(contractData.startDate || new Date()),
-        numberOfInstallments: 3
-      });
-      console.log('✅ Payment schedule created successfully');
-    } catch (error) {
-      console.error('Error in payment schedule creation:', error);
-      console.error('Error details:', {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      throw error;
+    // Step 7: Create payment schedule (only for Labor Support contracts)
+    const isLaborSupport = contractData.serviceType?.toLowerCase().includes('labor support');
+    if (isLaborSupport) {
+      console.log('💰 Step 7: Creating payment schedule for Labor Support contract...');
+      try {
+        const paymentSchedule = await createPaymentSchedule({
+          contractId,
+          totalAmount: parseFloat(contractData.totalInvestment?.replace(/[$,]/g, '') || '1200'),
+          depositAmount: parseFloat(contractData.depositAmount?.replace(/[$,]/g, '') || '600'),
+          frequency: 'monthly',
+          startDate: new Date(contractData.startDate || new Date()),
+          numberOfInstallments: 3
+        });
+        console.log('✅ Payment schedule created successfully');
+      } catch (error) {
+        console.error('Error in payment schedule creation:', error);
+        console.error('Error details:', {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined
+        });
+        throw error;
+      }
+    } else {
+      console.log('💰 Step 7: Skipping payment schedule for Postpartum contract (no payment required)');
     }
 
-    // Step 8: Send SignNow invitation with redirect URLs
-    console.log('📤 Step 8: Sending SignNow invitation with payment redirect...');
+    // Step 8: Send SignNow invitation with conditional redirect URLs
+    console.log('📤 Step 8: Sending SignNow invitation...');
     let invitationResult;
     try {
+      // Set redirect URLs based on contract type
+      let redirectUrl, declineUrl;
+      if (isLaborSupport) {
+        // Labor Support: redirect to payment page
+        redirectUrl = `${process.env.FRONTEND_URL || 'https://jerrybony.me'}/payment?contract_id=${contractId}`;
+        declineUrl = `${process.env.FRONTEND_URL || 'https://jerrybony.me'}/`;
+        console.log('🎯 Labor Support contract: redirecting to payment page after signing');
+      } else {
+        // Postpartum: redirect to success page (no payment required)
+        redirectUrl = `${process.env.FRONTEND_URL || 'https://jerrybony.me'}/contract-signed?contract_id=${contractId}`;
+        declineUrl = `${process.env.FRONTEND_URL || 'https://jerrybony.me'}/`;
+        console.log('🎯 Postpartum contract: redirecting to success page (no payment required)');
+      }
+
       invitationResult = await signNowService.createInvitationClientPartner(
         documentId,
         { email: clientEmail, name: clientName },
         undefined, // partner
         {
           contractId: contractId,
-          redirectUrl: `${process.env.FRONTEND_URL || 'https://jerrybony.me'}/payment?contract_id=${contractId}`,
-          declineUrl: `${process.env.FRONTEND_URL || 'https://jerrybony.me'}/`
+          redirectUrl: redirectUrl,
+          declineUrl: declineUrl
         }
       );
-      console.log('✅ SignNow invitation sent successfully with payment redirect');
+      console.log('✅ SignNow invitation sent successfully with appropriate redirect');
     } catch (error) {
       console.error('Error in SignNow invitation:', error);
       console.error('Error details:', {
@@ -369,7 +388,7 @@ async function createPaymentSchedule({
         schedule_name: 'Standard Payment Plan',
         total_amount: totalAmount,
         deposit_amount: depositAmount,
-        deposit_due_date: startDate.toISOString().split('T')[0], // Deposit due on start date
+        deposit_due_date: new Date().toISOString().split('T')[0], // Deposit due immediately (today)
         installment_amount: (totalAmount - depositAmount) / numberOfInstallments,
         number_of_installments: numberOfInstallments,
         payment_frequency: frequency,
@@ -389,6 +408,23 @@ async function createPaymentSchedule({
     if (scheduleError) {
       console.error('Error creating payment schedule:', scheduleError);
       throw scheduleError;
+    }
+
+    // Create deposit payment record (due immediately)
+    console.log(`Creating deposit payment: $${depositAmount.toFixed(2)} due immediately`);
+    const { error: depositError } = await supabase
+      .from('payment_installments')
+      .insert({
+        schedule_id: schedule.id,
+        amount: depositAmount,
+        due_date: new Date().toISOString().split('T')[0], // Due today
+        status: 'pending',
+        payment_type: 'deposit'
+      });
+
+    if (depositError) {
+      console.error('Error creating deposit payment:', depositError);
+      throw depositError;
     }
 
     // Generate installments with proper date calculations

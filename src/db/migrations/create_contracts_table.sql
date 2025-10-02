@@ -34,3 +34,5 @@ CREATE TABLE IF NOT EXISTS contract_payments (
 -- Create index for faster lookups
 CREATE INDEX IF NOT EXISTS idx_contract_payments_contract_id ON contract_payments(contract_id);
 CREATE INDEX IF NOT EXISTS idx_contract_payments_stripe_intent_id ON contract_payments(stripe_payment_intent_id);
+
+
