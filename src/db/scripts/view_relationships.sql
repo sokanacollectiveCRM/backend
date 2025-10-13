@@ -18,3 +18,5 @@ WHERE tc.constraint_type = 'FOREIGN KEY'
 ORDER BY tc.table_name, kcu.column_name;
 
 
+
+

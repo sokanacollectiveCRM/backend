@@ -36,3 +36,5 @@ CREATE INDEX IF NOT EXISTS idx_contract_payments_contract_id ON contract_payment
 CREATE INDEX IF NOT EXISTS idx_contract_payments_stripe_intent_id ON contract_payments(stripe_payment_intent_id);
 
 
+
+

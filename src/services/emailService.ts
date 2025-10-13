@@ -5,13 +5,30 @@ export class NodemailerService implements EmailService {
   private transporter: nodemailer.Transporter;
 
   constructor() {
+    const effectiveHost = process.env.EMAIL_HOST || 'smtp.gmail.com';
+    const effectivePort = parseInt(process.env.EMAIL_PORT || '465', 10);
+    const effectiveSecure = process.env.EMAIL_SECURE ? process.env.EMAIL_SECURE === 'true' : true;
+    const effectiveUser = process.env.EMAIL_USER || 'hello@sokanacollective.com';
+    const effectivePass = (process.env.EMAIL_PASSWORD || '').trim().replace(/\s+/g, '');
+
+    // Log the effective config (mask the password) for debugging
+    // eslint-disable-next-line no-console
+    console.log('Email config:', {
+      host: effectiveHost,
+      port: effectivePort,
+      secure: effectiveSecure,
+      user: effectiveUser,
+      passwordPreview: effectivePass ? `${effectivePass.slice(0, 2)}***${effectivePass.slice(-2)}` : '<empty>',
+      passwordLength: effectivePass.length
+    });
+
     this.transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
-      port: parseInt(process.env.EMAIL_PORT || '587'),
-      secure: process.env.EMAIL_SECURE === 'true',
+      host: effectiveHost,
+      port: effectivePort,
+      secure: effectiveSecure,
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASSWORD,
+        user: effectiveUser,
+        pass: effectivePass,
       },
     });
   }
@@ -31,7 +48,7 @@ export class NodemailerService implements EmailService {
 
     try {
       const mailOptions = {
-        from: process.env.EMAIL_FROM || 'Sokana CRM <noreply@sokanacrm.org>',
+        from: process.env.EMAIL_FROM || 'Sokana CRM <hello@sokanacollective.com>',
         to,
         subject,
         text,
@@ -39,6 +56,12 @@ export class NodemailerService implements EmailService {
       };
 
       const info = await this.transporter.sendMail(mailOptions);
+      // eslint-disable-next-line no-console
+      console.log('Email sent successfully:', {
+        messageId: info.messageId,
+        to: mailOptions.to,
+        subject: mailOptions.subject
+      });
     } catch (error) {
       console.error('Failed to send email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
@@ -56,7 +79,7 @@ export class NodemailerService implements EmailService {
     customText?: string
   ): Promise<void> {
     const subject = `Invoice ${invoiceNumber} from Sokana CRM`;
-    
+
     // Use custom text content if provided, otherwise use default
     const text = customText || `Dear ${customerName},
 
@@ -80,7 +103,7 @@ The Sokana Team`;
         <h2 style="color: #333;">Invoice ${invoiceNumber}</h2>
         <p>Dear ${customerName},</p>
         <p>Please find attached your invoice for <strong>${amount}</strong>.</p>
-        
+
         <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
           <h3 style="margin-top: 0; color: #333;">Invoice Details:</h3>
           <ul style="list-style: none; padding: 0; margin: 0;">
@@ -92,13 +115,13 @@ The Sokana Team`;
 
         <div style="text-align: center; margin: 30px 0;">
           <a href="https://app.sandbox.qbo.intuit.com/app/invoice?txnId=\${invoice.Id}"
-             style="background-color: #4CAF50; color: white; padding: 15px 30px; text-decoration: none; 
+             style="background-color: #4CAF50; color: white; padding: 15px 30px; text-decoration: none;
                     border-radius: 5px; font-weight: bold; font-size: 16px; display: inline-block;
                     box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
             Pay Invoice Now
           </a>
         </div>
-        
+
         <p>Please remit payment by the due date. If you have any questions about this invoice, please contact us.</p>
         <p>Thank you for your business!</p>
         <p>Best regards,<br>The Sokana Team</p>
@@ -164,7 +187,7 @@ The Sokana Team`;
         <p>Best regards,<br>The Sokana Team</p>
       </div>
     `;
-    
+
     await this.sendEmail(to, subject, text, html);
   }
 
@@ -177,7 +200,7 @@ The Sokana Team`;
         <h2>Welcome to the Sokana Team!</h2>
         <p>Dear ${firstname} ${lastname},</p>
         <p>We're excited to have you join our team as a ${role}!</p>
-        <div>    
+        <div>
         <p>Please fill out the</p>
         <a href="${signupUrl}" style="font-weight: bold;">Sign Up Form</a>
         <p> to create a new account and make sure to use this same email address.</p>
@@ -186,7 +209,7 @@ The Sokana Team`;
         <p>Best regards,<br>The Sokana Team</p>
       </div>
     `;
-    
+
     await this.sendEmail(to, subject, text, html);
   }
 }

@@ -3,7 +3,7 @@ import { NodemailerService } from '../services/emailService';
 import { RequestFormService } from "../services/RequestFormService";
 import { AuthRequest, RequestFormData, RequestStatus } from "../types";
 
-const notificationEmail = 'jerrybony5@gmail.com';
+const notificationEmail = 'hello@sokanacollective.com';
 const emailService = new NodemailerService();
 
 export class RequestFormController {
@@ -345,7 +345,7 @@ Status: lead`;
                       </div>
 
                       <div style="margin-bottom: 25px;">
-                        <h2 style="color: #333; background-color: #e8f5e8; padding: 10px; border-radius: 5px;">👶 Pregnancy/Baby</h2>
+                        <h2 style="color: #333; background-color: #e8f5e8; padding: 10px; border-radius: 5px;">👶🏾 Pregnancy/Baby</h2>
                         <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
                           <tr><td style="font-weight: bold; padding: 8px; width: 30%; background-color: #f5f5f5;">Due Date:</td><td style="padding: 8px;">${savedForm.due_date ? new Date(savedForm.due_date).toLocaleDateString() : 'Not specified'}</td></tr>
                           <tr><td style="font-weight: bold; padding: 8px; background-color: #f5f5f5;">Birth Location:</td><td style="padding: 8px;">${savedForm.birth_location || 'Not specified'}</td></tr>
@@ -385,6 +385,13 @@ Status: lead`;
                           <tr><td style="font-weight: bold; padding: 8px; background-color: #f5f5f5;">Insurance:</td><td style="padding: 8px;">${savedForm.insurance || 'Not specified'}</td></tr>
                           <tr><td style="font-weight: bold; padding: 8px; background-color: #f5f5f5;">Demographics:</td><td style="padding: 8px;">${Array.isArray(savedForm.demographics_multi) ? savedForm.demographics_multi.join(', ') : savedForm.demographics_multi || 'None'}</td></tr>
                         </table>
+                      </div>
+
+                      <div style="text-align: center; margin: 30px 0;">
+                        <a href="${process.env.FRONTEND_URL}/clients/${savedForm.id}?open=profile&mode=modal"
+                           style="background-color:#4CAF50;color:#fff;padding:12px 20px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block">
+                          View Lead in CRM
+                        </a>
                       </div>
 
                       <div style="margin-bottom: 25px;">
