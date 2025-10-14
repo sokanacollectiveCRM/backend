@@ -16,6 +16,8 @@ class RequestFormRepository {
             lastname: formData.lastname,
             email: formData.email,
             phone_number: formData.phone_number,
+            preferred_contact_method: formData.preferred_contact_method,
+            preferred_name: formData.preferred_name,
             pronouns: formData.pronouns,
             pronouns_other: formData.pronouns_other,
             // Step 2: Home Details
@@ -43,6 +45,7 @@ class RequestFormRepository {
             allergies: formData.allergies,
             health_notes: formData.health_notes,
             // Step 6: Payment Info
+            payment_method: formData.payment_method,
             annual_income: formData.annual_income,
             service_needed: formData.service_needed,
             service_specifics: formData.service_specifics,

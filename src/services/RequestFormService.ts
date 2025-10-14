@@ -23,11 +23,11 @@ export class RequestFormService {
     if (!formData.service_needed) {
       throw new ValidationError("Missing required field: service_needed");
     }
-    
+
     if (!formData.email || !formData.email.includes('@')) {
       throw new ValidationError("Valid email is required");
     }
-    
+
     if (!formData.phone_number) {
       throw new ValidationError("Phone number is required");
     }
@@ -95,11 +95,11 @@ export class RequestFormService {
       if (!formData.service_needed) {
         throw new ValidationError("Missing required field: service_needed");
       }
-      
+
       if (!formData.email || !formData.email.includes('@')) {
         throw new ValidationError("Valid email is required");
       }
-      
+
       if (!formData.phone_number) {
         throw new ValidationError("Phone number is required");
       }
@@ -133,9 +133,11 @@ export class RequestFormService {
         lastname: formData.lastname,
         email: formData.email,
         phone_number: formData.phone_number,
+        preferred_contact_method: formData.preferred_contact_method,  // Add this field
+        preferred_name: formData.preferred_name,                       // Add this field
         pronouns: formData.pronouns,
         pronouns_other: formData.pronouns_other,
-        
+
         // Step 2: Home Details
         address: formData.address,
         city: formData.city,
@@ -145,7 +147,7 @@ export class RequestFormService {
         home_type: formData.home_type,
         home_access: formData.home_access,
         pets: formData.pets,
-        
+
         // Step 3: Family Members
         relationship_status: formData.relationship_status,
         first_name: formData.first_name,
@@ -153,22 +155,23 @@ export class RequestFormService {
         middle_name: formData.middle_name,
         mobile_phone: formData.mobile_phone,
         work_phone: formData.work_phone,
-        
+
         // Step 4: Referral
         referral_source: formData.referral_source,
         referral_name: formData.referral_name,
         referral_email: formData.referral_email,
-        
+
         // Step 5: Health History
         health_history: formData.health_history,
         allergies: formData.allergies,
         health_notes: formData.health_notes,
-        
+
         // Step 6: Payment Info
+        payment_method: formData.payment_method,  // Add this field
         annual_income: formData.annual_income,
         service_needed: formData.service_needed,
         service_specifics: formData.service_specifics,
-        
+
         // Step 7: Pregnancy/Baby
         due_date: formData.due_date,
         birth_location: formData.birth_location,
@@ -177,17 +180,17 @@ export class RequestFormService {
         baby_name: formData.baby_name,
         provider_type: formData.provider_type,
         pregnancy_number: formData.pregnancy_number,
-        
+
         // Step 8: Past Pregnancies
         had_previous_pregnancies: formData.had_previous_pregnancies,
         previous_pregnancies_count: formData.previous_pregnancies_count,
         living_children_count: formData.living_children_count,
         past_pregnancy_experience: formData.past_pregnancy_experience,
-        
+
         // Step 9: Services Interested
         services_interested: formData.services_interested,
         service_support_details: formData.service_support_details,
-        
+
         // Step 10: Client Demographics
         race_ethnicity: formData.race_ethnicity,
         primary_language: formData.primary_language,
@@ -198,7 +201,7 @@ export class RequestFormService {
 
       // Save to repository (no userId)
       const response = await this.repository.saveData(newFormData);
-      
+
       // Return the complete RequestForm with all fields
       return new RequestForm(
         response.firstname,

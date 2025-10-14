@@ -22,10 +22,50 @@ export class User {
   status?:string;
   hospital?:string;
   service_needed?:string;
-  profile_picture?: File;  
+  profile_picture?: File;
   account_status?: ACCOUNT_STATUS;
   business?: string;
   bio?: string;
+
+  // Add all the missing fields that were causing the issue
+  preferred_contact_method?: string;
+  preferred_name?: string;
+  payment_method?: string;  // Add this field
+  home_type?: string;
+  services_interested?: string[];
+  phone_number?: string;
+  health_notes?: string;
+  service_specifics?: string;
+  baby_sex?: string;
+  baby_name?: string;
+  birth_hospital?: string;
+  birth_location?: string;
+  number_of_babies?: number;
+  provider_type?: string;
+  pregnancy_number?: number;
+  had_previous_pregnancies?: boolean;
+  previous_pregnancies_count?: number;
+  living_children_count?: number;
+  past_pregnancy_experience?: string;
+  service_support_details?: string;
+  race_ethnicity?: string;
+  primary_language?: string;
+  client_age_range?: string;
+  insurance?: string;
+  demographics_multi?: string[];
+  pronouns_other?: string;
+  home_phone?: string;
+  home_access?: string;
+  pets?: string;
+  relationship_status?: string;
+  first_name?: string;
+  last_name?: string;
+  middle_name?: string;
+  mobile_phone?: string;
+  work_phone?: string;
+  referral_source?: string;
+  referral_name?: string;
+  referral_email?: string;
 
   constructor(data: {
     id?: string;
@@ -52,7 +92,47 @@ export class User {
     profile_picture?: File;
     account_status?: ACCOUNT_STATUS;
     business?: string;
-    bio?: string;  
+    bio?: string;
+
+    // Add all the missing fields that were causing the issue
+    preferred_contact_method?: string;
+    preferred_name?: string;
+    payment_method?: string;  // Add this field
+    home_type?: string;
+    services_interested?: string[];
+    phone_number?: string;
+    health_notes?: string;
+    service_specifics?: string;
+    baby_sex?: string;
+    baby_name?: string;
+    birth_hospital?: string;
+    birth_location?: string;
+    number_of_babies?: number;
+    provider_type?: string;
+    pregnancy_number?: number;
+    had_previous_pregnancies?: boolean;
+    previous_pregnancies_count?: number;
+    living_children_count?: number;
+    past_pregnancy_experience?: string;
+    service_support_details?: string;
+    race_ethnicity?: string;
+    primary_language?: string;
+    client_age_range?: string;
+    insurance?: string;
+    demographics_multi?: string[];
+    pronouns_other?: string;
+    home_phone?: string;
+    home_access?: string;
+    pets?: string;
+    relationship_status?: string;
+    first_name?: string;
+    last_name?: string;
+    middle_name?: string;
+    mobile_phone?: string;
+    work_phone?: string;
+    referral_source?: string;
+    referral_name?: string;
+    referral_email?: string;
     }) {
       this.id = data.id;
       this.email = data.email || "";
@@ -75,10 +155,50 @@ export class User {
       this.country = data.country || "";
       this.zip_code = data.zip_code || -1;
       this.profile_picture = data.profile_picture || null;
-      this.account_status = data.account_status || ACCOUNT_STATUS.PENDING; 
+      this.account_status = data.account_status || ACCOUNT_STATUS.PENDING;
       this.business = data.business || "";
-      this.bio = data.bio || "";    
+      this.bio = data.bio || "";
       this.service_needed = data.service_needed || "";
+
+      // Add all the missing fields that were causing the issue
+      this.preferred_contact_method = data.preferred_contact_method;
+      this.preferred_name = data.preferred_name;
+      this.payment_method = data.payment_method;  // Add this field
+      this.home_type = data.home_type;
+      this.services_interested = data.services_interested;
+      this.phone_number = data.phone_number;
+      this.health_notes = data.health_notes;
+      this.service_specifics = data.service_specifics;
+      this.baby_sex = data.baby_sex;
+      this.baby_name = data.baby_name;
+      this.birth_hospital = data.birth_hospital;
+      this.birth_location = data.birth_location;
+      this.number_of_babies = data.number_of_babies;
+      this.provider_type = data.provider_type;
+      this.pregnancy_number = data.pregnancy_number;
+      this.had_previous_pregnancies = data.had_previous_pregnancies;
+      this.previous_pregnancies_count = data.previous_pregnancies_count;
+      this.living_children_count = data.living_children_count;
+      this.past_pregnancy_experience = data.past_pregnancy_experience;
+      this.service_support_details = data.service_support_details;
+      this.race_ethnicity = data.race_ethnicity;
+      this.primary_language = data.primary_language;
+      this.client_age_range = data.client_age_range;
+      this.insurance = data.insurance;
+      this.demographics_multi = data.demographics_multi;
+      this.pronouns_other = data.pronouns_other;
+      this.home_phone = data.home_phone;
+      this.home_access = data.home_access;
+      this.pets = data.pets;
+      this.relationship_status = data.relationship_status;
+      this.first_name = data.first_name;
+      this.last_name = data.last_name;
+      this.middle_name = data.middle_name;
+      this.mobile_phone = data.mobile_phone;
+      this.work_phone = data.work_phone;
+      this.referral_source = data.referral_source;
+      this.referral_name = data.referral_name;
+      this.referral_email = data.referral_email;
   }
 
   getFullName(): string {
@@ -111,7 +231,47 @@ export class User {
       profile_picture: this.profile_picture,
       account_status: this.account_status,
       business: this.business,
-      bio: this.bio
+      bio: this.bio,
+
+      // Add all the missing fields that were causing the issue
+      preferred_contact_method: this.preferred_contact_method,
+      preferred_name: this.preferred_name,
+      payment_method: this.payment_method,  // Add this field
+      home_type: this.home_type,
+      services_interested: this.services_interested,
+      phone_number: this.phone_number,
+      health_notes: this.health_notes,
+      service_specifics: this.service_specifics,
+      baby_sex: this.baby_sex,
+      baby_name: this.baby_name,
+      birth_hospital: this.birth_hospital,
+      birth_location: this.birth_location,
+      number_of_babies: this.number_of_babies,
+      provider_type: this.provider_type,
+      pregnancy_number: this.pregnancy_number,
+      had_previous_pregnancies: this.had_previous_pregnancies,
+      previous_pregnancies_count: this.previous_pregnancies_count,
+      living_children_count: this.living_children_count,
+      past_pregnancy_experience: this.past_pregnancy_experience,
+      service_support_details: this.service_support_details,
+      race_ethnicity: this.race_ethnicity,
+      primary_language: this.primary_language,
+      client_age_range: this.client_age_range,
+      insurance: this.insurance,
+      demographics_multi: this.demographics_multi,
+      pronouns_other: this.pronouns_other,
+      home_phone: this.home_phone,
+      home_access: this.home_access,
+      pets: this.pets,
+      relationship_status: this.relationship_status,
+      first_name: this.first_name,
+      last_name: this.last_name,
+      middle_name: this.middle_name,
+      mobile_phone: this.mobile_phone,
+      work_phone: this.work_phone,
+      referral_source: this.referral_source,
+      referral_name: this.referral_name,
+      referral_email: this.referral_email
     };
   }
 }

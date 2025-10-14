@@ -96,10 +96,10 @@ export interface UserData {
   state?: STATE;
   country?: string;
   zip_code?: number;
-  profile_picture?: File;  
+  profile_picture?: File;
   account_status?: ACCOUNT_STATUS;
   business?: string;
-  bio?: string;  
+  bio?: string;
 }
 
 export interface SignupBody {
@@ -132,10 +132,12 @@ export interface RequestFormData {
   lastname: string;
   email: string;
   phone_number: string;
+  preferred_contact_method?: string;  // Add this field
+  preferred_name?: string;             // Add this field
   pronouns?: Pronouns;
   pronouns_other?: string;
   children_expected?: string;
-  
+
   // Step 2: Home Details
   address: string;
   city: string;
@@ -145,7 +147,7 @@ export interface RequestFormData {
   home_type?: HomeType;
   home_access?: string;
   pets?: string;
-  
+
   // Step 3: Family Members
   relationship_status?: RelationshipStatus;
   first_name?: string;
@@ -153,22 +155,23 @@ export interface RequestFormData {
   middle_name?: string;
   mobile_phone?: string;
   work_phone?: string;
-  
+
   // Step 4: Referral
   referral_source?: string;
   referral_name?: string;
   referral_email?: string;
-  
+
   // Step 5: Health History
   health_history?: string;
   allergies?: string;
   health_notes?: string;
-  
+
   // Step 6: Payment Info
+  payment_method?: string;  // Add this field
   annual_income?: IncomeLevel;
   service_needed: ServiceTypes;
   service_specifics?: string;
-  
+
   // Step 7: Pregnancy/Baby
   due_date?: Date;
   birth_location?: string;
@@ -179,17 +182,17 @@ export interface RequestFormData {
   pregnancy_number?: number;
   hospital?: string;
   baby_sex?: string;
-  
+
   // Step 8: Past Pregnancies
   had_previous_pregnancies?: boolean;
   previous_pregnancies_count?: number;
   living_children_count?: number;
   past_pregnancy_experience?: string;
-  
+
   // Step 9: Services Interested
   services_interested?: string[];
   service_support_details?: string;
-  
+
   // Step 10: Client Demographics (Optional)
   race_ethnicity?: string;
   primary_language?: string;
@@ -344,5 +347,5 @@ export enum STATE {
   WA = "WA",
   WV = "WV",
   WI = "WI",
-  WY = "WY"  
+  WY = "WY"
 };

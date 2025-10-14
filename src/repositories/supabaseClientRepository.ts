@@ -18,24 +18,37 @@ export class SupabaseClientRepository  {
     const { data, error } = await this.supabaseClient
       .from('client_info')
       .select(`
-        id,
-        firstname,
-        lastname,
-        email,
-        phone_number,
-        status,
-        service_needed,
-        requested,
-        updated_at,
-        users (
-          firstname,
-          lastname,
-          profile_picture
-        )
+        *,
+        users (*)
       `);
 
     if (error) throw new Error(error.message);
-    return data.map(row => this.mapToClient(row));
+
+    // Debug logging for GET /clients
+    console.log('🔍 GET /clients - Raw database response:');
+    if (data && data.length > 0) {
+      const firstClient = data[0];
+      console.log('📊 First client raw data keys:', Object.keys(firstClient));
+      console.log('📋 preferred_contact_method in raw data:', firstClient.preferred_contact_method);
+      console.log('📋 Raw data sample:', {
+        id: firstClient.id,
+        firstname: firstClient.firstname,
+        preferred_contact_method: firstClient.preferred_contact_method,
+        home_type: firstClient.home_type,
+        services_interested: firstClient.services_interested
+      });
+    }
+
+    const mappedClients = data.map(row => this.mapToClient(row));
+
+    // Debug the mapped result
+    if (mappedClients && mappedClients.length > 0) {
+      const firstMappedClient = mappedClients[0];
+      console.log('📤 GET /clients - Mapped client user object keys:', Object.keys(firstMappedClient.user));
+      console.log('📤 preferred_contact_method in mapped user:', firstMappedClient.user.preferred_contact_method);
+    }
+
+    return mappedClients;
   }
 
   async exportCSV():Promise<string | null>{
@@ -62,17 +75,8 @@ export class SupabaseClientRepository  {
     const { data, error } = await this.supabaseClient
       .from('client_info')
       .select(`
-        id,
-        firstname,
-        lastname,
-        email,
-        phone_number,
-        status,
-        users (
-          firstname,
-          lastname,
-          profile_picture
-        )
+        *,
+        users (*)
       `)
       .in('id', clientIds);
 
@@ -119,17 +123,8 @@ export class SupabaseClientRepository  {
     const { data, error } = await this.supabaseClient
       .from('client_info')
       .select(`
-        id,
-        firstname,
-        lastname,
-        email,
-        phone_number,
-        status,
-        users (
-          firstname,
-          lastname,
-          profile_picture
-        )
+        *,
+        users (*)
       `)
       .eq('id', clientId)
       .single();
@@ -190,10 +185,19 @@ export class SupabaseClientRepository  {
     const updateData: any = {};
 
     // Map the fields from the request body to database columns
+    // Handle nested user object fields
     if (fieldsToUpdate.user?.firstname !== undefined) updateData.firstname = fieldsToUpdate.user.firstname;
     if (fieldsToUpdate.user?.lastname !== undefined) updateData.lastname = fieldsToUpdate.user.lastname;
     if (fieldsToUpdate.user?.email !== undefined) updateData.email = fieldsToUpdate.user.email;
     if (fieldsToUpdate.user?.role !== undefined) updateData.role = fieldsToUpdate.user.role;
+
+    // Handle direct field mappings from request body (top-level fields)
+    if (fieldsToUpdate.firstname !== undefined) updateData.firstname = fieldsToUpdate.firstname;
+    if (fieldsToUpdate.lastname !== undefined) updateData.lastname = fieldsToUpdate.lastname;
+    if (fieldsToUpdate.email !== undefined) updateData.email = fieldsToUpdate.email;
+    if (fieldsToUpdate.phoneNumber !== undefined) updateData.phone_number = fieldsToUpdate.phoneNumber;
+    if (fieldsToUpdate.phone_number !== undefined) updateData.phone_number = fieldsToUpdate.phone_number;
+    if (fieldsToUpdate.status !== undefined) updateData.status = fieldsToUpdate.status;
     if (fieldsToUpdate.serviceNeeded !== undefined) updateData.service_needed = fieldsToUpdate.serviceNeeded;
     if (fieldsToUpdate.childrenExpected !== undefined) updateData.children_expected = fieldsToUpdate.childrenExpected;
     if (fieldsToUpdate.pronouns !== undefined) updateData.pronouns = fieldsToUpdate.pronouns;
@@ -204,13 +208,52 @@ export class SupabaseClientRepository  {
     if (fieldsToUpdate.annual_income !== undefined) updateData.annual_income = fieldsToUpdate.annual_income;
     if (fieldsToUpdate.service_specifics !== undefined) updateData.service_specifics = fieldsToUpdate.service_specifics;
 
-    // Handle direct field mappings from request body
-    if (fieldsToUpdate.firstname !== undefined) updateData.firstname = fieldsToUpdate.firstname;
-    if (fieldsToUpdate.lastname !== undefined) updateData.lastname = fieldsToUpdate.lastname;
-    if (fieldsToUpdate.email !== undefined) updateData.email = fieldsToUpdate.email;
-    if (fieldsToUpdate.phoneNumber !== undefined) updateData.phone_number = fieldsToUpdate.phoneNumber;
-    if (fieldsToUpdate.phone_number !== undefined) updateData.phone_number = fieldsToUpdate.phone_number;
-    if (fieldsToUpdate.status !== undefined) updateData.status = fieldsToUpdate.status;
+    // Add ALL the missing fields that can be updated
+    if (fieldsToUpdate.preferred_contact_method !== undefined) updateData.preferred_contact_method = fieldsToUpdate.preferred_contact_method;
+    if (fieldsToUpdate.preferred_name !== undefined) updateData.preferred_name = fieldsToUpdate.preferred_name;
+    if (fieldsToUpdate.payment_method !== undefined) updateData.payment_method = fieldsToUpdate.payment_method;  // Add this field
+    if (fieldsToUpdate.home_type !== undefined) updateData.home_type = fieldsToUpdate.home_type;
+    if (fieldsToUpdate.services_interested !== undefined) updateData.services_interested = fieldsToUpdate.services_interested;
+    if (fieldsToUpdate.health_notes !== undefined) updateData.health_notes = fieldsToUpdate.health_notes;
+    if (fieldsToUpdate.baby_sex !== undefined) updateData.baby_sex = fieldsToUpdate.baby_sex;
+    if (fieldsToUpdate.baby_name !== undefined) updateData.baby_name = fieldsToUpdate.baby_name;
+    if (fieldsToUpdate.birth_hospital !== undefined) updateData.birth_hospital = fieldsToUpdate.birth_hospital;
+    if (fieldsToUpdate.birth_location !== undefined) updateData.birth_location = fieldsToUpdate.birth_location;
+    if (fieldsToUpdate.number_of_babies !== undefined) updateData.number_of_babies = fieldsToUpdate.number_of_babies;
+    if (fieldsToUpdate.provider_type !== undefined) updateData.provider_type = fieldsToUpdate.provider_type;
+    if (fieldsToUpdate.pregnancy_number !== undefined) updateData.pregnancy_number = fieldsToUpdate.pregnancy_number;
+    if (fieldsToUpdate.had_previous_pregnancies !== undefined) updateData.had_previous_pregnancies = fieldsToUpdate.had_previous_pregnancies;
+    if (fieldsToUpdate.previous_pregnancies_count !== undefined) updateData.previous_pregnancies_count = fieldsToUpdate.previous_pregnancies_count;
+    if (fieldsToUpdate.living_children_count !== undefined) updateData.living_children_count = fieldsToUpdate.living_children_count;
+    if (fieldsToUpdate.past_pregnancy_experience !== undefined) updateData.past_pregnancy_experience = fieldsToUpdate.past_pregnancy_experience;
+    if (fieldsToUpdate.service_support_details !== undefined) updateData.service_support_details = fieldsToUpdate.service_support_details;
+    if (fieldsToUpdate.race_ethnicity !== undefined) updateData.race_ethnicity = fieldsToUpdate.race_ethnicity;
+    if (fieldsToUpdate.primary_language !== undefined) updateData.primary_language = fieldsToUpdate.primary_language;
+    if (fieldsToUpdate.client_age_range !== undefined) updateData.client_age_range = fieldsToUpdate.client_age_range;
+    if (fieldsToUpdate.insurance !== undefined) updateData.insurance = fieldsToUpdate.insurance;
+    if (fieldsToUpdate.demographics_multi !== undefined) updateData.demographics_multi = fieldsToUpdate.demographics_multi;
+    if (fieldsToUpdate.pronouns_other !== undefined) updateData.pronouns_other = fieldsToUpdate.pronouns_other;
+    if (fieldsToUpdate.home_phone !== undefined) updateData.home_phone = fieldsToUpdate.home_phone;
+    if (fieldsToUpdate.home_access !== undefined) updateData.home_access = fieldsToUpdate.home_access;
+    if (fieldsToUpdate.pets !== undefined) updateData.pets = fieldsToUpdate.pets;
+    if (fieldsToUpdate.relationship_status !== undefined) updateData.relationship_status = fieldsToUpdate.relationship_status;
+    if (fieldsToUpdate.first_name !== undefined) updateData.first_name = fieldsToUpdate.first_name;
+    if (fieldsToUpdate.last_name !== undefined) updateData.last_name = fieldsToUpdate.last_name;
+    if (fieldsToUpdate.middle_name !== undefined) updateData.middle_name = fieldsToUpdate.middle_name;
+    if (fieldsToUpdate.mobile_phone !== undefined) updateData.mobile_phone = fieldsToUpdate.mobile_phone;
+    if (fieldsToUpdate.work_phone !== undefined) updateData.work_phone = fieldsToUpdate.work_phone;
+    if (fieldsToUpdate.referral_source !== undefined) updateData.referral_source = fieldsToUpdate.referral_source;
+    if (fieldsToUpdate.referral_name !== undefined) updateData.referral_name = fieldsToUpdate.referral_name;
+    if (fieldsToUpdate.referral_email !== undefined) updateData.referral_email = fieldsToUpdate.referral_email;
+    if (fieldsToUpdate.address !== undefined) updateData.address = fieldsToUpdate.address;
+    if (fieldsToUpdate.city !== undefined) updateData.city = fieldsToUpdate.city;
+    if (fieldsToUpdate.state !== undefined) updateData.state = fieldsToUpdate.state;
+    if (fieldsToUpdate.country !== undefined) updateData.country = fieldsToUpdate.country;
+    if (fieldsToUpdate.zip_code !== undefined) updateData.zip_code = fieldsToUpdate.zip_code;
+    if (fieldsToUpdate.profile_picture !== undefined) updateData.profile_picture = fieldsToUpdate.profile_picture;
+    if (fieldsToUpdate.account_status !== undefined) updateData.account_status = fieldsToUpdate.account_status;
+    if (fieldsToUpdate.business !== undefined) updateData.business = fieldsToUpdate.business;
+    if (fieldsToUpdate.bio !== undefined) updateData.bio = fieldsToUpdate.bio;
 
     console.log('Repository: phoneNumber field check:', {
       hasPhoneNumber: 'phoneNumber' in fieldsToUpdate,
@@ -319,10 +362,48 @@ export class SupabaseClientRepository  {
       health_history: data.health_history,
       allergies: data.allergies,
       due_date: data.due_date,
-      annual_income:data.annual_income,
+      annual_income: data.annual_income,
       status: data.status,
-      hospital:data.hospital,
-
+      hospital: data.hospital,
+      // Add missing fields that were causing the issue
+      preferred_contact_method: data.preferred_contact_method,
+      preferred_name: data.preferred_name,
+      pronouns: data.pronouns,
+      home_type: data.home_type,
+      services_interested: data.services_interested,
+      phone_number: data.phone_number,
+      health_notes: data.health_notes,
+      service_specifics: data.service_specifics,
+      baby_sex: data.baby_sex,
+      baby_name: data.baby_name,
+      birth_hospital: data.birth_hospital,
+      birth_location: data.birth_location,
+      number_of_babies: data.number_of_babies,
+      provider_type: data.provider_type,
+      pregnancy_number: data.pregnancy_number,
+      had_previous_pregnancies: data.had_previous_pregnancies,
+      previous_pregnancies_count: data.previous_pregnancies_count,
+      living_children_count: data.living_children_count,
+      past_pregnancy_experience: data.past_pregnancy_experience,
+      service_support_details: data.service_support_details,
+      race_ethnicity: data.race_ethnicity,
+      primary_language: data.primary_language,
+      client_age_range: data.client_age_range,
+      insurance: data.insurance,
+      demographics_multi: data.demographics_multi,
+      pronouns_other: data.pronouns_other,
+      home_phone: data.home_phone,
+      home_access: data.home_access,
+      pets: data.pets,
+      relationship_status: data.relationship_status,
+      first_name: data.first_name,
+      last_name: data.last_name,
+      middle_name: data.middle_name,
+      mobile_phone: data.mobile_phone,
+      work_phone: data.work_phone,
+      referral_source: data.referral_source,
+      referral_name: data.referral_name,
+      referral_email: data.referral_email
     });
   }
 
@@ -353,9 +434,48 @@ export class SupabaseClientRepository  {
       due_date: userRecord.due_date || data.due_date || '',
       annual_income: userRecord.annual_income || data.annual_income || '',
       status: userRecord.status || data.status || '',
-      hospital: userRecord.hospital || data.hospital|| ''
+      hospital: userRecord.hospital || data.hospital|| '',
 
-
+      // Add all the missing fields from data
+      preferred_contact_method: userRecord.preferred_contact_method || data.preferred_contact_method,
+      preferred_name: userRecord.preferred_name || data.preferred_name,
+      payment_method: userRecord.payment_method || data.payment_method,  // Add this field
+      pronouns: userRecord.pronouns || data.pronouns,
+      home_type: userRecord.home_type || data.home_type,
+      services_interested: userRecord.services_interested || data.services_interested,
+      phone_number: userRecord.phone_number || data.phone_number,
+      health_notes: userRecord.health_notes || data.health_notes,
+      service_specifics: userRecord.service_specifics || data.service_specifics,
+      baby_sex: userRecord.baby_sex || data.baby_sex,
+      baby_name: userRecord.baby_name || data.baby_name,
+      birth_hospital: userRecord.birth_hospital || data.birth_hospital,
+      birth_location: userRecord.birth_location || data.birth_location,
+      number_of_babies: userRecord.number_of_babies || data.number_of_babies,
+      provider_type: userRecord.provider_type || data.provider_type,
+      pregnancy_number: userRecord.pregnancy_number || data.pregnancy_number,
+      had_previous_pregnancies: userRecord.had_previous_pregnancies || data.had_previous_pregnancies,
+      previous_pregnancies_count: userRecord.previous_pregnancies_count || data.previous_pregnancies_count,
+      living_children_count: userRecord.living_children_count || data.living_children_count,
+      past_pregnancy_experience: userRecord.past_pregnancy_experience || data.past_pregnancy_experience,
+      service_support_details: userRecord.service_support_details || data.service_support_details,
+      race_ethnicity: userRecord.race_ethnicity || data.race_ethnicity,
+      primary_language: userRecord.primary_language || data.primary_language,
+      client_age_range: userRecord.client_age_range || data.client_age_range,
+      insurance: userRecord.insurance || data.insurance,
+      demographics_multi: userRecord.demographics_multi || data.demographics_multi,
+      pronouns_other: userRecord.pronouns_other || data.pronouns_other,
+      home_phone: userRecord.home_phone || data.home_phone,
+      home_access: userRecord.home_access || data.home_access,
+      pets: userRecord.pets || data.pets,
+      relationship_status: userRecord.relationship_status || data.relationship_status,
+      first_name: userRecord.first_name || data.first_name,
+      last_name: userRecord.last_name || data.last_name,
+      middle_name: userRecord.middle_name || data.middle_name,
+      mobile_phone: userRecord.mobile_phone || data.mobile_phone,
+      work_phone: userRecord.work_phone || data.work_phone,
+      referral_source: userRecord.referral_source || data.referral_source,
+      referral_name: userRecord.referral_name || data.referral_name,
+      referral_email: userRecord.referral_email || data.referral_email
     });
 
     return new Client(

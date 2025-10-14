@@ -184,6 +184,7 @@ export class ClientController {
     const { id } = req.params;
     const updateData = req.body;
 
+    console.log('🔧 PUT /clients/:id - UPDATE REQUEST START');
     console.log('Controller: Request details:', {
       method: req.method,
       url: req.url,
@@ -207,11 +208,26 @@ export class ClientController {
       return;
     }
 
-    console.log('Controller: Updating client:', {
-      id,
-      idType: typeof id,
-      updateData,
-      updateDataKeys: Object.keys(updateData)
+    console.log('📝 Controller: Frontend sent these fields to update:', {
+      clientId: id,
+      updateDataKeys: Object.keys(updateData),
+      updateDataValues: updateData,
+      updateDataCount: Object.keys(updateData).length
+    });
+
+    // Log specific fields we're looking for
+    const importantFields = [
+      'preferred_contact_method', 'preferred_name', 'pronouns', 'home_type',
+      'services_interested', 'phoneNumber', 'phone_number', 'firstname', 'lastname', 'email'
+    ];
+
+    console.log('🎯 Controller: Checking for important fields in request:');
+    importantFields.forEach(field => {
+      if (updateData[field] !== undefined) {
+        console.log(`  ✅ ${field}: "${updateData[field]}" (${typeof updateData[field]})`);
+      } else {
+        console.log(`  ❌ ${field}: undefined`);
+      }
     });
 
     try {
@@ -220,26 +236,126 @@ export class ClientController {
         updateData
       );
 
-      console.log('Controller: Client updated successfully:', client.id);
+      console.log('✅ Controller: Client updated successfully in database');
+      console.log('📊 Controller: Full client object returned from use case:', {
+        clientId: client.id,
+        userObjectKeys: Object.keys(client.user),
+        userObjectKeyCount: Object.keys(client.user).length,
+        clientFields: {
+          serviceNeeded: client.serviceNeeded,
+          status: client.status,
+          phoneNumber: client.phoneNumber
+        }
+      });
 
-      res.json({
+      // Log what we're about to send back to frontend
+      const responseData = {
         success: true,
         client: {
+          // Basic client info
           id: client.id,
           updatedAt: client.updatedAt,
+          status: client.status,
+          serviceNeeded: client.serviceNeeded,
+          requestedAt: client.requestedAt,
+          phoneNumber: client.phoneNumber,
+
+          // All user/profile fields from client_info table
           firstname: client.user.firstname,
           lastname: client.user.lastname,
           email: client.user.email,
-          phoneNumber: client.phoneNumber, // Get from Client entity
           role: client.user.role,
-          status: client.status,
-          serviceNeeded: client.serviceNeeded,
-          requestedAt: client.requestedAt
+
+          // All the fields that were missing from responses
+          preferred_contact_method: client.user.preferred_contact_method,
+          preferred_name: client.user.preferred_name,
+          payment_method: client.user.payment_method,  // Add this field
+          pronouns: client.user.pronouns,
+          home_type: client.user.home_type,
+          services_interested: client.user.services_interested,
+          phone_number: client.user.phone_number,
+          health_notes: client.user.health_notes,
+          service_specifics: client.user.service_specifics,
+          baby_sex: client.user.baby_sex,
+          baby_name: client.user.baby_name,
+          birth_hospital: client.user.birth_hospital,
+          birth_location: client.user.birth_location,
+          number_of_babies: client.user.number_of_babies,
+          provider_type: client.user.provider_type,
+          pregnancy_number: client.user.pregnancy_number,
+          had_previous_pregnancies: client.user.had_previous_pregnancies,
+          previous_pregnancies_count: client.user.previous_pregnancies_count,
+          living_children_count: client.user.living_children_count,
+          past_pregnancy_experience: client.user.past_pregnancy_experience,
+          service_support_details: client.user.service_support_details,
+          race_ethnicity: client.user.race_ethnicity,
+          primary_language: client.user.primary_language,
+          client_age_range: client.user.client_age_range,
+          insurance: client.user.insurance,
+          demographics_multi: client.user.demographics_multi,
+          pronouns_other: client.user.pronouns_other,
+          home_phone: client.user.home_phone,
+          home_access: client.user.home_access,
+          pets: client.user.pets,
+          relationship_status: client.user.relationship_status,
+          first_name: client.user.first_name,
+          last_name: client.user.last_name,
+          middle_name: client.user.middle_name,
+          mobile_phone: client.user.mobile_phone,
+          work_phone: client.user.work_phone,
+          referral_source: client.user.referral_source,
+          referral_name: client.user.referral_name,
+          referral_email: client.user.referral_email,
+
+          // Additional fields
+          address: client.user.address,
+          city: client.user.city,
+          state: client.user.state,
+          country: client.user.country,
+          zip_code: client.user.zip_code,
+          profile_picture: client.user.profile_picture,
+          account_status: client.user.account_status,
+          business: client.user.business,
+          bio: client.user.bio,
+          children_expected: client.user.children_expected,
+          service_needed: client.user.service_needed,
+          health_history: client.user.health_history,
+          allergies: client.user.allergies,
+          due_date: client.user.due_date,
+          annual_income: client.user.annual_income,
+          hospital: client.user.hospital,
+
+          // Client entity specific fields
+          childrenExpected: client.childrenExpected,
+          healthHistory: client.health_history,
+          dueDate: client.due_date,
+          babySex: client.baby_sex,
+          annualIncome: client.annual_income,
+          serviceSpecifics: client.service_specifics
+        }
+      };
+
+      console.log('📤 Controller: Response being sent to frontend:', {
+        responseKeys: Object.keys(responseData.client),
+        responseKeyCount: Object.keys(responseData.client).length,
+        responseData: responseData
+      });
+
+      // Check if important fields are missing from response
+      console.log('⚠️  Controller: Missing fields in response (not sent to frontend):');
+      importantFields.forEach(field => {
+        if (updateData[field] !== undefined && !(field in responseData.client)) {
+          console.log(`  🚨 ${field}: "${updateData[field]}" was updated but NOT in response`);
         }
       });
+
+      console.log('🔧 PUT /clients/:id - UPDATE REQUEST COMPLETE');
+      console.log('=====================================');
+
+      res.json(responseData);
     }
     catch (error) {
-      console.error('Controller: Error updating client:', error);
+      console.error('❌ Controller: Error updating client:', error);
       const err = this.handleError(error, res);
       res.status(err.status).json({ error: err.message });
     }
