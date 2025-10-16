@@ -20,10 +20,10 @@ export class UserUseCase {
 
     return user;
   }
-  
+
   async getHoursById(targetUserId: string): Promise<WORK_ENTRY[]> {
     const hours = await this.userRepository.getHoursById(targetUserId);
-    
+
     if(!hours) {
       throw new NotFoundError("Could not get hours based on Id");
     }
@@ -88,6 +88,5 @@ export class UserUseCase {
     return this.userRepository.addMember(firstname, lastname, userEmail, userRole);
   }
 
- 
-}
 
+}

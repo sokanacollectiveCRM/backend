@@ -119,16 +119,16 @@ export class UserController {
       const user = req.user
       const updateData = req.body;
       const profilePicture = req.file;
-      
+
       // upload profile picture to supabase storage so we can grab it later
       if (profilePicture) {
         const imageUrl = await this.userUseCase.uploadProfilePicture(user, profilePicture);
         updateData.profile_picture = imageUrl;
       }
-      
+
       // Here we will handle which fields to update
       const updatedUser = await this.userUseCase.updateUser(user, updateData);
-  
+
       res.status(200).json(updatedUser.toJSON());
     } catch(error) {
       res.status(400).json({ error: error.message});
@@ -154,7 +154,7 @@ export class UserController {
 
   private handleError(error: Error, res: Response): void {
     console.error('Error:', error.message);
-    
+
     if (error instanceof ValidationError) {
       res.status(400).json({ error: error.message });
     } else if (error instanceof ConflictError) {
