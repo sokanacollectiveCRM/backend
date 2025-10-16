@@ -6,7 +6,7 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 async function getClientInfoSchema() {
   try {
     console.log('🔍 Checking client_info table schema...');
-    
+
     // Query to get all columns from client_info table
     const { data, error } = await supabase
       .from('information_schema.columns')
@@ -22,24 +22,24 @@ async function getClientInfoSchema() {
 
     console.log('\n📋 Current client_info table columns:');
     console.log('=====================================');
-    
+
     if (data && data.length > 0) {
       data.forEach((column, index) => {
         console.log(`${index + 1}. ${column.column_name} (${column.data_type}) - ${column.is_nullable === 'YES' ? 'nullable' : 'not null'}`);
       });
-      
+
       console.log(`\n✅ Total columns: ${data.length}`);
-      
+
       // Check for specific fields we're trying to use
       const columnNames = data.map(col => col.column_name);
       const missingFields = [
         'preferred_contact_method',
-        'preferred_name', 
+        'preferred_name',
         'home_type',
         'services_interested',
         'health_notes'
       ];
-      
+
       console.log('\n🔍 Checking for missing fields:');
       missingFields.forEach(field => {
         if (columnNames.includes(field)) {
@@ -48,7 +48,7 @@ async function getClientInfoSchema() {
           console.log(`  ❌ ${field} - MISSING`);
         }
       });
-      
+
     } else {
       console.log('❌ No columns found or table does not exist');
     }
@@ -56,7 +56,7 @@ async function getClientInfoSchema() {
     // Also try to get a sample record to see the structure
     console.log('\n📄 Sample record structure:');
     console.log('============================');
-    
+
     const { data: sampleData, error: sampleError } = await supabase
       .from('client_info')
       .select('*')

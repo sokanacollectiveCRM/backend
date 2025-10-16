@@ -19,21 +19,21 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 async function runMigration() {
   try {
     console.log('🚀 Running migration to add missing client_info fields...');
-    
+
     // Read the migration file
     const migrationPath = path.join(__dirname, 'src/db/migrations/add_missing_client_info_fields.sql');
     const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
-    
+
     console.log('📄 Migration file loaded, executing SQL...');
-    
+
     // Execute the migration
     const { data, error } = await supabase.rpc('exec_sql', { sql: migrationSQL });
-    
+
     if (error) {
       console.error('❌ Migration failed:', error);
       process.exit(1);
     }
-    
+
     console.log('✅ Migration completed successfully!');
     console.log('📋 Added missing columns to client_info table:');
     console.log('  - preferred_contact_method');
@@ -42,9 +42,9 @@ async function runMigration() {
     console.log('  - services_interested');
     console.log('  - health_notes');
     console.log('  - And many more...');
-    
+
     console.log('\n🎉 You can now update any client profile field from the frontend!');
-    
+
   } catch (error) {
     console.error('❌ Error running migration:', error.message);
     process.exit(1);

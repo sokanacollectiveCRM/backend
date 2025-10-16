@@ -12,6 +12,12 @@ clientRoutes.get('/team/all',
   (req, res) => userController.getAllTeamMembers(req, res)
 );
 
+clientRoutes.get('/team/doulas',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
+  (req, res) => userController.getAllDoulas(req, res)
+);
+
 clientRoutes.delete('/team/:id',
   authMiddleware,
   (req, res, next) => authorizeRoles(req, res, next, ['admin']),
@@ -61,6 +67,38 @@ clientRoutes.put('/:id',
   authMiddleware,
   (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
   (req, res) => clientController.updateClient(req, res)
+);
+
+// Activity/Notes routes
+clientRoutes.get('/:id/activities',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
+  (req, res) => clientController.getClientActivities(req, res)
+);
+
+clientRoutes.post('/:id/activity',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
+  (req, res) => clientController.createActivity(req, res)
+);
+
+// Doula assignment routes
+clientRoutes.post('/:id/assign-doula',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
+  (req, res) => clientController.assignDoula(req, res)
+);
+
+clientRoutes.delete('/:id/assign-doula/:doulaId',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
+  (req, res) => clientController.unassignDoula(req, res)
+);
+
+clientRoutes.get('/:id/assigned-doulas',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
+  (req, res) => clientController.getAssignedDoulas(req, res)
 );
 
 export default clientRoutes;

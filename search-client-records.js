@@ -6,10 +6,10 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 async function searchClientRecords() {
   try {
     console.log('🔍 Searching all client_info records for preferred_contact_method...');
-    
+
     // First, let's check if the column exists at all
     console.log('\n1. Checking if preferred_contact_method column exists...');
-    
+
     const { data: columnCheck, error: columnError } = await supabase
       .from('information_schema.columns')
       .select('column_name')
@@ -26,7 +26,7 @@ async function searchClientRecords() {
 
     // Get all client records to see what's actually stored
     console.log('\n2. Fetching all client records...');
-    
+
     const { data: allClients, error: fetchError } = await supabase
       .from('client_info')
       .select('id, firstname, lastname, email, status, updated_at')
@@ -45,7 +45,7 @@ async function searchClientRecords() {
 
     // Try to get a specific client record with all fields
     console.log('\n3. Getting detailed record for the client that was being updated...');
-    
+
     const { data: detailedClient, error: detailError } = await supabase
       .from('client_info')
       .select('*')
@@ -60,14 +60,14 @@ async function searchClientRecords() {
       console.log(`   Email: ${detailedClient.email}`);
       console.log(`   Status: ${detailedClient.status}`);
       console.log(`   Updated: ${detailedClient.updated_at}`);
-      
+
       // Check for preferred_contact_method specifically
       if ('preferred_contact_method' in detailedClient) {
         console.log(`   preferred_contact_method: "${detailedClient.preferred_contact_method}"`);
       } else {
         console.log('   ❌ preferred_contact_method field not found in this record');
       }
-      
+
       // Show all fields that contain "contact" or "preferred"
       console.log('\n   Fields containing "contact" or "preferred":');
       Object.keys(detailedClient).forEach(key => {
@@ -75,14 +75,14 @@ async function searchClientRecords() {
           console.log(`     ${key}: "${detailedClient[key]}"`);
         }
       });
-      
+
     } else {
       console.log('❌ Could not find the specific client record');
     }
 
     // Check recent updates to see what's being saved
     console.log('\n4. Checking recent updates...');
-    
+
     const { data: recentUpdates, error: updateError } = await supabase
       .from('client_info')
       .select('id, firstname, lastname, updated_at, status')

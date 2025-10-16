@@ -11,24 +11,24 @@ import { ROLE } from '../types';
 
 export class SupabaseUserRepository implements UserRepository {
   private supabaseClient: SupabaseClient;
-  
+
   constructor(
     supabaseClient: SupabaseClient
   ) {
     this.supabaseClient = supabaseClient;
   }
-  
+
   async findByEmail(email: string): Promise<User | null> {
     const { data, error } = await this.supabaseClient
       .from('users')
       .select('*')
       .eq('email', email)
       .single();
-      
+
     if (error || !data) {
       return null;
     }
-    
+
     return this.mapToUser(data);
   }
 
@@ -36,9 +36,9 @@ export class SupabaseUserRepository implements UserRepository {
   async findByRole(role: string): Promise<User[]> {
     const { data, error } = await this.supabaseClient
       .from('users')
-      .select('*')
+      .select('id, email, firstname, lastname, role, profile_picture, bio')
       .eq('role', role)
-      .order('first_name', { ascending: true });
+      .order('firstname', { ascending: true });
 
     if (error) {
       throw new Error(`Failed to fetch ${role} users: ${error.message}`);
@@ -79,7 +79,7 @@ async findClientsAll(): Promise<any[]> {
     .from('client_info')
     .select(`
       id,
-      user_id,           
+      user_id,
       firstname,
       lastname,
       email,
@@ -150,8 +150,8 @@ async findClientsById(id: string): Promise<any> {
     console.log("GOING TO EERROR: NO DATA, client id is", id);
     return null;
   }
-  
-  return this.mapToClient(data[0]); 
+
+  return this.mapToClient(data[0]);
 }
 
 
@@ -188,7 +188,7 @@ async findClientsById(id: string): Promise<any> {
 
     return users.map(user => this.mapToClient(user));
   }
-  
+
   async save(user: User): Promise<User> {
     const { data, error } = await this.supabaseClient
       .from('users')
@@ -200,11 +200,11 @@ async findClientsById(id: string): Promise<any> {
       }, { onConflict: 'email' })
       .select()
       .single();
-      
+
     if (error) {
       throw new Error(error.message);
     }
-    
+
     return this.mapToUser(data);
   }
 
@@ -221,17 +221,17 @@ async findClientsById(id: string): Promise<any> {
     if (updatedUserError) throw new Error(updatedUserError.message);
     return this.mapToUser(updatedUser);
   }
-  
+
   async findAll(): Promise<User[]> {
     const { data, error } = await this.supabaseClient
     .from('users')
     .select('email, firstname, lastname')
     .order('firstname', { ascending: true });
-    
+
     if (error) {
       throw new Error(`Failed to fetch users: ${error.message}`);
     }
-    
+
     return data.map(this.mapToUser);
   }
 
@@ -258,10 +258,10 @@ async findClientsById(id: string): Promise<any> {
       const { data, error } = await this.supabaseClient
         .from('users')
         .insert([
-          { 
+          {
             firstname:firstname,
             lastname:lastname,
-            email: userEmail, 
+            email: userEmail,
             role: userRole
           },
         ])
@@ -285,16 +285,16 @@ async findClientsById(id: string): Promise<any> {
         .from('hours')
         .select('*')
         .eq('doula_id', id);
-      
+
       if (hoursError) throw new Error(hoursError.message);
       if (!hoursData) {
         return []
       };
-      
+
       // Get doula data once (since it's the same for all entries)
       const doulaData = await this.findById(id);
       if (!doulaData) throw new Error(`Doula with ID ${id} not found`);
-      
+
       // Process each hour entry to include client data
       const result = await Promise.all(hoursData.map(async (entry) => {
         const clientData = await this.findClientsById(entry.client_id);
@@ -304,7 +304,7 @@ async findClientsById(id: string): Promise<any> {
         // console.log("in getHoursById in supabaseUsersRepository, clientData (to which we are accessing clientData.firstname) is ", clientData);
         const noteData = await this.findNoteByWorkLogId(entry.id);
 
-        
+
 
         return {
           id: entry.id,
@@ -323,7 +323,7 @@ async findClientsById(id: string): Promise<any> {
           note: noteData ? noteData : null
         };
       }));
-      
+
       return result;
     } catch (error) {
       throw new Error(`Failed to get user's hours: ${error.message}`);
@@ -336,12 +336,12 @@ async findClientsById(id: string): Promise<any> {
       const { data: hoursData, error: hoursError } = await this.supabaseClient
         .from('hours')
         .select('*')
-      
+
       if (hoursError) throw new Error(hoursError.message);
       if (!hoursData) {
         return []
       };
-      
+
       // Process each hour entry to include client data
       const result = await Promise.all(hoursData.map(async (entry) => {
         // console.log("entry is", entry);
@@ -354,7 +354,7 @@ async findClientsById(id: string): Promise<any> {
           console.log("clientData is null in getAllHours, entry is", entry);
         }
 
-        
+
         return {
           id: entry.id,
           start_time: entry.start_time,
@@ -372,29 +372,29 @@ async findClientsById(id: string): Promise<any> {
           note: noteData ? noteData : null
         };
       }));
-      
+
       return result;
     } catch (error) {
       throw new Error(`Failed to get all hours: ${error.message}`);
     }
   }
-  
+
   async findById(id: string): Promise<User | null> {
     const { data, error } = await this.supabaseClient
       .from('users')
       .select('*')
       .eq('id', id)
       .single();
-      
+
     if (error || !data) {
       return null;
     }
-    
+
     return this.mapToUser(data);
   }
 
   async findNoteByWorkLogId(id: string): Promise<NOTE | null> {
-    
+
     const { data, error } = await this.supabaseClient
     .from('notes')
     .select('*')
@@ -406,18 +406,18 @@ async findClientsById(id: string): Promise<any> {
 
     return data[0];
   }
-  
+
   async delete(id: string): Promise<void> {
     const { error } = await this.supabaseClient
       .from('users')
       .delete()
       .eq('id', id);
-      
+
     if (error) {
       throw new Error(`Failed to delete user: ${error.message}`);
     }
   }
-  
+
   async uploadProfilePicture(user: User, profilePicture: MulterFile) {
     const filePath = `${user.id}/${Date.now()}_${profilePicture.originalname}`;
 
@@ -505,14 +505,14 @@ async findClientsById(id: string): Promise<any> {
       .from('hours')
       .insert([
         {
-          doula_id: doula_id, 
-          client_id: client_id, 
-          start_time: start_time, 
+          doula_id: doula_id,
+          client_id: client_id,
+          start_time: start_time,
           end_time: end_time
         }
       ])
       .select();
-      
+
       if (hoursError) {
         throw new Error(`Failed to post new user: ${hoursError.message}`);
       }
@@ -533,12 +533,12 @@ async findClientsById(id: string): Promise<any> {
         }
       ])
       .select();
-      
+
       if(noteError) {
         throw new Error(`The note field is nonempty but failed to add note, ${noteError.message}`);
       }
     }
-    
+
     return hoursData[0];
   }
 }

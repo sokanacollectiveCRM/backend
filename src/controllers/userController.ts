@@ -39,6 +39,26 @@ export class UserController {
     }
   }
 
+  async getAllDoulas(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const doulas = await this.userUseCase.getDoulasList();
+      res.json({
+        success: true,
+        doulas: doulas.map(d => ({
+          id: d.id,
+          firstname: d.firstname,
+          lastname: d.lastname,
+          email: d.email,
+          profile_picture: d.profile_picture,
+          bio: d.bio,
+          phone_number: d.phone_number
+        }))
+      });
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
   async deleteMember(req: AuthRequest, res: Response): Promise<void> {
     try {
       const userId = req.params.id;

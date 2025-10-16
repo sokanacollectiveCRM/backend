@@ -1,11 +1,15 @@
+import { Activity } from '../entities/Activity';
 import { Client } from '../entities/Client';
+import { ActivityRepository } from '../repositories/interface/activityRepository';
 import { ClientRepository } from '../repositories/interface/clientRepository';
 
 export class ClientUseCase {
   private clientRepository: ClientRepository;
+  private activityRepository: ActivityRepository;
 
-  constructor (clientRepository: ClientRepository) {
+  constructor (clientRepository: ClientRepository, activityRepository: ActivityRepository) {
     this.clientRepository = clientRepository;
+    this.activityRepository = activityRepository;
   }
 
   // Summary of clients for use in brief list of clients
@@ -91,6 +95,37 @@ export class ClientUseCase {
     }
     catch (error) {
       throw new Error(`Could not update client profile: ${error.message}`);
+    }
+  }
+
+  // Get activities for a client
+  async getClientActivities(clientId: string): Promise<Activity[]> {
+    try {
+      return await this.activityRepository.getActivitiesByClientId(clientId);
+    } catch (error) {
+      throw new Error(`Could not fetch client activities: ${error.message}`);
+    }
+  }
+
+  // Create a custom activity entry
+  async createActivity(
+    clientId: string,
+    type: string,
+    description: string,
+    metadata: any,
+    userId: string
+  ): Promise<Activity> {
+    try {
+      return await this.activityRepository.createActivity({
+        clientId,
+        type,
+        description,
+        metadata,
+        timestamp: new Date(),
+        createdBy: userId,
+      });
+    } catch (error) {
+      throw new Error(`Could not create activity: ${error.message}`);
     }
   }
 }

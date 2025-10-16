@@ -68,4 +68,4 @@ export class SupabaseActivityRepository implements ActivityRepository {
       data.created_by
     );
   }
-} 
+}

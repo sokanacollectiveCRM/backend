@@ -5,6 +5,8 @@ import { EmailController } from './controllers/emailController';
 import { RequestFormController } from './controllers/requestFormController';
 import { UserController } from './controllers/userController';
 import { RequestFormRepository } from './repositories/requestFormRepository';
+import { SupabaseActivityRepository } from './repositories/supabaseActivityRepository';
+import { SupabaseAssignmentRepository } from './repositories/supabaseAssignmentRepository';
 import { SupabaseClientRepository } from './repositories/supabaseClientRepository';
 import { SupabaseUserRepository } from './repositories/supabaseUserRepository';
 import { RequestFormService } from './services/RequestFormService';
@@ -22,6 +24,8 @@ import { UserUseCase } from './usecase/userUseCase';
 const userRepository = new SupabaseUserRepository(supabase);
 const requestRepository = new RequestFormRepository(supabase);
 const clientRepository = new SupabaseClientRepository(supabase);
+const activityRepository = new SupabaseActivityRepository(supabase);
+const assignmentRepository = new SupabaseAssignmentRepository(supabase);
 
 //-----------------------------------------------
 // Services (External Integrations)
@@ -34,7 +38,7 @@ const contractService = new SupabaseContractService(supabase);
 //-----------------------------------------------
 const authUseCase = new AuthUseCase(authService, userRepository);
 const userUseCase = new UserUseCase(userRepository);
-const clientUseCase = new ClientUseCase(clientRepository);
+const clientUseCase = new ClientUseCase(clientRepository, activityRepository);
 const contractUseCase = new ContractUseCase(contractService);
 
 //-----------------------------------------------
@@ -43,9 +47,8 @@ const contractUseCase = new ContractUseCase(contractService);
 const authController = new AuthController(authUseCase);
 const userController = new UserController(userUseCase);
 const requestFormController = new RequestFormController(requestService);
-const clientController = new ClientController(clientUseCase);
+const clientController = new ClientController(clientUseCase, assignmentRepository);
 const contractController = new ContractController(contractUseCase);
 const emailController = new EmailController();
 
 export { authController, authService, clientController, contractController, emailController, requestFormController, userController, userRepository };
-

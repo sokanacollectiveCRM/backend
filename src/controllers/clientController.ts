@@ -10,12 +10,15 @@ import { Client } from '../entities/Client';
 
 import { AuthRequest } from '../types';
 import { ClientUseCase } from '../usecase/clientUseCase';
+import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
 
 export class ClientController {
   private clientUseCase: ClientUseCase;
+  private assignmentRepository: SupabaseAssignmentRepository;
 
-  constructor (clientUseCase: ClientUseCase) {
+  constructor (clientUseCase: ClientUseCase, assignmentRepository: SupabaseAssignmentRepository) {
     this.clientUseCase = clientUseCase;
+    this.assignmentRepository = assignmentRepository;
   };
 
   //
@@ -356,6 +359,181 @@ export class ClientController {
     }
     catch (error) {
       console.error('❌ Controller: Error updating client:', error);
+      const err = this.handleError(error, res);
+      res.status(err.status).json({ error: err.message });
+    }
+  }
+
+  //
+  // createActivity()
+  //
+  // Creates a custom activity entry for a client
+  //
+  // returns:
+  //    Activity
+  //
+  async createActivity(req: AuthRequest, res: Response): Promise<void> {
+    const { id } = req.params;
+    const { type, description, metadata } = req.body;
+
+    if (!id) {
+      res.status(400).json({ error: 'Missing client ID' });
+      return;
+    }
+
+    if (!type || !description) {
+      res.status(400).json({ error: 'Missing type or description' });
+      return;
+    }
+
+    try {
+      const activity = await this.clientUseCase.createActivity(
+        id,
+        type,
+        description,
+        metadata,
+        req.user?.id
+      );
+
+      res.json({
+        success: true,
+        activity: {
+          id: activity.id,
+          clientId: activity.clientId,
+          type: activity.type,
+          description: activity.description,
+          metadata: activity.metadata,
+          timestamp: activity.timestamp,
+        },
+      });
+    } catch (error) {
+      const err = this.handleError(error, res);
+      res.status(err.status).json({ error: err.message });
+    }
+  }
+
+  //
+  // getClientActivities()
+  //
+  // Retrieves all activities/notes for a specific client
+  //
+  // returns:
+  //    Activity[]
+  //
+  async getClientActivities(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+
+      if (!id) {
+        res.status(400).json({ error: 'Missing client ID' });
+        return;
+      }
+
+      const activities = await this.clientUseCase.getClientActivities(id);
+
+      res.json({
+        success: true,
+        activities: activities
+      });
+    } catch (error) {
+      const err = this.handleError(error, res);
+      res.status(err.status).json({ error: err.message });
+    }
+  }
+
+  //
+  // assignDoula()
+  //
+  // Assign a doula to a client
+  //
+  // returns:
+  //    Assignment object
+  //
+  async assignDoula(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id: clientId } = req.params;
+      const { doulaId } = req.body;
+
+      if (!clientId || !doulaId) {
+        res.status(400).json({ error: 'Missing clientId or doulaId' });
+        return;
+      }
+
+      const assignment = await this.assignmentRepository.assignDoula(
+        clientId,
+        doulaId,
+        req.user?.id
+      );
+
+      res.json({
+        success: true,
+        assignment: {
+          id: assignment.id,
+          doulaId: assignment.doulaId,
+          clientId: assignment.clientId,
+          assignedAt: assignment.assignedAt,
+          status: assignment.status
+        }
+      });
+    } catch (error) {
+      const err = this.handleError(error, res);
+      res.status(err.status).json({ error: err.message });
+    }
+  }
+
+  //
+  // unassignDoula()
+  //
+  // Unassign a doula from a client
+  //
+  // returns:
+  //    Success message
+  //
+  async unassignDoula(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id: clientId, doulaId } = req.params;
+
+      if (!clientId || !doulaId) {
+        res.status(400).json({ error: 'Missing clientId or doulaId' });
+        return;
+      }
+
+      await this.assignmentRepository.unassignDoula(clientId, doulaId);
+
+      res.json({
+        success: true,
+        message: 'Doula unassigned successfully'
+      });
+    } catch (error) {
+      const err = this.handleError(error, res);
+      res.status(err.status).json({ error: err.message });
+    }
+  }
+
+  //
+  // getAssignedDoulas()
+  //
+  // Get all doulas assigned to a specific client
+  //
+  // returns:
+  //    Array of assigned doulas with their info
+  //
+  async getAssignedDoulas(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id: clientId } = req.params;
+
+      if (!clientId) {
+        res.status(400).json({ error: 'Missing clientId' });
+        return;
+      }
+
+      const doulas = await this.assignmentRepository.getAssignedDoulas(clientId);
+
+      res.json({
+        success: true,
+        doulas: doulas
+      });
+    } catch (error) {
       const err = this.handleError(error, res);
       res.status(err.status).json({ error: err.message });
     }

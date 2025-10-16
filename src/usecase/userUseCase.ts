@@ -76,6 +76,10 @@ export class UserUseCase {
     return this.userRepository.findAllTeamMembers();
   }
 
+  async getDoulasList(): Promise<User[]> {
+    return this.userRepository.findByRole('doula');
+  }
+
   async deleteMember(userId: string): Promise<void> {
     return this.userRepository.delete(userId);
   }
