@@ -1,211 +1,214 @@
-import { Request, Response } from "express";
+import { Request, Response } from 'express';
+
+import { RequestFormService } from '../services/RequestFormService';
 import { NodemailerService } from '../services/emailService';
-import { RequestFormService } from "../services/RequestFormService";
-import { AuthRequest, RequestFormData, RequestStatus } from "../types";
+import { AuthRequest, RequestFormData, RequestStatus } from '../types';
 
 const notificationEmail = 'hello@sokanacollective.com';
 const emailService = new NodemailerService();
 
 export class RequestFormController {
-    private service: RequestFormService;
+  private service: RequestFormService;
 
-    constructor(requestFormService: RequestFormService) {
-        this.service = requestFormService;
+  constructor(requestFormService: RequestFormService) {
+    this.service = requestFormService;
+  }
+
+  async createRequest(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.body) {
+        res.status(400).json({ error: 'No body found in request' });
+        return;
+      }
+
+      if (!req.user?.id) {
+        res.status(401).json({ error: 'User not authenticated' });
+        return;
+      }
+
+      const formData: RequestFormData = req.body;
+      const result = await this.service.createRequest(formData);
+
+      res.status(201).json({
+        message: 'Request form submitted successfully',
+        data: result,
+      });
+    } catch (error) {
+      console.error('Error creating request:', error);
+      res.status(400).json({ error: error.message });
     }
+  }
 
-    async createRequest(req: AuthRequest, res: Response): Promise<void> {
-        try {
-            if (!req.body) {
-                res.status(400).json({ error: 'No body found in request' });
-                return;
-            }
+  async getUserRequests(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        res.status(401).json({ error: 'User not authenticated' });
+        return;
+      }
 
-            if (!req.user?.id) {
-                res.status(401).json({ error: 'User not authenticated' });
-                return;
-            }
-
-            const formData: RequestFormData = req.body;
-            const result = await this.service.createRequest(formData);
-
-            res.status(201).json({
-                message: "Request form submitted successfully",
-                data: result
-            });
-        } catch (error) {
-            console.error("Error creating request:", error);
-            res.status(400).json({ error: error.message });
-        }
+      const requests = await this.service.getUserRequests(req.user.id);
+      res.status(200).json({
+        message: 'User requests retrieved successfully',
+        data: requests,
+      });
+    } catch (error) {
+      console.error('Error getting user requests:', error);
+      res.status(500).json({ error: error.message });
     }
+  }
 
-    async getUserRequests(req: AuthRequest, res: Response): Promise<void> {
-        try {
-            if (!req.user?.id) {
-                res.status(401).json({ error: 'User not authenticated' });
-                return;
-            }
+  async getRequestById(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        res.status(401).json({ error: 'User not authenticated' });
+        return;
+      }
 
-            const requests = await this.service.getUserRequests(req.user.id);
-            res.status(200).json({
-                message: "User requests retrieved successfully",
-                data: requests
-            });
-        } catch (error) {
-            console.error("Error getting user requests:", error);
-            res.status(500).json({ error: error.message });
-        }
+      const { id } = req.params;
+      if (!id) {
+        res.status(400).json({ error: 'Request ID is required' });
+        return;
+      }
+
+      const request = await this.service.getRequestById(id, req.user.id);
+      if (!request) {
+        res.status(404).json({ error: 'Request not found' });
+        return;
+      }
+
+      res.status(200).json({
+        message: 'Request retrieved successfully',
+        data: request,
+      });
+    } catch (error) {
+      console.error('Error getting request by ID:', error);
+      res.status(500).json({ error: error.message });
     }
+  }
 
-    async getRequestById(req: AuthRequest, res: Response): Promise<void> {
-        try {
-            if (!req.user?.id) {
-                res.status(401).json({ error: 'User not authenticated' });
-                return;
-            }
+  async getAllRequests(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        res.status(401).json({ error: 'User not authenticated' });
+        return;
+      }
 
-            const { id } = req.params;
-            if (!id) {
-                res.status(400).json({ error: 'Request ID is required' });
-                return;
-            }
+      // Check if user is admin
+      if (req.user.role !== 'admin') {
+        res.status(403).json({ error: 'Admin access required' });
+        return;
+      }
 
-            const request = await this.service.getRequestById(id, req.user.id);
-            if (!request) {
-                res.status(404).json({ error: 'Request not found' });
-                return;
-            }
-
-            res.status(200).json({
-                message: "Request retrieved successfully",
-                data: request
-            });
-        } catch (error) {
-            console.error("Error getting request by ID:", error);
-            res.status(500).json({ error: error.message });
-        }
+      const requests = await this.service.getAllRequests();
+      res.status(200).json({
+        message: 'All requests retrieved successfully',
+        data: requests,
+      });
+    } catch (error) {
+      console.error('Error getting all requests:', error);
+      res.status(500).json({ error: error.message });
     }
+  }
 
-    async getAllRequests(req: AuthRequest, res: Response): Promise<void> {
-        try {
-            if (!req.user?.id) {
-                res.status(401).json({ error: 'User not authenticated' });
-                return;
-            }
+  async getRequestByIdAdmin(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        res.status(401).json({ error: 'User not authenticated' });
+        return;
+      }
 
-            // Check if user is admin
-            if (req.user.role !== 'admin') {
-                res.status(403).json({ error: 'Admin access required' });
-                return;
-            }
+      // Check if user is admin
+      if (req.user.role !== 'admin') {
+        res.status(403).json({ error: 'Admin access required' });
+        return;
+      }
 
-            const requests = await this.service.getAllRequests();
-            res.status(200).json({
-                message: "All requests retrieved successfully",
-                data: requests
-            });
-        } catch (error) {
-            console.error("Error getting all requests:", error);
-            res.status(500).json({ error: error.message });
-        }
+      const { id } = req.params;
+      if (!id) {
+        res.status(400).json({ error: 'Request ID is required' });
+        return;
+      }
+
+      const request = await this.service.getRequestByIdAdmin(id);
+      if (!request) {
+        res.status(404).json({ error: 'Request not found' });
+        return;
+      }
+
+      res.status(200).json({
+        message: 'Request retrieved successfully',
+        data: request,
+      });
+    } catch (error) {
+      console.error('Error getting request by ID (admin):', error);
+      res.status(500).json({ error: error.message });
     }
+  }
 
-    async getRequestByIdAdmin(req: AuthRequest, res: Response): Promise<void> {
-        try {
-            if (!req.user?.id) {
-                res.status(401).json({ error: 'User not authenticated' });
-                return;
-            }
+  async updateRequestStatus(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        res.status(401).json({ error: 'User not authenticated' });
+        return;
+      }
 
-            // Check if user is admin
-            if (req.user.role !== 'admin') {
-                res.status(403).json({ error: 'Admin access required' });
-                return;
-            }
+      // Check if user is admin
+      if (req.user.role !== 'admin') {
+        res.status(403).json({ error: 'Admin access required' });
+        return;
+      }
 
-            const { id } = req.params;
-            if (!id) {
-                res.status(400).json({ error: 'Request ID is required' });
-                return;
-            }
+      const { id } = req.params;
+      const { status } = req.body;
 
-            const request = await this.service.getRequestByIdAdmin(id);
-            if (!request) {
-                res.status(404).json({ error: 'Request not found' });
-                return;
-            }
+      if (!id) {
+        res.status(400).json({ error: 'Request ID is required' });
+        return;
+      }
 
-            res.status(200).json({
-                message: "Request retrieved successfully",
-                data: request
-            });
-        } catch (error) {
-            console.error("Error getting request by ID (admin):", error);
-            res.status(500).json({ error: error.message });
-        }
+      if (!status) {
+        res.status(400).json({ error: 'Status is required' });
+        return;
+      }
+
+      const validStatuses = Object.values(RequestStatus);
+      if (!validStatuses.includes(status)) {
+        res.status(400).json({
+          error: 'Invalid status value',
+          validStatuses: validStatuses,
+        });
+        return;
+      }
+
+      const updatedRequest = await this.service.updateRequestStatus(id, status);
+      res.status(200).json({
+        message: 'Request status updated successfully',
+        data: updatedRequest,
+      });
+    } catch (error) {
+      console.error('Error updating request status:', error);
+      res.status(500).json({ error: error.message });
     }
+  }
 
-    async updateRequestStatus(req: AuthRequest, res: Response): Promise<void> {
-        try {
-            if (!req.user?.id) {
-                res.status(401).json({ error: 'User not authenticated' });
-                return;
-            }
+  // Updated method to handle all 10-step form fields
+  async createForm(req: Request, res: Response): Promise<void> {
+    try {
+      if (!req.body) {
+        res.status(400).json({ error: 'No body found in request' });
+        return;
+      }
+      const formData = req.body;
+      const savedForm = await this.service.newForm(formData);
+      console.log('📬 New lead saved with client_info ID:', savedForm.id); // Added log for linked client ID
+      const profileLink = `${process.env.FRONTEND_URL}/admin/clients/${savedForm.id}`; // Added profile link to email
 
-            // Check if user is admin
-            if (req.user.role !== 'admin') {
-                res.status(403).json({ error: 'Admin access required' });
-                return;
-            }
+      // Send notification email
+      try {
+        const subject = 'New Lead Submitted via Request Form';
 
-            const { id } = req.params;
-            const { status } = req.body;
-
-            if (!id) {
-                res.status(400).json({ error: 'Request ID is required' });
-                return;
-            }
-
-            if (!status) {
-                res.status(400).json({ error: 'Status is required' });
-                return;
-            }
-
-            const validStatuses = Object.values(RequestStatus);
-            if (!validStatuses.includes(status)) {
-                res.status(400).json({
-                    error: 'Invalid status value',
-                    validStatuses: validStatuses
-                });
-                return;
-            }
-
-            const updatedRequest = await this.service.updateRequestStatus(id, status);
-            res.status(200).json({
-                message: "Request status updated successfully",
-                data: updatedRequest
-            });
-        } catch (error) {
-            console.error("Error updating request status:", error);
-            res.status(500).json({ error: error.message });
-        }
-    }
-
-    // Updated method to handle all 10-step form fields
-    async createForm(req: Request, res: Response): Promise<void> {
-        try {
-            if (!req.body) {
-                res.status(400).json({ error: 'No body found in request' });
-                return;
-            }
-            const formData = req.body;
-            const savedForm = await this.service.newForm(formData);
-
-            // Send notification email
-            try {
-                const subject = 'New Lead Submitted via Request Form';
-
-                // Create comprehensive text version
-                const text = `A new lead has been submitted via the request form.
+        // Create comprehensive text version
+        const text = `A new lead has been submitted via the request form.
 
 CLIENT DETAILS:
 Name: ${savedForm.firstname} ${savedForm.lastname}
@@ -274,12 +277,13 @@ Demographics: ${Array.isArray(savedForm.demographics_multi) ? savedForm.demograp
 
 FORM SUBMISSION DETAILS:
 Submission Date: ${new Date().toLocaleString()}
-Status: lead`;
+Status: lead
 
+View Client Profile: ${profileLink}`;
 
-
-                // Create comprehensive HTML version
-                const html = `
+        // Added profile link to email button
+        // Create comprehensive HTML version
+        const html = `
                   <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; background-color: #f9f9f9; padding: 20px;">
                     <div style="background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
                       <h1 style="color: #4CAF50; text-align: center; margin-bottom: 30px; border-bottom: 3px solid #4CAF50; padding-bottom: 10px;">New Lead Submitted</h1>
@@ -388,9 +392,9 @@ Status: lead`;
                       </div>
 
                       <div style="text-align: center; margin: 30px 0;">
-                        <a href="${process.env.FRONTEND_URL}/clients/${savedForm.id}?open=profile&mode=modal"
-                           style="background-color:#4CAF50;color:#fff;padding:12px 20px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block">
-                          View Lead in CRM
+                        <a href="${profileLink}"
+                           style="background:#007934;color:white;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block">
+                          View Client Profile
                         </a>
                       </div>
 
@@ -406,26 +410,25 @@ Status: lead`;
                   </div>
                 `;
 
+        await emailService.sendEmail(notificationEmail, subject, text, html);
+      } catch (emailError) {
+        console.error('Failed to send notification email:', emailError);
+        // Do not block form submission if email fails
+      }
 
+      // Send confirmation email to the person who submitted the request
+      try {
+        const confirmationSubject =
+          "Request Received - We're Working on Your Match";
 
-                await emailService.sendEmail(notificationEmail, subject, text, html);
-            } catch (emailError) {
-                console.error('Failed to send notification email:', emailError);
-                // Do not block form submission if email fails
-            }
-
-            // Send confirmation email to the person who submitted the request
-            try {
-                const confirmationSubject = 'Request Received - We\'re Working on Your Match';
-
-                const confirmationText = `Dear ${savedForm.firstname} ${savedForm.lastname},
+        const confirmationText = `Dear ${savedForm.firstname} ${savedForm.lastname},
 
 Thank you for submitting your request for doula services. We have received your information and are working on finding the perfect match for you.
 
 Best regards,
 The Sokana Collective Team`;
 
-                const confirmationHtml = `
+        const confirmationHtml = `
                   <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f9f9f9; padding: 20px;">
                     <div style="background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
                       <h1 style="color: #4CAF50; text-align: center; margin-bottom: 30px; border-bottom: 3px solid #4CAF50; padding-bottom: 10px;">Request Received</h1>
@@ -444,16 +447,24 @@ The Sokana Collective Team`;
                   </div>
                 `;
 
-                await emailService.sendEmail(savedForm.email, confirmationSubject, confirmationText, confirmationHtml);
-            } catch (confirmationEmailError) {
-                console.error('Failed to send confirmation email:', confirmationEmailError);
-                // Do not block form submission if confirmation email fails
-            }
+        await emailService.sendEmail(
+          savedForm.email,
+          confirmationSubject,
+          confirmationText,
+          confirmationHtml
+        );
+      } catch (confirmationEmailError) {
+        console.error(
+          'Failed to send confirmation email:',
+          confirmationEmailError
+        );
+        // Do not block form submission if confirmation email fails
+      }
 
-            res.status(200).json({ message: "Form data received, onto processing" });
-        } catch (error) {
-            console.error("Error processing form data:", error);
-            res.status(400).json({ error: error.message });
-        }
+      res.status(200).json({ message: 'Form data received, onto processing' });
+    } catch (error) {
+      console.error('Error processing form data:', error);
+      res.status(400).json({ error: error.message });
     }
+  }
 }
