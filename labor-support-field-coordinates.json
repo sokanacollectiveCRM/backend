@@ -1,0 +1,24 @@
+{
+  "templateId": "6af732001d7944ee83cb6dde81846c3e83c241d8",
+  "templateName": "Labor Support Agreement for Service",
+  "documentName": "Labor Support Agreement for Service",
+  "pageCount": "3",
+  "fieldCoordinates": {
+    "date": {
+      "x": 100,
+      "y": 275,
+      "width": 150,
+      "height": 25,
+      "page": 2
+    },
+    "signature": {
+      "x": 380,
+      "y": 220,
+      "width": 150,
+      "height": 35,
+      "page": 2
+    }
+  },
+  "extractedAt": "2025-10-24T22:17:21.341Z",
+  "note": "Perfect positioning achieved through iterative adjustment"
+}

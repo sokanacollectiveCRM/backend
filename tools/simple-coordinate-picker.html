@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simple PDF Coordinate Picker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .pdf-container {
+        position: relative;
+        cursor: crosshair;
+        border: 2px solid #e5e7eb;
+        background: #f9fafb;
+        min-height: 600px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .pdf-container:hover {
+        background-color: rgba(59, 130, 246, 0.1);
+      }
+      .coordinate-marker {
+        position: absolute;
+        width: 12px;
+        height: 12px;
+        background-color: red;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 10;
+        pointer-events: none;
+        border: 2px solid white;
+      }
+      .coordinate-label {
+        position: absolute;
+        background-color: rgba(0, 0, 0, 0.9);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+        transform: translate(-50%, -100%);
+        margin-top: -8px;
+        z-index: 11;
+        pointer-events: none;
+        white-space: nowrap;
+      }
+      .pdf-placeholder {
+        text-align: center;
+        color: #6b7280;
+        font-size: 18px;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="app"
+      class="flex flex-col items-center gap-4 p-6 bg-gray-50 min-h-screen"
+    >
+      <h1 class="text-3xl font-bold text-blue-600">
+        🎯 Simple PDF Coordinate Picker
+      </h1>
+      <p class="text-gray-600">
+        Click on the PDF area to get exact coordinates for field placement
+      </p>
+
+      <div id="upload-section" class="bg-white p-8 rounded-lg shadow-lg">
+        <input
+          type="file"
+          id="pdf-file"
+          accept="application/pdf"
+          class="p-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-400"
+        />
+        <p class="text-sm text-gray-500 mt-2">Upload your PDF template</p>
+      </div>
+
+      <div id="picker-section" class="w-full max-w-6xl hidden">
+        <div class="bg-white p-4 rounded-lg shadow-lg mb-4">
+          <div class="flex items-center gap-4 mb-4">
+            <select id="field-select" class="border p-2 rounded">
+              <option value="">Select a field...</option>
+              <option value="clientName">clientName</option>
+              <option value="totalAmount">totalAmount</option>
+              <option value="deposit">deposit</option>
+              <option value="balanceAmount">balanceAmount</option>
+              <option value="clientInitials">clientInitials</option>
+              <option value="client_signature">client_signature</option>
+              <option value="client_signed_date">client_signed_date</option>
+            </select>
+
+            <button
+              id="toggle-markers"
+              class="px-4 py-2 rounded bg-green-500 text-white"
+            >
+              Hide Markers
+            </button>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button
+              id="export-btn"
+              class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+            >
+              💾 Export JSON
+            </button>
+            <button
+              id="copy-btn"
+              class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
+            >
+              📋 Copy to Clipboard
+            </button>
+            <button
+              id="clear-btn"
+              class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+            >
+              🗑 Clear All
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+          <div class="flex items-center justify-between p-4 bg-gray-100">
+            <button
+              id="prev-page"
+              class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+            >
+              ⬅ Previous
+            </button>
+            <span id="page-info" class="font-medium">Page 1 of 1</span>
+            <button
+              id="next-page"
+              class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+            >
+              Next ➡
+            </button>
+          </div>
+
+          <div id="pdf-container" class="pdf-container relative">
+            <div class="pdf-placeholder">
+              <p>📄 PDF will be displayed here</p>
+              <p class="text-sm mt-2">Click anywhere to place coordinates</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 bg-white p-4 rounded-lg shadow-lg">
+          <h3 class="font-bold mb-2">📍 Recorded Coordinates:</h3>
+          <div id="coordinates-list" class="max-h-48 overflow-auto">
+            <p class="text-gray-500">
+              No coordinates recorded yet. Select a field and click on the PDF
+              area.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      class CoordinatePicker {
+        constructor() {
+          this.coordinates = [];
+          this.currentPage = 1;
+          this.totalPages = 1;
+          this.showMarkers = true;
+          this.pdfFile = null;
+
+          this.initializeElements();
+          this.attachEventListeners();
+        }
+
+        initializeElements() {
+          this.uploadSection = document.getElementById('upload-section');
+          this.pickerSection = document.getElementById('picker-section');
+          this.pdfFileInput = document.getElementById('pdf-file');
+          this.fieldSelect = document.getElementById('field-select');
+          this.toggleMarkersBtn = document.getElementById('toggle-markers');
+          this.exportBtn = document.getElementById('export-btn');
+          this.copyBtn = document.getElementById('copy-btn');
+          this.clearBtn = document.getElementById('clear-btn');
+          this.prevPageBtn = document.getElementById('prev-page');
+          this.nextPageBtn = document.getElementById('next-page');
+          this.pageInfo = document.getElementById('page-info');
+          this.pdfContainer = document.getElementById('pdf-container');
+          this.coordinatesList = document.getElementById('coordinates-list');
+        }
+
+        attachEventListeners() {
+          this.pdfFileInput.addEventListener('change', (e) =>
+            this.handleFileUpload(e)
+          );
+          this.pdfContainer.addEventListener('click', (e) =>
+            this.handleClick(e)
+          );
+          this.toggleMarkersBtn.addEventListener('click', () =>
+            this.toggleMarkers()
+          );
+          this.exportBtn.addEventListener('click', () =>
+            this.exportCoordinates()
+          );
+          this.copyBtn.addEventListener('click', () => this.copyToClipboard());
+          this.clearBtn.addEventListener('click', () =>
+            this.clearCoordinates()
+          );
+          this.prevPageBtn.addEventListener('click', () => this.previousPage());
+          this.nextPageBtn.addEventListener('click', () => this.nextPage());
+        }
+
+        handleFileUpload(e) {
+          const file = e.target.files[0];
+          if (file && file.type === 'application/pdf') {
+            this.pdfFile = file;
+            this.uploadSection.classList.add('hidden');
+            this.pickerSection.classList.remove('hidden');
+            this.updatePageInfo();
+            console.log('PDF file loaded:', file.name);
+          } else {
+            alert('Please select a valid PDF file.');
+          }
+        }
+
+        handleClick(e) {
+          const selectedField = this.fieldSelect.value;
+          if (!selectedField) {
+            alert('Please select a field first!');
+            return;
+          }
+
+          const rect = this.pdfContainer.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const y = e.clientY - rect.top;
+
+          const coord = {
+            field: selectedField,
+            x: Math.round(x),
+            y: Math.round(y),
+            page: this.currentPage,
+            id: Date.now(),
+          };
+
+          this.coordinates.push(coord);
+          this.updateCoordinatesList();
+          this.renderMarkers();
+          console.log('📍 Added coordinate:', coord);
+        }
+
+        toggleMarkers() {
+          this.showMarkers = !this.showMarkers;
+          this.toggleMarkersBtn.textContent = this.showMarkers
+            ? 'Hide Markers'
+            : 'Show Markers';
+          this.renderMarkers();
+        }
+
+        renderMarkers() {
+          // Clear existing markers
+          const existingMarkers = this.pdfContainer.querySelectorAll(
+            '.coordinate-marker, .coordinate-label'
+          );
+          existingMarkers.forEach((marker) => marker.remove());
+
+          if (!this.showMarkers) return;
+
+          // Render markers for current page
+          const pageCoordinates = this.coordinates.filter(
+            (coord) => coord.page === this.currentPage
+          );
+          pageCoordinates.forEach((coord) => {
+            const marker = document.createElement('div');
+            marker.className = 'coordinate-marker';
+            marker.style.left = coord.x + 'px';
+            marker.style.top = coord.y + 'px';
+
+            const label = document.createElement('div');
+            label.className = 'coordinate-label';
+            label.style.left = coord.x + 'px';
+            label.style.top = coord.y + 'px';
+            label.textContent = `${coord.field} (${coord.x}, ${coord.y})`;
+
+            this.pdfContainer.appendChild(marker);
+            this.pdfContainer.appendChild(label);
+          });
+        }
+
+        updateCoordinatesList() {
+          if (this.coordinates.length === 0) {
+            this.coordinatesList.innerHTML =
+              '<p class="text-gray-500">No coordinates recorded yet. Select a field and click on the PDF area.</p>';
+            return;
+          }
+
+          const html = this.coordinates
+            .map(
+              (coord) => `
+                    <div class="flex items-center justify-between bg-gray-50 p-2 rounded mb-2">
+                        <span class="font-mono text-sm">
+                            ${coord.field}: (${coord.x}, ${coord.y}) - Page ${coord.page}
+                        </span>
+                        <button onclick="coordinatePicker.removeCoordinate(${coord.id})"
+                                class="text-red-500 hover:text-red-700">
+                            ❌
+                        </button>
+                    </div>
+                `
+            )
+            .join('');
+
+          this.coordinatesList.innerHTML = html;
+        }
+
+        removeCoordinate(id) {
+          this.coordinates = this.coordinates.filter(
+            (coord) => coord.id !== id
+          );
+          this.updateCoordinatesList();
+          this.renderMarkers();
+        }
+
+        exportCoordinates() {
+          const exportData = this.coordinates.reduce((acc, coord) => {
+            acc[coord.field] = { x: coord.x, y: coord.y, page: coord.page };
+            return acc;
+          }, {});
+
+          const json = JSON.stringify(exportData, null, 2);
+          const blob = new Blob([json], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `pdfCoordinates_page${this.currentPage}.json`;
+          a.click();
+        }
+
+        copyToClipboard() {
+          const exportData = this.coordinates.reduce((acc, coord) => {
+            acc[coord.field] = { x: coord.x, y: coord.y, page: coord.page };
+            return acc;
+          }, {});
+
+          const json = JSON.stringify(exportData, null, 2);
+          navigator.clipboard.writeText(json).then(() => {
+            alert('Coordinates copied to clipboard!');
+          });
+        }
+
+        clearCoordinates() {
+          if (window.confirm('Clear all coordinates?')) {
+            this.coordinates = [];
+            this.updateCoordinatesList();
+            this.renderMarkers();
+          }
+        }
+
+        previousPage() {
+          if (this.currentPage > 1) {
+            this.currentPage--;
+            this.updatePageInfo();
+            this.renderMarkers();
+          }
+        }
+
+        nextPage() {
+          if (this.currentPage < this.totalPages) {
+            this.currentPage++;
+            this.updatePageInfo();
+            this.renderMarkers();
+          }
+        }
+
+        updatePageInfo() {
+          this.pageInfo.textContent = `Page ${this.currentPage} of ${this.totalPages}`;
+          this.prevPageBtn.disabled = this.currentPage === 1;
+          this.nextPageBtn.disabled = this.currentPage === this.totalPages;
+        }
+      }
+
+      // Initialize the coordinate picker
+      const coordinatePicker = new CoordinatePicker();
+    </script>
+  </body>
+</html>
+
+
+
+
+
