@@ -18,7 +18,9 @@
     "lint:fix": "eslint . --fix",
     "lint:check": "eslint . --max-warnings 0",
     "build": "tsc && tsc-alias",
-    "create-admin": "tsx scripts/createAdmin.ts"
+    "create-admin": "tsx scripts/createAdmin.ts",
+    "signnow:coords": "tsx src/scripts/getSignNowCoordinates.ts",
+    "signnow:send:ls": "tsx src/scripts/sendLaborSupportContract.ts"
   },
   "keywords": [],
   "author": "",
@@ -34,7 +36,7 @@
     "cors": "^2.8.5",
     "docusign-esign": "^8.4.0",
     "docx": "^9.5.1",
-    "docxtemplater": "^3.62.0",
+    "docxtemplater": "^3.67.1",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "form-data": "^4.0.4",

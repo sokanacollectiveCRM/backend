@@ -1,4 +1,5 @@
 import axios from 'axios';
+
 import { SignNowPostpartumFields } from '../types/postpartum';
 
 export class SignNowService {
@@ -9,7 +10,7 @@ export class SignNowService {
 
       // Then test with a simple API call like getting user info
       const response = await axios.get(`${this.baseURL}/user`, {
-        headers: this.getAuthHeaders()
+        headers: this.getAuthHeaders(),
       });
       return { success: true, data: response.data };
     } catch (error) {
@@ -23,15 +24,18 @@ export class SignNowService {
       await this.authenticate();
 
       // Try to get template details
-      const response = await axios.get(`${this.baseURL}/template/${templateId}`, {
-        headers: this.getAuthHeaders()
-      });
+      const response = await axios.get(
+        `${this.baseURL}/template/${templateId}`,
+        {
+          headers: this.getAuthHeaders(),
+        }
+      );
       return { success: true, template: response.data };
     } catch (error) {
       console.error('Template test error:', {
         status: error.response?.status,
         data: error.response?.data,
-        url: `${this.baseURL}/template/${templateId}`
+        url: `${this.baseURL}/template/${templateId}`,
       });
       throw error;
     }
@@ -44,14 +48,14 @@ export class SignNowService {
 
       // List all templates
       const response = await axios.get(`${this.baseURL}/template`, {
-        headers: this.getAuthHeaders()
+        headers: this.getAuthHeaders(),
       });
       return { success: true, templates: response.data };
     } catch (error) {
       console.error('List templates error:', {
         status: error.response?.status,
         data: error.response?.data,
-        url: `${this.baseURL}/template`
+        url: `${this.baseURL}/template`,
       });
       throw error;
     }
@@ -63,9 +67,12 @@ export class SignNowService {
       await this.authenticate();
 
       // Get template details including fields
-      const response = await axios.get(`${this.baseURL}/document/${templateId}`, {
-        headers: this.getAuthHeaders()
-      });
+      const response = await axios.get(
+        `${this.baseURL}/document/${templateId}`,
+        {
+          headers: this.getAuthHeaders(),
+        }
+      );
 
       // Extract field information
       const fields = response.data.texts || [];
@@ -73,20 +80,20 @@ export class SignNowService {
         name: field.name,
         label: field.label,
         id: field.id,
-        required: field.required
+        required: field.required,
       }));
 
       return {
         success: true,
         fields: fieldInfo,
         allTexts: response.data.texts,
-        fullDocument: response.data
+        fullDocument: response.data,
       };
     } catch (error) {
       console.error('Get template fields error:', {
         status: error.response?.status,
         data: error.response?.data,
-        url: `${this.baseURL}/document/${templateId}`
+        url: `${this.baseURL}/document/${templateId}`,
       });
       throw error;
     }
@@ -96,22 +103,25 @@ export class SignNowService {
     try {
       await this.authenticate();
 
-      console.log('🔍 Inspecting document fields (source of truth):', documentId);
+      console.log(
+        '🔍 Inspecting document fields (source of truth):',
+        documentId
+      );
 
       const doc = await axios.get(`${this.baseURL}/document/${documentId}`, {
-        headers: this.getAuthHeaders()
+        headers: this.getAuthHeaders(),
       });
 
       const fields = doc.data?.fields || [];
       const fieldInfo = fields.map((f: any) => ({
         id: f.id,
-        name: f.name,                    // exact field_name you must use
+        name: f.name, // exact field_name you must use
         json_name: f.json_attributes?.name, // sometimes different
-        type: f.type,                    // text / signature / initials / date
-        role: f.role,                    // "Client" / "Recipient 1" etc
+        type: f.type, // text / signature / initials / date
+        role: f.role, // "Client" / "Recipient 1" etc
         prefilled_text: f.prefilled_text, // any existing value
         required: f.required || f.json_attributes?.required,
-        data: f.data                     // current value
+        data: f.data, // current value
       }));
 
       console.log('📋 Document fields (source of truth):');
@@ -119,7 +129,10 @@ export class SignNowService {
 
       return { success: true, fields: fieldInfo, rawFields: fields };
     } catch (error) {
-      console.error('Error inspecting document fields:', error.response?.data || error.message);
+      console.error(
+        'Error inspecting document fields:',
+        error.response?.data || error.message
+      );
       throw error;
     }
   }
@@ -132,7 +145,7 @@ export class SignNowService {
 
       // Get live field metadata
       const doc = await axios.get(`${this.baseURL}/document/${documentId}`, {
-        headers: this.getAuthHeaders()
+        headers: this.getAuthHeaders(),
       });
 
       const fields = doc.data?.fields || [];
@@ -154,7 +167,9 @@ export class SignNowService {
 
         if (field) {
           fieldValues.push({ field_id: field.id, value: String(val) });
-          console.log(`✅ Mapped "${key}" → field_id: ${field.id}, value: "${val}"`);
+          console.log(
+            `✅ Mapped "${key}" → field_id: ${field.id}, value: "${val}"`
+          );
         } else {
           console.warn(`❌ No matching field for key "${key}"`);
         }
@@ -170,13 +185,20 @@ export class SignNowService {
         );
 
         console.log('✅ Field update response:', response.data);
-        return { success: true, updatedFields: fieldValues.length, response: response.data };
+        return {
+          success: true,
+          updatedFields: fieldValues.length,
+          response: response.data,
+        };
       } else {
         console.warn('⚠️ No field_values to update.');
         return { success: false, error: 'No matching fields found' };
       }
     } catch (error) {
-      console.error('❌ Error prefilling fields:', error.response?.data || error.message);
+      console.error(
+        '❌ Error prefilling fields:',
+        error.response?.data || error.message
+      );
       throw error;
     }
   }
@@ -188,7 +210,7 @@ export class SignNowService {
       console.log('🔍 Verifying field values after update:', documentId);
 
       const verify = await axios.get(`${this.baseURL}/document/${documentId}`, {
-        headers: this.getAuthHeaders()
+        headers: this.getAuthHeaders(),
       });
 
       const fields = verify.data?.fields || [];
@@ -197,7 +219,7 @@ export class SignNowService {
         id: f.id,
         type: f.type,
         value: f.prefilled_text || f.data,
-        role: f.role
+        role: f.role,
       }));
 
       console.log('📋 Field values verification:');
@@ -205,12 +227,18 @@ export class SignNowService {
 
       return { success: true, fields: fieldInfo };
     } catch (error) {
-      console.error('Error verifying field values:', error.response?.data || error.message);
+      console.error(
+        'Error verifying field values:',
+        error.response?.data || error.message
+      );
       throw error;
     }
   }
 
-  async updateDocumentFields(documentId: string, fieldValues: Array<{field_name: string, value: string}>) {
+  async updateDocumentFields(
+    documentId: string,
+    fieldValues: Array<{ field_name: string; value: string }>
+  ) {
     try {
       // First authenticate to get a token
       await this.authenticate();
@@ -219,25 +247,37 @@ export class SignNowService {
 
       // Get document info first to see current state
       console.log('Getting document details before update...');
-      const docResponse = await axios.get(`${this.baseURL}/document/${documentId}`, {
-        headers: this.getAuthHeaders()
-      });
-      console.log('Document fields before update:', docResponse.data.fields?.map(f => ({ name: f.json_attributes?.name, id: f.id })));
+      const docResponse = await axios.get(
+        `${this.baseURL}/document/${documentId}`,
+        {
+          headers: this.getAuthHeaders(),
+        }
+      );
+      console.log(
+        'Document fields before update:',
+        docResponse.data.fields?.map((f) => ({
+          name: f.json_attributes?.name,
+          id: f.id,
+        }))
+      );
 
       // Try both approaches - field names and field IDs
       const payload = {
-        field_values: fieldValues
+        field_values: fieldValues,
       };
 
       // Also try with texts array format
       const alternativePayload = {
-        texts: fieldValues.map(fv => ({
+        texts: fieldValues.map((fv) => ({
           name: fv.field_name,
-          data: fv.value
-        }))
+          data: fv.value,
+        })),
       };
 
-      console.log('Sending PUT request with payload:', JSON.stringify(payload, null, 2));
+      console.log(
+        'Sending PUT request with payload:',
+        JSON.stringify(payload, null, 2)
+      );
 
       // Use PUT endpoint to update fields
       const response = await axios.put(
@@ -250,21 +290,31 @@ export class SignNowService {
 
       // Get document info after update to verify
       console.log('Getting document details after update...');
-      const docResponseAfter = await axios.get(`${this.baseURL}/document/${documentId}`, {
-        headers: this.getAuthHeaders()
-      });
-      console.log('Document fields after update:', docResponseAfter.data.fields?.map(f => ({ name: f.json_attributes?.name, id: f.id, value: f.data })));
+      const docResponseAfter = await axios.get(
+        `${this.baseURL}/document/${documentId}`,
+        {
+          headers: this.getAuthHeaders(),
+        }
+      );
+      console.log(
+        'Document fields after update:',
+        docResponseAfter.data.fields?.map((f) => ({
+          name: f.json_attributes?.name,
+          id: f.id,
+          value: f.data,
+        }))
+      );
 
       return {
         success: true,
-        data: response.data
+        data: response.data,
       };
     } catch (error) {
       console.error('Error updating document fields:', {
         status: error.response?.status,
         data: error.response?.data,
         url: `${this.baseURL}/document/${documentId}`,
-        payload: fieldValues
+        payload: fieldValues,
       });
       throw error;
     }
@@ -283,7 +333,9 @@ export class SignNowService {
     this.clientSecret = process.env.SIGNNOW_CLIENT_SECRET!;
     this.username = process.env.SIGNNOW_USERNAME!;
     this.password = process.env.SIGNNOW_PASSWORD!;
-    this.templateId = process.env.SIGNNOW_TEMPLATE_ID || '3cc4323f75af4986b9a142513185d2b13d300759';
+    this.templateId =
+      process.env.SIGNNOW_TEMPLATE_ID ||
+      '3cc4323f75af4986b9a142513185d2b13d300759';
   }
 
   private async authenticate() {
@@ -295,7 +347,7 @@ export class SignNowService {
         client_id: this.clientId,
         client_secret: this.clientSecret,
         username: this.username,
-        password: this.password
+        password: this.password,
       });
 
       console.log('📝 Request params:', params.toString());
@@ -305,8 +357,8 @@ export class SignNowService {
         params.toString(),
         {
           headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-          }
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
         }
       );
 
@@ -322,8 +374,11 @@ export class SignNowService {
           url: error.config?.url,
           method: error.config?.method,
           headers: error.config?.headers,
-          data: error.config?.data?.replace(/(client_secret=)[^&]+/, '$1[REDACTED]')
-        }
+          data: error.config?.data?.replace(
+            /(client_secret=)[^&]+/,
+            '$1[REDACTED]'
+          ),
+        },
       });
       throw error;
     }
@@ -334,7 +389,7 @@ export class SignNowService {
     return {
       Authorization: `Bearer ${this.apiToken}`,
       'Content-Type': 'application/json',
-      Accept: 'application/json'
+      Accept: 'application/json',
     };
   }
 
@@ -352,7 +407,12 @@ export class SignNowService {
       console.log('Prefilling template:', { documentId, fields });
 
       // Clone the template first
-      const cloneResult = await this.cloneTemplate(documentId, fields.total_hours ? `Contract for ${fields.total_hours} hours` : undefined);
+      const cloneResult = await this.cloneTemplate(
+        documentId,
+        fields.total_hours
+          ? `Contract for ${fields.total_hours} hours`
+          : undefined
+      );
       const newDocumentId = cloneResult.documentId;
 
       // Prepare the field data
@@ -362,8 +422,8 @@ export class SignNowService {
           hourly_rate_fee: { value: fields.hourly_rate_fee },
           total_amount: { value: fields.total_amount },
           deposit: { value: fields.deposit },
-          overnight_fee_amount: { value: fields.overnight_fee_amount }
-        }
+          overnight_fee_amount: { value: fields.overnight_fee_amount },
+        },
       };
 
       console.log('Setting field data:', fieldData);
@@ -376,7 +436,10 @@ export class SignNowService {
           { headers: this.getAuthHeaders() }
         );
       } catch (fieldError) {
-        console.log('First field endpoint failed, trying alternative:', fieldError.response?.status);
+        console.log(
+          'First field endpoint failed, trying alternative:',
+          fieldError.response?.status
+        );
         // Try alternative endpoint
         await axios.put(
           `${this.baseURL}/document/${newDocumentId}/prefill`,
@@ -387,7 +450,10 @@ export class SignNowService {
 
       return newDocumentId;
     } catch (error) {
-      console.error('Failed to prefill template:', error.response?.data || error.message);
+      console.error(
+        'Failed to prefill template:',
+        error.response?.data || error.message
+      );
       throw error;
     }
   }
@@ -412,7 +478,7 @@ export class SignNowService {
       const response = await axios.get(
         `${this.baseURL}/document/${documentId}`,
         {
-          headers: this.getAuthHeaders()
+          headers: this.getAuthHeaders(),
         }
       );
 
@@ -420,23 +486,28 @@ export class SignNowService {
       if (response.data.fields?.length > 0) {
         console.log(`✅ Found ${response.data.fields.length} fields:`);
         response.data.fields.forEach((field: any) => {
-          console.log(JSON.stringify({
-            name: field.name,
-            type: field.type,
-            page: field.page_number,
-            x: field.x,
-            y: field.y,
-            width: field.width,
-            height: field.height,
-            role: field.role
-          }, null, 2));
+          console.log(
+            JSON.stringify(
+              {
+                name: field.name,
+                type: field.type,
+                page: field.page_number,
+                x: field.x,
+                y: field.y,
+                width: field.width,
+                height: field.height,
+                role: field.role,
+              },
+              null,
+              2
+            )
+          );
         });
       } else {
         console.log('ℹ️ No fields found in document');
       }
 
       return response.data.fields || [];
-
     } catch (error: any) {
       // Log detailed error information
       const errorDetails = {
@@ -445,7 +516,7 @@ export class SignNowService {
         data: error.response?.data,
         message: error.message,
         url: `${this.baseURL}/document/${documentId}`,
-        token: this.apiToken ? `${this.apiToken.slice(0, 8)}...` : 'undefined'
+        token: this.apiToken ? `${this.apiToken.slice(0, 8)}...` : 'undefined',
       };
 
       console.error('❌ SignNow API Error:', errorDetails);
@@ -456,8 +527,18 @@ export class SignNowService {
     }
   }
 
-  async createInvitationClientPartner(documentId: string, client: { email: string; name: string }, partner?: { email: string; name: string }, options: any = {}) {
-    console.log('Creating invitation:', { documentId, client, partner, options });
+  async createInvitationClientPartner(
+    documentId: string,
+    client: { email: string; name: string },
+    partner?: { email: string; name: string },
+    options: any = {}
+  ) {
+    console.log('Creating invitation:', {
+      documentId,
+      client,
+      partner,
+      options,
+    });
     try {
       if (!client || !client.email || !client.name) {
         throw new Error('client {name,email} is required');
@@ -475,15 +556,18 @@ export class SignNowService {
       const contractId = options.contractId || documentId; // Use documentId as fallback
 
       const invitePayload = {
-        to: [{
-          email: client.email,
-          role: "Signer 1",
-          order: 1
-        }],
-        from: "jerry@techluminateacademy.com",
+        to: [
+          {
+            email: client.email,
+            role: 'Signer 1',
+            order: 1,
+          },
+        ],
+        from: 'jerry@techluminateacademy.com',
         // Fixed redirect URLs with proper validation
-        redirect_uri: options.redirectUrl || `${baseUrl}/payment?contract_id=${contractId}`,
-        decline_redirect_uri: options.declineUrl || `${baseUrl}/`
+        redirect_uri:
+          options.redirectUrl || `${baseUrl}/payment?contract_id=${contractId}`,
+        decline_redirect_uri: options.declineUrl || `${baseUrl}/`,
       };
 
       console.log('📤 Sending field invitation:', invitePayload);
@@ -506,36 +590,55 @@ export class SignNowService {
         url: `${this.baseURL}/document/${documentId}/invite`,
         method: 'POST',
         token: this.apiToken ? `${this.apiToken.slice(0, 8)}...` : 'undefined',
-        headers: this.getAuthHeaders()
+        headers: this.getAuthHeaders(),
       });
 
       // Log the detailed errors from SignNow
       if (error.response?.data?.errors) {
-        console.error('SignNow API errors:', JSON.stringify(error.response.data.errors, null, 2));
+        console.error(
+          'SignNow API errors:',
+          JSON.stringify(error.response.data.errors, null, 2)
+        );
       }
 
       // Check for specific error types
       if (error.response?.data?.errors) {
-        const dailyLimitError = error.response.data.errors.find(e => e.code === 65639);
+        const dailyLimitError = error.response.data.errors.find(
+          (e) => e.code === 65639
+        );
         if (dailyLimitError) {
-          throw new Error('Daily invite limit exceeded. Please try again tomorrow.');
+          throw new Error(
+            'Daily invite limit exceeded. Please try again tomorrow.'
+          );
         }
       }
 
-      throw new Error(error.response?.data?.error || error.message || 'Failed to create invitation');
+      throw new Error(
+        error.response?.data?.error ||
+          error.message ||
+          'Failed to create invitation'
+      );
     }
   }
 
-  async createPrefilledDocFromTemplate(templateId: string, documentName: string, fieldValues: Array<{field_name: string, value: string}>) {
+  async createPrefilledDocFromTemplate(
+    templateId: string,
+    documentName: string,
+    fieldValues: Array<{ field_name: string; value: string }>
+  ) {
     try {
-      console.log('Creating prefilled document from template:', { templateId, documentName, fieldValues });
+      console.log('Creating prefilled document from template:', {
+        templateId,
+        documentName,
+        fieldValues,
+      });
 
       // Get a fresh token first
       await this.authenticate();
 
       const payload = {
         document_name: documentName,
-        field_values: fieldValues
+        field_values: fieldValues,
       };
 
       // Try template copy endpoint first, then document copy
@@ -550,7 +653,10 @@ export class SignNowService {
         data = response.data;
         console.log('Template copy succeeded');
       } catch (templateError) {
-        console.log('Template copy failed, trying document copy:', templateError.response?.status);
+        console.log(
+          'Template copy failed, trying document copy:',
+          templateError.response?.status
+        );
         const response = await axios.post(
           `${this.baseURL}/document/${templateId}/copy`,
           payload,
@@ -564,23 +670,37 @@ export class SignNowService {
       return {
         success: true,
         documentId: data.id,
-        name: data.name
+        name: data.name,
       };
     } catch (error) {
-      console.error('Error creating prefilled document:', error.response?.data || error.message);
-      throw new Error(`Failed to create prefilled document: ${error.response?.data?.error || error.message}`);
+      console.error(
+        'Error creating prefilled document:',
+        error.response?.data || error.message
+      );
+      throw new Error(
+        `Failed to create prefilled document: ${error.response?.data?.error || error.message}`
+      );
     }
   }
 
-  async cloneTemplate(templateId: string, documentName?: string, fieldValues?: Array<{field_name: string, value: string}>) {
+  async cloneTemplate(
+    templateId: string,
+    documentName?: string,
+    fieldValues?: Array<{ field_name: string; value: string }>
+  ) {
     try {
       // Get a fresh token first
       await this.authenticate();
 
-      console.log('Cloning template with fields:', { templateId, documentName, fieldValues });
+      console.log('Cloning template with fields:', {
+        templateId,
+        documentName,
+        fieldValues,
+      });
 
       const payload: any = {
-        document_name: documentName || `Contract for ${new Date().toISOString()}`
+        document_name:
+          documentName || `Contract for ${new Date().toISOString()}`,
       };
 
       // Add field values if provided - try both field_name and field_id approaches
@@ -589,17 +709,17 @@ export class SignNowService {
 
         // Also try with known field IDs from template
         const fieldIdMap = {
-          'total_hours': 'e6306c9700be4d97b4b0c43dda0e993fe5fe88f6',
-          'deposit': '4702a39d39c34bd884df312df8e4a9b6d8ea0ca8',
-          'hourly_rate_fee': '6bb9ad3702704fbb972d0248edc55096a3bfa041',
-          'overnight_fee_amount': '14067a355bdf469da9f89661804913ce4f5f0535',
-          'total_amount': '4da20398befa4a8f9868c61be82e874a4ce37d25'
+          total_hours: 'e6306c9700be4d97b4b0c43dda0e993fe5fe88f6',
+          deposit: '4702a39d39c34bd884df312df8e4a9b6d8ea0ca8',
+          hourly_rate_fee: '6bb9ad3702704fbb972d0248edc55096a3bfa041',
+          overnight_fee_amount: '14067a355bdf469da9f89661804913ce4f5f0535',
+          total_amount: '4da20398befa4a8f9868c61be82e874a4ce37d25',
         };
 
         // Try with template field IDs
-        payload.template_field_values = fieldValues.map(fv => ({
+        payload.template_field_values = fieldValues.map((fv) => ({
           field_id: fieldIdMap[fv.field_name] || fv.field_name,
-          value: fv.value
+          value: fv.value,
         }));
       }
 
@@ -614,11 +734,16 @@ export class SignNowService {
       return {
         success: true,
         documentId: data.id,
-        name: data.name
+        name: data.name,
       };
     } catch (error) {
-      console.error('Error cloning template:', error.response?.data || error.message);
-      throw new Error(`Failed to clone template: ${error.response?.data?.error || error.message}`);
+      console.error(
+        'Error cloning template:',
+        error.response?.data || error.message
+      );
+      throw new Error(
+        `Failed to clone template: ${error.response?.data?.error || error.message}`
+      );
     }
   }
 
@@ -626,7 +751,9 @@ export class SignNowService {
     try {
       await this.authenticate();
 
-      console.log(`📤 Uploading document: ${fileName}, size: ${fileBuffer.length} bytes`);
+      console.log(
+        `📤 Uploading document: ${fileName}, size: ${fileBuffer.length} bytes`
+      );
 
       const FormData = require('form-data');
       const formData = new FormData();
@@ -634,22 +761,18 @@ export class SignNowService {
 
       console.log(`🌐 POST ${this.baseURL}/document`);
 
-      const response = await axios.post(
-        `${this.baseURL}/document`,
-        formData,
-        {
-          headers: {
-            ...this.getAuthHeaders(),
-            ...formData.getHeaders()
-          }
-        }
-      );
+      const response = await axios.post(`${this.baseURL}/document`, formData, {
+        headers: {
+          ...this.getAuthHeaders(),
+          ...formData.getHeaders(),
+        },
+      });
 
       console.log('✅ Document uploaded successfully:', response.data.id);
       return {
         success: true,
         documentId: response.data.id,
-        document: response.data
+        document: response.data,
       };
     } catch (error) {
       console.error('❌ Document upload failed:');
@@ -657,63 +780,82 @@ export class SignNowService {
       console.error('Data:', JSON.stringify(error.response?.data, null, 2));
       console.error('Headers:', error.response?.headers);
 
-      throw new Error(`Failed to upload document: ${error.response?.data?.error || error.message}`);
+      throw new Error(
+        `Failed to upload document: ${error.response?.data?.error || error.message}`
+      );
     }
   }
 
-  async addSignatureFields(documentId: string, clientName: string, contractData?: any, pdfPath?: string) {
+  async addSignatureFields(
+    documentId: string,
+    clientName: string,
+    contractData?: any,
+    pdfPath?: string
+  ) {
     try {
       await this.authenticate();
 
-      console.log(`✍️ Adding signature and initials fields to document: ${documentId}`);
+      console.log(
+        `✍️ Adding signature and initials fields to document: ${documentId}`
+      );
 
       // Determine contract type for appropriate field positioning
-      const isLaborSupport = contractData?.serviceType?.toLowerCase().includes('labor support') ||
-                            contractData?.serviceType?.toLowerCase().includes('labor') ||
-                            contractData?.serviceType === 'Labor Support Services';
+      const isLaborSupport =
+        contractData?.serviceType?.toLowerCase().includes('labor support') ||
+        contractData?.serviceType?.toLowerCase().includes('labor') ||
+        contractData?.serviceType === 'Labor Support Services';
 
-      console.log(`📋 Contract type: ${isLaborSupport ? 'Labor Support Agreement' : 'Postpartum Doula Services'}`);
+      console.log(
+        `📋 Contract type: ${isLaborSupport ? 'Labor Support Agreement' : 'Postpartum Doula Services'}`
+      );
 
       // Apply SignNow coordinate formula from PDF analysis
       // PDF found: "Client Signature:" at (3.2, 30.3) on page 2
       // SignNow formula: SignNow_X = PDF_X, SignNow_Y = 792 - PDF_Y
-      const pageNumber = 2;    // Last page (0-indexed)
+      const pageNumber = 2; // Last page (0-indexed)
 
-      const pdfX = 3.2;        // PDF X coordinate
-      const pdfY = 30.3;       // PDF Y coordinate
-      const pageHeight = 792;  // US Letter height in points
+      const pdfX = 3.2; // PDF X coordinate
+      const pdfY = 30.3; // PDF Y coordinate
+      const pageHeight = 792; // US Letter height in points
 
       // SignNow uses top-left origin, Y increases downward
       // Position signature field based on contract type
       let signatureX, signatureY;
 
       if (isLaborSupport) {
-        // Labor Support Agreement signature coordinates (fine-tuned for accurate positioning)
-        // Signature field: Adjusted to avoid text overlap in Labor Support template
-        signatureX = Math.round(pdfX + 200);  // Move further right to avoid covering text
-        signatureY = 680;  // Position lower to avoid text overlap
-        console.log('🎯 Using Labor Support signature coordinates (fine-tuned positioning)');
+        // Labor Support Agreement signature coordinates (corrected from live document)
+        // Signature field: Position (384, 218) from actual document
+        signatureX = 384; // Corrected from calculated value
+        signatureY = 218; // Corrected from 680
+        console.log(
+          '🎯 Using Labor Support signature coordinates (corrected from live document)'
+        );
       } else {
         // Postpartum Doula Services signature coordinates (original working values)
-        signatureX = Math.round(pdfX + 150);  // Move further right to avoid covering text
-        signatureY = 650;  // Position in lower part of page where signature typically appears
-        console.log('🎯 Using Postpartum signature coordinates (original working values)');
+        signatureX = Math.round(pdfX + 150); // Move further right to avoid covering text
+        signatureY = 650; // Position in lower part of page where signature typically appears
+        console.log(
+          '🎯 Using Postpartum signature coordinates (original working values)'
+        );
       }
 
       // Date field positioning based on contract type
       let dateX, dateY;
 
       if (isLaborSupport) {
-        // Labor Support Agreement date coordinates (fine-tuned for accurate positioning)
-        // Date field: Adjusted to avoid text overlap in Labor Support template
-        dateX = Math.round(pdfX + 460);       // Move even further right for better spacing
-        dateY = signatureY;                   // Same line as signature
-        console.log('🎯 Using Labor Support date coordinates (fine-tuned positioning)');
+        // Labor Support: coordinates from live document (corrected)
+        dateX = 111; // Corrected from 128
+        dateY = 274; // This was correct
+        console.log(
+          '🎯 Using Labor Support date coordinates (corrected from live document)'
+        );
       } else {
         // Postpartum Doula Services date coordinates (original working values)
-        dateX = Math.round(pdfX + 410);       // Move even further right for better spacing
-        dateY = signatureY;                   // Same line
-        console.log('🎯 Using Postpartum date coordinates (original working values)');
+        dateX = Math.round(pdfX + 410);
+        dateY = signatureY;
+        console.log(
+          '🎯 Using Postpartum date coordinates (original working values)'
+        );
       }
 
       // Calculate positions for initials fields next to financial amounts
@@ -748,29 +890,47 @@ export class SignNowService {
       // Need to be on same line as the amounts but after them
 
       // Use coordinates based on contract type
-        let totalAmountX, totalAmountY, depositAmountX, depositAmountY;
+      let totalAmountX, totalAmountY, depositAmountX, depositAmountY;
+      // Additional initials coordinates
+      let addInitials1X, addInitials1Y, addInitials2X, addInitials2Y;
 
-        if (isLaborSupport) {
-          // Labor Support Agreement coordinates (fine-tuned for accurate positioning)
-          // Adjusted coordinates to avoid text overlap in Labor Support template
-          totalAmountX = 280;    // Labor Support total amount initials X coordinate (adjusted)
-          totalAmountY = 450;    // Labor Support total amount initials Y coordinate (adjusted)
-          depositAmountX = 420;   // Labor Support deposit amount initials X coordinate (adjusted)
-          depositAmountY = 120;   // Labor Support deposit amount initials Y coordinate (adjusted)
-          console.log('🎯 Using Labor Support Agreement coordinates (fine-tuned positioning)');
-        } else {
-          // Postpartum Doula Services coordinates (original working values)
-          totalAmountX = 253;    // Total amount initials X coordinate
-          totalAmountY = 421;    // Total amount initials Y coordinate
-          depositAmountX = 397;  // Deposit amount initials X coordinate
-          depositAmountY = 108;  // Deposit amount initials Y coordinate
-          console.log('🎯 Using Postpartum Doula Services coordinates (original working values)');
-        }
+      if (isLaborSupport) {
+        // Labor Support: three initials on page 1 from live document
+        totalAmountX = 228; // map to Initials 1 (corrected from 222)
+        totalAmountY = 579; // corrected from 582
+        depositAmountX = 259; // map to Initials 2 (corrected from 262)
+        depositAmountY = 602; // corrected from 607
+        addInitials1X = 235; // Initials 3 (corrected from 338)
+        addInitials1Y = 623; // corrected from 624
+        // No fourth initials needed; keep second additional off-screen if added
+        addInitials2X = undefined as any;
+        addInitials2Y = undefined as any;
+        console.log(
+          '🎯 Using Labor Support initials coordinates (corrected from live document)'
+        );
+      } else {
+        // Postpartum: original working values
+        totalAmountX = 253;
+        totalAmountY = 421;
+        depositAmountX = 397;
+        depositAmountY = 108;
+        addInitials1X = 245;
+        addInitials1Y = 649;
+        addInitials2X = 329;
+        addInitials2Y = 70;
+        console.log('🎯 Using Postpartum initials coordinates (original)');
+      }
 
-      console.log(`📍 SignNow formula applied: PDF(${pdfX}, ${pdfY}) → SignNow(${signatureX}, ${signatureY})`);
+      console.log(
+        `📍 SignNow formula applied: PDF(${pdfX}, ${pdfY}) → SignNow(${signatureX}, ${signatureY})`
+      );
       console.log('🎯 Using manually positioned coordinates:');
-      console.log(`  Total amount initials: page 1, x=${totalAmountX}, y=${totalAmountY}`);
-      console.log(`  Deposit amount initials: page 2, x=${depositAmountX}, y=${depositAmountY}`);
+      console.log(
+        `  Total amount initials: page 1, x=${totalAmountX}, y=${totalAmountY}`
+      );
+      console.log(
+        `  Deposit amount initials: page 2, x=${depositAmountX}, y=${depositAmountY}`
+      );
 
       const fieldData = {
         client_timestamp: Math.floor(Date.now() / 1000),
@@ -778,77 +938,82 @@ export class SignNowService {
           // Signature and date fields (existing)
           {
             page_number: pageNumber,
-            type: "signature",
-            name: "client_signature",
-            role: "Signer 1",
+            type: 'signature',
+            name: 'client_signature',
+            role: 'Signer 1',
             required: true,
             height: 25,
             width: 150,
             x: signatureX,
-            y: signatureY
+            y: signatureY,
           },
           {
             page_number: pageNumber,
-            type: "text",  // Use text field for date entry (from working git history)
-            name: "signature_date",
-            role: "Signer 1",
+            type: 'text', // Use text field for date entry (from working git history)
+            name: 'signature_date',
+            role: 'Signer 1',
             required: true,
             height: 25,
             width: 120,
             x: dateX,
             y: dateY,
-            label: "Date"
+            label: 'Date',
           },
           // Initials fields next to financial amounts and additional positions (from manual positioning)
           {
-            page_number: 1,  // Total amount initials on page 1
-            type: "initials",
-            name: "total_amount_initials",
-            role: "Signer 1",
+            page_number: 1, // Total amount initials on page 1
+            type: 'initials',
+            name: 'total_amount_initials',
+            role: 'Signer 1',
             required: true,
             height: 21,
             width: 69,
-            x: 253,
-            y: 421,
-            label: "Initials"
+            x: totalAmountX,
+            y: totalAmountY,
+            label: 'Initials',
           },
           {
-            page_number: 2,  // Deposit amount initials on page 2
-            type: "initials",
-            name: "deposit_amount_initials",
-            role: "Signer 1",
+            page_number: 2, // Deposit amount initials on page 2
+            type: 'initials',
+            name: 'deposit_amount_initials',
+            role: 'Signer 1',
             required: true,
             height: 21,
             width: 69,
-            x: 397,
-            y: 108,
-            label: "Initials"
+            x: depositAmountX,
+            y: depositAmountY,
+            label: 'Initials',
           },
           {
-            page_number: 1,  // Additional initials field 1
-            type: "initials",
-            name: "additional_initials_1",
-            role: "Signer 1",
+            page_number: 1, // Additional initials field 1
+            type: 'initials',
+            name: 'additional_initials_1',
+            role: 'Signer 1',
             required: true,
             height: 21,
             width: 69,
-            x: 245,
-            y: 649,
-            label: "Initials"
+            x: addInitials1X ?? 245,
+            y: addInitials1Y ?? 649,
+            label: 'Initials',
           },
-          {
-            page_number: 2,  // Additional initials field 2
-            type: "initials",
-            name: "additional_initials_2",
-            role: "Signer 1",
-            required: true,
-            height: 21,
-            width: 69,
-            x: 329,
-            y: 70,
-            label: "Initials"
-          }
-        ]
+          // Only add second additional if coordinates are defined (Postpartum)
+          ...(addInitials2X !== undefined && addInitials2Y !== undefined
+            ? ([
+                {
+                  page_number: isLaborSupport ? 1 : 2,
+                  type: 'initials',
+                  name: 'additional_initials_2',
+                  role: 'Signer 1',
+                  required: true,
+                  height: 21,
+                  width: 69,
+                  x: addInitials2X,
+                  y: addInitials2Y,
+                  label: 'Initials',
+                },
+              ] as any)
+            : []),
+        ],
       };
 
       console.log(`🌐 PUT ${this.baseURL}/document/${documentId}`);
@@ -863,9 +1028,8 @@ export class SignNowService {
       console.log('✅ Signature fields added successfully');
       return {
         success: true,
-        response: response.data
+        response: response.data,
       };
-
     } catch (error) {
       console.error('❌ Failed to add signature fields:');
       console.error('Status:', error.response?.status);
@@ -878,9 +1042,9 @@ export class SignNowService {
           roles: [
             {
               name: 'Recipient 1',
-              signing_order: 1
-            }
-          ]
+              signing_order: 1,
+            },
+          ],
         };
 
         const rolesResponse = await axios.put(
@@ -892,11 +1056,16 @@ export class SignNowService {
         console.log('✅ Roles added successfully');
         return {
           success: true,
-          response: rolesResponse.data
+          response: rolesResponse.data,
         };
       } catch (rolesError) {
-        console.error('❌ Roles approach also failed:', rolesError.response?.data);
-        throw new Error(`Failed to add signature fields: ${error.response?.data?.error || error.message}`);
+        console.error(
+          '❌ Roles approach also failed:',
+          rolesError.response?.data
+        );
+        throw new Error(
+          `Failed to add signature fields: ${error.response?.data?.error || error.message}`
+        );
       }
     }
   }

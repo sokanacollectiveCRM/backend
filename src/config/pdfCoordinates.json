@@ -1,0 +1,21 @@
+{
+  "labor_support_v1": {
+    "clientName": { "x": 150, "y": 580, "page": 1, "size": 11 },
+    "totalAmount": { "x": 200, "y": 520, "page": 1, "size": 11 },
+    "deposit": { "x": 200, "y": 500, "page": 1, "size": 11 },
+    "balanceAmount": { "x": 200, "y": 480, "page": 1, "size": 11 },
+    "clientInitials": { "x": 450, "y": 350, "page": 1, "size": 11 },
+    "client_signature": { "x": 450, "y": 380, "page": 1, "size": 11 },
+    "client_signed_date": { "x": 150, "y": 350, "page": 1, "size": 11 }
+  },
+  "postpartum_v1": {
+    "clientName": { "x": 110, "y": 710, "page": 1, "size": 11 },
+    "totalHours": { "x": 100, "y": 680, "page": 1, "size": 11 },
+    "hourlyRate": { "x": 100, "y": 660, "page": 1, "size": 11 },
+    "totalAmount": { "x": 100, "y": 640, "page": 1, "size": 11 },
+    "deposit": { "x": 100, "y": 620, "page": 1, "size": 11 },
+    "clientInitials": { "x": 253, "y": 421, "page": 3, "size": 11 },
+    "clientSignature": { "x": 400, "y": 260, "page": 3, "size": 11 },
+    "date": { "x": 150, "y": 310, "page": 3, "size": 11 }
+  }
+}

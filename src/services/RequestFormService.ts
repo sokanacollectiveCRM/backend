@@ -203,7 +203,7 @@ export class RequestFormService {
       const response = await this.repository.saveData(newFormData);
 
       // Return the complete RequestForm with all fields
-      return new RequestForm(
+      const requestForm = new RequestForm(
         response.firstname,
         response.lastname,
         response.email,
@@ -255,6 +255,14 @@ export class RequestFormService {
         response.insurance,
         response.demographics_multi
       );
+
+      requestForm.id = response.id; // Added: persist Supabase record id
+      requestForm.status = response.status;
+      requestForm.user_id = response.user_id;
+      requestForm.created_at = response.created_at ? new Date(response.created_at) : undefined;
+      requestForm.updated_at = response.updated_at ? new Date(response.updated_at) : undefined;
+
+      return requestForm;
     } catch (error) {
       console.error("Error in newForm:", error);
       throw error;

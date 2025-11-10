@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simple PDF Coordinate Finder</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .pdf-container {
+        position: relative;
+        cursor: crosshair;
+        border: 2px solid #e5e7eb;
+        background: #f9fafb;
+        min-height: 800px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        max-width: 1200px;
+      }
+      .coordinate-display {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 10px;
+        border-radius: 5px;
+        font-family: monospace;
+        z-index: 1000;
+      }
+      .click-marker {
+        position: absolute;
+        width: 10px;
+        height: 10px;
+        background: red;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 999;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="flex flex-col items-center gap-4 p-6 bg-gray-50 min-h-screen">
+      <h1 class="text-3xl font-bold text-blue-600">
+        🎯 Simple PDF Coordinate Finder
+      </h1>
+      <p class="text-gray-600">
+        Upload your PDF and click anywhere to get exact coordinates
+      </p>
+
+      <div class="bg-white p-8 rounded-lg shadow-lg">
+        <input
+          type="file"
+          id="pdf-file"
+          accept="application/pdf"
+          class="p-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-400"
+        />
+        <p class="text-sm text-gray-500 mt-2">Upload your PDF template</p>
+      </div>
+
+      <div id="pdf-viewer" class="pdf-container hidden">
+        <div class="coordinate-display" id="coords-display">
+          Click anywhere on the PDF to get coordinates
+        </div>
+        <div id="pdf-content"></div>
+      </div>
+
+      <div
+        id="instructions"
+        class="bg-white p-4 rounded-lg shadow-lg max-w-2xl"
+      >
+        <h3 class="font-bold text-lg mb-2">📋 How to Use:</h3>
+        <ol class="list-decimal list-inside space-y-2 text-sm">
+          <li>Upload your PDF file using the file input above</li>
+          <li>Click anywhere on the PDF where you want to place a field</li>
+          <li>Copy the coordinates that appear in the top-left corner</li>
+          <li>Use these coordinates in your pdfCoordinates.json file</li>
+        </ol>
+
+        <div class="mt-4 p-3 bg-blue-50 rounded">
+          <h4 class="font-bold text-blue-800">💡 Coordinate Format:</h4>
+          <p class="text-sm text-blue-700">
+            The coordinates will be displayed as: <code>x: 123, y: 456</code
+            ><br />
+            Use these in your JSON like:
+            <code>{"x": 123, "y": 456, "page": 1}</code>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      class PDFCoordinateFinder {
+        constructor() {
+          this.pdfFileInput = document.getElementById('pdf-file');
+          this.pdfViewer = document.getElementById('pdf-viewer');
+          this.pdfContent = document.getElementById('pdf-content');
+          this.coordsDisplay = document.getElementById('coords-display');
+          this.clicks = [];
+
+          this.initializeEventListeners();
+        }
+
+        initializeEventListeners() {
+          this.pdfFileInput.addEventListener('change', (e) =>
+            this.handleFileUpload(e)
+          );
+          this.pdfContent.addEventListener('click', (e) => this.handleClick(e));
+        }
+
+        handleFileUpload(e) {
+          const file = e.target.files[0];
+          if (file && file.type === 'application/pdf') {
+            this.loadPDF(file);
+          } else {
+            alert('Please select a valid PDF file.');
+          }
+        }
+
+        loadPDF(file) {
+          const fileURL = URL.createObjectURL(file);
+
+          // Create PDF embed
+          const pdfEmbed = document.createElement('embed');
+          pdfEmbed.src = fileURL;
+          pdfEmbed.type = 'application/pdf';
+          pdfEmbed.style.width = '100%';
+          pdfEmbed.style.height = '800px';
+          pdfEmbed.style.border = 'none';
+          pdfEmbed.style.transform = 'scale(1.2)';
+          pdfEmbed.style.transformOrigin = 'top left';
+
+          // Clear previous content
+          this.pdfContent.innerHTML = '';
+          this.pdfContent.appendChild(pdfEmbed);
+
+          // Show viewer
+          this.pdfViewer.classList.remove('hidden');
+
+          console.log('PDF loaded:', file.name);
+        }
+
+        handleClick(e) {
+          const rect = this.pdfContent.getBoundingClientRect();
+          const x = Math.round(e.clientX - rect.left);
+          const y = Math.round(e.clientY - rect.top);
+
+          // Store click
+          this.clicks.push({ x, y, timestamp: Date.now() });
+
+          // Update display
+          this.coordsDisplay.innerHTML = `
+                    <strong>Latest Click:</strong><br>
+                    x: ${x}<br>
+                    y: ${y}<br>
+                    <small>Click count: ${this.clicks.length}</small>
+                `;
+
+          // Add visual marker
+          this.addClickMarker(x, y);
+
+          // Log to console
+          console.log(`Click ${this.clicks.length}: x=${x}, y=${y}`);
+
+          // Copy to clipboard
+          navigator.clipboard
+            .writeText(`{"x": ${x}, "y": ${y}, "page": 1}`)
+            .then(() => {
+              console.log('Coordinates copied to clipboard!');
+            });
+        }
+
+        addClickMarker(x, y) {
+          const marker = document.createElement('div');
+          marker.className = 'click-marker';
+          marker.style.left = x + 'px';
+          marker.style.top = y + 'px';
+
+          this.pdfContent.appendChild(marker);
+
+          // Remove marker after 3 seconds
+          setTimeout(() => {
+            marker.remove();
+          }, 3000);
+        }
+      }
+
+      // Initialize the coordinate finder
+      const coordinateFinder = new PDFCoordinateFinder();
+    </script>
+  </body>
+</html>

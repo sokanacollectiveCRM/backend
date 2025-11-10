@@ -1,8 +1,10 @@
-import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express, { Express, NextFunction, Request, Response } from 'express';
 
+import cookieParser from 'cookie-parser';
+
+import emailRoutes from './routes/EmailRoutes';
 import authRoutes from './routes/authRoutes';
 import clientRoutes from './routes/clientRoutes';
 import contractPaymentRoutes from './routes/contractPaymentRoutes';
@@ -10,8 +12,8 @@ import contractRoutes from './routes/contractRoutes';
 import contractSigningRoutes from './routes/contractSigningRoutes';
 import customersRoutes from './routes/customersRoutes';
 import docusignRoutes from './routes/docusignRoutes';
-import emailRoutes from './routes/EmailRoutes';
 import paymentRoutes from './routes/paymentRoutes';
+import pdfContractRoutes from './routes/pdfContractRoutes';
 import quickbookRoutes from './routes/quickbooksRoutes';
 import requestRouter from './routes/requestRoute';
 import signNowRoutes from './routes/signNowRoutes';
@@ -44,7 +46,7 @@ const corsOptions: CorsOptions = {
       process.env.FRONTEND_URL_DEV || 'http://localhost:3000',
       'http://localhost:5050',
       'http://localhost:3001',
-      'http://localhost:3000'
+      'http://localhost:3000',
     ];
 
     if (allowedOrigins.includes(origin || '') || !origin) {
@@ -93,6 +95,7 @@ app.use('/quickbooks/customers', asMiddleware(customersRoutes));
 app.use('/users', asMiddleware(userRoutes));
 app.use('/api/contract', asMiddleware(contractRoutes));
 app.use('/api/contract-signing', asMiddleware(contractSigningRoutes));
+app.use('/api/pdf-contract', asMiddleware(pdfContractRoutes));
 app.use('/api/payments', asMiddleware(paymentRoutes));
 app.use('/api/signnow', asMiddleware(signNowRoutes));
 app.use('/api/contract-payment', asMiddleware(contractPaymentRoutes));
@@ -110,7 +113,10 @@ interface AppError extends Error {
 // eslint-disable-next-line no-unused-vars
 app.use((err: AppError, _req: Request, res: Response, _next: NextFunction) => {
   res.status(err.status || 500).json({
-    error: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message,
+    error:
+      process.env.NODE_ENV === 'production'
+        ? 'Internal Server Error'
+        : err.message,
   });
 });
 
@@ -119,7 +125,9 @@ const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3001'}`);
+  console.log(
+    `Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3001'}`
+  );
 });
 
 export default app;

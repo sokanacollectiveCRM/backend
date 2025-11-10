@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Coordinate Mapper</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/react-pdf@7.7.3/dist/react-pdf.umd.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .pdf-container {
+            position: relative;
+            cursor: crosshair;
+        }
+        .pdf-container:hover {
+            background-color: rgba(0, 0, 255, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+        const { Document, Page } = ReactPDF;
+
+        function PdfMapper() {
+            const [pdfFile, setPdfFile] = useState(null);
+            const [numPages, setNumPages] = useState(0);
+            const [currentPage, setCurrentPage] = useState(1);
+            const [coords, setCoords] = useState([]);
+            const [selectedLabel, setSelectedLabel] = useState('');
+
+            function onDocumentLoadSuccess({ numPages }) {
+                setNumPages(numPages);
+            }
+
+            function handleClick(e) {
+                if (!selectedLabel) {
+                    alert('Please enter a label before clicking.');
+                    return;
+                }
+
+                const rect = e.target.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = rect.height - (e.clientY - rect.top);
+                const coord = {
+                    label: selectedLabel,
+                    x: Math.round(x),
+                    y: Math.round(y),
+                    page: currentPage,
+                };
+
+                setCoords(prev => [...prev, coord]);
+                console.log('📍 Added:', coord);
+            }
+
+            function handleExport() {
+                // Build export structure
+                const exportData = coords.reduce((acc, { label, x, y, page }) => {
+                    acc[label] = { x, y, page };
+                    return acc;
+                }, {});
+
+                const json = JSON.stringify(exportData, null, 2);
+                const blob = new Blob([json], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `pdfCoordinates_page${currentPage}.json`;
+                a.click();
+            }
+
+            function handleClear() {
+                if (window.confirm('Clear all recorded coordinates?')) {
+                    setCoords([]);
+                }
+            }
+
+            return (
+                <div className="flex flex-col items-center gap-4 p-6 bg-gray-50 min-h-screen">
+                    <h1 className="text-2xl font-bold mb-2">🧭 PDF Coordinate Mapper (with Field Labels)</h1>
+
+                    {!pdfFile && (
+                        <input
+                            type="file"
+                            accept="application/pdf"
+                            onChange={e => setPdfFile(e.target.files?.[0] ?? null)}
+                            className="p-2 border rounded"
+                        />
+                    )}
+
+                    {pdfFile && (
+                        <div className="flex flex-col gap-4">
+                            <div className="pdf-container border shadow-md">
+                                <Document
+                                    file={pdfFile}
+                                    onLoadSuccess={onDocumentLoadSuccess}
+                                >
+                                    <Page
+                                        pageNumber={currentPage}
+                                        width={850}
+                                        onClick={handleClick}
+                                    />
+                                </Document>
+                            </div>
+
+                            <div className="flex items-center justify-between w-full mt-2">
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                                    disabled={currentPage === 1}
+                                    className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50"
+                                >
+                                    ⬅ Prev
+                                </button>
+
+                                <p className="text-sm font-medium">Page {currentPage} / {numPages}</p>
+
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.min(p + 1, numPages))}
+                                    disabled={currentPage === numPages}
+                                    className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50"
+                                >
+                                    Next ➡
+                                </button>
+                            </div>
+
+                            <div className="flex items-center gap-2 mt-4">
+                                <input
+                                    type="text"
+                                    placeholder="Enter field label (e.g. signature)"
+                                    value={selectedLabel}
+                                    onChange={e => setSelectedLabel(e.target.value)}
+                                    className="border p-2 rounded w-64"
+                                />
+                                <button
+                                    onClick={handleExport}
+                                    className="bg-green-500 text-white px-4 py-2 rounded"
+                                >
+                                    💾 Export JSON
+                                </button>
+                                <button
+                                    onClick={handleClear}
+                                    className="bg-red-400 text-white px-4 py-2 rounded"
+                                >
+                                    🗑 Clear
+                                </button>
+                            </div>
+
+                            <div className="w-full bg-white border rounded p-2 text-xs overflow-auto h-48 mt-2">
+                                <pre>{JSON.stringify(coords, null, 2)}</pre>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        ReactDOM.render(<PdfMapper />, document.getElementById('root'));
+    </script>
+</body>
+</html>
+
+
+
+
+
