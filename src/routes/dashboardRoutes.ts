@@ -155,4 +155,57 @@ dashboardRoutes.get(
   }
 );
 
+// GET /api/dashboard/calendar - Returns pregnancy due date events
+dashboardRoutes.get(
+  '/calendar',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
+  async (_req, res) => {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayIso = today.toISOString().split('T')[0];
+
+      // Query clients with future or today's due dates
+      const { data, error } = await supabase
+        .from('client_info')
+        .select('id, firstname, lastname, due_date')
+        .not('due_date', 'is', null)
+        .gte('due_date', todayIso);
+
+      if (error) {
+        console.error('[dashboard/calendar] Failed to fetch due dates:', error);
+        throw error;
+      }
+
+      if (!data || data.length === 0) {
+        return res.status(200).json({ events: [] });
+      }
+
+      // Map to calendar events
+      const events = data
+        .map((client: any) => ({
+          id: client.id,
+          type: 'pregnancyDueDate',
+          title:
+            `EDD – Baby Due (${client.firstname || ''} ${client.lastname || ''})`.trim(),
+          date: client.due_date,
+          color: '#34A853',
+        }))
+        .sort((a: any, b: any) => a.date.localeCompare(b.date));
+
+      res.status(200).json({ events });
+    } catch (error) {
+      console.error('Failed to fetch calendar events:', error);
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unable to fetch calendar events';
+
+      res.status(500).json({ error: message });
+    }
+  }
+);
+
 export default dashboardRoutes;
