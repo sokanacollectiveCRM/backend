@@ -92,6 +92,7 @@ app.use('/requestService', asMiddleware(requestRouter));
 app.use('/clients', asMiddleware(clientRoutes));
 app.use('/client', asMiddleware(clientRoutes)); // alias
 app.use('/quickbooks', asMiddleware(quickbookRoutes));
+app.use('/api/quickbooks', asMiddleware(quickbookRoutes)); // Also mount at /api/quickbooks for callback compatibility
 app.use('/quickbooks/customers', asMiddleware(customersRoutes));
 app.use('/users', asMiddleware(userRoutes));
 app.use('/api/contract', asMiddleware(contractRoutes));
