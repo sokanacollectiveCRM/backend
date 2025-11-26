@@ -19,11 +19,39 @@ const JWT_SECRET = process.env.SUPABASE_JWT_SECRET!
  */
 export const quickBooksAuthUrl: RequestHandler = (_req, res, next) => {
   try {
+    // Validate required environment variables
+    const { QB_CLIENT_ID, QB_CLIENT_SECRET, QB_REDIRECT_URI } = process.env;
+
+    if (!QB_CLIENT_ID || !QB_CLIENT_SECRET || !QB_REDIRECT_URI) {
+      console.error('❌ [QB Auth] Missing required environment variables:', {
+        hasClientId: !!QB_CLIENT_ID,
+        hasClientSecret: !!QB_CLIENT_SECRET,
+        hasRedirectUri: !!QB_REDIRECT_URI
+      });
+      return res.status(500).json({
+        error: 'QuickBooks configuration is incomplete. Please check server environment variables.',
+        details: 'Missing QB_CLIENT_ID, QB_CLIENT_SECRET, or QB_REDIRECT_URI'
+      });
+    }
+
     const state = Math.random().toString(36).substring(2)
-    const url   = generateConsentUrl(state)
+    const url = generateConsentUrl(state)
+
+    if (!url) {
+      console.error('❌ [QB Auth] Failed to generate consent URL');
+      return res.status(500).json({
+        error: 'Could not generate QuickBooks authorization URL'
+      });
+    }
+
+    console.log('✅ [QB Auth] Generated auth URL successfully');
     res.json({ url })
-  } catch (err) {
-    next(err)
+  } catch (err: any) {
+    console.error('❌ [QB Auth] Error generating auth URL:', err);
+    res.status(500).json({
+      error: 'Could not fetch QuickBooks auth URL',
+      details: err?.message || 'Unknown error occurred'
+    });
   }
 }
 

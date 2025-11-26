@@ -13,7 +13,7 @@ export interface TokenStore {
  */
 export async function getTokenFromDatabase(): Promise<TokenStore | null> {
   console.log('🔍 [QB] Loading tokens from database...');
-  
+
   const { data, error } = await supabase
     .from('quickbooks_tokens')
     .select('realm_id, access_token, refresh_token, expires_at')
@@ -34,12 +34,12 @@ export async function getTokenFromDatabase(): Promise<TokenStore | null> {
     refreshToken: data.refresh_token,
     expiresAt: data.expires_at,
   };
-  
+
   console.log('✅ [QB] Tokens loaded successfully');
   console.log('📅 [QB] Token expires at:', tokens.expiresAt);
   console.log('⏰ [QB] Current time:', new Date().toISOString());
   console.log('🔍 [QB] Token expired?', new Date(tokens.expiresAt) <= new Date());
-  
+
   return tokens;
 }
 
@@ -49,7 +49,7 @@ export async function getTokenFromDatabase(): Promise<TokenStore | null> {
  */
 export async function refreshQuickBooksToken(): Promise<TokenStore | null> {
   console.log('🔄 [QB] Starting token refresh...');
-  
+
   const tokens = await getTokenFromDatabase();
   if (!tokens) {
     console.log('❌ [QB] No tokens to refresh');
@@ -80,12 +80,33 @@ export async function refreshQuickBooksToken(): Promise<TokenStore | null> {
     if (!resp.ok) {
       const errorText = await resp.text();
       console.error('❌ [QB] Refresh failed:', resp.status, errorText);
+
+      // Parse error response to check for invalid_grant
+      let errorData: any = {};
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        // If parsing fails, use the raw text
+      }
+
+      // If token is invalid (invalid_grant), delete the stored tokens
+      // This allows the user to reconnect with a new authorization
+      if (errorData.error === 'invalid_grant' || resp.status === 400) {
+        console.warn('⚠️ [QB] Token is invalid (invalid_grant). Deleting stored tokens to allow reconnection...');
+        try {
+          await deleteTokens();
+          console.log('✅ [QB] Invalid tokens deleted successfully');
+        } catch (deleteError) {
+          console.error('❌ [QB] Failed to delete invalid tokens:', deleteError);
+        }
+      }
+
       throw new Error(`Failed to refresh token: ${resp.status}`);
     }
 
     const json = await resp.json();
     console.log('✅ [QB] Refresh successful, expires in:', json.expires_in, 'seconds');
-    
+
     const tokenData: TokenStore = {
       realmId: tokens.realmId,
       accessToken: json.access_token,
@@ -96,10 +117,22 @@ export async function refreshQuickBooksToken(): Promise<TokenStore | null> {
     console.log('💾 [QB] Saving refreshed tokens...');
     await saveTokensToDatabase(tokenData);
     console.log('✅ [QB] Refreshed tokens saved successfully');
-    
+
     return tokenData;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ [QB] Error refreshing token:', error);
+
+    // If the error indicates invalid token, try to clean up
+    if (error?.message?.includes('invalid_grant') || error?.message?.includes('400')) {
+      console.warn('⚠️ [QB] Detected invalid token error. Attempting to clean up...');
+      try {
+        await deleteTokens();
+        console.log('✅ [QB] Cleaned up invalid tokens');
+      } catch (deleteError) {
+        console.error('❌ [QB] Failed to clean up tokens:', deleteError);
+      }
+    }
+
     return null;
   }
 }
@@ -110,7 +143,7 @@ export async function refreshQuickBooksToken(): Promise<TokenStore | null> {
  */
 export async function getValidAccessToken(): Promise<string | null> {
   console.log('🎯 [QB] Getting valid access token...');
-  
+
   const tokens = await getTokenFromDatabase();
   if (!tokens) {
     console.log('❌ [QB] No tokens available');
@@ -120,7 +153,7 @@ export async function getValidAccessToken(): Promise<string | null> {
   const now = Date.now();
   const expiresAt = new Date(tokens.expiresAt).getTime();
   const timeUntilExpiry = expiresAt - now;
-  
+
   console.log('⏱️ [QB] Time until expiry:', Math.round(timeUntilExpiry / 1000), 'seconds');
 
   // Check if token is expired or will expire in the next minute
@@ -139,7 +172,7 @@ export async function getValidAccessToken(): Promise<string | null> {
  */
 export async function saveTokensToDatabase(tokens: TokenStore): Promise<void> {
   console.log('💾 [QB] Saving tokens to database...');
-  
+
   const { error } = await supabase
     .from('quickbooks_tokens')
     .upsert({
@@ -154,14 +187,14 @@ export async function saveTokensToDatabase(tokens: TokenStore): Promise<void> {
     console.error('❌ [QB] Failed to save tokens:', error.message);
     throw new Error(`Failed to save QuickBooks tokens: ${error.message}`);
   }
-  
+
   console.log('✅ [QB] Tokens saved successfully');
 }
 
 /** Delete QuickBooks tokens */
 export async function deleteTokens(): Promise<void> {
   console.log('🗑️ [QB] Deleting tokens...');
-  
+
   const { error } = await supabase
     .from('quickbooks_tokens')
     .delete()
@@ -171,7 +204,7 @@ export async function deleteTokens(): Promise<void> {
     console.error('❌ [QB] Failed to delete tokens:', error.message);
     throw new Error(`Failed to delete QuickBooks tokens: ${error.message}`);
   }
-  
+
   console.log('✅ [QB] Tokens deleted successfully');
 }
 

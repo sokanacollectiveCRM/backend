@@ -16,6 +16,15 @@ const {
   QBO_ENV          = 'production'
 } = process.env;
 
+// Validate required environment variables
+if (!QB_CLIENT_ID || !QB_CLIENT_SECRET || !QB_REDIRECT_URI) {
+  console.error('⚠️ [QB Auth Service] Missing QuickBooks environment variables:', {
+    hasClientId: !!QB_CLIENT_ID,
+    hasClientSecret: !!QB_CLIENT_SECRET,
+    hasRedirectUri: !!QB_REDIRECT_URI
+  });
+}
+
 const oauthClient = new OAuthClient({
   clientId:     QB_CLIENT_ID,
   clientSecret: QB_CLIENT_SECRET,
@@ -27,10 +36,26 @@ const oauthClient = new OAuthClient({
  * Build the Intuit consent URL.
  */
 export function generateConsentUrl(state: string): string {
-  return oauthClient.authorizeUri({
-    scope: [ OAuthClient.scopes.Accounting ],
-    state
-  });
+  // Validate configuration before generating URL
+  if (!QB_CLIENT_ID || !QB_CLIENT_SECRET || !QB_REDIRECT_URI) {
+    throw new Error('QuickBooks OAuth configuration is incomplete. Missing required environment variables.');
+  }
+
+  try {
+    const url = oauthClient.authorizeUri({
+      scope: [ OAuthClient.scopes.Accounting ],
+      state
+    });
+
+    if (!url) {
+      throw new Error('Failed to generate authorization URL from OAuth client');
+    }
+
+    return url;
+  } catch (error: any) {
+    console.error('❌ [QB Auth Service] Error generating consent URL:', error);
+    throw new Error(`Failed to generate QuickBooks authorization URL: ${error?.message || 'Unknown error'}`);
+  }
 }
 
 /**
@@ -78,21 +103,21 @@ export async function handleAuthCallback(
  */
 export async function isConnected(): Promise<boolean> {
   console.log('🔍 [QB Auth] Checking if QuickBooks is connected...');
-  
+
   const tokens = await getTokens();
   if (!tokens) {
     console.log('❌ [QB Auth] No tokens found - not connected');
     return false;
   }
-  
+
   const now = new Date();
   const expiresAt = new Date(tokens.expiresAt);
   const isExpired = expiresAt <= now;
-  
+
   console.log('⏰ [QB Auth] Current time:', now.toISOString());
   console.log('📅 [QB Auth] Token expires at:', expiresAt.toISOString());
   console.log('🔍 [QB Auth] Token expired?', isExpired);
-  
+
   if (isExpired) {
     console.log('🔄 [QB Auth] Token expired, attempting refresh...');
     // Import and use getValidAccessToken which handles refresh
@@ -100,9 +125,16 @@ export async function isConnected(): Promise<boolean> {
     const validToken = await getValidAccessToken();
     const refreshSuccessful = !!validToken;
     console.log('📊 [QB Auth] Refresh successful?', refreshSuccessful);
+
+    // If refresh failed, tokens are likely invalid and should be cleaned up
+    // This will be handled by the refresh function, but we return false here
+    if (!refreshSuccessful) {
+      console.log('⚠️ [QB Auth] Token refresh failed. User needs to reconnect.');
+    }
+
     return refreshSuccessful;
   }
-  
+
   console.log('📊 [QB Auth] Connected? true (token valid)');
   return true;
 }
@@ -113,4 +145,3 @@ export async function isConnected(): Promise<boolean> {
 export async function disconnectQuickBooks(): Promise<void> {
   await deleteTokens();
 }
-
