@@ -14,6 +14,12 @@ const authMiddleware = async (
     const token = authHeader ? authHeader.split(' ')[1] : cookieToken
 
     if (!token) {
+      console.warn('⚠️ [Auth] No token provided:', {
+        path: req.path,
+        hasAuthHeader: !!authHeader,
+        hasCookie: !!cookieToken,
+        method: req.method
+      });
       res.status(401).json({ error: 'No session token provided' })
       return
     }
@@ -24,16 +30,25 @@ const authMiddleware = async (
     } = await supabase.auth.getUser(token)
 
     if (error || !user) {
+      console.warn('⚠️ [Auth] Invalid or expired token:', {
+        path: req.path,
+        error: error?.message,
+        hasUser: !!user
+      });
       res.status(401).json({ error: 'Invalid or expired session token' })
       return
     }
 
-    // Your app’s user object
+    // Your app's user object
     const user_entity = await authService.getUserFromToken(token)
     req.user = user_entity;
     next();
-  } catch {
-    console.error('Auth middleware error:');
+  } catch (err: any) {
+    console.error('❌ [Auth] Middleware error:', {
+      path: req.path,
+      error: err?.message,
+      stack: err?.stack
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 };
