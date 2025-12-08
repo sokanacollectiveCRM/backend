@@ -4,6 +4,7 @@ import {
   connectQuickBooks,
   createInvoice,
   getInvoices,
+  getQuickBooksCustomers,
   handleQuickBooksCallback,
   quickBooksAuthUrl,
   quickBooksDisconnect,
@@ -25,6 +26,7 @@ router.use(authMiddleware)
 router.get('/auth/url', quickBooksAuthUrl)
 router.get('/status', quickBooksStatus)
 router.get('/invoices', getInvoices)
+router.get('/customers', getQuickBooksCustomers)
 router.post('/disconnect', quickBooksDisconnect)
 router.post('/invoice', createInvoice)
 

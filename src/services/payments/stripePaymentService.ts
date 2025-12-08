@@ -21,7 +21,7 @@ interface UpdateCardParams {
 export class StripePaymentService {
   private async ensureStripeCustomer(customerId: string): Promise<string> {
     console.log(`Ensuring Stripe customer exists for customer ID: ${customerId}`);
-    
+
     // Get customer info from database
     const { data: customerData, error: customerError } = await supabase
       .from('customers')
@@ -34,10 +34,10 @@ export class StripePaymentService {
       throw new Error(`Customer not found: ${customerError?.message}`);
     }
 
-    console.log('Found customer data:', { 
-      email: customerData.email, 
-      name: customerData.name, 
-      hasStripeId: !!customerData.stripe_customer_id 
+    console.log('Found customer data:', {
+      email: customerData.email,
+      name: customerData.name,
+      hasStripeId: !!customerData.stripe_customer_id
     });
 
     // If customer already has Stripe ID, verify it exists in Stripe
@@ -61,7 +61,7 @@ export class StripePaymentService {
           supabase_customer_id: customerId
         }
       });
-      
+
       console.log('Created new Stripe customer:', stripeCustomer.id);
 
       // Save Stripe customer ID
@@ -85,10 +85,10 @@ export class StripePaymentService {
 
   async saveCard({ customerId, cardToken }: SaveCardParams) {
     console.log('Starting saveCard process for customer:', customerId);
-    
+
     // Ensure customer exists in Stripe
     const stripeCustomerId = await this.ensureStripeCustomer(customerId);
-    
+
     try {
       // First, mark any existing payment methods as not default
       console.log('Marking existing payment methods as not default');
@@ -134,9 +134,9 @@ export class StripePaymentService {
         card_exp_year: paymentMethod.card!.exp_year,
         is_default: true
       };
-      
+
       console.log('Payment method data to insert:', paymentMethodData);
-      
+
       const { data: insertResult, error } = await supabase
         .from('payment_methods')
         .insert(paymentMethodData)
@@ -166,7 +166,7 @@ export class StripePaymentService {
 
   async chargeCard({ customerId, amount, description }: ChargeCardParams) {
     console.log('Starting charge process for customer:', customerId);
-    
+
     // Ensure customer exists in Stripe
     const stripeCustomerId = await this.ensureStripeCustomer(customerId);
 
@@ -176,7 +176,7 @@ export class StripePaymentService {
       .from('payment_methods')
       .select('*')
       .eq('customer_id', customerId);
-    
+
     console.log('All payment methods for customer:', allPaymentMethods);
     console.log('Payment methods query error:', allError);
 
@@ -214,17 +214,38 @@ export class StripePaymentService {
 
       // Save the charge
       console.log('Saving charge to database');
-      const { error: chargeError } = await supabase.from('charges').insert({
-        customer_id: customerId,
-        payment_method_id: paymentMethod.id,
-        stripe_payment_intent_id: paymentIntent.id,
-        amount: paymentIntent.amount,
-        status: paymentIntent.status,
-        description: paymentIntent.description
-      });
+      const { data: chargeData, error: chargeError } = await supabase
+        .from('charges')
+        .insert({
+          customer_id: customerId,
+          payment_method_id: paymentMethod.id,
+          stripe_payment_intent_id: paymentIntent.id,
+          amount: paymentIntent.amount,
+          status: paymentIntent.status,
+          description: paymentIntent.description,
+          qb_sync_status: 'pending' // Mark as pending sync
+        })
+        .select('id')
+        .single();
 
       if (chargeError) {
         console.error('Failed to save charge to database:', chargeError);
+      } else {
+        console.log('Charge saved to database');
+
+        // Sync to QuickBooks (non-blocking)
+        if (chargeData?.id && paymentIntent.status === 'succeeded') {
+          const syncPaymentToQuickBooks = (await import('./syncPaymentToQuickBooks')).default;
+          syncPaymentToQuickBooks(
+            chargeData.id,
+            customerId,
+            paymentIntent.amount,
+            paymentIntent.id,
+            paymentIntent.description
+          ).catch(err => {
+            console.error('❌ QuickBooks sync failed (non-blocking):', err);
+          });
+        }
       }
 
       console.log('Charge process completed successfully');
@@ -237,7 +258,7 @@ export class StripePaymentService {
 
   async updateCard({ customerId, cardToken, paymentMethodId }: UpdateCardParams) {
     console.log('Starting updateCard process for customer:', customerId);
-    
+
     // Ensure customer exists in Stripe
     const stripeCustomerId = await this.ensureStripeCustomer(customerId);
 
@@ -319,7 +340,7 @@ export class StripePaymentService {
 
   async getPaymentMethods(customerId: string) {
     console.log('Fetching payment methods for customer:', customerId);
-    
+
     try {
       // Get payment methods from database
       const { data: paymentMethods, error } = await supabase
@@ -334,7 +355,7 @@ export class StripePaymentService {
       }
 
       console.log(`Found ${paymentMethods?.length || 0} payment methods for customer`);
-      
+
       return (paymentMethods || []).map(pm => ({
         id: pm.id,
         stripePaymentMethodId: pm.stripe_payment_method_id,
@@ -353,7 +374,7 @@ export class StripePaymentService {
 
   async getCustomersWithStripeId() {
     console.log('Fetching customers with Stripe IDs');
-    
+
     try {
       // Get customers from database that have a stripe_customer_id
       const { data: customers, error } = await supabase
@@ -368,7 +389,7 @@ export class StripePaymentService {
       }
 
       console.log(`Found ${customers?.length || 0} customers with Stripe IDs`);
-      
+
       return (customers || []).map(customer => ({
         id: customer.id,
         name: customer.name,
@@ -382,4 +403,4 @@ export class StripePaymentService {
       throw err;
     }
   }
-} 
+}

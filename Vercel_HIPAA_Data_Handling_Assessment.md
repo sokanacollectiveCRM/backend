@@ -221,7 +221,3 @@ modifications to logging practices and data handling to meet HIPAA requirements.
 
 **Risk Level**: High - Current implementation has multiple HIPAA violations that
 could result in significant penalties.
-
-
-
-
