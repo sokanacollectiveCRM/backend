@@ -11,6 +11,7 @@ import createInvoiceService from '../services/invoice/createInvoice';
 import supabase from '../supabase';
 // ← 1) Import your invoiceable-customers logic
 import getInvoiceableCustomers from '../services/customer/getInvoiceableCustomers';
+import getCustomersFromQuickBooks from '../services/customer/getCustomersFromQuickBooks';
 // Ensure you have SUPABASE_JWT_SECRET in your env
 const JWT_SECRET = process.env.SUPABASE_JWT_SECRET!
 
@@ -207,5 +208,31 @@ export const getInvoices: RequestHandler = async (_req, res, next) => {
     res.json(data)
   } catch (err) {
     next(err)
+  }
+}
+
+/**
+ * GET /quickbooks/customers
+ * Returns all customers from QuickBooks Online
+ */
+export const getQuickBooksCustomers: RequestHandler = async (req, res, next) => {
+  try {
+    console.log('📋 [QB Customers] Fetching customers from QuickBooks...');
+
+    // Optional query parameter for max results
+    const maxResults = req.query.maxResults
+      ? parseInt(req.query.maxResults as string, 10)
+      : 100;
+
+    const customers = await getCustomersFromQuickBooks(maxResults);
+
+    console.log(`✅ [QB Customers] Returning ${customers.length} customers`);
+    res.json(customers);
+  } catch (err: any) {
+    console.error('❌ [QB Customers] Error fetching customers:', err);
+    res.status(500).json({
+      error: 'Failed to fetch customers from QuickBooks',
+      message: err.message || 'Unknown error'
+    });
   }
 }

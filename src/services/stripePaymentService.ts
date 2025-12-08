@@ -333,7 +333,7 @@ export class StripePaymentService {
       }
 
       // Save to charges table (using a dummy payment method ID since we don't have one in the contract system)
-      const { error: chargesError } = await supabase
+      const { data: chargeData, error: chargesError } = await supabase
         .from('charges')
         .insert({
           customer_id: customerData.id,
@@ -342,14 +342,31 @@ export class StripePaymentService {
           amount: paymentIntent.amount,
           status: paymentIntent.status,
           description: `Contract payment - ${paymentIntent.metadata?.payment_type || 'unknown'}`,
+          qb_sync_status: 'pending', // Mark as pending sync
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
-        });
+        })
+        .select('id')
+        .single();
 
       if (chargesError) {
         console.error('⚠️ Failed to save to charges table:', chargesError);
       } else {
         console.log('✅ Payment saved to charges table');
+
+        // Sync to QuickBooks (non-blocking)
+        if (chargeData?.id) {
+          const syncPaymentToQuickBooks = (await import('./payments/syncPaymentToQuickBooks')).default;
+          syncPaymentToQuickBooks(
+            chargeData.id,
+            customerData.id,
+            paymentIntent.amount,
+            paymentIntent.id,
+            `Contract payment - ${paymentIntent.metadata?.payment_type || 'unknown'}`
+          ).catch(err => {
+            console.error('❌ QuickBooks sync failed (non-blocking):', err);
+          });
+        }
       }
 
     } catch (error) {
