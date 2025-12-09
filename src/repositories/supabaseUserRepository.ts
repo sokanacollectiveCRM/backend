@@ -22,10 +22,15 @@ export class SupabaseUserRepository implements UserRepository {
     const { data, error } = await this.supabaseClient
       .from('users')
       .select('*')
-      .eq('email', email)
-      .single();
+      .eq('email', email.toLowerCase().trim()) // Normalize email for comparison
+      .maybeSingle(); // Use maybeSingle() instead of single() to avoid errors when no row found
 
-    if (error || !data) {
+    if (error) {
+      console.error(`Error finding user by email ${email}:`, error);
+      return null;
+    }
+
+    if (!data) {
       return null;
     }
 
@@ -160,6 +165,7 @@ async findClientsById(id: string): Promise<any> {
       .from('assignments')
       .select('client_id')
       .eq('doula_id', doulaId)
+      .eq('status', 'active'); // Only get active assignments
 
     if (assignmentsError) {
       throw new Error(`Failed to fetch assignments: ${assignmentsError.message}`);
@@ -173,20 +179,20 @@ async findClientsById(id: string): Promise<any> {
     // store out client ids into an array
     const clientIds = assignments.map(assignment => assignment.client_id);
 
-    // console.log("clientIds are ", clientIds);
-
-    // grab our users
-    const { data: users, error: getUsersError } = await this.supabaseClient
+    // grab our users with full user data joined
+    const { data: clients, error: getClientsError } = await this.supabaseClient
       .from('client_info')
-      .select('*')
+      .select(`
+        *,
+        users (*)
+      `)
       .in('id', clientIds);
 
-    if (getUsersError) {
-      throw new Error(`${getUsersError.message}`);
+    if (getClientsError) {
+      throw new Error(`Failed to fetch clients: ${getClientsError.message}`);
     }
-    // console.log("after call to client_info");
 
-    return users.map(user => this.mapToClient(user));
+    return clients.map(client => this.mapToClient(client));
   }
 
   async save(user: User): Promise<User> {
@@ -255,25 +261,37 @@ async findClientsById(id: string): Promise<any> {
 
   async addMember(firstname: string, lastname: string, userEmail: string, userRole: string): Promise<User> {
     try {
+      // Normalize email to lowercase for consistency
+      const normalizedEmail = userEmail.toLowerCase().trim();
+
       const { data, error } = await this.supabaseClient
         .from('users')
         .insert([
           {
-            firstname:firstname,
-            lastname:lastname,
-            email: userEmail,
-            role: userRole
+            firstname: firstname.trim(),
+            lastname: lastname.trim(),
+            email: normalizedEmail,
+            role: userRole,
+            account_status: 'pending' // Set account status to pending for new invites
           },
         ])
         .select()
         .single()
 
       if (error) {
+        console.error(`Error adding member ${normalizedEmail}:`, error);
         throw new Error(`Failed to add member: ${error.message}`);
       }
 
-      return this.mapToUser(data);
-    } catch (err) {
+      if (!data) {
+        throw new Error('Failed to add member: No data returned from insert');
+      }
+
+      const user = this.mapToUser(data);
+      console.log(`✅ Successfully added member: ${normalizedEmail}, ID: ${user.id}, Status: ${user.account_status}`);
+      return user;
+    } catch (err: any) {
+      console.error(`Failed to add member ${userEmail}:`, err);
       throw new Error(`Failed to add member: ${err.message}`);
     }
   }

@@ -63,6 +63,39 @@ export class SupabaseClientRepository  {
     return data;
   }
 
+  /**
+   * Get clients by status
+   */
+  async findClientsByStatus(status: string): Promise<Client[]> {
+    const { data, error } = await this.supabaseClient
+      .from('client_info')
+      .select(`
+        *,
+        users (*)
+      `)
+      .eq('status', status);
+
+    if (error) {
+      throw new Error(`Failed to fetch clients by status: ${error.message}`);
+    }
+
+    return data.map(row => this.mapToClient(row));
+  }
+
+  /**
+   * Find a client by ID (uses lite version)
+   */
+  async findById(clientId: string): Promise<Client | null> {
+    try {
+      return await this.findClientLiteById(clientId);
+    } catch (error: any) {
+      if (error.message?.includes('No rows')) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
   async findClientsLiteByDoula(userId: string): Promise<Client[]> {
     const clientIds = await this.getClientIdsAssignedToDoula(userId);
 
@@ -332,7 +365,8 @@ export class SupabaseClientRepository  {
     const { data, error } = await this.supabaseClient
       .from('assignments')
       .select('client_id')
-      .eq('doula_id', doulaId);
+      .eq('doula_id', doulaId)
+      .eq('status', 'active'); // Only get active assignments
 
     if (error) throw new Error(error.message);
     return data.map(entry => entry.client_id);
