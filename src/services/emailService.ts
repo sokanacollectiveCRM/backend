@@ -212,4 +212,128 @@ The Sokana Team`;
 
     await this.sendEmail(to, subject, text, html);
   }
+
+  async sendDoulaInviteEmail(to: string, firstname: string, lastname: string, inviteToken?: string): Promise<void> {
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+    const signupUrl = inviteToken
+      ? `${baseUrl}/signup?role=doula&email=${encodeURIComponent(to)}&invite_token=${inviteToken}`
+      : `${baseUrl}/signup?role=doula&email=${encodeURIComponent(to)}`;
+
+    const subject = 'Welcome to the Sokana Doula Team!';
+    const text = `Dear ${firstname} ${lastname},\n\nYou have been invited to join the Sokana Collective as a doula! We're excited to have you on our team.\n\nPlease complete your profile by clicking the link below:\n${signupUrl}\n\nAfter signing up, you'll be able to:\n- Complete your profile\n- Upload required documents (background checks and licenses)\n- View and manage your assigned clients\n- Log hours and add notes for your clients\n\nPlease make sure to use this email address (${to}) when creating your account.\n\nIf you have any questions, please don't hesitate to reach out.\n\nBest regards,\nThe Sokana Team`;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #333;">Welcome to the Sokana Doula Team!</h2>
+        <p>Dear ${firstname} ${lastname},</p>
+        <p>We're excited to have you join the Sokana Collective as a doula! We're thrilled to have you on our team.</p>
+
+        <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <p style="margin-top: 0;"><strong>Next Steps:</strong></p>
+          <ol style="margin: 0; padding-left: 20px;">
+            <li>Complete your profile by clicking the button below</li>
+            <li>Upload required documents (background checks and licenses)</li>
+            <li>Start viewing and managing your assigned clients</li>
+            <li>Log hours and add notes for your clients</li>
+          </ol>
+        </div>
+
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${signupUrl}"
+             style="background-color: #4CAF50; color: white; padding: 15px 30px; text-decoration: none;
+                    border-radius: 5px; font-weight: bold; font-size: 16px; display: inline-block;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            Complete Your Profile
+          </a>
+        </div>
+
+        <p><strong>Important:</strong> Please make sure to use this email address (<strong>${to}</strong>) when creating your account.</p>
+
+        <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+        <p style="word-break: break-all; color: #666;">${signupUrl}</p>
+
+        <p>If you have any questions, please don't hesitate to reach out.</p>
+        <p>Best regards,<br>The Sokana Team</p>
+      </div>
+    `;
+
+    await this.sendEmail(to, subject, text, html);
+  }
+
+  async sendDoulaMatchNotification(
+    doulaEmail: string,
+    doulaName: string,
+    clientName: string,
+    clientEmail: string,
+    notes?: string
+  ): Promise<void> {
+    const subject = 'New Client Assignment - Sokana Collective';
+    const text = `Dear ${doulaName},\n\nYou have been matched with a new client!\n\nClient Details:\n- Name: ${clientName}\n- Email: ${clientEmail}\n${notes ? `\nAssignment Notes:\n${notes}\n` : ''}\n\nYou can now view this client's information in your doula dashboard and start logging hours and activities.\n\nBest regards,\nThe Sokana Team`;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #333;">New Client Assignment</h2>
+        <p>Dear ${doulaName},</p>
+        <p>You have been matched with a new client! We're excited for you to begin working together.</p>
+
+        <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #333;">Client Details:</h3>
+          <ul style="list-style: none; padding: 0; margin: 0;">
+            <li style="margin: 10px 0;"><strong>Name:</strong> ${clientName}</li>
+            <li style="margin: 10px 0;"><strong>Email:</strong> ${clientEmail}</li>
+            ${notes ? `<li style="margin: 10px 0;"><strong>Assignment Notes:</strong><br>${notes}</li>` : ''}
+          </ul>
+        </div>
+
+        <p>You can now view this client's information in your doula dashboard and start logging hours and activities.</p>
+
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${process.env.FRONTEND_URL || 'http://localhost:3001'}/doula/dashboard"
+             style="background-color: #4CAF50; color: white; padding: 15px 30px; text-decoration: none;
+                    border-radius: 5px; font-weight: bold; font-size: 16px; display: inline-block;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            View Dashboard
+          </a>
+        </div>
+
+        <p>Best regards,<br>The Sokana Team</p>
+      </div>
+    `;
+
+    await this.sendEmail(doulaEmail, subject, text, html);
+  }
+
+  async sendClientMatchNotification(
+    clientEmail: string,
+    clientName: string,
+    doulaName: string,
+    doulaEmail: string
+  ): Promise<void> {
+    const subject = 'Your Doula Match - Sokana Collective';
+    const text = `Dear ${clientName},\n\nGreat news! We've matched you with a doula.\n\nDoula Details:\n- Name: ${doulaName}\n- Email: ${doulaEmail}\n\nYour doula will be in touch with you soon to discuss your needs and begin providing support.\n\nBest regards,\nThe Sokana Team`;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #333;">Your Doula Match</h2>
+        <p>Dear ${clientName},</p>
+        <p>Great news! We've matched you with a doula who will support you through your journey.</p>
+
+        <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #333;">Your Doula:</h3>
+          <ul style="list-style: none; padding: 0; margin: 0;">
+            <li style="margin: 10px 0;"><strong>Name:</strong> ${doulaName}</li>
+            <li style="margin: 10px 0;"><strong>Email:</strong> ${doulaEmail}</li>
+          </ul>
+        </div>
+
+        <p>Your doula will be in touch with you soon to discuss your needs and begin providing support.</p>
+
+        <p>If you have any questions, please don't hesitate to reach out to us.</p>
+
+        <p>Best regards,<br>The Sokana Team</p>
+      </div>
+    `;
+
+    await this.sendEmail(clientEmail, subject, text, html);
+  }
 }

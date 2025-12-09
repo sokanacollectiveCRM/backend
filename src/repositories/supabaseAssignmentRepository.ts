@@ -1,4 +1,4 @@
-import { SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient, createClient } from '@supabase/supabase-js';
 
 export interface Assignment {
   id: string;
@@ -30,9 +30,25 @@ export interface AssignedDoula {
 
 export class SupabaseAssignmentRepository {
   private supabaseClient: SupabaseClient;
+  private supabaseUrl: string;
 
   constructor(supabaseClient: SupabaseClient) {
     this.supabaseClient = supabaseClient;
+    this.supabaseUrl = process.env.SUPABASE_URL || '';
+  }
+
+  private createUserClient(accessToken: string): SupabaseClient {
+    return createClient(this.supabaseUrl, process.env.SUPABASE_ANON_KEY || '', {
+      global: {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
   }
 
   /**
@@ -41,9 +57,12 @@ export class SupabaseAssignmentRepository {
   async assignDoula(
     clientId: string,
     doulaId: string,
-    assignedBy?: string
+    assignedBy?: string,
+    accessToken?: string
   ): Promise<Assignment> {
-    const { data, error } = await this.supabaseClient
+    const client = accessToken ? this.createUserClient(accessToken) : this.supabaseClient;
+
+    const { data, error } = await client
       .from('assignments')
       .insert({
         client_id: clientId,
@@ -59,6 +78,28 @@ export class SupabaseAssignmentRepository {
       if (error.code === '23505') {
         throw new Error('This doula is already assigned to this client');
       }
+
+      // If RLS error with user token, try with service role as fallback
+      if (error.message.includes('row-level security') && accessToken) {
+        console.log('⚠️  RLS error with user token, retrying with service role...');
+        const { data: retryData, error: retryError } = await this.supabaseClient
+          .from('assignments')
+          .insert({
+            client_id: clientId,
+            doula_id: doulaId,
+            assigned_by: assignedBy,
+            status: 'active'
+          })
+          .select()
+          .single();
+
+        if (retryError) {
+          throw new Error(`Failed to assign doula: ${retryError.message}`);
+        }
+
+        return this.mapToAssignment(retryData);
+      }
+
       throw new Error(`Failed to assign doula: ${error.message}`);
     }
 

@@ -6,7 +6,9 @@ import cookieParser from 'cookie-parser';
 
 import emailRoutes from './routes/EmailRoutes';
 import authRoutes from './routes/authRoutes';
+import adminRoutes from './routes/adminRoutes';
 import clientRoutes from './routes/clientRoutes';
+import doulaRoutes from './routes/doulaRoutes';
 import contractPaymentRoutes from './routes/contractPaymentRoutes';
 import contractRoutes from './routes/contractRoutes';
 import contractSigningRoutes from './routes/contractSigningRoutes';
@@ -87,6 +89,8 @@ app.use((req, _res, next) => {
 
 // ---- Mount other routes (wrapped for ESM/CJS compatibility) ----
 app.use('/auth', asMiddleware(authRoutes));
+app.use('/api/admin', asMiddleware(adminRoutes));
+app.use('/api/doulas', asMiddleware(doulaRoutes));
 app.use('/email', asMiddleware(emailRoutes));
 app.use('/requestService', asMiddleware(requestRouter));
 app.use('/clients', asMiddleware(clientRoutes));

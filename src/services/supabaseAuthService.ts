@@ -9,14 +9,14 @@ import {
 
 export class SupabaseAuthService implements AuthService {
   private supabaseClient: SupabaseClient;
-  
+
   constructor(
     supabaseClient: SupabaseClient,
     private userRepository: UserRepository,
   ) {
     this.supabaseClient = supabaseClient;
   }
-  
+
   async signup(
     email: string,
     password: string,
@@ -56,7 +56,7 @@ export class SupabaseAuthService implements AuthService {
       throw new Error("Failed to update user profile during signup");
     }
   }
-  
+
   async login(
     email: string,
     password: string
@@ -92,13 +92,24 @@ export class SupabaseAuthService implements AuthService {
 
     const { data: {user}, error } = await this.supabaseClient.auth.getUser(token);
 
+    if (error || !user) {
+      throw new Error('Authentication error: Invalid token');
+    }
+
     try {
       const user_profile = await this.userRepository.findByEmail(user.email);
 
+      if (!user_profile) {
+        throw new Error('Authentication error: User profile not found in repository');
+      }
+
       return user_profile;
 
-    } catch (error) {
-      throw new Error('Authentication error: getMe could not be found from repository');
+    } catch (error: any) {
+      if (error.message.includes('not found')) {
+        throw error;
+      }
+      throw new Error(`Authentication error: getMe could not be found from repository: ${error.message}`);
     }
   }
 

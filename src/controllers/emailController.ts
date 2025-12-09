@@ -13,9 +13,9 @@ export class EmailController {
       const { email, name, signupUrl } = req.body;
 
       if (!email || !name || !signupUrl) {
-        res.status(400).json({ 
-          success: false, 
-          error: 'Missing required fields: email, name, or signupUrl' 
+        res.status(400).json({
+          success: false,
+          error: 'Missing required fields: email, name, or signupUrl'
         });
         return;
       }
@@ -26,15 +26,15 @@ export class EmailController {
         signupUrl
       );
 
-      res.status(200).json({ 
-        success: true, 
-        message: `Approval email sent to ${email}` 
+      res.status(200).json({
+        success: true,
+        message: `Approval email sent to ${email}`
       });
     } catch (error) {
       console.error('Error sending approval email:', error);
-      res.status(500).json({ 
-        success: false, 
-        error: error.message || 'Failed to send email' 
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to send email'
       });
     }
   }
@@ -45,9 +45,9 @@ export class EmailController {
 
       if (!email || !firstname || !lastname || !role) {
         console.log('Missing required fields:', { email, firstname, lastname, role });
-        res.status(400).json({ 
-          success: false, 
-          error: 'Missing required fields: email, firstname, lastname, or role' 
+        res.status(400).json({
+          success: false,
+          error: 'Missing required fields: email, firstname, lastname, or role'
         });
         return;
       }
@@ -59,9 +59,9 @@ export class EmailController {
         role
       );
 
-      res.status(200).json({ 
-        success: true, 
-        message: `Invite email sent to ${email}` 
+      res.status(200).json({
+        success: true,
+        message: `Invite email sent to ${email}`
       });
     } catch (error) {
       console.error('Error sending team invite email:', error);
@@ -70,10 +70,44 @@ export class EmailController {
         message: error.message,
         stack: error.stack
       });
-      res.status(500).json({ 
-        success: false, 
-        error: error.message || 'Failed to send email' 
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to send email'
       });
     }
+  }
+
+  async sendDoulaInvite(email: string, firstname: string, lastname: string, inviteToken?: string): Promise<void> {
+    await this.emailService.sendDoulaInviteEmail(email, firstname, lastname, inviteToken);
+  }
+
+  async sendDoulaMatchNotification(
+    doulaEmail: string,
+    doulaName: string,
+    clientName: string,
+    clientEmail: string,
+    notes?: string
+  ): Promise<void> {
+    await this.emailService.sendDoulaMatchNotification(
+      doulaEmail,
+      doulaName,
+      clientName,
+      clientEmail,
+      notes
+    );
+  }
+
+  async sendClientMatchNotification(
+    clientEmail: string,
+    clientName: string,
+    doulaName: string,
+    doulaEmail: string
+  ): Promise<void> {
+    await this.emailService.sendClientMatchNotification(
+      clientEmail,
+      clientName,
+      doulaName,
+      doulaEmail
+    );
   }
 }

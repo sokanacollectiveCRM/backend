@@ -46,5 +46,15 @@ export interface ClientRepository {
    */
   deleteClient(clientId: string): Promise<void>;
 
+  /**
+   * Get clients by status
+   */
+  findClientsByStatus(status: string): Promise<Client[]>;
+
+  /**
+   * Find a client by ID (lite or detailed)
+   */
+  findById(clientId: string): Promise<Client | null>;
+
   exportCSV(): Promise<string | null>;
 }

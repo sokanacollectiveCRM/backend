@@ -26,12 +26,12 @@ export class AuthUseCase {
   //    user
   //
   async signup(
-    email: string, 
-    password: string, 
-    firstname: string, 
+    email: string,
+    password: string,
+    firstname: string,
     lastname: string
   ): Promise<User> {
-      
+
     if (!email || !password) {
       throw new ValidationError("Email and password are required");
     }
@@ -43,9 +43,12 @@ export class AuthUseCase {
     // Check that the user is pre-approved by an admin
     const existingUser = await this.userRepository.findByEmail(email);
     if (!existingUser) {
+      console.error(`❌ Signup attempt for ${email}: User not found in database. User must be invited by an admin first.`);
       throw new AuthorizationError("You are not authorized to sign up. Please email the office if the issue persists.");
     }
+    console.log(`✅ Found user ${email} with account_status: ${existingUser.account_status}`);
     if (existingUser.account_status !== 'pending') {
+      console.warn(`⚠️  Signup attempt for ${email}: account_status is '${existingUser.account_status}', expected 'pending'`);
       throw new AuthorizationError("This account already exists");
     }
 
@@ -68,7 +71,7 @@ export class AuthUseCase {
     email: string,
     password: string
   ): Promise<{user: any, token: any}> {
-    
+
     if (!email || !password) {
       throw new ValidationError("Email and password are required");
     }
@@ -99,7 +102,7 @@ export class AuthUseCase {
   async getMe(
       token: string
   ): Promise<User> {
-    
+
     if (!token) {
       throw new AuthenticationError("Not authenticated");
     }
@@ -195,7 +198,7 @@ export class AuthUseCase {
   async handleOAuthCallback(
     code: string,
   ): Promise<{session: any, user: User}> {
-    
+
     if (!code) {
       throw new ValidationError('No code provided');
     }
@@ -203,15 +206,15 @@ export class AuthUseCase {
     try {
       // Exchange code for session
       const { session, userData } = await this.authService.exchangeCodeForSession(code);
-      
+
       // Check if user exists
       let user = await this.userRepository.findByEmail(userData.email);
-      
+
       // User should already exist in users table
       if (!user) {
         throw new AuthorizationError('You are not authorized to sign in. Please email the office if the issue persists.');
       }
-      
+
       return { session, user };
     } catch (error) {
       throw new AuthenticationError(`${error.message}`);
@@ -235,22 +238,22 @@ export class AuthUseCase {
     try {
       // Get user data from token
       let user = await this.authService.getUserFromToken(accessToken);
-      
+
       // Create user if doesn't exist
       if (!user) {
         const newUser = new User({
           email: user.email,
-          firstname: user.user_metadata?.given_name || 
-                    user.user_metadata?.name?.split(' ')[0] || 
+          firstname: user.user_metadata?.given_name ||
+                    user.user_metadata?.name?.split(' ')[0] ||
                     null,
-          lastname: user.user_metadata?.family_name || 
-                   user.user_metadata?.name?.split(' ')[1] || 
+          lastname: user.user_metadata?.family_name ||
+                   user.user_metadata?.name?.split(' ')[1] ||
                    null,
         });
-        
+
         user = await this.userRepository.save(newUser);
       }
-      
+
       return user;
     } catch (error) {
       throw new AuthenticationError(`Token handling error: ${error.message}`);
@@ -296,13 +299,13 @@ export class AuthUseCase {
 
     try {
       const session = await this.authService.verifyRecoveryToken(tokenHash);
-      
+
       const queryParams = new URLSearchParams({
         access_token: session.access_token,
         refresh_token: session.refresh_token,
         type: 'recovery',
       }).toString();
-      
+
       return queryParams;
     } catch (error) {
       throw new AuthenticationError(`Failed to process password recovery: ${error.message}`);
@@ -330,16 +333,16 @@ export class AuthUseCase {
     try {
       // Validate session
       await this.authService.setSession(token);
-      
+
       // Update password
       const userData = await this.authService.updateUserPassword(password);
-      
+
       // Get domain user
       const user = await this.userRepository.findByEmail(userData.email);
       if (!user) {
         throw new NotFoundError('User not found');
       }
-      
+
       return user;
     } catch (error) {
       if (error instanceof NotFoundError) {
