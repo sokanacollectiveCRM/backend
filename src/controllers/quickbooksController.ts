@@ -29,10 +29,11 @@ export const quickBooksAuthUrl: RequestHandler = (_req, res, next) => {
         hasClientSecret: !!QB_CLIENT_SECRET,
         hasRedirectUri: !!QB_REDIRECT_URI
       });
-      return res.status(500).json({
+      res.status(500).json({
         error: 'QuickBooks configuration is incomplete. Please check server environment variables.',
         details: 'Missing QB_CLIENT_ID, QB_CLIENT_SECRET, or QB_REDIRECT_URI'
       });
+      return;
     }
 
     const state = Math.random().toString(36).substring(2)
@@ -40,13 +41,14 @@ export const quickBooksAuthUrl: RequestHandler = (_req, res, next) => {
 
     if (!url) {
       console.error('❌ [QB Auth] Failed to generate consent URL');
-      return res.status(500).json({
+      res.status(500).json({
         error: 'Could not generate QuickBooks authorization URL'
       });
+      return;
     }
 
     console.log('✅ [QB Auth] Generated auth URL successfully');
-    res.json({ url })
+    res.json({ url });
   } catch (err: any) {
     console.error('❌ [QB Auth] Error generating auth URL:', err);
     res.status(500).json({

@@ -179,7 +179,8 @@ dashboardRoutes.get(
       }
 
       if (!data || data.length === 0) {
-        return res.status(200).json({ events: [] });
+        res.status(200).json({ events: [] });
+        return;
       }
 
       // Map to calendar events

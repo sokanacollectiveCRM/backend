@@ -76,6 +76,7 @@ export enum IncomeLevel{
 
 export interface AuthRequest extends Request {
   user?: User;
+  file?: MulterFile;
 }
 
 export interface UpdateRequest extends Request {
