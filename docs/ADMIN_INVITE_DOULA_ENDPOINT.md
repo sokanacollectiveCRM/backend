@@ -36,7 +36,7 @@ Endpoint for administrators to invite doulas to join the platform. The doula rec
     "email": "doula@example.com",
     "firstname": "Jane",
     "lastname": "Doe",
-    "inviteToken": "62e7d2ff379b935ceed3ecb32ef6b5cc0b452391b8e3859ac8fd088b224f111e"
+    "inviteToken": "example_invite_token_abc123xyz"
   }
 }
 ```
@@ -85,7 +85,7 @@ Endpoint for administrators to invite doulas to join the platform. The doula rec
 
 The doula receives an email with:
 - **Subject:** "You're Invited to Join Our Doula Team!"
-- **Content:** 
+- **Content:**
   - Personalized greeting with firstname and lastname
   - Invitation to create profile
   - Link to signup page: `${FRONTEND_URL}/signup`
@@ -97,7 +97,7 @@ The doula receives an email with:
 ### cURL
 ```bash
 curl -X POST http://localhost:5050/api/admin/doulas/invite \
-  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
+  -H "Authorization: Bearer <your_admin_access_token>" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "doula@example.com",
@@ -121,13 +121,13 @@ async function inviteDoula(token: string, email: string, firstname: string, last
       lastname
     })
   });
-  
+
   const data = await response.json();
-  
+
   if (!response.ok) {
     throw new Error(data.error || 'Failed to invite doula');
   }
-  
+
   return data;
 }
 
@@ -188,7 +188,7 @@ function InviteDoulaForm() {
     setSuccess('');
 
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('authToken'); // Replace with your actual token storage method
       const response = await fetch('http://localhost:5050/api/admin/doulas/invite', {
         method: 'POST',
         headers: {
@@ -287,4 +287,3 @@ The endpoint has been tested and verified. Test results:
 - **Doula Signup:** `POST /api/auth/signup` (with role="doula")
 - **Doula Profile:** `GET /api/doulas/profile`
 - **Upload Documents:** `POST /api/doulas/documents`
-

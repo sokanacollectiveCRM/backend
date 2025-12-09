@@ -9,7 +9,14 @@ export class SupabaseActivityRepository implements ActivityRepository {
     this.supabaseClient = supabaseClient;
   }
 
-  async createActivity(activityData: Omit<Activity, 'id'>): Promise<Activity> {
+  async createActivity(activityData: {
+    clientId: string;
+    type: string;
+    description?: string;
+    metadata?: any;
+    timestamp: Date;
+    createdBy?: string;
+  }): Promise<Activity> {
     const { data, error } = await this.supabaseClient
       .from('client_activities')
       .insert({
