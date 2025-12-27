@@ -66,6 +66,8 @@ export async function refreshQuickBooksToken(): Promise<TokenStore | null> {
   console.log('📤 [QB] Making refresh request to:', url);
 
   try {
+    // Use dynamic import for node-fetch (ES Module compatible)
+    const { default: fetch } = await import('node-fetch');
     const resp = await fetch(url, {
       method: 'POST',
       headers: {
@@ -104,7 +106,7 @@ export async function refreshQuickBooksToken(): Promise<TokenStore | null> {
       throw new Error(`Failed to refresh token: ${resp.status}`);
     }
 
-    const json = await resp.json();
+    const json = await resp.json() as { access_token: string; refresh_token: string; expires_in: number };
     console.log('✅ [QB] Refresh successful, expires in:', json.expires_in, 'seconds');
 
     const tokenData: TokenStore = {

@@ -81,12 +81,35 @@ export class UserUseCase {
   }
 
   async deleteMember(userId: string): Promise<void> {
-    return this.userRepository.delete(userId);
+    console.log(`🔄 UseCase: Deleting member with ID: ${userId}`);
+    await this.userRepository.delete(userId);
+    console.log(`✅ UseCase: Member ${userId} deleted successfully`);
   }
 
   async addMember(firstname: string, lastname: string, userEmail: string, userRole: string): Promise<User> {
     return this.userRepository.addMember(firstname, lastname, userEmail, userRole);
   }
 
+  async updateTeamMember(userId: string, updateData: Partial<User>): Promise<User> {
+    // First, verify the user exists
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new NotFoundError("User not found");
+    }
+
+    // Filter out empty strings and unchanged values
+    const fieldsToUpdate = Object.entries(updateData).reduce((acc, [key, value]) => {
+      if (value !== '' && user[key] !== value) {
+        acc[key] = value;
+      }
+      return acc;
+    }, {} as Partial<User>);
+
+    if (Object.keys(fieldsToUpdate).length === 0) {
+      return user; // Nothing to update
+    }
+
+    return this.userRepository.update(userId, fieldsToUpdate);
+  }
 
 }

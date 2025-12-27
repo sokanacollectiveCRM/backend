@@ -551,27 +551,49 @@ export class DoulaController {
         return;
       }
 
-      // Get current user
+      console.log(`📝 Doula ${doulaId} (${req.user?.email}) attempting to update profile`);
+
+      // Get current user for comparison
       const currentUser = await this.userUseCase.getUserById(doulaId);
       if (!currentUser) {
+        console.error(`❌ Profile not found for doula ${doulaId}`);
         res.status(404).json({ error: 'Profile not found' });
         return;
       }
 
+      console.log(`📋 Current profile state - Address: "${currentUser.address}", City: "${currentUser.city}", State: "${currentUser.state}"`);
+
       // Update user with new data
       const updateData = req.body;
-      const updatedUser = await this.userRepository.save({
-        ...currentUser,
-        ...updateData,
-        id: doulaId // Ensure ID doesn't change
-      });
+
+      // Log all received fields, especially address
+      console.log(`📥 Received update data:`, JSON.stringify(updateData, null, 2));
+      console.log(`🏠 Address field specifically: "${updateData.address}" (type: ${typeof updateData.address})`);
+
+      // Filter out undefined/null values but keep empty strings for explicit clearing
+      const fieldsToUpdate = Object.entries(updateData).reduce((acc, [key, value]) => {
+        if (value !== undefined && value !== null) {
+          acc[key] = value;
+        }
+        return acc;
+      }, {} as any);
+
+      console.log(`📤 Fields to update (filtered):`, JSON.stringify(fieldsToUpdate, null, 2));
+      console.log(`🎯 Targeting user ID: ${doulaId} (authenticated doula)`);
+
+      // Use update() instead of save() to properly update all fields
+      const updatedUser = await this.userRepository.update(doulaId, fieldsToUpdate);
+
+      console.log(`✅ Profile updated successfully for doula ${doulaId}`);
+      console.log(`📋 Updated profile - Address: "${updatedUser.address}", City: "${updatedUser.city}", State: "${updatedUser.state}"`);
 
       res.json({
         success: true,
         profile: updatedUser.toJSON()
       });
     } catch (error: any) {
-      console.error('Error updating profile:', error);
+      console.error(`❌ Error updating profile for doula ${req.user?.id}:`, error.message);
+      console.error('Full error:', error);
       res.status(500).json({
         error: error.message || 'Failed to update profile'
       });

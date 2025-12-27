@@ -215,6 +215,16 @@ async findClientsById(id: string): Promise<any> {
   }
 
   async update(userId: string, fieldsToUpdate: Partial<User>): Promise<User> {
+    console.log(`🗄️  Repository: Updating user ${userId} in database`);
+    console.log(`📝 Fields in update map:`, JSON.stringify(fieldsToUpdate, null, 2));
+    console.log(`🎯 SQL WHERE clause: id = '${userId}'`);
+
+    // Log address specifically if it's in the update
+    if ('address' in fieldsToUpdate) {
+      console.log(`🏠 Address field included in update: "${fieldsToUpdate.address}"`);
+    } else {
+      console.log(`⚠️  Address field NOT in update map`);
+    }
 
     const { data: updatedUser, error: updatedUserError } = await this.supabaseClient
       .from('users')
@@ -223,8 +233,16 @@ async findClientsById(id: string): Promise<any> {
       .select()
       .single()
 
+    if (updatedUserError) {
+      console.error(`❌ Repository: Database update failed for user ${userId}:`, updatedUserError.message);
+      throw new Error(updatedUserError.message);
+    }
 
-    if (updatedUserError) throw new Error(updatedUserError.message);
+    console.log(`✅ Repository: User ${userId} updated successfully in database`);
+    if (updatedUser) {
+      console.log(`📋 Repository: Updated user data - Address: "${updatedUser.address}", City: "${updatedUser.city}", State: "${updatedUser.state}"`);
+    }
+
     return this.mapToUser(updatedUser);
   }
 
@@ -426,13 +444,24 @@ async findClientsById(id: string): Promise<any> {
   }
 
   async delete(id: string): Promise<void> {
-    const { error } = await this.supabaseClient
+    console.log(`🗄️  Repository: Attempting to delete user ${id} from database`);
+
+    const { data, error } = await this.supabaseClient
       .from('users')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .select(); // Select to get info about what was deleted
 
     if (error) {
+      console.error(`❌ Repository: Failed to delete user ${id}:`, error.message);
       throw new Error(`Failed to delete user: ${error.message}`);
+    }
+
+    if (data && data.length > 0) {
+      const deletedUser = data[0];
+      console.log(`✅ Repository: User ${id} (${deletedUser.email || 'N/A'}) deleted from database`);
+    } else {
+      console.log(`⚠️  Repository: No user found with ID ${id} to delete`);
     }
   }
 
