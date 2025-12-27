@@ -62,8 +62,29 @@ export class UserController {
   async deleteMember(req: AuthRequest, res: Response): Promise<void> {
     try {
       const userId = req.params.id;
+      const adminUser = req.user;
+
+      console.log(`🗑️  Admin ${adminUser?.id} (${adminUser?.email}) attempting to delete team member ${userId}`);
+
+      // Try to get user info before deletion for logging (optional)
+      let userInfo = null;
+      try {
+        userInfo = await this.userUseCase.getUserById(userId);
+        console.log(`📋 Deleting user: ${userInfo.email} (${userInfo.firstname} ${userInfo.lastname}), Role: ${userInfo.role}`);
+      } catch (error) {
+        console.log(`⚠️  Could not fetch user info for ${userId} before deletion, proceeding anyway`);
+      }
+
       await this.userUseCase.deleteMember(userId);
+
+      const userEmail = userInfo?.email || userId;
+      console.log(`✅ Successfully deleted team member ${userId}${userInfo ? ` (${userInfo.email})` : ''} by admin ${adminUser?.id}`);
+      res.status(200).json({
+        success: true,
+        message: `Team member${userInfo ? ` ${userInfo.email}` : ''} has been deleted successfully`
+      });
     } catch (error) {
+      console.error(`❌ Error deleting team member ${req.params.id}:`, error.message);
       this.handleError(error, res);
     }
   }
@@ -149,6 +170,18 @@ export class UserController {
     } catch (error) {
       console.error('Error adding team member:', error);
       res.status(500).json({ error: error.message });
+    }
+  }
+
+  async updateTeamMember(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.params.id;
+      const updateData = req.body;
+
+      const updatedMember = await this.userUseCase.updateTeamMember(userId, updateData);
+      res.status(200).json(updatedMember.toJSON());
+    } catch (error) {
+      this.handleError(error, res);
     }
   }
 

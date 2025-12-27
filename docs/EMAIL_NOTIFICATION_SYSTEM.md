@@ -172,3 +172,4 @@ await emailService.sendInvoiceEmail(
 
 - `nodemailer`: SMTP email sending library
 - Node.js environment variables for configuration
+

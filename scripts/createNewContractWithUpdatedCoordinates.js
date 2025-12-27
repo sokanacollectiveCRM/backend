@@ -257,3 +257,4 @@ createNewContractWithUpdatedCoordinates().then((result) => {
 
 
 
+

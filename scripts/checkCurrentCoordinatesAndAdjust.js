@@ -247,3 +247,4 @@ checkCurrentCoordinatesAndAdjust().then((result) => {
 
 
 
+

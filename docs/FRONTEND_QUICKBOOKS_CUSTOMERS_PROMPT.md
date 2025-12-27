@@ -2,7 +2,13 @@
 
 ## 🎯 Objective
 
-Implement a customers section in the dashboard that displays all customers from QuickBooks Online. This will allow users to view their QuickBooks customer list directly in the application.
+<<<<<<< HEAD Implement a customers section in the dashboard that displays all
+customers from QuickBooks Online. This will allow users to view their QuickBooks
+customer list directly in the application. ======= Implement a customers section
+in the dashboard that displays all customers from QuickBooks Online. This will
+allow users to view their QuickBooks customer list directly in the application.
+
+> > > > > > > d4318d4f9ad702c9475ea4311973ac79bb5306cb
 
 ## 📋 Requirements
 
@@ -10,10 +16,20 @@ Implement a customers section in the dashboard that displays all customers from 
 
 **Endpoint**: `GET /api/quickbooks/customers`
 
-**Query Parameters** (optional):
+**Query Parameters** (optional): <<<<<<< HEAD
+
 - `maxResults` - Maximum number of customers to return (default: 100)
 
 **Response Format**:
+
+=======
+
+- `maxResults` - Maximum number of customers to return (default: 100)
+
+**Response Format**:
+
+> > > > > > > d4318d4f9ad702c9475ea4311973ac79bb5306cb
+
 ```typescript
 interface QuickBooksCustomer {
   Id: string;
@@ -32,7 +48,12 @@ interface QuickBooksCustomer {
 }
 ```
 
-**Example Response**:
+**Example Response**: <<<<<<< HEAD
+
+=======
+
+> > > > > > > d4318d4f9ad702c9475ea4311973ac79bb5306cb
+
 ```json
 [
   {
@@ -53,7 +74,12 @@ interface QuickBooksCustomer {
 ]
 ```
 
-**Error Response** (if QuickBooks not connected):
+**Error Response** (if QuickBooks not connected): <<<<<<< HEAD
+
+=======
+
+> > > > > > > d4318d4f9ad702c9475ea4311973ac79bb5306cb
+
 ```json
 {
   "error": "Failed to fetch customers from QuickBooks",
@@ -63,18 +89,41 @@ interface QuickBooksCustomer {
 
 ### 2. Implementation Location
 
-Add this feature to the **existing Customers page** in the dashboard. The page currently shows leads with a table structure (Name, Needs, Status, Action columns).
+<<<<<<< HEAD Add this feature to the **existing Customers page** in the
+dashboard. The page currently shows leads with a table structure (Name, Needs,
+Status, Action columns).
 
 **Integration Options:**
-- **Option A (Recommended)**: Add a toggle/tab switcher at the top to switch between "Leads" view and "QuickBooks Customers" view
-- **Option B**: Add QuickBooks customers as a separate section below the leads table
-- **Option C**: Add a filter/dropdown to switch between "All Leads" and "QuickBooks Customers"
+
+- **Option A (Recommended)**: Add a toggle/tab switcher at the top to switch
+  between "Leads" view and "QuickBooks Customers" view
+- **Option B**: Add QuickBooks customers as a separate section below the leads
+  table
+- **Option C**: Add a filter/dropdown to switch between "All Leads" and
+  "QuickBooks Customers" ======= Add this feature to the **existing Customers
+  page** in the dashboard. The page currently shows leads with a table structure
+  (Name, Needs, Status, Action columns).
+
+**Integration Options:**
+
+- **Option A (Recommended)**: Add a toggle/tab switcher at the top to switch
+  between "Leads" view and "QuickBooks Customers" view
+- **Option B**: Add QuickBooks customers as a separate section below the leads
+  table
+- **Option C**: Add a filter/dropdown to switch between "All Leads" and
+  "QuickBooks Customers"
+  > > > > > > > d4318d4f9ad702c9475ea4311973ac79bb5306cb
 
 ### 3. UI Components to Create
 
 #### Main Component: `QuickBooksCustomersList` or `CustomersList`
 
-**Features**:
+**Features**: <<<<<<< HEAD
+
+=======
+
+> > > > > > > d4318d4f9ad702c9475ea4311973ac79bb5306cb
+
 - Display customers in a table or card layout
 - Show customer information: Name, Email, Phone, Balance
 - Loading state while fetching
@@ -85,7 +134,16 @@ Add this feature to the **existing Customers page** in the dashboard. The page c
 - Optional: Pagination if many customers
 
 #### Table Display Fields (Match Existing UI):
+
+<<<<<<< HEAD
+
 The table should match the existing Customers page design with these columns:
+
+======= The table should match the existing Customers page design with these
+columns:
+
+> > > > > > > d4318d4f9ad702c9475ea4311973ac79bb5306cb
+
 - **Name** (DisplayName) - bold header, left-aligned
 - **Email** (PrimaryEmailAddr.Address) - or replace "Needs" column
 - **Phone** (PrimaryPhone.FreeFormNumber) - optional column
@@ -93,7 +151,12 @@ The table should match the existing Customers page design with these columns:
 - **Status** (Active/Inactive) - match existing status styling
 - **Action** - Optional action buttons (e.g., "View Details", "Sync")
 
-**Note**: Match the existing table styling:
+**Note**: Match the existing table styling: <<<<<<< HEAD
+
+=======
+
+> > > > > > > d4318d4f9ad702c9475ea4311973ac79bb5306cb
+
 - Clean white background
 - Dark gray/black text
 - Green action buttons (if adding actions)
@@ -104,7 +167,11 @@ The table should match the existing Customers page design with these columns:
 
 #### Step 1: Create API Service Function
 
-Create or update your API service file (e.g., `src/services/api/quickbooksApi.ts` or similar):
+<<<<<<< HEAD Create or update your API service file (e.g.,
+`src/services/api/quickbooksApi.ts` or similar): ======= Create or update your
+API service file (e.g., `src/services/api/quickbooksApi.ts` or similar):
+
+> > > > > > > d4318d4f9ad702c9475ea4311973ac79bb5306cb
 
 ```typescript
 interface QuickBooksCustomer {
@@ -123,7 +190,13 @@ interface QuickBooksCustomer {
   Active?: boolean;
 }
 
+<<<<<<< HEAD
+export async function getQuickBooksCustomers(
+  maxResults?: number
+): Promise<QuickBooksCustomer[]> {
+=======
 export async function getQuickBooksCustomers(maxResults?: number): Promise<QuickBooksCustomer[]> {
+>>>>>>> d4318d4f9ad702c9475ea4311973ac79bb5306cb
   const url = maxResults
     ? `/api/quickbooks/customers?maxResults=${maxResults}`
     : '/api/quickbooks/customers';
@@ -133,13 +206,24 @@ export async function getQuickBooksCustomers(maxResults?: number): Promise<Quick
     headers: {
       'Content-Type': 'application/json',
       // Add your auth headers here
+<<<<<<< HEAD
+      Authorization: `Bearer ${getAuthToken()}`, // Adjust based on your auth setup
+    },
+=======
       'Authorization': `Bearer ${getAuthToken()}` // Adjust based on your auth setup
     }
+>>>>>>> d4318d4f9ad702c9475ea4311973ac79bb5306cb
   });
 
   if (!response.ok) {
     const error = await response.json();
+<<<<<<< HEAD
+    throw new Error(
+      error.message || 'Failed to fetch customers from QuickBooks'
+    );
+=======
     throw new Error(error.message || 'Failed to fetch customers from QuickBooks');
+>>>>>>> d4318d4f9ad702c9475ea4311973ac79bb5306cb
   }
 
   return response.json();
@@ -148,7 +232,12 @@ export async function getQuickBooksCustomers(maxResults?: number): Promise<Quick
 
 #### Step 2: Update Existing Customers Page Component
 
-Modify your existing Customers page to include a view switcher and QuickBooks customers table. The component should match your existing UI style.
+<<<<<<< HEAD Modify your existing Customers page to include a view switcher and
+QuickBooks customers table. The component should match your existing UI style.
+======= Modify your existing Customers page to include a view switcher and
+QuickBooks customers table. The component should match your existing UI style.
+
+> > > > > > > d4318d4f9ad702c9475ea4311973ac79bb5306cb
 
 ```typescript
 import React, { useState, useEffect } from 'react';
@@ -358,9 +447,18 @@ export const CustomersPage: React.FC = () => {
 
 #### Step 3: Integration Notes
 
-**Important**: This should be integrated into your **existing Customers page**, not as a separate component.
+<<<<<<< HEAD **Important**: This should be integrated into your **existing
+Customers page**, not as a separate component.
 
 **Integration Approach:**
+
+======= **Important**: This should be integrated into your **existing Customers
+page**, not as a separate component.
+
+**Integration Approach:**
+
+> > > > > > > d4318d4f9ad702c9475ea4311973ac79bb5306cb
+
 1. Add a view switcher (toggle buttons) at the top of the Customers page
 2. Keep your existing "Leads" view unchanged
 3. Add the new "QuickBooks Customers" view that shows the QuickBooks data
@@ -370,7 +468,12 @@ export const CustomersPage: React.FC = () => {
    - Same spacing and padding
    - Same button styling (green buttons matching "Create Customer" style)
 
-**Key Design Elements to Match:**
+**Key Design Elements to Match:** <<<<<<< HEAD
+
+=======
+
+> > > > > > > d4318d4f9ad702c9475ea4311973ac79bb5306cb
+
 - Page title: Large, bold, dark font
 - Subtitle: Gray text below title (update based on selected view)
 - Table: Clean white background, border separators
@@ -380,29 +483,55 @@ export const CustomersPage: React.FC = () => {
 ### 5. Optional Enhancements
 
 #### Search/Filter
+
+<<<<<<< HEAD
+
+````typescript
+const [searchTerm, setSearchTerm] = useState('');
+
+const filteredCustomers = customers.filter(
+  (customer) =>
+    customer.DisplayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    customer.PrimaryEmailAddr?.Address.toLowerCase().includes(
+      searchTerm.toLowerCase()
+    )
+=======
 ```typescript
 const [searchTerm, setSearchTerm] = useState('');
 
 const filteredCustomers = customers.filter(customer =>
   customer.DisplayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
   customer.PrimaryEmailAddr?.Address.toLowerCase().includes(searchTerm.toLowerCase())
+>>>>>>> d4318d4f9ad702c9475ea4311973ac79bb5306cb
 );
-```
+````
 
 #### Pagination
+
 If you expect many customers, implement pagination:
+
 - Use `maxResults` query parameter
 - Add "Load More" or pagination controls
 - Track current page/offset
 
 #### Sorting
+
 Add sorting by:
+
 - Name (A-Z, Z-A)
 - Balance (High to Low, Low to High)
 - Status (Active first)
 
 #### Customer Details Modal
+
+<<<<<<< HEAD
+
 Click on a customer row to see more details:
+
+======= Click on a customer row to see more details:
+
+> > > > > > > d4318d4f9ad702c9475ea4311973ac79bb5306cb
+
 - Full customer information
 - Payment history
 - Invoices
@@ -410,7 +539,12 @@ Click on a customer row to see more details:
 
 ### 6. Error Handling
 
-Handle these scenarios:
+Handle these scenarios: <<<<<<< HEAD
+
+=======
+
+> > > > > > > d4318d4f9ad702c9475ea4311973ac79bb5306cb
+
 1. **QuickBooks not connected**: Show message with link to connect
 2. **Network error**: Show retry button
 3. **Empty list**: Show friendly message
@@ -438,8 +572,17 @@ Handle these scenarios:
 
 ### 9. API Integration Notes
 
-- **Authentication**: Ensure the API call includes proper auth headers (Bearer token, etc.)
-- **Base URL**: Use your API base URL (e.g., `process.env.NEXT_PUBLIC_API_URL` or similar)
+<<<<<<< HEAD
+
+- **Authentication**: Ensure the API call includes proper auth headers (Bearer
+  token, etc.)
+- **Base URL**: Use your API base URL (e.g., `process.env.NEXT_PUBLIC_API_URL`
+  or similar) =======
+- **Authentication**: Ensure the API call includes proper auth headers (Bearer
+  token, etc.)
+- **Base URL**: Use your API base URL (e.g., `process.env.NEXT_PUBLIC_API_URL`
+  or similar)
+  > > > > > > > d4318d4f9ad702c9475ea4311973ac79bb5306cb
 - **CORS**: Ensure backend allows requests from your frontend domain
 - **Error Handling**: Parse error responses and display user-friendly messages
 
@@ -447,30 +590,50 @@ Handle these scenarios:
 
 **Match Existing Customers Page Styling:**
 
-1. **Page Header:**
-   - Large, bold title: "Customers" (text-3xl or similar)
-   - Subtitle text in gray below title
-   - View switcher buttons below subtitle
+1. **Page Header:** <<<<<<< HEAD
 
-2. **Table Styling:**
-   - White background
-   - Border separators between rows (horizontal lines)
-   - Header row: Bold, dark text
-   - Row hover: Light gray background
-   - Padding: Match existing table (py-3 px-4 or similar)
+=======
 
-3. **Button Styling:**
-   - Green buttons: Match your existing "Create Customer" button style
-   - Background: Same green color (#16a34a or your exact shade)
-   - White text
-   - Rounded corners
-   - Hover: Slightly darker green
+> > > > > > > d4318d4f9ad702c9475ea4311973ac79bb5306cb
 
-4. **Color Palette:**
-   - Primary text: Dark gray/black (#111827 or similar)
-   - Secondary text: Medium gray (#6b7280 or similar)
-   - Borders: Light gray (#e5e7eb or similar)
-   - Green accent: Match existing green buttons
+- Large, bold title: "Customers" (text-3xl or similar)
+- Subtitle text in gray below title
+- View switcher buttons below subtitle
+
+2. **Table Styling:** <<<<<<< HEAD
+
+=======
+
+> > > > > > > d4318d4f9ad702c9475ea4311973ac79bb5306cb
+
+- White background
+- Border separators between rows (horizontal lines)
+- Header row: Bold, dark text
+- Row hover: Light gray background
+- Padding: Match existing table (py-3 px-4 or similar)
+
+3. **Button Styling:** <<<<<<< HEAD
+
+=======
+
+> > > > > > > d4318d4f9ad702c9475ea4311973ac79bb5306cb
+
+- Green buttons: Match your existing "Create Customer" button style
+- Background: Same green color (#16a34a or your exact shade)
+- White text
+- Rounded corners
+- Hover: Slightly darker green
+
+4. **Color Palette:** <<<<<<< HEAD
+
+=======
+
+> > > > > > > d4318d4f9ad702c9475ea4311973ac79bb5306cb
+
+- Primary text: Dark gray/black (#111827 or similar)
+- Secondary text: Medium gray (#6b7280 or similar)
+- Borders: Light gray (#e5e7eb or similar)
+- Green accent: Match existing green buttons
 
 5. **Layout:**
    - Full width table
@@ -482,16 +645,33 @@ Handle these scenarios:
 
 **Update your existing Customers page** to include QuickBooks customers:
 
-1. **Add view switcher** - Toggle between "Leads" and "QuickBooks Customers" views
-2. **Keep existing Leads view** - Don't modify the current leads functionality
-3. **Add QuickBooks view** - New table showing QuickBooks customers
-4. **Match existing UI exactly**:
+<<<<<<< HEAD
+
+1. **Add view switcher** - Toggle between "Leads" and "QuickBooks Customers"
+   views =======
+1. **Add view switcher** - Toggle between "Leads" and "QuickBooks Customers"
+   views
+   > > > > > > > d4318d4f9ad702c9475ea4311973ac79bb5306cb
+1. **Keep existing Leads view** - Don't modify the current leads functionality
+1. **Add QuickBooks view** - New table showing QuickBooks customers
+1. **Match existing UI exactly**:
    - Same table structure and styling
    - Same green button style
    - Same spacing, typography, and colors
    - Same page header format
-5. **Table columns**: Name, Email, Phone, Balance, Status
-6. **Handle states**: Loading, error (with QuickBooks connection prompt), empty state
-7. **Add refresh button** - Match existing button styling
+1. **Table columns**: Name, Email, Phone, Balance, Status <<<<<<< HEAD
+1. **Handle states**: Loading, error (with QuickBooks connection prompt), empty
+   state
+1. **Add refresh button** - Match existing button styling
 
-**Key Point**: This should feel like a natural extension of your existing Customers page, not a separate feature. The UI should be indistinguishable from your current design patterns.
+**Key Point**: This should feel like a natural extension of your existing
+Customers page, not a separate feature. The UI should be indistinguishable from
+your current design patterns. ======= 6. **Handle states**: Loading, error (with
+QuickBooks connection prompt), empty state 7. **Add refresh button** - Match
+existing button styling
+
+**Key Point**: This should feel like a natural extension of your existing
+Customers page, not a separate feature. The UI should be indistinguishable from
+your current design patterns.
+
+> > > > > > > d4318d4f9ad702c9475ea4311973ac79bb5306cb

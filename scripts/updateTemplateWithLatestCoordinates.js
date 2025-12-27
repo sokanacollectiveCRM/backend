@@ -180,3 +180,4 @@ updateTemplateWithLatestCoordinates().then((coordinates) => {
 
 
 
+

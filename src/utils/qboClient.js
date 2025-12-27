@@ -102,10 +102,8 @@ async function qboRequest(path, options = {}) {
       : 'https://quickbooks.api.intuit.com';
   const url = `${host}/v3/company/${realmId}${path}`;
   console.log('QBO URL →', url);
-  // Use dynamic import for node-fetch
-  const fetch = (
-    await Promise.resolve().then(() => __importStar(require('node-fetch')))
-  ).default;
+  // Use dynamic import for node-fetch (ES Module compatible)
+  const { default: fetch } = await import('node-fetch');
   const resp = await fetch(url, {
     ...options,
     headers: {
