@@ -483,7 +483,8 @@ export class SupabaseClientRepository  {
       data.baby_sex ?? undefined,
       data.annual_income ?? undefined,
       data.service_specifics ?? undefined,
-      data.phone_number ?? undefined // Add phone number mapping
+      data.phone_number ?? undefined, // Add phone number mapping
+      data.portal_status ?? undefined // Portal invite status
     );
   }
 }

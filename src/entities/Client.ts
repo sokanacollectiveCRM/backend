@@ -21,6 +21,7 @@ export class Client {
     public annual_income?: string,
     public service_specifics?: string,
     public phoneNumber?: string, // Add phone number field
+    public portal_status?: string, // Portal invite status: 'not_invited', 'invited', 'active', 'disabled'
   ) {}
 
   toJson(): Object {
@@ -42,7 +43,8 @@ export class Client {
       baby_sex: this.baby_sex,
       annual_income: this.annual_income,
       service_specifics: this.service_specifics,
-      phoneNumber: this.phoneNumber
+      phoneNumber: this.phoneNumber,
+      portal_status: this.portal_status
     };
   }
 }
