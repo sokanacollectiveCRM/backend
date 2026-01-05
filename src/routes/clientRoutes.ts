@@ -1,9 +1,17 @@
 import express, { Router } from 'express';
 import { clientController, userController } from '../index';
+import { PortalController } from '../controllers/portalController';
+import { PortalInviteService } from '../services/portalInviteService';
+import supabase from '../supabase';
+import { clientRepository } from '../index';
 import authMiddleware from '../middleware/authMiddleware';
 import authorizeRoles from '../middleware/authorizeRoles';
 
 const clientRoutes: Router = express.Router();
+
+// Portal controller for client portal endpoints
+const portalInviteService = new PortalInviteService(supabase);
+const portalController = new PortalController(portalInviteService, clientRepository);
 
 // Team specific routes
 clientRoutes.get('/team/all',
@@ -105,6 +113,13 @@ clientRoutes.get('/:id/assigned-doulas',
   authMiddleware,
   (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
   (req, res) => clientController.getAssignedDoulas(req, res)
+);
+
+// Portal status endpoint for authenticated clients
+clientRoutes.get('/me/portal-status',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['client']),
+  (req, res) => portalController.getMyPortalStatus(req, res)
 );
 
 export default clientRoutes;

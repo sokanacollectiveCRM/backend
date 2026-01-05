@@ -19,36 +19,12 @@ export class SupabaseClientRepository  {
       .from('client_info')
       .select(`
         *,
-        users (*)
+        users!user_id (*)
       `);
 
     if (error) throw new Error(error.message);
 
-    // Debug logging for GET /clients
-    console.log('🔍 GET /clients - Raw database response:');
-    if (data && data.length > 0) {
-      const firstClient = data[0];
-      console.log('📊 First client raw data keys:', Object.keys(firstClient));
-      console.log('📋 preferred_contact_method in raw data:', firstClient.preferred_contact_method);
-      console.log('📋 Raw data sample:', {
-        id: firstClient.id,
-        firstname: firstClient.firstname,
-        preferred_contact_method: firstClient.preferred_contact_method,
-        home_type: firstClient.home_type,
-        services_interested: firstClient.services_interested
-      });
-    }
-
-    const mappedClients = data.map(row => this.mapToClient(row));
-
-    // Debug the mapped result
-    if (mappedClients && mappedClients.length > 0) {
-      const firstMappedClient = mappedClients[0];
-      console.log('📤 GET /clients - Mapped client user object keys:', Object.keys(firstMappedClient.user));
-      console.log('📤 preferred_contact_method in mapped user:', firstMappedClient.user.preferred_contact_method);
-    }
-
-    return mappedClients;
+    return data.map(row => this.mapToClient(row));
   }
 
   async exportCSV():Promise<string | null>{
@@ -71,7 +47,7 @@ export class SupabaseClientRepository  {
       .from('client_info')
       .select(`
         *,
-        users (*)
+        users!user_id (*)
       `)
       .eq('status', status);
 
@@ -100,16 +76,14 @@ export class SupabaseClientRepository  {
     const clientIds = await this.getClientIdsAssignedToDoula(userId);
 
     if (clientIds.length === 0) {
-      console.log("clientIDs.length is 0");
       return [];
     }
-    // console.log("clientIds is ", clientIds);
 
     const { data, error } = await this.supabaseClient
       .from('client_info')
       .select(`
         *,
-        users (*)
+        users!user_id (*)
       `)
       .in('id', clientIds);
 
@@ -123,7 +97,7 @@ export class SupabaseClientRepository  {
       .from('client_info')
       .select(`
         *,
-        users (
+        users!user_id (
           *
         )
         `);
@@ -141,7 +115,7 @@ export class SupabaseClientRepository  {
       .from('client_info')
       .select(`
         *,
-        users (
+        users!user_id (
           *
         )
       `)
@@ -157,7 +131,7 @@ export class SupabaseClientRepository  {
       .from('client_info')
       .select(`
         *,
-        users (*)
+        users!user_id (*)
       `)
       .eq('id', clientId)
       .single();
@@ -171,7 +145,7 @@ export class SupabaseClientRepository  {
       .from('client_info')
       .select(`
         *,
-        users (*)
+        users!user_id (*)
       `)
       .eq('id', clientId)
       .single();
@@ -195,7 +169,7 @@ export class SupabaseClientRepository  {
         updated_at,
         status,
         user_id,
-        users (
+        users!user_id (
           profile_picture,
           firstname,
           lastname
@@ -211,9 +185,6 @@ export class SupabaseClientRepository  {
   }
 
   async updateClient(clientId: string, fieldsToUpdate: any): Promise<Client> {
-    console.log('Repository: Updating client with ID:', clientId);
-    console.log('Repository: Fields to update:', JSON.stringify(fieldsToUpdate, null, 2));
-
     // Map request body fields to database column names
     const updateData: any = {};
 
@@ -288,13 +259,6 @@ export class SupabaseClientRepository  {
     if (fieldsToUpdate.business !== undefined) updateData.business = fieldsToUpdate.business;
     if (fieldsToUpdate.bio !== undefined) updateData.bio = fieldsToUpdate.bio;
 
-    console.log('Repository: phoneNumber field check:', {
-      hasPhoneNumber: 'phoneNumber' in fieldsToUpdate,
-      phoneNumberValue: fieldsToUpdate.phoneNumber,
-      phoneNumberType: typeof fieldsToUpdate.phoneNumber
-    });
-    console.log('Repository: Mapped update data:', updateData);
-
     // Check if client exists first
     const { data: existingClient, error: checkError } = await this.supabaseClient
       .from('client_info')
@@ -303,16 +267,12 @@ export class SupabaseClientRepository  {
       .maybeSingle();
 
     if (checkError) {
-      console.error('Repository: Error checking client existence:', checkError);
       throw new Error(`Error checking client existence: ${checkError.message}`);
     }
 
     if (!existingClient) {
-      console.error('Repository: Client not found with ID:', clientId);
       throw new Error(`Client not found with ID: ${clientId}`);
     }
-
-    console.log('Repository: Found existing client:', existingClient);
 
     // Perform the update
     const { data: updateResult, error: updateError } = await this.supabaseClient
@@ -321,34 +281,27 @@ export class SupabaseClientRepository  {
       .eq('id', clientId);
 
     if (updateError) {
-      console.error('Repository: Update error:', updateError);
       throw new Error(`Failed to update client: ${updateError.message}`);
     }
-
-    console.log('Repository: Update completed, fetching updated data');
 
     // Fetch the updated client data
     const { data, error: fetchError } = await this.supabaseClient
       .from('client_info')
       .select(`
         *,
-        users (*)
+        users!user_id (*)
       `)
       .eq('id', clientId)
       .single();
 
     if (fetchError) {
-      console.error('Repository: Error fetching updated client:', fetchError);
       throw new Error(`Failed to fetch updated client: ${fetchError.message}`);
     }
 
     if (!data) {
-      console.error('Repository: No data returned after update');
       throw new Error(`No data returned after update for client ID: ${clientId}`);
     }
 
-    console.log('Repository: Raw database response after update:', data);
-    console.log('Repository: Update successful, mapping data');
     return this.mapToClient(data);
   }
 

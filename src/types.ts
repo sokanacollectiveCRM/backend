@@ -298,6 +298,27 @@ export enum ROLE {
   CLIENT = "client"
 };
 
+export type PortalStatus = 'not_invited' | 'invited' | 'active' | 'disabled';
+
+export interface PortalInviteFields {
+  portal_status: PortalStatus;
+  invited_at: string | null;
+  last_invite_sent_at: string | null;
+  invite_sent_count: number;
+  invited_by: string | null;
+  auth_user_id: string | null;
+}
+
+export interface PortalInviteResult {
+  clientId: string;
+  portalStatus: PortalStatus;
+  invitedAt: Date | null;
+  lastInviteSentAt: Date | null;
+  inviteSentCount: number;
+  invitedBy: string;
+  authUserId?: string;
+}
+
 export enum STATE {
   AL = "AL",
   AK = "AK",
