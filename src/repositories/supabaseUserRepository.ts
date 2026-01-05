@@ -115,8 +115,6 @@ async findClientsAll(): Promise<any[]> {
 // Add this method inside the SupabaseUserRepository class
 
 async updateClientStatusToCustomer(userId: string): Promise<void> {
-  console.log('Updating client_info where user_id =', userId);
-
   const { error } = await this.supabaseClient
     .from('client_info')
     .update({ status: 'customer' })      // set the new status
@@ -139,7 +137,7 @@ async findClientsById(id: string): Promise<any> {
       updated_at,
       status,
       user_id,
-      users (
+      users!user_id (
         profile_picture,
         firstname,
         lastname
@@ -152,7 +150,6 @@ async findClientsById(id: string): Promise<any> {
   }
 
   if (!data || data.length === 0) {
-    console.log("GOING TO EERROR: NO DATA, client id is", id);
     return null;
   }
 
@@ -184,7 +181,7 @@ async findClientsById(id: string): Promise<any> {
       .from('client_info')
       .select(`
         *,
-        users (*)
+        users!user_id (*)
       `)
       .in('id', clientIds);
 
@@ -215,17 +212,6 @@ async findClientsById(id: string): Promise<any> {
   }
 
   async update(userId: string, fieldsToUpdate: Partial<User>): Promise<User> {
-    console.log(`🗄️  Repository: Updating user ${userId} in database`);
-    console.log(`📝 Fields in update map:`, JSON.stringify(fieldsToUpdate, null, 2));
-    console.log(`🎯 SQL WHERE clause: id = '${userId}'`);
-
-    // Log address specifically if it's in the update
-    if ('address' in fieldsToUpdate) {
-      console.log(`🏠 Address field included in update: "${fieldsToUpdate.address}"`);
-    } else {
-      console.log(`⚠️  Address field NOT in update map`);
-    }
-
     const { data: updatedUser, error: updatedUserError } = await this.supabaseClient
       .from('users')
       .update(fieldsToUpdate)
@@ -234,11 +220,8 @@ async findClientsById(id: string): Promise<any> {
       .single()
 
     if (updatedUserError) {
-      console.error(`❌ Repository: Database update failed for user ${userId}:`, updatedUserError.message);
       throw new Error(updatedUserError.message);
     }
-
-    console.log(`✅ Repository: User ${userId} updated successfully in database`);
     if (updatedUser) {
       console.log(`📋 Repository: Updated user data - Address: "${updatedUser.address}", City: "${updatedUser.city}", State: "${updatedUser.state}"`);
     }
