@@ -11,14 +11,18 @@ import { Client } from '../entities/Client';
 import { AuthRequest } from '../types';
 import { ClientUseCase } from '../usecase/clientUseCase';
 import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
+import { PortalEligibilityService } from '../services/portalEligibilityService';
+import supabase from '../supabase';
 
 export class ClientController {
   private clientUseCase: ClientUseCase;
   private assignmentRepository: SupabaseAssignmentRepository;
+  private eligibilityService: PortalEligibilityService;
 
   constructor (clientUseCase: ClientUseCase, assignmentRepository: SupabaseAssignmentRepository) {
     this.clientUseCase = clientUseCase;
     this.assignmentRepository = assignmentRepository;
+    this.eligibilityService = new PortalEligibilityService(supabase);
   };
 
   //
@@ -40,7 +44,23 @@ export class ClientController {
 
       console.log("clients:", clients);
 
-      res.json(clients.map(client => client.toJson()));
+      // Compute eligibility for each client and add to response
+      const clientsWithEligibility = await Promise.all(
+        clients.map(async (client) => {
+          const clientJson = client.toJson() as any;
+          try {
+            const eligibility = await this.eligibilityService.getInviteEligibility(client.id);
+            clientJson.is_eligible = eligibility.eligible;
+          } catch (error) {
+            // If eligibility check fails, default to false
+            console.error(`Error checking eligibility for client ${client.id}:`, error);
+            clientJson.is_eligible = false;
+          }
+          return clientJson;
+        })
+      );
+
+      res.json(clientsWithEligibility);
     } catch (getError) {
       const error = this.handleError(getError, res);
       if (!res.headersSent) {
