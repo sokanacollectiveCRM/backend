@@ -44,13 +44,13 @@ export class AuthController {
       // call useCase to grab newly created user
       const user = await this.authUseCase.signup(email, password, firstname, lastname);
       res.status(201).json({ message: 'User created successfully', user: user.toJSON() })
-    } 
+    }
     catch (signUpError) {
       const error = this.handleError(signUpError, res);
       res.status(error.status).json({ error: error.message})
     }
   }
-  
+
   //
   // login()
   //
@@ -69,7 +69,7 @@ export class AuthController {
       // call useCase to grab the user and token
       const result = await this.authUseCase.login(email, password);
       res.status(200).json({ message: 'Login successful', user: result.user.toJSON() , token: result.token });
-    } 
+    }
     catch (loginError) {
       const error = this.handleError(loginError, res);
       res.status(error.status).json({ error: error.message})
@@ -86,12 +86,79 @@ export class AuthController {
   //
   async getMe(req: Request, res: Response): Promise<void> {
     try {
-      const token = req.cookies?.session || req.headers.authorization?.split(' ')[1]
+      // Extract token - PRIORITIZE Authorization header over cookie
+      // The cookie might contain a Flask session token, not a JWT
+      let token: string | undefined;
+      let tokenSource = 'none';
+
+      // First, try Authorization header (this should be the Supabase JWT)
+      if (req.headers.authorization) {
+        const authHeader = req.headers.authorization.trim();
+        tokenSource = 'header';
+
+        // Handle both "Bearer <token>" and just "<token>" formats
+        if (authHeader.toLowerCase().startsWith('bearer ')) {
+          // Remove "Bearer " prefix (case-insensitive) and get everything after it
+          token = authHeader.substring(7).trim();
+          // If there are multiple spaces, take only the first token part (the JWT)
+          const spaceIndex = token.indexOf(' ');
+          if (spaceIndex > 0) {
+            token = token.substring(0, spaceIndex);
+          }
+        } else {
+          // No "Bearer " prefix, assume the whole header is the token
+          // But if it contains spaces, take only the first part
+          const spaceIndex = authHeader.indexOf(' ');
+          token = spaceIndex > 0 ? authHeader.substring(0, spaceIndex) : authHeader;
+        }
+      }
+
+      // Fallback to cookie ONLY if no Authorization header AND cookie looks like a JWT
+      // Note: Flask session cookies start with '.' and are NOT JWTs - ignore them
+      if (!token && req.cookies?.session) {
+        const cookieToken = req.cookies.session.trim();
+        // Check if cookie is a JWT (has 3 parts when split by dots, doesn't start with '.')
+        const cookieParts = cookieToken.split('.');
+        const isJWT = cookieParts.length === 3 && !cookieToken.startsWith('.');
+
+        if (isJWT) {
+          token = cookieToken;
+          tokenSource = 'cookie';
+        } else {
+          console.warn('⚠️ [Auth] Cookie token is not a JWT (likely Flask session or other format), ignoring:', {
+            cookiePreview: cookieToken.substring(0, 50),
+            partsCount: cookieParts.length,
+            startsWithDot: cookieToken.startsWith('.'),
+            note: 'This backend uses Supabase JWTs, not Flask sessions'
+          });
+        }
+      }
+
       if (!token) {
+        console.warn('⚠️ [Auth] No token found in request');
         res.status(401).json({ error: 'No session token provided' })
         return
       }
-  
+
+      // Clean the token from any surrounding whitespace
+      token = token.trim();
+
+      // Validate token format (JWT should have 3 parts separated by dots)
+      const tokenParts = token.split('.');
+      if (tokenParts.length !== 3) {
+        console.error('❌ [Auth] Invalid JWT format:', {
+          tokenSource,
+          tokenLength: token.length,
+          tokenPreview: token.substring(0, 50) + '...',
+          partsCount: tokenParts.length,
+          hasCookie: !!req.cookies?.session,
+          hasAuthHeader: !!req.headers.authorization,
+          authHeaderPreview: req.headers.authorization?.substring(0, 50)
+        });
+        res.status(401).json({ error: 'Invalid token format: JWT must have 3 parts', details: `Received ${tokenParts.length} parts, expected 3` })
+        return
+      }
+
       // 1) Get your app user
       const appUser = await this.authUseCase.getMe(token)
       if (!appUser) {
@@ -99,18 +166,18 @@ export class AuthController {
         return
       }
       const base = appUser.toJSON()
-  
+
       // 2) Fetch Supabase user metadata
       const { data: sbUser, error } = await supabase.auth.getUser(token)
       let finalRole = (base as any).role  // fallback to the DB role
-  
+
       if (!error && sbUser.user) {
         const meta = (sbUser.user.user_metadata as any) || {}
         if (typeof meta.role === 'string') {
           finalRole = meta.role
         }
       }
-  
+
       // 3) Merge and return
       res.json({
         ...(base as any),
@@ -121,10 +188,10 @@ export class AuthController {
       res.status(errorInfo.status).json({ error: errorInfo.message })
     }
   }
-  
-  
 
-  
+
+
+
   //
   // logout()
   //
@@ -134,7 +201,7 @@ export class AuthController {
   //    None
   //
   async logout(
-    _req: Request, 
+    _req: Request,
     res: Response
   ): Promise<void> {
     res.clearCookie('session');
@@ -142,7 +209,7 @@ export class AuthController {
     console.log('logged out')
     res.json({ message: 'Logged out successfully' });
   }
-  
+
   //
   // verifyEmail()
   //
@@ -152,7 +219,7 @@ export class AuthController {
   //    None
   //
   async verifyEmail(
-    req: Request, 
+    req: Request,
     res: Response
   ): Promise<void> {
     try {
@@ -160,15 +227,15 @@ export class AuthController {
       const type = req.query.type as string;
       // call useCase to return success, query params, and error message
       const queryParams = await this.authUseCase.verifyEmail(token_hash, type);
-        
+
       // Redirect with tokens if verification is successful
       return res.redirect(`${process.env.FRONTEND_URL}/auth/callback?${queryParams}`);
-    } 
+    }
     catch (error) {
       res.redirect(`${process.env.FRONTEND_URL}/auth/callback?error=${error.message}`);
     }
   }
-  
+
   //
   // getAllUsers()
   //
@@ -178,7 +245,7 @@ export class AuthController {
   //    users => user.toJSON()
   //
   async getAllUsers(
-    _req: AuthRequest, 
+    _req: AuthRequest,
     res: Response
   ): Promise<void> {
     try {
@@ -190,7 +257,7 @@ export class AuthController {
       res.status(error.status).json({ error: error.message})
     }
   }
-  
+
   //
   // googleAuth()
   //
@@ -200,7 +267,7 @@ export class AuthController {
   //    url - OAuth URL
   //
   async googleAuth(
-    _req: Request, 
+    _req: Request,
     res: Response
   ): Promise<void> {
     try {
@@ -208,13 +275,13 @@ export class AuthController {
       const redirectTo = `${process.env.FRONTEND_URL}/auth/callback`;
       const url = await this.authUseCase.googleAuth(redirectTo);
       res.json({ url });
-    } 
+    }
     catch (googleAuthError) {
       const error = this.handleError(googleAuthError, res);
       res.status(error.status).json({ error: error.message})
     }
   }
-  
+
   //
   // handleOAuthCallback()
   //
@@ -224,7 +291,7 @@ export class AuthController {
   //    none
   //
   async handleOAuthCallback(
-    req: Request, 
+    req: Request,
     res: Response
   ): Promise<void> {
     try {
@@ -250,7 +317,7 @@ export class AuthController {
       );
     }
   }
-  
+
   //
   // handleToken()
   //
@@ -269,9 +336,9 @@ export class AuthController {
       if (!access_token) {
         res.status(401).json({ error: 'No access token provided' });
       }
-      
+
       const user = await this.authUseCase.handleToken(access_token);
-  
+
       res.cookie('session', access_token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -287,7 +354,7 @@ export class AuthController {
       // res.status(error.status).json({ error: error.message})
     }
   }
-  
+
   //
   // requestPasswordReset()
   //
@@ -303,10 +370,10 @@ export class AuthController {
     try {
       const { email } = req.body;
       const redirectTo = `${process.env.FRONTEND_URL}/auth/reset-password`;
-      
+
       // call useCase to redirect user to reset password and check for errors
       await this.authUseCase.requestPasswordReset(email, redirectTo);
-      
+
       res.status(200).json({ message: 'Password reset instructions sent to email'});
     } catch (requestPasswordError) {
       const error = this.handleError(requestPasswordError, res);
@@ -323,16 +390,16 @@ export class AuthController {
   //    None
   //
   async handlePasswordRecovery(
-    req: Request, 
+    req: Request,
     res: Response
   ): Promise<void> {
     try {
       const token_hash = req.query.token_hash as string;
       const type = req.query.type as string;
-      
+
       // call useCase to retrieve access and refresh tokens.
       const queryParams = await this.authUseCase.handlePasswordRecovery(token_hash, type);
-  
+
       const redirectUrl = `${process.env.FRONTEND_URL}/auth/reset-password?${queryParams.toString()}`;
       res.redirect(redirectUrl);
     } catch {
@@ -359,9 +426,9 @@ export class AuthController {
     try {
       const { password } = req.body;
       const token = req.headers.authorization?.split(' ')[1];
-      
+
       const user = await this.authUseCase.updatePassword(password, token);
-  
+
       res.status(200).json({
         message: 'Password updated successfully',
         user: user.toJSON(),
@@ -374,11 +441,11 @@ export class AuthController {
 
   // Helper method to handle errors
   private handleError(
-    error: Error, 
+    error: Error,
     res: Response
   ): { status: number, message: string } {
     console.error('Error:', error.message);
-    
+
     if (error instanceof ValidationError) {
       return { status: 400, message: error.message};
     } else if (error instanceof ConflictError) {
