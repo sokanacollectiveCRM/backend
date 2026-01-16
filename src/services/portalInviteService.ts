@@ -38,10 +38,15 @@ export class PortalInviteService {
 
   /**
    * Get redirect URL for portal invite
+   * Normalizes the URL by removing trailing slashes
    */
   private getRedirectUrl(): string {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-    return `${frontendUrl}/auth/set-password`;
+    // Remove trailing slash if present, then append path
+    const normalizedUrl = frontendUrl.replace(/\/+$/, '');
+    const redirectUrl = `${normalizedUrl}/auth/set-password`;
+    console.log(`🔗 Using redirect URL: ${redirectUrl}`);
+    return redirectUrl;
   }
 
   /**

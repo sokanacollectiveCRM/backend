@@ -144,3 +144,4 @@ FROM client_info ci
 LEFT JOIN contracts c ON c.client_id = ci.id
 LEFT JOIN contract_payments cp ON cp.contract_id = c.id AND cp.payment_type = 'deposit'
 WHERE ci.email = 'ncowans@hotmail.com';
+
