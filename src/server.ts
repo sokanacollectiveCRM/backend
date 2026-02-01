@@ -31,32 +31,22 @@ const app: Express = express();
 const asMiddleware = (m: any) =>
   typeof m === 'function' ? m : (m?.default ?? m);
 
-interface CorsOptions {
-  origin: (
-    origin: string | undefined,
-    callback: (err: Error | null, allow?: boolean) => void
-  ) => void;
-  methods: string[];
-  allowedHeaders: string[];
-  credentials: boolean;
-  maxAge: number;
-}
+const allowedOrigins = new Set(
+  [
+    process.env.CORS_ORIGIN,
+    process.env.FRONTEND_URL,
+    process.env.FRONTEND_URL_DEV,
+    'http://localhost:3001',
+    'http://localhost:3000',
+    'http://localhost:5050',
+  ].filter(Boolean) as string[]
+);
 
-const corsOptions: CorsOptions = {
-  origin: (origin, callback) => {
-    const allowedOrigins = [
-      process.env.FRONTEND_URL || 'http://localhost:3001',
-      process.env.FRONTEND_URL_DEV || 'http://localhost:3000',
-      'http://localhost:5050',
-      'http://localhost:3001',
-      'http://localhost:3000',
-    ];
-
-    if (allowedOrigins.includes(origin || '') || !origin) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.has(origin)) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -133,16 +123,6 @@ app.use((err: AppError, _req: Request, res: Response, _next: NextFunction) => {
         ? 'Internal Server Error'
         : err.message,
   });
-});
-
-const PORT = process.env.PORT || 8080;
-
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(
-    `Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3001'}`
-  );
 });
 
 export default app;

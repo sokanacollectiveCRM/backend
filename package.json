@@ -25,7 +25,7 @@
     "test:doula-invite": "tsx scripts/test-doula-invite-email.ts",
     "signnow:coords": "tsx src/scripts/getSignNowCoordinates.ts",
     "signnow:send:ls": "tsx src/scripts/sendLaborSupportContract.ts",
-    "test:doula": "tsx scripts/test-doula-endpoints.ts"
+    "start:cloudrun": "node dist/cloudrun.js"
   },
   "keywords": [],
   "author": "",

@@ -11,5 +11,5 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["./**/*.ts", "src/server.mts", "src/routes/quickbooksRoutes.js"]
+  "include": ["src/**/*.ts", "src/server.mts", "src/routes/quickbooksRoutes.js"]
 }
