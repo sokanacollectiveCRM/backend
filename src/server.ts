@@ -13,7 +13,6 @@ import contractPaymentRoutes from './routes/contractPaymentRoutes';
 import contractRoutes from './routes/contractRoutes';
 import contractSigningRoutes from './routes/contractSigningRoutes';
 import customersRoutes from './routes/customersRoutes';
-import docusignRoutes from './routes/docusignRoutes';
 import paymentRoutes from './routes/paymentRoutes';
 import pdfContractRoutes from './routes/pdfContractRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
@@ -96,7 +95,6 @@ app.use('/api/pdf-contract', asMiddleware(pdfContractRoutes));
 app.use('/api/payments', asMiddleware(paymentRoutes));
 app.use('/api/signnow', asMiddleware(signNowRoutes));
 app.use('/api/contract-payment', asMiddleware(contractPaymentRoutes));
-app.use('/api/docusign', asMiddleware(docusignRoutes));
 
 app.get('/', (_req: Request, res: Response) => {
   res.status(200).json({ status: 'ok' });

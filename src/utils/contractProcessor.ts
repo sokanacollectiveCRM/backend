@@ -6,6 +6,7 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import PizZip from 'pizzip';
 import { NodemailerService } from '../services/emailService';
 import supabase from '../supabase';
+import { GENERATED_DIR, ensureDir } from './runtimePaths';
 
 /**
  * Contract Processor Module
@@ -34,10 +35,6 @@ export interface ProcessingResult {
 }
 
 // Ensure directories exist - use /tmp for serverless environments
-const GENERATED_DIR = process.env.NODE_ENV === 'production' && process.env.VERCEL
-  ? '/tmp/generated'
-  : path.join(process.cwd(), 'generated');
-
 /**
  * Generate a contract document from template
  * @param contractData - Contract data with placeholders
@@ -47,7 +44,7 @@ const GENERATED_DIR = process.env.NODE_ENV === 'production' && process.env.VERCE
 async function generateContractDocx(contractData: Omit<ContractData, 'contractId'>, contractId: string): Promise<string> {
   try {
     // Ensure generated directory exists
-    await fs.ensureDir(GENERATED_DIR);
+    ensureDir(GENERATED_DIR);
 
     const outputPath = path.join(GENERATED_DIR, `contract-${contractId}.docx`);
 
@@ -219,6 +216,7 @@ async function convertDocxToPdf(docxPath: string, contractId: string): Promise<s
 
   return new Promise((resolve, reject) => {
     const outputDir = path.join(GENERATED_DIR);
+    ensureDir(outputDir);
     const command = `soffice --headless --convert-to pdf "${docxPath}" --outdir "${outputDir}"`;
 
     exec(command, (error, stdout, stderr) => {

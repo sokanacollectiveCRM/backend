@@ -1,6 +1,7 @@
 const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 const fs = require('fs-extra');
 const path = require('path');
+const { GENERATED_DIR, ensureDir } = require('./runtimePaths');
 
 /**
  * Simple Signature Processor
@@ -103,7 +104,8 @@ async function simpleApplySignature(pdfPath, clientName, signatureStyle, signatu
     });
 
     const signedPdfBytes = await pdfDoc.save();
-    const signedPdfPath = path.join('./generated', `contract-${contractId}-simple-signed.pdf`);
+    ensureDir(GENERATED_DIR);
+    const signedPdfPath = path.join(GENERATED_DIR, `contract-${contractId}-simple-signed.pdf`);
     await fs.writeFile(signedPdfPath, signedPdfBytes);
 
     console.log(`Simple signature applied: ${signedPdfPath}`);

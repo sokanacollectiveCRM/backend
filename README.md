@@ -139,3 +139,9 @@ For testing, we use [Jest](https://jestjs.io/) as our testing framework.
 
 [Nodemon](https://nodemon.io/) is used for automatic server restarts during
 development.
+
+## Cloud Run verification
+- npm run build
+- PORT=8080 node dist/cloudrun.js
+- curl -i http://localhost:8080/health
+- Expect a single log line: "Cloud Run listening on 8080"

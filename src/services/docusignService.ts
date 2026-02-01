@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import docusign from 'docusign-esign';
 import fs from 'fs';
 import path from 'path';
+import { DOCUSIGN_TOKEN_PATH } from '../utils/runtimePaths';
 import { documentProcessor } from '../utils/documentProcessor';
 
 export interface DocuSignContractFields {
@@ -43,7 +44,7 @@ export class DocuSignService {
     this.apiClient.setBasePath(`${this.basePath}/restapi`);
 
     // Set token file path
-    this.tokenFilePath = path.join(process.cwd(), '.docusign-token.json');
+    this.tokenFilePath = DOCUSIGN_TOKEN_PATH;
 
     // Load access token from file if available
     this.loadAccessToken();

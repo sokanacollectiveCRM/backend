@@ -2,6 +2,7 @@ import { Document, Packer, Paragraph, TextRun } from 'docx';
 import fs from 'fs';
 import mammoth from 'mammoth';
 import path from 'path';
+import { GENERATED_DIR, ensureDir } from './runtimePaths';
 
 export interface ContractFields {
   total_hours: string;
@@ -199,13 +200,10 @@ export class DocumentProcessor {
   async saveProcessedDocument(fields: ContractFields, filename: string = 'processed-contract.docx'): Promise<string> {
     try {
       const buffer = await this.processTemplate(fields);
-      const outputPath = path.join(process.cwd(), 'generated', filename);
+      const outputPath = path.join(GENERATED_DIR, filename);
 
       // Ensure generated directory exists
-      const generatedDir = path.join(process.cwd(), 'generated');
-      if (!fs.existsSync(generatedDir)) {
-        fs.mkdirSync(generatedDir, { recursive: true });
-      }
+      ensureDir(GENERATED_DIR);
 
       fs.writeFileSync(outputPath, buffer);
       console.log(`💾 Processed document saved to: ${outputPath}`);

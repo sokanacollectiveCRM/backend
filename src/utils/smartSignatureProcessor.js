@@ -1,6 +1,7 @@
 const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 const fs = require('fs-extra');
 const path = require('path');
+const { GENERATED_DIR, ensureDir } = require('./runtimePaths');
 
 /**
  * Smart Signature Processor
@@ -78,7 +79,8 @@ async function smartApplySignature(pdfPath, clientName, signatureStyle, signatur
     });
 
     const signedPdfBytes = await pdfDoc.save();
-    const signedPdfPath = path.join('./generated', `contract-${contractId}-smart-signed.pdf`);
+    ensureDir(GENERATED_DIR);
+    const signedPdfPath = path.join(GENERATED_DIR, `contract-${contractId}-smart-signed.pdf`);
     await fs.writeFile(signedPdfPath, signedPdfBytes);
 
     console.log(`Smart signature applied: ${signedPdfPath}`);

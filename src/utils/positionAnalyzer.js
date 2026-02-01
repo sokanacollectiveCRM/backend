@@ -2,6 +2,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const Docxtemplater = require('docxtemplater');
 const PizZip = require('pizzip');
+const { GENERATED_DIR } = require('./runtimePaths');
 
 /**
  * Analyze document structure to determine optimal signature field positioning
@@ -99,7 +100,7 @@ async function analyzeDocumentStructure(docxPath) {
 
 // Run analysis if called directly
 if (require.main === module) {
-  const docxPath = process.argv[2] || './generated/contract-LOCAL-TEST-1757626198870.docx';
+  const docxPath = process.argv[2] || path.join(GENERATED_DIR, 'contract-LOCAL-TEST-1757626198870.docx');
   analyzeDocumentStructure(docxPath)
     .then(result => {
       console.log('\n✅ Analysis complete!');
@@ -112,7 +113,6 @@ if (require.main === module) {
 }
 
 module.exports = { analyzeDocumentStructure };
-
 
 
 

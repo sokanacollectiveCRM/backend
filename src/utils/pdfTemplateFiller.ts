@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 import currentCoordinates from '../config/pdfCoordinates.json';
+import { GENERATED_DIR, ensureDir } from './runtimePaths';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
@@ -99,13 +100,12 @@ export async function fillPdfTemplate(
     // 5️⃣ Save filled contract
     const timestamp = Date.now();
     const outputPath = path.join(
-      process.cwd(),
-      'generated',
+      GENERATED_DIR,
       `${templateKey}-filled-${timestamp}.pdf`
     );
 
     // Ensure generated directory exists
-    await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
+    ensureDir(path.dirname(outputPath));
 
     const pdfBytes = await pdfDoc.save();
     await fs.promises.writeFile(outputPath, pdfBytes);
