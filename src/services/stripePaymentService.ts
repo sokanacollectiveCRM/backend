@@ -2,10 +2,7 @@ import crypto from 'crypto';
 import Stripe from 'stripe';
 import supabase from '../supabase';
 import { SimplePaymentService } from './simplePaymentService';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2023-10-16',
-});
+import { getStripe } from '../config/stripe';
 
 export interface StripePaymentRequest {
   contract_id: string;
@@ -44,6 +41,10 @@ export class StripePaymentService {
 
   constructor() {
     this.paymentService = new SimplePaymentService();
+  }
+
+  private stripe(): Stripe {
+    return getStripe();
   }
 
   /**
@@ -93,7 +94,7 @@ export class StripePaymentService {
       });
 
       // Create payment intent
-      const paymentIntent = await stripe.paymentIntents.create({
+      const paymentIntent = await this.stripe().paymentIntents.create({
         amount: request.amount, // Amount in cents
         currency: request.currency || 'usd',
         customer: customerId,

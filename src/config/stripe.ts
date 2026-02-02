@@ -1,9 +1,11 @@
 import Stripe from 'stripe';
+import { requireEnv } from '../utils/env';
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error('STRIPE_SECRET_KEY environment variable is required');
+let stripeClient: Stripe | null = null;
+
+export function getStripe(): Stripe {
+  if (stripeClient) return stripeClient;
+  const secretKey = requireEnv('STRIPE_SECRET_KEY');
+  stripeClient = new Stripe(secretKey, { apiVersion: '2023-10-16' });
+  return stripeClient;
 }
-
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2023-10-16', // Use the latest API version
-}); 

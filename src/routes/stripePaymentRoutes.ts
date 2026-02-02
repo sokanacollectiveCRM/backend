@@ -1,5 +1,5 @@
 import express, { Request, Response } from 'express';
-import { stripe } from '../config/stripe';
+import { getStripe } from '../config/stripe';
 import { ContractClientService } from '../services/contractClientService';
 import { StripePaymentService } from '../services/stripePaymentService';
 import supabase from '../supabase';
@@ -128,7 +128,7 @@ router.get('/payment-intent/:paymentIntentId/status', async (req, res) => {
   try {
     const { paymentIntentId } = req.params;
 
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    const paymentIntent = await getStripe().paymentIntents.retrieve(paymentIntentId);
 
     res.json({
       success: true,
@@ -186,7 +186,7 @@ router.post('/payment-intent/:paymentIntentId/confirm', async (req: Request, res
   try {
     const { paymentIntentId } = req.params;
 
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    const paymentIntent = await getStripe().paymentIntents.retrieve(paymentIntentId);
 
     if (paymentIntent.status === 'succeeded') {
       // Payment is already confirmed via webhook, just return success
