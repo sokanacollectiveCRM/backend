@@ -38,13 +38,11 @@ export interface PaymentIntentWebhookData {
 
 export class StripePaymentService {
   private paymentService: SimplePaymentService;
+  private stripe: Stripe;
 
   constructor() {
     this.paymentService = new SimplePaymentService();
-  }
-
-  private stripe(): Stripe {
-    return getStripe();
+    this.stripe = getStripe();
   }
 
   /**
@@ -94,7 +92,7 @@ export class StripePaymentService {
       });
 
       // Create payment intent
-      const paymentIntent = await this.stripe().paymentIntents.create({
+      const paymentIntent = await this.stripe.paymentIntents.create({
         amount: request.amount, // Amount in cents
         currency: request.currency || 'usd',
         customer: customerId,
@@ -149,7 +147,7 @@ export class StripePaymentService {
 
         // Verify the customer still exists in Stripe
         try {
-          await stripe.customers.retrieve(existingCustomer.stripe_customer_id);
+          await this.stripe.customers.retrieve(existingCustomer.stripe_customer_id);
           return existingCustomer.stripe_customer_id;
         } catch (stripeError) {
           console.log('⚠️ Stripe customer not found, creating new one');
@@ -158,7 +156,7 @@ export class StripePaymentService {
       }
 
       // Create new Stripe customer
-      const customer = await stripe.customers.create({
+      const customer = await this.stripe.customers.create({
         email: customerData.email,
         name: customerData.name,
         metadata: customerData.metadata,
@@ -526,7 +524,7 @@ export class StripePaymentService {
    */
   verifyWebhookSignature(payload: string | Buffer, signature: string, secret: string): Stripe.Event {
     try {
-      return stripe.webhooks.constructEvent(payload, signature, secret);
+      return this.stripe.webhooks.constructEvent(payload, signature, secret);
     } catch (error) {
       console.error('❌ Webhook signature verification failed:', error);
       throw new Error('Invalid webhook signature');

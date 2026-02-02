@@ -1,4 +1,5 @@
-import { stripe } from '../../config/stripe';
+import Stripe from 'stripe';
+import { getStripe } from '../../config/stripe';
 import supabase from '../../supabase';
 
 interface SaveCardParams {
@@ -19,6 +20,12 @@ interface UpdateCardParams {
 }
 
 export class StripePaymentService {
+  private stripe: Stripe;
+
+  constructor() {
+    this.stripe = getStripe();
+  }
+
   private async ensureStripeCustomer(customerId: string): Promise<string> {
     console.log(`Ensuring Stripe customer exists for customer ID: ${customerId}`);
 
@@ -43,7 +50,7 @@ export class StripePaymentService {
     // If customer already has Stripe ID, verify it exists in Stripe
     if (customerData.stripe_customer_id) {
       try {
-        await stripe.customers.retrieve(customerData.stripe_customer_id);
+        await this.stripe.customers.retrieve(customerData.stripe_customer_id);
         console.log('Verified existing Stripe customer:', customerData.stripe_customer_id);
         return customerData.stripe_customer_id;
       } catch (err) {
@@ -54,7 +61,7 @@ export class StripePaymentService {
 
     // Create new Stripe customer
     try {
-      const stripeCustomer = await stripe.customers.create({
+      const stripeCustomer = await this.stripe.customers.create({
         email: customerData.email,
         name: customerData.name,
         metadata: {
@@ -99,7 +106,7 @@ export class StripePaymentService {
 
       // Create a payment method from the token and attach to customer in one step
       console.log('Creating payment method from token and attaching to customer');
-      const paymentMethod = await stripe.paymentMethods.create({
+      const paymentMethod = await this.stripe.paymentMethods.create({
         type: 'card',
         card: { token: cardToken },
         metadata: {
@@ -111,13 +118,13 @@ export class StripePaymentService {
 
       // Attach payment method to the customer
       console.log('Attaching payment method to customer');
-      await stripe.paymentMethods.attach(paymentMethod.id, {
+      await this.stripe.paymentMethods.attach(paymentMethod.id, {
         customer: stripeCustomerId,
       });
 
       // Set as default payment method
       console.log('Setting as default payment method');
-      await stripe.customers.update(stripeCustomerId, {
+      await this.stripe.customers.update(stripeCustomerId, {
         invoice_settings: {
           default_payment_method: paymentMethod.id,
         },
@@ -200,7 +207,7 @@ export class StripePaymentService {
     try {
       // Create and confirm the payment intent
       console.log('Creating payment intent');
-      const paymentIntent = await stripe.paymentIntents.create({
+      const paymentIntent = await this.stripe.paymentIntents.create({
         amount,
         currency: 'usd',
         customer: stripeCustomerId,
@@ -277,7 +284,7 @@ export class StripePaymentService {
 
       // Create new payment method from token
       console.log('Creating new payment method from token');
-      const newPaymentMethod = await stripe.paymentMethods.create({
+      const newPaymentMethod = await this.stripe.paymentMethods.create({
         type: 'card',
         card: { token: cardToken }
       });
@@ -286,14 +293,14 @@ export class StripePaymentService {
 
       // Attach new payment method to customer
       console.log('Attaching new payment method to customer');
-      await stripe.paymentMethods.attach(newPaymentMethod.id, {
+      await this.stripe.paymentMethods.attach(newPaymentMethod.id, {
         customer: stripeCustomerId,
       });
 
       // If this was the default payment method, update customer's default
       if (existingPaymentMethod.is_default) {
         console.log('Updating default payment method');
-        await stripe.customers.update(stripeCustomerId, {
+        await this.stripe.customers.update(stripeCustomerId, {
           invoice_settings: {
             default_payment_method: newPaymentMethod.id,
           },
@@ -302,7 +309,7 @@ export class StripePaymentService {
 
       // Detach old payment method from Stripe
       console.log('Detaching old payment method');
-      await stripe.paymentMethods.detach(existingPaymentMethod.stripe_payment_method_id);
+      await this.stripe.paymentMethods.detach(existingPaymentMethod.stripe_payment_method_id);
 
       // Update payment method in database
       console.log('Updating payment method in database');
