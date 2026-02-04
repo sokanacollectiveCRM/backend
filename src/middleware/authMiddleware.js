@@ -9,9 +9,7 @@ const index_1 = require('../index');
 const supabase_1 = __importDefault(require('../supabase'));
 const authMiddleware = async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization;
-    const cookieToken = req.cookies?.session;
-    const token = authHeader ? authHeader.split(' ')[1] : cookieToken;
+    const token = req.cookies?.['sb-access-token'];
     if (!token) {
       res.status(401).json({ error: 'No session token provided' });
       return;
