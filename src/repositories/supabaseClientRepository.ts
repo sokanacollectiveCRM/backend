@@ -15,22 +15,24 @@ export class SupabaseClientRepository  {
   }
 
   async findClientsLiteAll(): Promise<Client[]> {
+    // Simple query without join - client_info has the essential fields
     const { data, error } = await this.supabaseClient
       .from('client_info')
-      .select(`
-        *,
-        users!user_id (*)
-      `);
+      .select('*');
 
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error('findClientsLiteAll error:', error);
+      throw new Error(error.message);
+    }
 
+    console.log('findClientsLiteAll returned:', data?.length, 'clients');
     return data.map(row => this.mapToClient(row));
   }
 
   async exportCSV():Promise<string | null>{
     const {data,error} = await this.supabaseClient
     .from('client_info')
-    .select('firstname,lastname,zip_code,annual_income,pronouns')
+    .select('first_name,last_name,zip_code,annual_income,pronouns')
     .csv()
 
     if(error || !data){
@@ -140,6 +142,122 @@ export class SupabaseClientRepository  {
     return this.mapToClient(data);
   }
 
+  /**
+   * Get a single client by ID with explicit column selection (canonical mode).
+   * HIPAA COMPLIANCE: Returns ONLY operational fields - NO PHI.
+   * Uses explicit SELECT - never SELECT *.
+   * 
+   * @param clientId - The client UUID
+   * @returns Raw row data for mapping to ClientDetailDTO, or null if not found
+   * @throws Error if database query fails (excluding not found)
+   */
+  async getClientById(clientId: string): Promise<{
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    phone_number: string | null;
+    status: string | null;
+    service_needed: string | null;
+    portal_status: string | null;
+    invited_at: string | null;
+    last_invite_sent_at: string | null;
+    invite_sent_count: number | null;
+    requested_at: string | null;
+    updated_at: string | null;
+  } | null> {
+    // EXPLICIT column selection - NO select('*')
+    // ONLY operational fields - NO PHI (no due_date, health_history, insurance, etc.)
+    const { data, error } = await this.supabaseClient
+      .from('client_info')
+      .select(`
+        id,
+        first_name,
+        last_name,
+        email,
+        phone_number,
+        status,
+        service_needed,
+        portal_status,
+        invited_at,
+        last_invite_sent_at,
+        invite_sent_count,
+        requested_at,
+        updated_at
+      `)
+      .eq('id', clientId)
+      .single();
+
+    if (error) {
+      // PGRST116 = "Searched for a single row but found 0"
+      if (error.code === 'PGRST116') {
+        return null;
+      }
+      throw new Error(`Failed to fetch client: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  /**
+   * Update client status and return updated row with explicit columns (canonical mode).
+   * HIPAA COMPLIANCE: Returns ONLY operational fields - NO PHI.
+   * Uses explicit SELECT - never SELECT *.
+   * 
+   * @param clientId - The client UUID
+   * @param status - The new status value
+   * @returns Updated row data for mapping to ClientDetailDTO, or null if not found
+   * @throws Error if database update fails (excluding not found)
+   */
+  async updateClientStatusCanonical(clientId: string, status: string): Promise<{
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    phone_number: string | null;
+    status: string | null;
+    service_needed: string | null;
+    portal_status: string | null;
+    invited_at: string | null;
+    last_invite_sent_at: string | null;
+    invite_sent_count: number | null;
+    requested_at: string | null;
+    updated_at: string | null;
+  } | null> {
+    // EXPLICIT column selection - NO select('*')
+    // ONLY operational fields - NO PHI (no due_date, health_history, insurance, etc.)
+    const { data, error } = await this.supabaseClient
+      .from('client_info')
+      .update({ status })
+      .eq('id', clientId)
+      .select(`
+        id,
+        first_name,
+        last_name,
+        email,
+        phone_number,
+        status,
+        service_needed,
+        portal_status,
+        invited_at,
+        last_invite_sent_at,
+        invite_sent_count,
+        requested_at,
+        updated_at
+      `)
+      .single();
+
+    if (error) {
+      // PGRST116 = "Searched for a single row but found 0" (no rows matched the update)
+      if (error.code === 'PGRST116') {
+        return null;
+      }
+      throw new Error(`Failed to update client status: ${error.message}`);
+    }
+
+    return data;
+  }
+
   async findClientDetailedById(clientId: string): Promise<Client> {
     const { data, error } = await this.supabaseClient
       .from('client_info')
@@ -161,18 +279,18 @@ export class SupabaseClientRepository  {
       .eq('id', clientId)
       .select(`
         id,
-        firstname,
-        lastname,
+        first_name,
+        last_name,
         phone_number,
         service_needed,
-        requested,
+        requested_at,
         updated_at,
         status,
         user_id,
         users!user_id (
           profile_picture,
-          firstname,
-          lastname
+          first_name,
+          last_name
         )
       `)
       .single()
@@ -190,14 +308,16 @@ export class SupabaseClientRepository  {
 
     // Map the fields from the request body to database columns
     // Handle nested user object fields
-    if (fieldsToUpdate.user?.firstname !== undefined) updateData.firstname = fieldsToUpdate.user.firstname;
-    if (fieldsToUpdate.user?.lastname !== undefined) updateData.lastname = fieldsToUpdate.user.lastname;
+    if (fieldsToUpdate.user?.firstname !== undefined) updateData.first_name = fieldsToUpdate.user.firstname;
+    if (fieldsToUpdate.user?.lastname !== undefined) updateData.last_name = fieldsToUpdate.user.lastname;
+    if (fieldsToUpdate.user?.first_name !== undefined) updateData.first_name = fieldsToUpdate.user.first_name;
+    if (fieldsToUpdate.user?.last_name !== undefined) updateData.last_name = fieldsToUpdate.user.last_name;
     if (fieldsToUpdate.user?.email !== undefined) updateData.email = fieldsToUpdate.user.email;
     if (fieldsToUpdate.user?.role !== undefined) updateData.role = fieldsToUpdate.user.role;
 
     // Handle direct field mappings from request body (top-level fields)
-    if (fieldsToUpdate.firstname !== undefined) updateData.firstname = fieldsToUpdate.firstname;
-    if (fieldsToUpdate.lastname !== undefined) updateData.lastname = fieldsToUpdate.lastname;
+    if (fieldsToUpdate.firstname !== undefined) updateData.first_name = fieldsToUpdate.firstname;
+    if (fieldsToUpdate.lastname !== undefined) updateData.last_name = fieldsToUpdate.lastname;
     if (fieldsToUpdate.email !== undefined) updateData.email = fieldsToUpdate.email;
     if (fieldsToUpdate.phoneNumber !== undefined) updateData.phone_number = fieldsToUpdate.phoneNumber;
     if (fieldsToUpdate.phone_number !== undefined) updateData.phone_number = fieldsToUpdate.phone_number;
@@ -262,7 +382,7 @@ export class SupabaseClientRepository  {
     // Check if client exists first
     const { data: existingClient, error: checkError } = await this.supabaseClient
       .from('client_info')
-      .select('id, firstname, lastname, phone_number')
+      .select('id, first_name, last_name, phone_number')
       .eq('id', clientId)
       .maybeSingle();
 
@@ -397,11 +517,17 @@ export class SupabaseClientRepository  {
   private mapToClient(data: any): Client {
     const userRecord = data.users ?? {};
 
+    // Handle both legacy (firstname) and new (first_name) column naming
+    const firstName = userRecord.firstname || userRecord.first_name || data.firstname || data.first_name || '';
+    const lastName = userRecord.lastname || userRecord.last_name || data.lastname || data.last_name || '';
+
     const user = this.mapToUser({
       id: userRecord.id || data.user_id || data.id,
       email: userRecord.email || data.email || '',
-      firstname: userRecord.firstname || data.firstname || '',
-      lastname: userRecord.lastname || data.lastname || '',
+      firstname: firstName,
+      lastname: lastName,
+      first_name: firstName,
+      last_name: lastName,
       created_at: userRecord.created_at || data.created_at,
       updated_at: userRecord.updated_at || data.updated_at,
       role: userRecord.role || 'client',
@@ -416,25 +542,27 @@ export class SupabaseClientRepository  {
       bio: userRecord.bio || '',
       children_expected: userRecord.children_expected || data.children_expected || '',
       service_needed: userRecord.service_needed || data.service_needed || '',
-      health_history: userRecord.health_history || data.health_history || '',
-      allergies: userRecord.allergies || data.allergies || '',
-      due_date: userRecord.due_date || data.due_date || '',
-      annual_income: userRecord.annual_income || data.annual_income || '',
+      // PHI fields - these should NOT be in Supabase for HIPAA compliance
+      // Only include if coming from Sensitive DB in future
+      health_history: '',
+      allergies: '',
+      due_date: '',
+      annual_income: '',
       status: userRecord.status || data.status || '',
-      hospital: userRecord.hospital || data.hospital|| '',
+      hospital: '',
 
       // Add all the missing fields from data
       preferred_contact_method: userRecord.preferred_contact_method || data.preferred_contact_method,
       preferred_name: userRecord.preferred_name || data.preferred_name,
-      payment_method: userRecord.payment_method || data.payment_method,  // Add this field
+      payment_method: userRecord.payment_method || data.payment_method,
       pronouns: userRecord.pronouns || data.pronouns,
       home_type: userRecord.home_type || data.home_type,
       services_interested: userRecord.services_interested || data.services_interested,
       phone_number: userRecord.phone_number || data.phone_number,
-      health_notes: userRecord.health_notes || data.health_notes,
+      health_notes: '',
       service_specifics: userRecord.service_specifics || data.service_specifics,
-      baby_sex: userRecord.baby_sex || data.baby_sex,
-      baby_name: userRecord.baby_name || data.baby_name,
+      baby_sex: '',
+      baby_name: '',
       birth_hospital: userRecord.birth_hospital || data.birth_hospital,
       birth_location: userRecord.birth_location || data.birth_location,
       number_of_babies: userRecord.number_of_babies || data.number_of_babies,
@@ -465,26 +593,29 @@ export class SupabaseClientRepository  {
       referral_email: userRecord.referral_email || data.referral_email
     });
 
+    // Handle both legacy (requested) and new (requested_at) column naming
+    const requestedAt = data.requested_at || data.requested;
+
     return new Client(
       data.id,
       user,
       data.service_needed ?? null,
-      data.requested ? new Date(data.requested) : null,
+      requestedAt ? new Date(requestedAt) : new Date(),
       data.updated_at ? new Date(data.updated_at) : new Date(),
       data.status ?? 'lead',
 
-      // Optional detailed fields
+      // Optional detailed fields - PHI fields should be empty (from Sensitive DB only)
       data.children_expected ?? undefined,
       data.pronouns ?? undefined,
-      data.health_history ?? undefined,
-      data.allergies ?? undefined,
-      data.due_date ? new Date(data.due_date) : undefined,
-      data.hospital ?? undefined,
-      data.baby_sex ?? undefined,
-      data.annual_income ?? undefined,
+      undefined, // health_history - PHI, not in Supabase
+      undefined, // allergies - PHI, not in Supabase
+      undefined, // due_date - PHI, not in Supabase
+      undefined, // hospital - PHI, not in Supabase
+      undefined, // baby_sex - PHI, not in Supabase
+      undefined, // annual_income - sensitive, not in Supabase
       data.service_specifics ?? undefined,
-      data.phone_number ?? undefined, // Add phone number mapping
-      data.portal_status ?? undefined // Portal invite status
+      data.phone_number ?? undefined,
+      data.portal_status ?? undefined
     );
   }
 }

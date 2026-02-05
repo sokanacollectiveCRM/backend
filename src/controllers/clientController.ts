@@ -11,8 +11,13 @@ import { Client } from '../entities/Client';
 import { AuthRequest } from '../types';
 import { ClientUseCase } from '../usecase/clientUseCase';
 import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
+import { SupabaseClientRepository } from '../repositories/supabaseClientRepository';
+import { SupabaseActivityRepository } from '../repositories/supabaseActivityRepository';
 import { PortalEligibilityService } from '../services/portalEligibilityService';
 import supabase from '../supabase';
+import { ClientMapper } from '../mappers/ClientMapper';
+import { ActivityMapper } from '../mappers/ActivityMapper';
+import { ApiResponse } from '../utils/responseBuilder';
 
 export class ClientController {
   private clientUseCase: ClientUseCase;
@@ -37,12 +42,34 @@ export class ClientController {
     try {
       const { id, role } = req.user;
       const { detailed } = req.query;
+      const readMode = process.env.SPLIT_DB_READ_MODE;
 
       const clients = detailed === 'true'
         ? await this.clientUseCase.getClientsDetailed(id, role)
         : await this.clientUseCase.getClientsLite(id, role);
 
-      console.log("clients:", clients);
+      // Canonical response format for split-DB primary mode
+      if (readMode === 'primary') {
+        // Compute eligibility and map to DTOs
+        const dtos = await Promise.all(
+          clients.map(async (client) => {
+            let isEligible = false;
+            try {
+              const eligibility = await this.eligibilityService.getInviteEligibility(client.id);
+              isEligible = eligibility.eligible;
+            } catch (error) {
+              console.error(`Error checking eligibility for client ${client.id}:`, error);
+            }
+            return ClientMapper.toListItemDTO(client, isEligible);
+          })
+        );
+
+        res.json(ApiResponse.list(dtos, dtos.length));
+        return;
+      }
+
+      // Legacy response format (raw array) for non-primary modes
+      // Note: Avoid logging client data - HIPAA compliance
 
       // Compute eligibility for each client and add to response
       const clientsWithEligibility = await Promise.all(
@@ -103,27 +130,50 @@ export class ClientController {
   // Grab a specific client with detailed information
   //
   // returns:
-  //    Client
+  //    Client (or ClientDetailDTO in canonical mode)
   //
   async getClientById(req: AuthRequest, res: Response): Promise<void> {
   try {
     const { id } = req.params;
-    const { detailed } = req.query;
+    const readMode = process.env.SPLIT_DB_READ_MODE;
 
-    if (!id) {
-      res.status(400).json({ error: 'Missing client ID' });
+    // Require PRIMARY mode - shadow mode disabled
+    if (readMode !== 'primary') {
+      res.status(501).json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
       return;
     }
 
-    const client = detailed === 'true'
-      ? await this.clientUseCase.getClientDetailed(id)
-      : await this.clientUseCase.getClientLite(id);
+    if (!id) {
+      res.status(400).json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
+      return;
+    }
 
-    res.json(client.toJson());
+    // Use repository with explicit SELECT columns (no select('*'), no PHI)
+    const clientRepository = new SupabaseClientRepository(supabase);
+    const clientRow = await clientRepository.getClientById(id);
+
+    if (!clientRow) {
+      res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
+      return;
+    }
+
+    // Compute eligibility (optional, swallow errors)
+    let isEligible = false;
+    try {
+      const eligibility = await this.eligibilityService.getInviteEligibility(id);
+      isEligible = eligibility.eligible;
+    } catch (eligibilityError) {
+      // HIPAA: Do not log client identifiers, only generic error
+      console.error('Error checking eligibility');
+    }
+
+    // Map to DTO and return canonical response
+    const dto = ClientMapper.toDetailDTO(clientRow, isEligible);
+    res.json(ApiResponse.success(dto));
   } catch (error) {
     const err = this.handleError(error, res);
     if (!res.headersSent) {
-      res.status(err.status).json({ error: err.message });
+      res.status(err.status).json(ApiResponse.error(err.message));
     }
   }
 }
@@ -153,42 +203,59 @@ export class ClientController {
   // Updates client status in client_info table by grabbing the client to update in the request body
   //
   // returns:
-  //    Client with updatedAt timestamp
+  //    Client with updatedAt timestamp (or ClientDetailDTO in canonical mode)
   //
   async updateClientStatus(
     req: AuthRequest,
     res: Response,
   ): Promise<void> {
     const { clientId, status } = req.body;
-    console.log(clientId, status);
+    const readMode = process.env.SPLIT_DB_READ_MODE;
 
-    if (!clientId || !status) {
-      res.status(400).json({ message: 'Missing client ID or status' });
+    // Require PRIMARY mode - shadow mode disabled
+    if (readMode !== 'primary') {
+      res.status(501).json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
+      return;
+    }
+
+    // Validate request body
+    if (!clientId || typeof clientId !== 'string') {
+      res.status(400).json(ApiResponse.error('Invalid request: clientId is required and must be a string', 'VALIDATION_ERROR'));
+      return;
+    }
+
+    if (!status || typeof status !== 'string' || status.trim() === '') {
+      res.status(400).json(ApiResponse.error('Invalid request: status is required and must be a non-empty string', 'VALIDATION_ERROR'));
       return;
     }
 
     try {
-      // Update client status directly in client_info table
-      const client = await this.clientUseCase.updateClientStatus(clientId, status);
+      // Use repository with explicit SELECT columns (no select('*'), no PHI)
+      const clientRepository = new SupabaseClientRepository(supabase);
+      const updatedRow = await clientRepository.updateClientStatusCanonical(clientId, status.trim());
 
-      res.json({
-        success: true,
-        client: {
-          id: client.id,
-          status: client.status,
-          updatedAt: client.updatedAt,
-          firstname: client.user.firstname,
-          lastname: client.user.lastname,
-          email: client.user.email,
-          role: client.user.role,
-          serviceNeeded: client.serviceNeeded,
-          requestedAt: client.requestedAt
-        }
-      });
+      if (!updatedRow) {
+        res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
+        return;
+      }
+
+      // Compute eligibility (optional, swallow errors)
+      let isEligible = false;
+      try {
+        const eligibility = await this.eligibilityService.getInviteEligibility(clientId);
+        isEligible = eligibility.eligible;
+      } catch {
+        // HIPAA: Do not log client identifiers
+        console.error('Error checking eligibility');
+      }
+
+      // Map to DTO and return canonical response
+      const dto = ClientMapper.toDetailDTO(updatedRow, isEligible);
+      res.json(ApiResponse.success(dto));
     }
     catch (statusError) {
       const error = this.handleError(statusError, res);
-      res.status(error.status).json({ error: error.message });
+      res.status(error.status).json(ApiResponse.error(error.message));
     }
   }
 
@@ -390,45 +457,64 @@ export class ClientController {
   // Creates a custom activity entry for a client
   //
   // returns:
-  //    Activity
+  //    Canonical: { success: true, data: ActivityDTO }
   //
   async createActivity(req: AuthRequest, res: Response): Promise<void> {
     const { id } = req.params;
-    const { type, description, metadata } = req.body;
+    const readMode = process.env.SPLIT_DB_READ_MODE;
 
-    if (!id) {
-      res.status(400).json({ error: 'Missing client ID' });
+    // Require PRIMARY mode - shadow mode disabled
+    if (readMode !== 'primary') {
+      res.status(501).json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
       return;
     }
 
-    if (!type || !description) {
-      res.status(400).json({ error: 'Missing type or description' });
+    if (!id) {
+      res.status(400).json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
+      return;
+    }
+
+    // Canonical field names: activity_type, content
+    const { activity_type, content } = req.body;
+
+    // Validate request body
+    if (!activity_type || typeof activity_type !== 'string' || activity_type.trim() === '') {
+      res.status(400).json(ApiResponse.error('Invalid request: activity_type is required and must be a non-empty string', 'VALIDATION_ERROR'));
+      return;
+    }
+
+    if (!content || typeof content !== 'string' || content.trim() === '') {
+      res.status(400).json(ApiResponse.error('Invalid request: content is required and must be a non-empty string', 'VALIDATION_ERROR'));
       return;
     }
 
     try {
-      const activity = await this.clientUseCase.createActivity(
+      // Verify client exists (optional but preferred)
+      const clientRepository = new SupabaseClientRepository(supabase);
+      const clientExists = await clientRepository.getClientById(id);
+      if (!clientExists) {
+        res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
+        return;
+      }
+
+      // Determine createdBy from authenticated user
+      const createdBy = req.user?.id || null;
+
+      // Create activity with explicit column selection
+      const activityRepository = new SupabaseActivityRepository(supabase);
+      const row = await activityRepository.createActivityCanonical(
         id,
-        type,
-        description,
-        metadata,
-        req.user?.id
+        createdBy,
+        activity_type.trim(),
+        content.trim()
       );
 
-      res.json({
-        success: true,
-        activity: {
-          id: activity.id,
-          clientId: activity.clientId,
-          type: activity.type,
-          description: activity.description,
-          metadata: activity.metadata,
-          timestamp: activity.timestamp,
-        },
-      });
+      // Map to DTO and return canonical response
+      const dto = ActivityMapper.toDTO(row);
+      res.json(ApiResponse.success(dto));
     } catch (error) {
       const err = this.handleError(error, res);
-      res.status(err.status).json({ error: err.message });
+      res.status(err.status).json(ApiResponse.error(err.message));
     }
   }
 
@@ -438,26 +524,44 @@ export class ClientController {
   // Retrieves all activities/notes for a specific client
   //
   // returns:
-  //    Activity[]
+  //    Canonical: { success: true, data: ActivityDTO[], meta: { count } }
   //
   async getClientActivities(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
+    const { id } = req.params;
+    const readMode = process.env.SPLIT_DB_READ_MODE;
 
-      if (!id) {
-        res.status(400).json({ error: 'Missing client ID' });
+    // Require PRIMARY mode - shadow mode disabled
+    if (readMode !== 'primary') {
+      res.status(501).json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
+      return;
+    }
+
+    if (!id) {
+      res.status(400).json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
+      return;
+    }
+
+    try {
+      // Verify client exists (optional but preferred)
+      const clientRepository = new SupabaseClientRepository(supabase);
+      const clientExists = await clientRepository.getClientById(id);
+      if (!clientExists) {
+        res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
         return;
       }
 
-      const activities = await this.clientUseCase.getClientActivities(id);
+      // Fetch activities with explicit column selection
+      const activityRepository = new SupabaseActivityRepository(supabase);
+      const rows = await activityRepository.getActivitiesByClientIdCanonical(id);
 
-      res.json({
-        success: true,
-        activities: activities
-      });
+      // Map to DTOs
+      const dtos = rows.map(row => ActivityMapper.toDTO(row));
+
+      // Return canonical list response
+      res.json(ApiResponse.list(dtos, dtos.length));
     } catch (error) {
       const err = this.handleError(error, res);
-      res.status(err.status).json({ error: err.message });
+      res.status(err.status).json(ApiResponse.error(err.message));
     }
   }
 
