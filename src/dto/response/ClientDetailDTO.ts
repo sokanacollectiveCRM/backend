@@ -67,6 +67,11 @@ export interface ClientDetailDTO {
   health_history?: string;
   health_notes?: string;
   allergies?: string;
+  medications?: string;
+
+  // Demographics / contact
+  date_of_birth?: string;
+  address_line1?: string;
 
   // Demographics
   race_ethnicity?: string;
