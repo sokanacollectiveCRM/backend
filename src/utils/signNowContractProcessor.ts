@@ -245,7 +245,7 @@ export async function processContractWithSignNow(
         {
           contractId: contractId,
           redirectUrl: redirectUrl,
-          declineUrl: declineUrl
+          declineUrl: declineUrl,
         }
       );
       console.log('✅ SignNow invitation sent successfully with appropriate redirect');
