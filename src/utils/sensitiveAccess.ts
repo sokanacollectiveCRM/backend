@@ -17,10 +17,11 @@ import supabase from '../supabase';
 /**
  * User object from auth middleware.
  * Contains id and role from staff cookie auth.
+ * role is optional to accept User entity where role may be optional.
  */
 interface AuthUser {
   id: string;
-  role: 'admin' | 'doula' | string;
+  role?: 'admin' | 'doula' | string;
 }
 
 /**
