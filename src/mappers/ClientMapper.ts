@@ -6,10 +6,11 @@ import { ClientDetailDTO } from '../dto/response/ClientDetailDTO';
  * Maps Client entity to DTOs for API responses.
  * 
  * HIPAA COMPLIANCE:
- * - This mapper returns ONLY operational fields (non-PHI)
- * - DO NOT add: health_history, due_date, medical info, SSN, insurance, etc.
- * - PHI fields are only accessible via Sensitive DB endpoints
+ * - toListItemDTO() and toDetailDTO() return ONLY operational fields (non-PHI)
+ * - PHI fields are merged separately via PHI Broker response (in controller)
+ * - PHI fields are OMITTED (not null) when user is not authorized
  * - Email/phone are PII (not PHI) but should be redacted in logs
+ * - NEVER log PHI values
  */
 export class ClientMapper {
   /**
@@ -79,6 +80,7 @@ export class ClientMapper {
     isEligible?: boolean
   ): ClientDetailDTO {
     // ONLY operational fields - no PHI
+    // PHI fields are merged separately from PHI Broker response (in controller)
     return {
       id: row.id,
       first_name: row.first_name || '',

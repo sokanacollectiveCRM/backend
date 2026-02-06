@@ -4,9 +4,11 @@
  * Used by GET /clients/:id when SPLIT_DB_READ_MODE=primary.
  * 
  * HIPAA COMPLIANCE:
- * This DTO contains ONLY operational fields (non-PHI).
+ * - Operational fields (non-PHI) are always included
+ * - PHI fields are OPTIONAL and only included when user is authorized
+ * - When unauthorized, PHI fields are OMITTED (not set to null)
  * 
- * ALLOWED (operational):
+ * OPERATIONAL (always included):
  * - id, first_name, last_name (identifiers)
  * - email, phone_number (PII - needed for contact, redact in logs)
  * - status, service_needed (workflow state)
@@ -14,13 +16,15 @@
  * - requested_at, updated_at (timestamps)
  * - is_eligible (computed flag)
  * 
- * NEVER ADD (PHI - belongs in Sensitive DB only):
- * - health_history, allergies, health_notes
- * - due_date, baby_sex, pregnancy info
- * - insurance, SSN, demographics
- * - Any medical or treatment information
+ * PHI (only when authorized via PHI Broker - omitted otherwise):
+ * - Pregnancy: due_date, pregnancy_number, baby_sex, baby_name, number_of_babies
+ * - Past pregnancies: had_previous_pregnancies, previous_pregnancies_count,
+ *   living_children_count, past_pregnancy_experience
+ * - Health: health_history, health_notes, allergies
+ * - Demographics: race_ethnicity, client_age_range, annual_income, insurance
  */
 export interface ClientDetailDTO {
+  // ========== OPERATIONAL FIELDS (always included) ==========
   id: string;
 
   first_name: string;
@@ -42,5 +46,31 @@ export interface ClientDetailDTO {
 
   is_eligible?: boolean;
 
-  // IMPORTANT: NO PHI fields in this DTO (no due_date, health_history, insurance, etc.)
+  // ========== PHI FIELDS (only when authorized; omitted otherwise) ==========
+  // These fields come from PHI Broker (Cloud SQL) and are gated by authorization.
+  // When user is not authorized, these keys are NOT present in the response.
+
+  // Pregnancy info
+  due_date?: string;
+  pregnancy_number?: number;
+  baby_sex?: string;
+  baby_name?: string;
+  number_of_babies?: number;
+
+  // Past pregnancies
+  had_previous_pregnancies?: boolean;
+  previous_pregnancies_count?: number;
+  living_children_count?: number;
+  past_pregnancy_experience?: string;
+
+  // Health
+  health_history?: string;
+  health_notes?: string;
+  allergies?: string;
+
+  // Demographics
+  race_ethnicity?: string;
+  client_age_range?: string;
+  annual_income?: string;
+  insurance?: string;
 }

@@ -18,6 +18,8 @@ import supabase from '../supabase';
 import { ClientMapper } from '../mappers/ClientMapper';
 import { ActivityMapper } from '../mappers/ActivityMapper';
 import { ApiResponse } from '../utils/responseBuilder';
+import { canAccessSensitive } from '../utils/sensitiveAccess';
+import { fetchClientPhi, PhiBrokerError } from '../services/phiBrokerService';
 
 export class ClientController {
   private clientUseCase: ClientUseCase;
@@ -127,10 +129,16 @@ export class ClientController {
   //
   // getClientById()
   //
-  // Grab a specific client with detailed information
+  // Grab a specific client with detailed information.
+  // Includes PHI fields from PHI Broker (Cloud SQL) when user is authorized.
+  //
+  // Authorization for PHI:
+  // - admin: Always authorized
+  // - doula: Authorized only if assigned to client
+  // - other: PHI fields omitted
   //
   // returns:
-  //    Client (or ClientDetailDTO in canonical mode)
+  //    ClientDetailDTO (operational fields always; PHI fields when authorized)
   //
   async getClientById(req: AuthRequest, res: Response): Promise<void> {
   try {
@@ -143,21 +151,23 @@ export class ClientController {
       return;
     }
 
+    // Step 1: Validate client ID
     if (!id) {
       res.status(400).json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
       return;
     }
 
-    // Use repository with explicit SELECT columns (no select('*'), no PHI)
+    // Step 2: Fetch operational data from Supabase (explicit columns, no PHI)
     const clientRepository = new SupabaseClientRepository(supabase);
     const clientRow = await clientRepository.getClientById(id);
 
+    // Step 3: Handle not found
     if (!clientRow) {
       res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
       return;
     }
 
-    // Compute eligibility (optional, swallow errors)
+    // Step 4: Compute eligibility (optional, swallow errors)
     let isEligible = false;
     try {
       const eligibility = await this.eligibilityService.getInviteEligibility(id);
@@ -167,10 +177,43 @@ export class ClientController {
       console.error('Error checking eligibility');
     }
 
-    // Map to DTO and return canonical response
+    // Step 5: Map operational data to DTO
     const dto = ClientMapper.toDetailDTO(clientRow, isEligible);
-    res.json(ApiResponse.success(dto));
+
+    // Step 6: Check authorization for sensitive/PHI data
+    const { canAccess, assignedClientIds } = await canAccessSensitive(req.user, id);
+
+    // Step 7: Branch based on authorization
+    if (!canAccess) {
+      // Unauthorized: Return operational-only DTO (PHI fields omitted)
+      res.json(ApiResponse.success(dto));
+      return;
+    }
+
+    // Authorized: Fetch PHI from PHI Broker service
+    try {
+      const phiData = await fetchClientPhi(id, {
+        role: req.user?.role || '',
+        userId: req.user?.id || '',
+        assignedClientIds,
+      });
+
+      // Merge PHI fields into response (spread operator keeps only present keys)
+      const merged = { ...dto, ...phiData };
+
+      // HIPAA: Do NOT log merged which may contain PHI
+      res.json(ApiResponse.success(merged));
+    } catch (brokerError) {
+      // PHI Broker failed - return 502
+      if (brokerError instanceof PhiBrokerError) {
+        console.error('[ClientController] PHI Broker unavailable');
+        res.status(502).json(ApiResponse.error('Upstream PHI service unavailable', 'PHI_BROKER_ERROR'));
+        return;
+      }
+      throw brokerError;
+    }
   } catch (error) {
+    // HIPAA: Do not log error details which may contain client data
     const err = this.handleError(error, res);
     if (!res.headersSent) {
       res.status(err.status).json(ApiResponse.error(err.message));
