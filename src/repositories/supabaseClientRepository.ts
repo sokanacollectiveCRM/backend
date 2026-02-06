@@ -583,8 +583,6 @@ export class SupabaseClientRepository  {
       home_access: userRecord.home_access || data.home_access,
       pets: userRecord.pets || data.pets,
       relationship_status: userRecord.relationship_status || data.relationship_status,
-      first_name: userRecord.first_name || data.first_name,
-      last_name: userRecord.last_name || data.last_name,
       middle_name: userRecord.middle_name || data.middle_name,
       mobile_phone: userRecord.mobile_phone || data.mobile_phone,
       work_phone: userRecord.work_phone || data.work_phone,
