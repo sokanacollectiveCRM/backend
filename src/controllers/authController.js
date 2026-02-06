@@ -53,10 +53,16 @@ class AuthController {
       const { email, password } = req.body;
       // call useCase to grab the user and token
       const result = await this.authUseCase.login(email, password);
+      res.cookie('sb-access-token', result.token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+        maxAge: 3600000,
+        path: '/',
+      });
       res.status(200).json({
         message: 'Login successful',
         user: result.user.toJSON(),
-        token: result.token,
       });
     } catch (loginError) {
       const error = this.handleError(loginError, res);
@@ -73,8 +79,7 @@ class AuthController {
   //
   async getMe(req, res) {
     try {
-      const token =
-        req.cookies?.session || req.headers.authorization?.split(' ')[1];
+      const token = req.cookies?.['sb-access-token'];
       if (!token) {
         res.status(401).json({ error: 'No session token provided' });
         return;
@@ -115,6 +120,12 @@ class AuthController {
   //    None
   //
   async logout(_req, res) {
+    res.clearCookie('sb-access-token', {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      path: '/',
+    });
     res.clearCookie('session');
     await this.authUseCase.logout();
     console.log('logged out');

@@ -2,6 +2,7 @@ import { NextFunction, Response } from 'express';
 import { authService } from '../index';
 import supabase from '../supabase';
 import type { AuthRequest } from '../types';
+import { logger } from '../common/utils/logger';
 
 const authMiddleware = async (
   req: AuthRequest,
@@ -9,17 +10,14 @@ const authMiddleware = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const authHeader = req.headers.authorization
-    const cookieToken = req.cookies?.session
-    const token = authHeader ? authHeader.split(' ')[1] : cookieToken
+    const token = req.cookies?.['sb-access-token'];
 
     if (!token) {
-      console.warn('⚠️ [Auth] No token provided:', {
+      logger.warn({
+        context: 'authMiddleware',
         path: req.path,
-        hasAuthHeader: !!authHeader,
-        hasCookie: !!cookieToken,
         method: req.method
-      });
+      }, 'No token provided');
       res.status(401).json({ error: 'No session token provided' })
       return
     }
@@ -30,11 +28,12 @@ const authMiddleware = async (
     } = await supabase.auth.getUser(token)
 
     if (error || !user) {
-      console.warn('⚠️ [Auth] Invalid or expired token:', {
+      logger.warn({
+        context: 'authMiddleware',
         path: req.path,
         error: error?.message,
         hasUser: !!user
-      });
+      }, 'Invalid or expired token');
       res.status(401).json({ error: 'Invalid or expired session token' })
       return
     }
@@ -44,11 +43,7 @@ const authMiddleware = async (
     req.user = user_entity;
     next();
   } catch (err: any) {
-    console.error('❌ [Auth] Middleware error:', {
-      path: req.path,
-      error: err?.message,
-      stack: err?.stack
-    });
+    logger.error({ err, context: 'authMiddleware', path: req.path }, 'Middleware error');
     res.status(500).json({ error: 'Internal server error' });
   }
 };

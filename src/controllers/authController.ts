@@ -17,6 +17,7 @@ import {
   UpdatePasswordBody,
 } from '../types';
 import { AuthUseCase } from '../usecase/authUseCase.js';
+import { logger } from '../common/utils/logger';
 
 
 export class AuthController {
@@ -68,7 +69,14 @@ export class AuthController {
       const { email, password } = req.body;
       // call useCase to grab the user and token
       const result = await this.authUseCase.login(email, password);
-      res.status(200).json({ message: 'Login successful', user: result.user.toJSON() , token: result.token });
+      res.cookie('sb-access-token', result.token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+        maxAge: 3600000,
+        path: '/',
+      });
+      res.status(200).json({ message: 'Login successful', user: result.user.toJSON() });
     }
     catch (loginError) {
       const error = this.handleError(loginError, res);
@@ -86,75 +94,22 @@ export class AuthController {
   //
   async getMe(req: Request, res: Response): Promise<void> {
     try {
-      // Extract token - PRIORITIZE Authorization header over cookie
-      // The cookie might contain a Flask session token, not a JWT
-      let token: string | undefined;
-      let tokenSource = 'none';
-
-      // First, try Authorization header (this should be the Supabase JWT)
-      if (req.headers.authorization) {
-        const authHeader = req.headers.authorization.trim();
-        tokenSource = 'header';
-
-        // Handle both "Bearer <token>" and just "<token>" formats
-        if (authHeader.toLowerCase().startsWith('bearer ')) {
-          // Remove "Bearer " prefix (case-insensitive) and get everything after it
-          token = authHeader.substring(7).trim();
-          // If there are multiple spaces, take only the first token part (the JWT)
-          const spaceIndex = token.indexOf(' ');
-          if (spaceIndex > 0) {
-            token = token.substring(0, spaceIndex);
-          }
-        } else {
-          // No "Bearer " prefix, assume the whole header is the token
-          // But if it contains spaces, take only the first part
-          const spaceIndex = authHeader.indexOf(' ');
-          token = spaceIndex > 0 ? authHeader.substring(0, spaceIndex) : authHeader;
-        }
-      }
-
-      // Fallback to cookie ONLY if no Authorization header AND cookie looks like a JWT
-      // Note: Flask session cookies start with '.' and are NOT JWTs - ignore them
-      if (!token && req.cookies?.session) {
-        const cookieToken = req.cookies.session.trim();
-        // Check if cookie is a JWT (has 3 parts when split by dots, doesn't start with '.')
-        const cookieParts = cookieToken.split('.');
-        const isJWT = cookieParts.length === 3 && !cookieToken.startsWith('.');
-
-        if (isJWT) {
-          token = cookieToken;
-          tokenSource = 'cookie';
-        } else {
-          console.warn('⚠️ [Auth] Cookie token is not a JWT (likely Flask session or other format), ignoring:', {
-            cookiePreview: cookieToken.substring(0, 50),
-            partsCount: cookieParts.length,
-            startsWithDot: cookieToken.startsWith('.'),
-            note: 'This backend uses Supabase JWTs, not Flask sessions'
-          });
-        }
-      }
-
+      const token: string | undefined = req.cookies?.['sb-access-token'];
       if (!token) {
-        console.warn('⚠️ [Auth] No token found in request');
+        logger.warn({ context: 'AuthController.getMe' }, 'No token found in request');
         res.status(401).json({ error: 'No session token provided' })
         return
       }
 
-      // Clean the token from any surrounding whitespace
-      token = token.trim();
-
       // Validate token format (JWT should have 3 parts separated by dots)
       const tokenParts = token.split('.');
       if (tokenParts.length !== 3) {
-        console.error('❌ [Auth] Invalid JWT format:', {
-          tokenSource,
+        logger.error({
+          context: 'AuthController.getMe',
           tokenLength: token.length,
           tokenPreview: token.substring(0, 50) + '...',
           partsCount: tokenParts.length,
-          hasCookie: !!req.cookies?.session,
-          hasAuthHeader: !!req.headers.authorization,
-          authHeaderPreview: req.headers.authorization?.substring(0, 50)
-        });
+        }, 'Invalid JWT format');
         res.status(401).json({ error: 'Invalid token format: JWT must have 3 parts', details: `Received ${tokenParts.length} parts, expected 3` })
         return
       }
@@ -204,9 +159,15 @@ export class AuthController {
     _req: Request,
     res: Response
   ): Promise<void> {
+    res.clearCookie('sb-access-token', {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      path: '/',
+    });
     res.clearCookie('session');
     await this.authUseCase.logout();
-    console.log('logged out')
+    logger.info({ context: 'AuthController.logout' }, 'Logged out');
     res.json({ message: 'Logged out successfully' });
   }
 
@@ -271,7 +232,7 @@ export class AuthController {
     res: Response
   ): Promise<void> {
     try {
-      console.log('starting google auth');
+      logger.info({ context: 'AuthController.googleAuth' }, 'Starting google auth');
       const redirectTo = `${process.env.FRONTEND_URL}/auth/callback`;
       const url = await this.authUseCase.googleAuth(redirectTo);
       res.json({ url });
@@ -295,13 +256,13 @@ export class AuthController {
     res: Response
   ): Promise<void> {
     try {
-      console.log('OAuth callback received:', req.query);
+      logger.info({ context: 'AuthController.handleOAuthCallback', query: req.query }, 'OAuth callback received');
       const code = req.query.code as string;
 
       // call useCase to retrieve current session and user
       const data = await this.authUseCase.handleOAuthCallback(code);
       // create our cookie
-      console.log("creating cookie");
+      logger.info({ context: 'AuthController.handleOAuthCallback' }, 'Creating session cookie');
       res.cookie('session', data.session.access_token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -349,7 +310,7 @@ export class AuthController {
 
       res.json({ success: true , user: user.toJSON()});
     } catch (handleTokenError) {
-      console.log(handleTokenError);
+      logger.error({ err: handleTokenError, context: 'AuthController.handleToken' }, 'Handle token failed');
       // const error = this.handleError(handleTokenError, res);
       // res.status(error.status).json({ error: error.message})
     }
@@ -444,7 +405,7 @@ export class AuthController {
     error: Error,
     res: Response
   ): { status: number, message: string } {
-    console.error('Error:', error.message);
+    logger.error({ err: error, context: 'AuthController.handleError' }, 'Error handling request');
 
     if (error instanceof ValidationError) {
       return { status: 400, message: error.message};

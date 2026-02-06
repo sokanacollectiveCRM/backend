@@ -1,9 +1,12 @@
+import 'dotenv/config';
+
 import cors from 'cors';
-import dotenv from 'dotenv';
 import express, { Express, NextFunction, Request, Response } from 'express';
 
 import cookieParser from 'cookie-parser';
+import pinoHttp from 'pino-http';
 
+import { logger } from './common/utils/logger';
 import emailRoutes from './routes/EmailRoutes';
 import authRoutes from './routes/authRoutes';
 import adminRoutes from './routes/adminRoutes';
@@ -21,8 +24,6 @@ import requestRouter from './routes/requestRoute';
 import signNowRoutes from './routes/signNowRoutes';
 import userRoutes from './routes/specificUserRoutes';
 import stripePaymentRoutes from './routes/stripePaymentRoutes';
-
-dotenv.config();
 
 const app: Express = express();
 
@@ -69,6 +70,40 @@ app.use(cookieParser());
 app.use('/api/stripe', asMiddleware(stripePaymentRoutes));
 
 app.use(express.json());
+
+const httpLogger = pinoHttp({
+  logger,
+  redact: {
+    paths: [
+      'req.headers.cookie',
+      'req.headers.authorization',
+      'req.body.email',
+      'req.body.password',
+      'req.body.address',
+      'req.body.ssn',
+      'req.body.phone',
+      'req.body.health_history',
+      'req.body.dob',
+      'req.body.*.email',
+      'req.body.*.*.email',
+    ],
+    censor: '[PHI_REDACTED]',
+  },
+  serializers: {
+    req(req) {
+      return {
+        method: req.method,
+        url: req.url,
+        headers: req.headers,
+        body: req.body,
+      };
+    },
+    res(res) {
+      return { statusCode: res.statusCode };
+    },
+  },
+});
+app.use(httpLogger);
 
 // normalize duplicate slashes
 app.use((req, _res, next) => {
