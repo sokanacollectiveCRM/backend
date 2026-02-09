@@ -69,9 +69,10 @@ export class ClientController {
           })
         );
 
-        // Production: assert no PHI in list response; strip and log if any present
+        // Production: strip PHI by default; enrich for admin and assigned doulas only
         let safeDtos = dtos as Record<string, any>[];
         if (IS_PRODUCTION) {
+          // Strip first (removes any PHI that may have come from entity)
           const allPhiKeys: string[] = [];
           safeDtos = dtos.map((d) => {
             const { stripped, hadPhi, phiKeysFound } = stripPhiAndDetect(d as Record<string, any>);
@@ -85,10 +86,51 @@ export class ClientController {
               '[Client] SECURITY: PHI keys found in list response; stripped (values not logged)'
             );
           }
+
+          // Enrich with PHI for admin and assigned doulas (first_name, last_name, email)
+          const { canAccessSensitive } = await import('../utils/sensitiveAccess');
+          const { fetchClientPhi } = await import('../services/phiBrokerService');
+          const firstId = safeDtos[0]?.id as string | undefined;
+          const accessCheck = await canAccessSensitive(req.user!, firstId || '');
+          const requester = {
+            role: req.user?.role || '',
+            userId: req.user?.id || '',
+            assignedClientIds: accessCheck.assignedClientIds,
+          };
+          const canEnrich =
+            req.user?.role === 'admin' ||
+            (req.user?.role === 'doula' && requester.assignedClientIds.length > 0);
+          if (canEnrich) {
+            const enriched = await Promise.all(
+              safeDtos.map(async (dto) => {
+                const clientId = dto.id as string;
+                const access = await canAccessSensitive(req.user!, clientId);
+                if (!access.canAccess) return dto;
+                try {
+                  const phi = await fetchClientPhi(clientId, {
+                    ...requester,
+                    assignedClientIds: access.assignedClientIds,
+                  });
+                  if (phi.first_name || phi.last_name || phi.email) {
+                    return {
+                      ...dto,
+                      first_name: phi.first_name ?? dto.first_name,
+                      last_name: phi.last_name ?? dto.last_name,
+                      email: phi.email ?? dto.email,
+                    };
+                  }
+                } catch (e) {
+                  logger.warn({ clientId, err: (e as Error)?.message }, '[Client] PHI enrichment skipped for list item');
+                }
+                return dto;
+              })
+            );
+            safeDtos = enriched;
+          }
         }
 
         logger.info({
-          sources: { operational: 'supabase', sensitive: 'none' },
+          sources: { operational: 'supabase', sensitive: IS_PRODUCTION ? 'phiBroker (when authorized)' : 'none' },
           keys: {
             operational: safeDtos.length > 0 ? Object.keys(safeDtos[0]) : [],
           },
