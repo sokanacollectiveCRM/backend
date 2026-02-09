@@ -1,7 +1,7 @@
 import app from './server';
+import { logger } from './common/utils/logger';
+import { PORT, HOST } from './config/env';
 
-const port = Number(process.env.PORT ?? 8080);
-
-app.listen(port, () => {
-  console.log(`Cloud Run listening on ${port}`);
+app.listen(PORT, HOST, () => {
+  logger.info({ port: PORT, host: HOST }, 'Server listening');
 });

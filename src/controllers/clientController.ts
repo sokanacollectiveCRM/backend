@@ -20,8 +20,9 @@ import { ActivityMapper } from '../mappers/ActivityMapper';
 import { ApiResponse } from '../utils/responseBuilder';
 import { canAccessSensitive } from '../utils/sensitiveAccess';
 import { fetchClientPhi, updateClientPhi } from '../services/phiBrokerService';
-import { normalizeClientPatch, splitClientPatch } from '../constants/phiFields';
+import { normalizeClientPatch, splitClientPatch, stripPhiAndDetect } from '../constants/phiFields';
 import { logger } from '../common/utils/logger';
+import { IS_PRODUCTION } from '../config/env';
 
 export class ClientController {
   private clientUseCase: ClientUseCase;
@@ -68,16 +69,33 @@ export class ClientController {
           })
         );
 
-        // Source-of-truth instrumentation
+        // Production: assert no PHI in list response; strip and log if any present
+        let safeDtos = dtos as Record<string, any>[];
+        if (IS_PRODUCTION) {
+          const allPhiKeys: string[] = [];
+          safeDtos = dtos.map((d) => {
+            const { stripped, hadPhi, phiKeysFound } = stripPhiAndDetect(d as Record<string, any>);
+            if (hadPhi) allPhiKeys.push(...phiKeysFound);
+            return stripped;
+          });
+          if (allPhiKeys.length > 0) {
+            const uniqueKeys = [...new Set(allPhiKeys)];
+            logger.warn(
+              { phi_keys_stripped: uniqueKeys, count: dtos.length },
+              '[Client] SECURITY: PHI keys found in list response; stripped (values not logged)'
+            );
+          }
+        }
+
         logger.info({
           sources: { operational: 'supabase', sensitive: 'none' },
           keys: {
-            operational: dtos.length > 0 ? Object.keys(dtos[0]) : [],
+            operational: safeDtos.length > 0 ? Object.keys(safeDtos[0]) : [],
           },
-          count: dtos.length,
+          count: safeDtos.length,
         }, '[Client] list response composition');
 
-        res.json(ApiResponse.list(dtos, dtos.length));
+        res.json(ApiResponse.list(safeDtos, safeDtos.length));
         return;
       }
 
@@ -85,7 +103,7 @@ export class ClientController {
       // Note: Avoid logging client data - HIPAA compliance
 
       // Compute eligibility for each client and add to response
-      const clientsWithEligibility = await Promise.all(
+      let clientsWithEligibility = await Promise.all(
         clients.map(async (client) => {
           const clientJson = client.toJson() as any;
           try {
@@ -93,12 +111,29 @@ export class ClientController {
             clientJson.is_eligible = eligibility.eligible;
           } catch (error) {
             // If eligibility check fails, default to false
-            console.error(`Error checking eligibility for client ${client.id}:`, error);
+            logger.error({ err: error, clientId: client.id }, 'Error checking eligibility for client');
             clientJson.is_eligible = false;
           }
           return clientJson;
         })
       );
+
+      // Production: strip any PHI from list response
+      if (IS_PRODUCTION) {
+        const allPhiKeys: string[] = [];
+        clientsWithEligibility = clientsWithEligibility.map((row) => {
+          const { stripped, hadPhi, phiKeysFound } = stripPhiAndDetect(row);
+          if (hadPhi) allPhiKeys.push(...phiKeysFound);
+          return stripped;
+        });
+        if (allPhiKeys.length > 0) {
+          const uniqueKeys = [...new Set(allPhiKeys)];
+          logger.warn(
+            { phi_keys_stripped: uniqueKeys, count: clientsWithEligibility.length },
+            '[Client] SECURITY: PHI keys found in list response; stripped (values not logged)'
+          );
+        }
+      }
 
       res.json(clientsWithEligibility);
     } catch (getError) {
