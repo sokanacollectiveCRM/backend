@@ -5,6 +5,25 @@ import { Client } from '../entities/Client';
 import { User } from '../entities/User';
 import { ROLE } from '../types';
 
+/**
+ * Allowed client_info columns for update. Unknown keys in the payload are dropped
+ * so schema cache / missing column errors are avoided.
+ */
+const ALLOWED_CLIENT_INFO_UPDATE_COLUMNS = new Set([
+  'first_name', 'last_name', 'email', 'role', 'phone_number', 'status', 'service_needed',
+  'children_expected', 'pronouns', 'health_history', 'allergies', 'due_date', 'hospital',
+  'annual_income', 'service_specifics', 'preferred_contact_method', 'preferred_name',
+  'payment_method', 'home_type', 'services_interested', 'health_notes', 'baby_sex',
+  'baby_name', 'birth_hospital', 'birth_location', 'number_of_babies', 'provider_type',
+  'pregnancy_number', 'had_previous_pregnancies', 'previous_pregnancies_count',
+  'living_children_count', 'past_pregnancy_experience', 'service_support_details',
+  'race_ethnicity', 'primary_language', 'client_age_range', 'insurance', 'demographics_multi',
+  'pronouns_other', 'home_phone', 'home_access', 'pets', 'relationship_status',
+  'middle_name', 'mobile_phone', 'work_phone', 'referral_source', 'referral_name',
+  'referral_email', 'address', 'city', 'state', 'country', 'zip_code', 'profile_picture',
+  'account_status', 'business', 'bio',
+]);
+
 export class SupabaseClientRepository  {
   private supabaseClient: SupabaseClient;
 
@@ -379,6 +398,20 @@ export class SupabaseClientRepository  {
     if (fieldsToUpdate.business !== undefined) updateData.business = fieldsToUpdate.business;
     if (fieldsToUpdate.bio !== undefined) updateData.bio = fieldsToUpdate.bio;
 
+    // Whitelist: only send known client_info columns so unknown/extra keys never break the update
+    const keysBefore = Object.keys(updateData);
+    const sanitized: Record<string, unknown> = {};
+    for (const key of keysBefore) {
+      if (ALLOWED_CLIENT_INFO_UPDATE_COLUMNS.has(key)) {
+        sanitized[key] = updateData[key];
+      }
+    }
+    const dropped = keysBefore.filter((k) => !ALLOWED_CLIENT_INFO_UPDATE_COLUMNS.has(k));
+    if (dropped.length > 0) {
+      console.warn('[SupabaseClientRepository] Dropped unknown update keys (not in client_info whitelist):', dropped);
+    }
+    const updatePayload = Object.keys(sanitized).length > 0 ? sanitized : null;
+
     // Check if client exists first
     const { data: existingClient, error: checkError } = await this.supabaseClient
       .from('client_info')
@@ -394,14 +427,15 @@ export class SupabaseClientRepository  {
       throw new Error(`Client not found with ID: ${clientId}`);
     }
 
-    // Perform the update
-    const { data: updateResult, error: updateError } = await this.supabaseClient
-      .from('client_info')
-      .update(updateData)
-      .eq('id', clientId);
+    if (updatePayload !== null) {
+      const { error: updateError } = await this.supabaseClient
+        .from('client_info')
+        .update(updatePayload)
+        .eq('id', clientId);
 
-    if (updateError) {
-      throw new Error(`Failed to update client: ${updateError.message}`);
+      if (updateError) {
+        throw new Error(`Failed to update client: ${updateError.message}`);
+      }
     }
 
     // Fetch the updated client data

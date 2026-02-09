@@ -344,7 +344,6 @@ export class ClientController {
     console.log('📝 Controller: Frontend sent these fields to update:', {
       clientId: id,
       updateDataKeys: Object.keys(updateData),
-      updateDataValues: updateData,
       updateDataCount: Object.keys(updateData).length
     });
 
@@ -470,8 +469,7 @@ export class ClientController {
 
       console.log('📤 Controller: Response being sent to frontend:', {
         responseKeys: Object.keys(responseData.client),
-        responseKeyCount: Object.keys(responseData.client).length,
-        responseData: responseData
+        responseKeyCount: Object.keys(responseData.client).length
       });
 
       // Check if important fields are missing from response

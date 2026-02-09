@@ -100,13 +100,17 @@ export function verifySignature(req: Request, res: Response, next: NextFunction)
 
 /**
  * Express body parser verify callback — captures raw body for signature verification.
- * Use with express.json({ verify: captureRawBody })
+ * Use with express.json({ verify: captureRawBody }). Never throws.
  */
 export function captureRawBody(
   req: Request,
   _res: Response,
-  buf: Buffer,
-  encoding: BufferEncoding
+  buf: Buffer | undefined,
+  encoding?: BufferEncoding
 ): void {
-  (req as any).rawBody = buf.toString(encoding || 'utf8');
+  try {
+    (req as any).rawBody = buf && Buffer.isBuffer(buf) ? buf.toString(encoding || 'utf8') : '';
+  } catch {
+    (req as any).rawBody = '';
+  }
 }

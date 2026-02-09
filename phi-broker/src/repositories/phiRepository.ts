@@ -30,14 +30,19 @@ export interface PhiData {
   medications?: string;
 }
 
+export interface GetPhiResult {
+  data: PhiData;
+  found: boolean;
+}
+
 /**
  * Fetch PHI data for a client from the phi_clients table.
  * Date columns converted to ISO strings in SQL (date::text).
  *
  * @param clientId - The client UUID
- * @returns PhiData with only non-null fields present
+ * @returns GetPhiResult with data and found flag (found false when 0 rows)
  */
-export async function getPhiByClientId(clientId: string): Promise<PhiData> {
+export async function getPhiByClientId(clientId: string): Promise<GetPhiResult> {
   const pool = getPool();
 
   const { rows } = await pool.query<{
@@ -70,7 +75,9 @@ export async function getPhiByClientId(clientId: string): Promise<PhiData> {
   );
 
   const row = rows[0];
-  if (!row) return {};
+  if (!row) {
+    return { data: {}, found: false };
+  }
 
   const result: PhiData = {};
   if (row.first_name !== null) result.first_name = row.first_name;
@@ -84,5 +91,5 @@ export async function getPhiByClientId(clientId: string): Promise<PhiData> {
   if (row.allergies !== null) result.allergies = row.allergies;
   if (row.medications !== null) result.medications = row.medications;
 
-  return result;
+  return { data: result, found: true };
 }

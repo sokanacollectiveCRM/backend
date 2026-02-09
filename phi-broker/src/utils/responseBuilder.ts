@@ -11,6 +11,7 @@ export interface ApiErrorResponse {
   success: false;
   error: string;
   code?: string;
+  request_id?: string;
 }
 
 export type ApiResponse<T> = ApiSuccessResponse<T> | ApiErrorResponse;
@@ -29,11 +30,12 @@ export class ResponseBuilder {
   /**
    * Creates an error response.
    */
-  static error(message: string, code?: string): ApiErrorResponse {
+  static error(message: string, code?: string, requestId?: string): ApiErrorResponse {
     return {
       success: false,
       error: message,
       ...(code && { code }),
+      ...(requestId && { request_id: requestId }),
     };
   }
 }
