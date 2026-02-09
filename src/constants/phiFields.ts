@@ -204,3 +204,21 @@ export function stripPhiFromOperational(row: Record<string, any>): Record<string
   }
   return clone;
 }
+
+/**
+ * Strip PHI from a row and return both the clean object and whether any PHI was present.
+ * Use for response-level assert: if hadPhi, log security warning (never log values).
+ */
+export function stripPhiAndDetect(
+  row: Record<string, any>
+): { stripped: Record<string, any>; hadPhi: boolean; phiKeysFound: string[] } {
+  const phiKeysFound: string[] = [];
+  for (const k of PHI_FIELDS) {
+    if (k in row && row[k] !== undefined) phiKeysFound.push(k);
+  }
+  return {
+    stripped: stripPhiFromOperational(row),
+    hadPhi: phiKeysFound.length > 0,
+    phiKeysFound,
+  };
+}

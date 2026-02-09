@@ -1,18 +1,13 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { requireEnv, optionalEnv } from './utils/env';
+import { supabase as supabaseConfig } from './config/env';
 
 let supabaseClient: SupabaseClient | null = null;
 
 function initSupabase(): SupabaseClient {
   if (supabaseClient) return supabaseClient;
 
-  const supabaseUrl = optionalEnv('SUPABASE_URL');
-  const supabaseKey = optionalEnv('SUPABASE_SERVICE_ROLE_KEY');
-
-  if (!supabaseUrl || !supabaseKey) {
-    // Defer hard failure to first use
-    throw new Error('Missing Supabase environment variables');
-  }
+  const supabaseUrl = supabaseConfig.url;
+  const supabaseKey = supabaseConfig.serviceRoleKey;
 
   supabaseClient = createClient(supabaseUrl, supabaseKey, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },

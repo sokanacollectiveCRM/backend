@@ -1,12 +1,21 @@
 import express, { Request, Response } from 'express';
 import { getStripe } from '../config/stripe';
+import { stripe as stripeConfig } from '../config/env';
 import { ContractClientService } from '../services/contractClientService';
 import { StripePaymentService } from '../services/stripePaymentService';
 import supabase from '../supabase';
 
 const router = express.Router();
-const stripeService = new StripePaymentService();
-const contractService = new ContractClientService();
+let _stripeService: StripePaymentService | null = null;
+let _contractService: ContractClientService | null = null;
+function getStripeService(): StripePaymentService {
+  if (!_stripeService) _stripeService = new StripePaymentService();
+  return _stripeService;
+}
+function getContractService(): ContractClientService {
+  if (!_contractService) _contractService = new ContractClientService();
+  return _contractService;
+}
 
 // Create payment intent for next payment after contract signing
 router.post('/contract/:contractId/create-payment', async (req: Request, res: Response): Promise<void> => {
@@ -34,7 +43,7 @@ router.post('/contract/:contractId/create-payment', async (req: Request, res: Re
     }
 
     // Create payment intent for next payment
-    const paymentResult = await stripeService.createNextPaymentIntent(contractId);
+    const paymentResult = await getStripeService().createNextPaymentIntent(contractId);
 
     if (!paymentResult) {
       res.status(400).json({
@@ -70,7 +79,7 @@ router.post('/contract/:contractId/payment/:paymentId/create', async (req: Reque
       res.status(400).json({ success: false, error: 'Amount is required' });
     }
 
-    const paymentResult = await stripeService.createPaymentIntent({
+    const paymentResult = await getStripeService().createPaymentIntent({
       contract_id: contractId,
       payment_id: paymentId,
       amount: Math.round(amount * 100), // Convert dollars to cents
@@ -99,7 +108,7 @@ router.post('/contract/:contractId/payment/:paymentId/create', async (req: Reque
 router.post('/webhook', express.raw({type: 'application/json'}), async (req: Request, res: Response): Promise<void> => {
   try {
     const signature = req.headers['stripe-signature'] as string;
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    const webhookSecret = stripeConfig.webhookSecret;
 
     if (!webhookSecret) {
       console.error('❌ STRIPE_WEBHOOK_SECRET not configured');
@@ -110,10 +119,10 @@ router.post('/webhook', express.raw({type: 'application/json'}), async (req: Req
     const body = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body));
 
     // Verify webhook signature
-    const event = stripeService.verifyWebhookSignature(body, signature, webhookSecret);
+    const event = getStripeService().verifyWebhookSignature(body, signature, webhookSecret);
 
     // Handle the webhook event
-    await stripeService.handlePaymentWebhook(event);
+    await getStripeService().handlePaymentWebhook(event);
 
     res.json({ success: true, message: 'Webhook processed successfully' });
 
@@ -152,7 +161,7 @@ router.get('/contract/:contractId/next-payment', async (req: Request, res: Respo
   try {
     const { contractId } = req.params;
 
-    const nextPayment = await stripeService.getNextPayment(contractId);
+    const nextPayment = await getStripeService().getNextPayment(contractId);
 
     if (!nextPayment) {
       res.json({ success: true, data: null, message: 'No pending payments' });
@@ -171,7 +180,7 @@ router.get('/contract/:contractId/payment-summary', async (req: Request, res: Re
   try {
     const { contractId } = req.params;
 
-    const summary = await contractService.getContractPaymentSummary(contractId);
+    const summary = await getContractService().getContractPaymentSummary(contractId);
 
     res.json({ success: true, data: summary });
 

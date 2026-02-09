@@ -17,6 +17,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080
 
+EXPOSE 8080
+
 # Copy only runtime necessities
 COPY --from=build /app/package.json /app/package-lock.json* ./
 COPY --from=build /app/node_modules ./node_modules

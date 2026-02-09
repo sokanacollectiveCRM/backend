@@ -12,6 +12,8 @@ const redactPaths = [
   'health_history',
   'dob',
   '*.email',
+  'session_token',
+  '*.session_token',
 ];
 
 const baseOptions: pino.LoggerOptions = {

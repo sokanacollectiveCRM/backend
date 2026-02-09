@@ -7,6 +7,7 @@ import {
   NotFoundError,
   ValidationError
 } from '../domains/errors';
+import { getSessionToken } from '../middleware/authMiddleware';
 import supabase from '../supabase';
 import {
   AuthRequest,
@@ -94,11 +95,14 @@ export class AuthController {
   //
   async getMe(req: Request, res: Response): Promise<void> {
     try {
-      const token: string | undefined = req.cookies?.['sb-access-token'];
+      const token = getSessionToken(req as any);
       if (!token) {
         logger.warn({ context: 'AuthController.getMe' }, 'No token found in request');
-        res.status(401).json({ error: 'No session token provided' })
-        return
+        res.status(401).json({
+          error: 'No session token provided',
+          hint: 'Provide Cookie or X-Session-Token header'
+        });
+        return;
       }
 
       // Validate token format (JWT should have 3 parts separated by dots)
