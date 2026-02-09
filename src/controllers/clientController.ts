@@ -20,7 +20,7 @@ import { ActivityMapper } from '../mappers/ActivityMapper';
 import { ApiResponse } from '../utils/responseBuilder';
 import { canAccessSensitive } from '../utils/sensitiveAccess';
 import { fetchClientPhi, updateClientPhi } from '../services/phiBrokerService';
-import { splitClientPatch } from '../constants/phiFields';
+import { normalizeClientPatch, splitClientPatch } from '../constants/phiFields';
 import { logger } from '../common/utils/logger';
 
 export class ClientController {
@@ -373,8 +373,11 @@ export class ClientController {
     }
 
     try {
+      // ── Step 0: Normalize field names (camelCase/nested → canonical snake_case) ──
+      const normalized = normalizeClientPatch(updateData);
+
       // ── Step 1: Split payload into operational (Supabase) vs PHI (broker) ──
-      const { operational, phi } = splitClientPatch(updateData);
+      const { operational, phi } = splitClientPatch(normalized);
 
       logger.info({
         clientId: id,

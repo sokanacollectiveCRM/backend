@@ -83,6 +83,13 @@ clientRoutes.put('/:id',
   (req, res) => clientController.updateClient(req, res)
 );
 
+// PATCH alias — same handler, proper REST semantics for partial updates
+clientRoutes.patch('/:id',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
+  (req, res) => clientController.updateClient(req, res)
+);
+
 // Activity/Notes routes
 clientRoutes.get('/:id/activities',
   authMiddleware,
