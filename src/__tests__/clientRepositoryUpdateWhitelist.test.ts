@@ -10,7 +10,14 @@ const mockEq = jest.fn().mockReturnThis();
 const mockSelect = jest.fn().mockReturnThis();
 const mockSingle = jest.fn();
 
-const mockFrom = jest.fn(() => ({
+type FromChain = {
+  select: ReturnType<typeof jest.fn>;
+  update: ReturnType<typeof jest.fn>;
+  eq: ReturnType<typeof jest.fn>;
+  single: ReturnType<typeof jest.fn>;
+};
+
+const mockFrom = jest.fn<FromChain, [table: string]>(() => ({
   select: mockSelect,
   update: mockUpdate,
   eq: mockEq,
@@ -37,11 +44,12 @@ describe('SupabaseClientRepository.updateClient whitelist', () => {
     mockUpdate.mockReturnValue({
       eq: jest.fn().mockResolvedValue({ data: null, error: null }),
     });
-    mockFrom.mockImplementation((table: string) => {
+    mockFrom.mockImplementation((table: string): FromChain => {
       if (table === 'client_info') {
+        const mockEqInner = jest.fn().mockReturnThis();
         return {
           select: jest.fn().mockReturnValue({
-            eq: jest.fn().mockReturnValue({
+            eq: mockEqInner.mockReturnValue({
               maybeSingle: jest.fn().mockResolvedValue({
                 data: { id: 'client-1', first_name: 'Jane', last_name: 'Doe', phone_number: null },
                 error: null,
@@ -51,13 +59,16 @@ describe('SupabaseClientRepository.updateClient whitelist', () => {
           update: jest.fn().mockReturnValue({
             eq: jest.fn().mockResolvedValue({ data: null, error: null }),
           }),
+          eq: mockEqInner,
+          single: jest.fn().mockResolvedValue({ data: null, error: null }),
         };
       }
       return { select: mockSelect, update: mockUpdate, eq: mockEq, single: mockSingle };
     });
 
-    const chain = {
+    const chain: FromChain = {
       select: jest.fn().mockReturnThis(),
+      update: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
       single: jest.fn().mockResolvedValue({
         data: {
@@ -87,6 +98,7 @@ describe('SupabaseClientRepository.updateClient whitelist', () => {
           data: { id: 'client-1', first_name: 'Updated', last_name: 'Doe', user_id: null, users: null },
           error: null,
         }),
+        update: jest.fn().mockReturnValue({ eq: jest.fn().mockResolvedValue({ data: null, error: null }) }),
       };
       if (table === 'client_info') {
         return {
@@ -124,6 +136,7 @@ describe('SupabaseClientRepository.updateClient whitelist', () => {
           data: { id: 'client-1', first_name: 'Jane', last_name: 'Doe', city: 'NYC', user_id: null, users: null },
           error: null,
         }),
+        update: jest.fn().mockReturnValue({ eq: jest.fn().mockResolvedValue({ data: null, error: null }) }),
       };
       if (table === 'client_info') {
         return {
