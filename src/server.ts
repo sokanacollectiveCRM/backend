@@ -47,7 +47,7 @@ const corsOptions = {
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Token'],
-  credentials: !IS_PRODUCTION,
+  credentials: true, // Required for cookie (sb-access-token) and Bearer auth cross-origin
   maxAge: 86400,
 };
 

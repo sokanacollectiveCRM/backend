@@ -70,10 +70,11 @@ export class AuthController {
       const { email, password } = req.body;
       // call useCase to grab the user and token
       const result = await this.authUseCase.login(email, password);
+      const isProd = process.env.NODE_ENV === 'production';
       res.cookie('sb-access-token', result.token, {
         httpOnly: true,
-        secure: true,
-        sameSite: 'none',
+        secure: isProd, // false for localhost (HTTP), true for prod (HTTPS)
+        sameSite: isProd ? 'none' : 'lax', // 'none' for cross-origin prod; 'lax' for local
         maxAge: 3600000,
         path: '/',
       });
@@ -163,10 +164,11 @@ export class AuthController {
     _req: Request,
     res: Response
   ): Promise<void> {
+    const isProd = process.env.NODE_ENV === 'production';
     res.clearCookie('sb-access-token', {
       httpOnly: true,
-      secure: true,
-      sameSite: 'none',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       path: '/',
     });
     res.clearCookie('session');
