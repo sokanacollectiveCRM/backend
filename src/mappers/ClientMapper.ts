@@ -42,6 +42,7 @@ export class ClientMapper {
       email: user?.email,
       phone_number: entity.phoneNumber || user?.phone_number || user?.mobile_phone,
       status: entity.status,
+      service_needed: entity.serviceNeeded,
       portal_status: entity.portal_status,
       invited_at: undefined, // Will be populated when invite tracking is added
       updated_at: entity.updatedAt?.toISOString(),
