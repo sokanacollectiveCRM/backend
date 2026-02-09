@@ -108,13 +108,70 @@ export const OPERATIONAL_UPDATE_COLUMNS = new Set([
 ]);
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Field-name normalization (frontend → DB column names)
+// ---------------------------------------------------------------------------
+
+/**
+ * Maps legacy / camelCase / aliased frontend field names to canonical
+ * snake_case database column names. Entries not listed here pass through as-is.
+ *
+ * This covers every variant the old updateClient controller handled, including
+ * camelCase (phoneNumber), short (firstname), and alternate snake names.
+ */
+const FIELD_ALIAS_MAP: Record<string, string> = {
+  // Identity
+  firstname: 'first_name',
+  lastname: 'last_name',
+  phoneNumber: 'phone_number',
+
+  // Workflow / operational
+  serviceNeeded: 'service_needed',
+  childrenExpected: 'children_expected',
+};
+
+/**
+ * Normalize a client update payload from the frontend into canonical
+ * snake_case column names. Handles:
+ * - camelCase aliases (phoneNumber → phone_number)
+ * - Short names (firstname → first_name)
+ * - Nested `user` object (user.firstname → first_name)
+ * - Direct snake_case (pass-through)
+ *
+ * Must be called BEFORE splitClientPatch.
+ */
+export function normalizeClientPatch(raw: Record<string, any>): Record<string, any> {
+  const out: Record<string, any> = {};
+
+  // 1) Flatten nested `user` object (frontend sometimes nests profile fields)
+  const userObj = raw.user;
+  if (userObj && typeof userObj === 'object' && !Array.isArray(userObj)) {
+    for (const [k, v] of Object.entries(userObj)) {
+      if (v === undefined) continue;
+      const canonical = FIELD_ALIAS_MAP[k] ?? k;
+      out[canonical] = v;
+    }
+  }
+
+  // 2) Process top-level fields (overwrite nested if both present — top-level wins)
+  for (const [k, v] of Object.entries(raw)) {
+    if (k === 'user') continue; // already handled
+    if (v === undefined) continue;
+    const canonical = FIELD_ALIAS_MAP[k] ?? k;
+    out[canonical] = v;
+  }
+
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Split helpers
 // ---------------------------------------------------------------------------
 
 /**
  * Split a client update payload into operational (Supabase) and PHI (broker) parts.
+ * Input MUST already be normalized (canonical snake_case column names).
  *
- * @param input - Flat key-value patch from the request body
+ * @param input - Normalized flat key-value patch
  * @returns { operational, phi } — two disjoint objects
  */
 export function splitClientPatch(input: Record<string, any>): {
