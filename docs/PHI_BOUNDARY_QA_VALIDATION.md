@@ -105,6 +105,19 @@ In **Vercel** → Project → **Settings** → **Environment Variables** (prod):
 
 ---
 
+## Interpreting [PHI] debug logs (Vercel backend)
+
+After deploy, `GET /clients/:id` with admin auth logs keys-only `[PHI]` lines. Use them to fix why PHI is missing:
+
+| Case | What you see | Fix |
+|------|----------------|-----|
+| **A** | `canAccessSensitive` shows `canAccess: false` | Backend doesn’t treat you as admin. Verify `req.user` is set for cookie auth; verify `req.user.role` is `"admin"` (not `"authenticated"` or missing). If role is in Supabase `user_metadata.role`, ensure auth middleware reads it and doesn’t overwrite it. |
+| **B** | `canAccess: true` but `hasBrokerUrl: false` or `hasBrokerSecret: false` | Broker call is disabled by missing env. In Vercel (Production + Preview): set `PHI_BROKER_URL=https://sokana-phi-broker-634744984887.us-central1.run.app` and `PHI_BROKER_SHARED_SECRET=<same as Cloud Run>`. Redeploy. |
+| **C** | `canAccess: true`, env present, but `broker keys: []` | Backend calls broker but gets empty object. Check: role sent to broker is exactly `"admin"` (case-sensitive); for doulas, `assignedClientIds` is populated. |
+| **D** | `[PHI] broker error` and 502 | Vercel can’t reach broker or signature mismatch: wrong `PHI_BROKER_SHARED_SECRET`, wrong `PHI_BROKER_URL`, or large clock skew (timestamp window). |
+
+---
+
 ## Pass criteria (summary)
 
 | # | Check | Pass condition |

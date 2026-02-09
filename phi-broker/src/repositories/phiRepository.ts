@@ -1,10 +1,11 @@
 /**
- * PHI Repository - Read-only access to sensitive client data
+ * PHI Repository - Access to sensitive client data in Cloud SQL (sokana-private)
  *
  * HIPAA COMPLIANCE:
  * - Uses explicit column SELECTs (never SELECT *)
  * - PHI values are NEVER logged
  * - Returns undefined for missing fields (to enable omission in response)
+ * - Updates use parameterized queries and column allowlist
  *
  * Schema: Table public.phi_clients with columns:
  * client_id (FK), first_name, last_name, email, phone, date_of_birth, address_line1,
@@ -92,4 +93,77 @@ export async function getPhiByClientId(clientId: string): Promise<GetPhiResult> 
   if (row.medications !== null) result.medications = row.medications;
 
   return { data: result, found: true };
+}
+
+// ---------------------------------------------------------------------------
+// UPDATE
+// ---------------------------------------------------------------------------
+
+/**
+ * Maps API field names → phi_clients column names.
+ * Only keys present here are allowed in UPDATE statements.
+ * Note: API uses "phone_number" but the DB column is "phone".
+ */
+const PHI_WRITE_COLUMN_MAP: Record<string, string> = {
+  first_name: 'first_name',
+  last_name: 'last_name',
+  email: 'email',
+  phone_number: 'phone',           // API name → DB column name
+  date_of_birth: 'date_of_birth',
+  address_line1: 'address_line1',
+  due_date: 'due_date',
+  health_history: 'health_history',
+  allergies: 'allergies',
+  medications: 'medications',
+};
+
+/** Allowed API-level field names for PHI writes. */
+export const ALLOWED_PHI_WRITE_KEYS = new Set(Object.keys(PHI_WRITE_COLUMN_MAP));
+
+export interface UpdatePhiResult {
+  updated: boolean;
+  updated_keys: string[];
+}
+
+/**
+ * Update PHI fields for a client in the phi_clients table.
+ *
+ * - Only columns in PHI_WRITE_COLUMN_MAP are written; unknown keys are silently skipped.
+ * - Uses parameterized queries ($1, $2, …) — no interpolation.
+ * - Sets updated_at = NOW() on every write.
+ *
+ * @param clientId - The client UUID (matches phi_clients.client_id)
+ * @param fields   - Object with API field names as keys (e.g. { first_name: "X" })
+ * @returns { updated: true/false, updated_keys: string[] }
+ */
+export async function updatePhiByClientId(
+  clientId: string,
+  fields: Record<string, any>
+): Promise<UpdatePhiResult> {
+  const pool = getPool();
+
+  // Map API field names → DB column names, dropping unknown or undefined keys
+  const entries: Array<{ apiKey: string; dbCol: string; value: any }> = [];
+  for (const [apiKey, value] of Object.entries(fields)) {
+    const dbCol = PHI_WRITE_COLUMN_MAP[apiKey];
+    if (dbCol && value !== undefined) {
+      entries.push({ apiKey, dbCol, value });
+    }
+  }
+
+  if (entries.length === 0) {
+    return { updated: false, updated_keys: [] };
+  }
+
+  // Build parameterized SET clause: $1 = clientId, $2.. = field values
+  const setClauses = entries.map((e, i) => `"${e.dbCol}" = $${i + 2}`);
+  const sql = `UPDATE phi_clients SET ${setClauses.join(', ')}, updated_at = NOW() WHERE client_id = $1`;
+  const params = [clientId, ...entries.map(e => e.value)];
+
+  const result = await pool.query(sql, params);
+
+  return {
+    updated: (result.rowCount ?? 0) > 0,
+    updated_keys: entries.map(e => e.apiKey),
+  };
 }

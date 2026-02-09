@@ -136,9 +136,7 @@ export class SupabaseAssignmentRepository {
           id,
           firstname,
           lastname,
-          email,
-          profile_picture,
-          bio
+          email
         )
       `)
       .eq('client_id', clientId)
@@ -160,8 +158,8 @@ export class SupabaseAssignmentRepository {
           firstname: userRow?.firstname,
           lastname: userRow?.lastname,
           email: userRow?.email,
-          profile_picture: userRow?.profile_picture,
-          bio: userRow?.bio
+          profile_picture: undefined, // column may not exist in users table
+          bio: undefined,
         }
       };
     });

@@ -18,7 +18,7 @@ import { config } from 'dotenv';
 config();
 
 import { verifySignature, captureRawBody } from './auth/verifySignature';
-import { getClientPhi } from './controllers/phiController';
+import { getClientPhi, updateClientPhi } from './controllers/phiController';
 import { testConnection, closePool } from './db/pool';
 import { ResponseBuilder } from './utils/responseBuilder';
 
@@ -66,6 +66,24 @@ function phiClientHandler(req: Request, res: Response, next: NextFunction): void
   });
 }
 app.post('/v1/phi/client', verifySignature, phiClientHandler);
+
+// PHI update endpoint — same HMAC verification, admin-only authorization
+function phiUpdateHandler(req: Request, res: Response, next: NextFunction): void {
+  Promise.resolve(updateClientPhi(req, res)).catch((err: unknown) => {
+    const reqWithId = req as Request & { requestId?: string };
+    const requestId = reqWithId.requestId;
+    console.error('[Server] Unhandled error in PHI update handler', {
+      request_id: requestId,
+      error_name: err instanceof Error ? err.name : 'Unknown',
+      error_message: err instanceof Error ? err.message : String(err),
+    });
+    if (!res.headersSent) {
+      res.status(500).json(ResponseBuilder.error('Internal server error', 'INTERNAL_ERROR', requestId));
+    }
+    next();
+  });
+}
+app.post('/v1/phi/client/update', verifySignature, phiUpdateHandler);
 
 // 404 handler
 app.use((_req: Request, res: Response) => {
