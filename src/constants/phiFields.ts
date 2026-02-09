@@ -193,31 +193,82 @@ export function splitClientPatch(input: Record<string, any>): {
   return { operational, phi };
 }
 
-/**
- * Defensive strip: remove any PHI fields from a row.
- * Use on data coming from Supabase before returning on list/operational-only endpoints.
- */
-export function stripPhiFromOperational(row: Record<string, any>): Record<string, any> {
-  const clone = { ...row };
-  for (const k of PHI_FIELDS) {
-    delete clone[k];
-  }
-  return clone;
+/** Keys to strip (PHI + camelCase variants used in legacy nested objects) */
+const PHI_STRIP_KEYS = new Set([
+  ...PHI_FIELDS,
+  'firstname',
+  'lastname',
+  'phoneNumber',
+  'healthHistory',
+  'healthNotes',
+  'dueDate',
+  'dateOfBirth',
+  'addressLine1',
+  'fullName', // derived from first_name + last_name
+]);
+
+function shouldStripKey(key: string): boolean {
+  return PHI_STRIP_KEYS.has(key);
 }
 
 /**
- * Strip PHI from a row and return both the clean object and whether any PHI was present.
+ * Recursively strip PHI from a value (object, array, or primitive).
+ * Strips at every nesting level (e.g. user.health_history, user.email).
+ */
+function stripPhiRecursive(value: unknown): { result: unknown; phiKeysFound: string[] } {
+  const phiKeysFound: string[] = [];
+
+  if (value === null || value === undefined) {
+    return { result: value, phiKeysFound };
+  }
+
+  if (Array.isArray(value)) {
+    const results: unknown[] = [];
+    for (const item of value) {
+      const { result, phiKeysFound: found } = stripPhiRecursive(item);
+      results.push(result);
+      phiKeysFound.push(...found);
+    }
+    return { result: results, phiKeysFound };
+  }
+
+  if (typeof value === 'object' && value !== null) {
+    const obj = value as Record<string, unknown>;
+    const stripped: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (shouldStripKey(k)) {
+        phiKeysFound.push(k);
+        continue;
+      }
+      const { result, phiKeysFound: found } = stripPhiRecursive(v);
+      stripped[k] = result;
+      phiKeysFound.push(...found);
+    }
+    return { result: stripped, phiKeysFound };
+  }
+
+  return { result: value, phiKeysFound };
+}
+
+/**
+ * Defensive strip: remove any PHI fields from a row (recursively for nested objects).
+ * Use on data coming from Supabase before returning on list/operational-only endpoints.
+ */
+export function stripPhiFromOperational(row: Record<string, any>): Record<string, any> {
+  const { result } = stripPhiRecursive(row);
+  return result as Record<string, any>;
+}
+
+/**
+ * Strip PHI from a row (recursively) and return both the clean object and whether any PHI was present.
  * Use for response-level assert: if hadPhi, log security warning (never log values).
  */
 export function stripPhiAndDetect(
   row: Record<string, any>
 ): { stripped: Record<string, any>; hadPhi: boolean; phiKeysFound: string[] } {
-  const phiKeysFound: string[] = [];
-  for (const k of PHI_FIELDS) {
-    if (k in row && row[k] !== undefined) phiKeysFound.push(k);
-  }
+  const { result, phiKeysFound } = stripPhiRecursive(row);
   return {
-    stripped: stripPhiFromOperational(row),
+    stripped: result as Record<string, any>,
     hadPhi: phiKeysFound.length > 0,
     phiKeysFound,
   };
