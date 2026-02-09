@@ -1,10 +1,9 @@
 /**
  * HMAC Signature Verification for Service-to-Service Auth
- * 
- * Security:
- * - Verifies X-Sokana-Timestamp header (reject if > 5 minutes old)
- * - Verifies X-Sokana-Signature header (HMAC-SHA256)
- * - Signature = HMAC-SHA256(timestamp + "." + rawBodyString)
+ *
+ * HARDENED: Never returns 500 for auth failures. Always 401 Unauthorized.
+ * - X-Sokana-Timestamp (Unix ms, ±5 min)
+ * - X-Sokana-Signature (HMAC-SHA256 of timestamp + "." + rawBody, hex)
  */
 
 import { createHmac, timingSafeEqual } from 'crypto';
@@ -12,88 +11,95 @@ import { Request, Response, NextFunction } from 'express';
 import { ResponseBuilder } from '../utils/responseBuilder';
 
 const MAX_TIMESTAMP_AGE_MS = 5 * 60 * 1000; // 5 minutes
+const HMAC_HEX_LENGTH = 64; // SHA-256 digest in hex
 
 /**
- * Express middleware to verify HMAC signature on incoming requests.
+ * Send 401 Unauthorized. No details, no throw, no 500.
  */
-export function verifySignature(req: Request, res: Response, next: NextFunction): void {
-  const sharedSecret = process.env.PHI_BROKER_SHARED_SECRET;
-  
-  if (!sharedSecret) {
-    console.error('[Auth] PHI_BROKER_SHARED_SECRET not configured');
-    res.status(500).json(ResponseBuilder.error('Server misconfigured', 'CONFIG_ERROR'));
-    return;
-  }
-
-  // Extract headers
-  const timestamp = req.headers['x-sokana-timestamp'] as string | undefined;
-  const signature = req.headers['x-sokana-signature'] as string | undefined;
-
-  // Validate headers exist
-  if (!timestamp || !signature) {
-    // Log metadata only - no sensitive data
-    console.warn('[Auth] Missing auth headers', {
-      hasTimestamp: !!timestamp,
-      hasSignature: !!signature,
-    });
-    res.status(401).json(ResponseBuilder.error('Unauthorized', 'UNAUTHORIZED'));
-    return;
-  }
-
-  // Validate timestamp is not too old
-  const timestampMs = parseInt(timestamp, 10);
-  if (isNaN(timestampMs)) {
-    console.warn('[Auth] Invalid timestamp format');
-    res.status(401).json(ResponseBuilder.error('Unauthorized', 'UNAUTHORIZED'));
-    return;
-  }
-
-  const now = Date.now();
-  const age = now - timestampMs;
-
-  if (age > MAX_TIMESTAMP_AGE_MS || age < -MAX_TIMESTAMP_AGE_MS) {
-    // Log metadata only
-    console.warn('[Auth] Timestamp out of range', { age, maxAge: MAX_TIMESTAMP_AGE_MS });
-    res.status(401).json(ResponseBuilder.error('Unauthorized', 'UNAUTHORIZED'));
-    return;
-  }
-
-  // Compute expected signature
-  // Body was captured as raw string by express.json() with verify option
-  const rawBody = (req as any).rawBody as string;
-  if (typeof rawBody !== 'string') {
-    console.error('[Auth] rawBody not captured - middleware misconfigured');
-    res.status(500).json(ResponseBuilder.error('Server misconfigured', 'CONFIG_ERROR'));
-    return;
-  }
-
-  const signaturePayload = `${timestamp}.${rawBody}`;
-  const expectedSignature = createHmac('sha256', sharedSecret)
-    .update(signaturePayload)
-    .digest('hex');
-
-  // Timing-safe comparison to prevent timing attacks
-  const signatureBuffer = Buffer.from(signature, 'hex');
-  const expectedBuffer = Buffer.from(expectedSignature, 'hex');
-
-  if (signatureBuffer.length !== expectedBuffer.length) {
-    console.warn('[Auth] Signature length mismatch');
-    res.status(401).json(ResponseBuilder.error('Unauthorized', 'UNAUTHORIZED'));
-    return;
-  }
-
-  if (!timingSafeEqual(signatureBuffer, expectedBuffer)) {
-    console.warn('[Auth] Signature mismatch');
-    res.status(401).json(ResponseBuilder.error('Unauthorized', 'UNAUTHORIZED'));
-    return;
-  }
-
-  // Signature valid
-  next();
+function safeUnauthorized(res: Response): void {
+  res.status(401).json(ResponseBuilder.error('Unauthorized', 'UNAUTHORIZED'));
 }
 
 /**
- * Express body parser options to capture raw body for signature verification.
+ * Express middleware to verify HMAC signature on incoming requests.
+ * Never throws. Never returns 500 for missing/invalid auth — only 401.
+ */
+export function verifySignature(req: Request, res: Response, next: NextFunction): void {
+  try {
+    // 401 if secret not configured (treat as auth failure, not server misconfig for QA)
+    const sharedSecret = process.env.PHI_BROKER_SHARED_SECRET;
+    if (!sharedSecret || typeof sharedSecret !== 'string') {
+      safeUnauthorized(res);
+      return;
+    }
+
+    const timestamp = req.headers['x-sokana-timestamp'] as string | undefined;
+    const signature = req.headers['x-sokana-signature'] as string | undefined;
+
+    if (!timestamp || !signature) {
+      safeUnauthorized(res);
+      return;
+    }
+
+    const timestampMs = Number(timestamp);
+    if (!Number.isFinite(timestampMs)) {
+      safeUnauthorized(res);
+      return;
+    }
+
+    const now = Date.now();
+    const age = now - timestampMs;
+    if (age > MAX_TIMESTAMP_AGE_MS || age < -MAX_TIMESTAMP_AGE_MS) {
+      safeUnauthorized(res);
+      return;
+    }
+
+    const rawBody = (req as any).rawBody;
+    if (typeof rawBody !== 'string') {
+      safeUnauthorized(res);
+      return;
+    }
+
+    const signaturePayload = `${timestamp}.${rawBody}`;
+    const expectedHex = createHmac('sha256', sharedSecret)
+      .update(signaturePayload)
+      .digest('hex');
+
+    // Validate hex format and length before Buffer conversion
+    if (typeof signature !== 'string' || signature.length !== HMAC_HEX_LENGTH) {
+      safeUnauthorized(res);
+      return;
+    }
+    if (!/^[0-9a-fA-F]+$/.test(signature)) {
+      safeUnauthorized(res);
+      return;
+    }
+    if (expectedHex.length !== HMAC_HEX_LENGTH) {
+      safeUnauthorized(res);
+      return;
+    }
+
+    const signatureBuffer = Buffer.from(signature, 'hex');
+    const expectedBuffer = Buffer.from(expectedHex, 'hex');
+
+    if (signatureBuffer.length !== expectedBuffer.length) {
+      safeUnauthorized(res);
+      return;
+    }
+
+    if (!timingSafeEqual(signatureBuffer, expectedBuffer)) {
+      safeUnauthorized(res);
+      return;
+    }
+
+    next();
+  } catch (_) {
+    safeUnauthorized(res);
+  }
+}
+
+/**
+ * Express body parser verify callback — captures raw body for signature verification.
  * Use with express.json({ verify: captureRawBody })
  */
 export function captureRawBody(

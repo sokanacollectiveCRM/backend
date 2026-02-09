@@ -6,10 +6,9 @@
  * - PHI values are NEVER logged
  * - Returns undefined for missing fields (to enable omission in response)
  *
- * Schema: Single phi table with columns:
- * id, first_name, last_name, email, phone, date_of_birth, address_line1,
+ * Schema: Table public.phi_clients with columns:
+ * client_id (FK), first_name, last_name, email, phone, date_of_birth, address_line1,
  * due_date, health_history, allergies, medications, created_at, updated_at.
- * Lookup by client_id (FK). Table name: phi (adjust if your table differs).
  */
 
 import { getPool } from '../db/pool';
@@ -32,7 +31,7 @@ export interface PhiData {
 }
 
 /**
- * Fetch PHI data for a client from the phi table.
+ * Fetch PHI data for a client from the phi_clients table.
  * Date columns converted to ISO strings in SQL (date::text).
  *
  * @param clientId - The client UUID
@@ -64,7 +63,7 @@ export async function getPhiByClientId(clientId: string): Promise<PhiData> {
       health_history,
       allergies,
       medications
-     FROM phi
+     FROM phi_clients
      WHERE client_id = $1
      LIMIT 1`,
     [clientId]
