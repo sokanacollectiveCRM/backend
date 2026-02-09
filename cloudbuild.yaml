@@ -1,3 +1,7 @@
+# Cloud Build: builds and pushes to Artifact Registry (NOT gcr.io).
+# The trigger MUST use this file: Configuration type = "Cloud Build configuration file",
+# Location = "cloudbuild.yaml". If the trigger uses Autodetect/Dockerfile/Buildpack
+# instead, Cloud Build uses a default image name (gcr.io/...) and you get push errors.
 steps:
   - name: gcr.io/k8s-skaffold/pack
     args:
