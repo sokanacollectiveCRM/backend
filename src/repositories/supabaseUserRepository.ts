@@ -39,9 +39,11 @@ export class SupabaseUserRepository implements UserRepository {
 
 
   async findByRole(role: string): Promise<User[]> {
+    // Only select columns guaranteed to exist in users table.
+    // profile_picture and bio may not exist depending on migration state.
     const { data, error } = await this.supabaseClient
       .from('users')
-      .select('id, email, firstname, lastname, role, profile_picture, bio')
+      .select('id, email, firstname, lastname, role, account_status')
       .eq('role', role)
       .order('firstname', { ascending: true });
 
@@ -138,9 +140,10 @@ async findClientsById(id: string): Promise<any> {
       status,
       user_id,
       users!user_id (
-        profile_picture,
+        id,
         firstname,
-        lastname
+        lastname,
+        email
       )
     `)
     .eq('id', id);
@@ -246,7 +249,7 @@ async findClientsById(id: string): Promise<any> {
     try {
       const { data, error } = await this.supabaseClient
       .from('users')
-      .select('id, firstname, lastname, email, role, bio')
+      .select('id, firstname, lastname, email, role, account_status')
       .in('role', ['doula','admin'])
 
       if (error) {

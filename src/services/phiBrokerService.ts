@@ -59,6 +59,91 @@ function signRequest(timestamp: string, body: string, secret: string): string {
 }
 
 /**
+ * Update PHI data for a client via the PHI Broker service.
+ *
+ * @param clientId - The client UUID
+ * @param requester - Information about the requester (role, userId, assignedClientIds)
+ * @param fields - PHI fields to update (key-value pairs)
+ * @returns Updated PHI data object
+ * @throws PhiBrokerError if broker is unavailable or returns an error
+ *
+ * HIPAA: PHI values are NEVER logged — only field count and metadata.
+ */
+export async function updateClientPhi(
+  clientId: string,
+  requester: PhiRequester,
+  fields: Record<string, any>
+): Promise<PhiData> {
+  const brokerUrl = process.env.PHI_BROKER_URL;
+  const sharedSecret = process.env.PHI_BROKER_SHARED_SECRET;
+
+  // If broker not configured, skip update (feature disabled)
+  if (!brokerUrl || !sharedSecret) {
+    console.warn('[PhiBroker] Not configured — PHI update skipped');
+    return {};
+  }
+
+  const requestBody = JSON.stringify({
+    client_id: clientId,
+    requester: {
+      role: requester.role,
+      user_id: requester.userId,
+      assigned_client_ids: requester.assignedClientIds || [],
+    },
+    fields,
+  });
+
+  const timestamp = Date.now().toString();
+  const signature = signRequest(timestamp, requestBody, sharedSecret);
+
+  try {
+    const response = await fetch(`${brokerUrl}/v1/phi/client/update`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Sokana-Timestamp': timestamp,
+        'X-Sokana-Signature': signature,
+      },
+      body: requestBody,
+    });
+
+    if (!response.ok) {
+      // Log metadata only — never PHI values
+      console.error('[PhiBroker] Update failed', {
+        status: response.status,
+        clientId,
+        userId: requester.userId,
+      });
+      throw new PhiBrokerError(`Broker update returned ${response.status}`);
+    }
+
+    const result = await response.json() as { success: boolean; data?: PhiData; error?: string };
+
+    if (!result.success) {
+      throw new PhiBrokerError('Broker update returned error response');
+    }
+
+    // HIPAA: log metadata only — never PHI values
+    console.log('[PhiBroker] Update successful', {
+      clientId,
+      userId: requester.userId,
+      updatedFieldCount: Object.keys(fields).length,
+    });
+
+    return result.data || {};
+  } catch (error) {
+    if (error instanceof PhiBrokerError) throw error;
+
+    console.error('[PhiBroker] Update network error', {
+      clientId,
+      userId: requester.userId,
+      errorType: error instanceof Error ? error.name : 'unknown',
+    });
+    throw new PhiBrokerError('Failed to connect to PHI Broker for update');
+  }
+}
+
+/**
  * Fetch PHI data for a client from the PHI Broker service.
  * 
  * @param clientId - The client UUID

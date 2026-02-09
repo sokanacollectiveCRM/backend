@@ -4,10 +4,12 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { Client } from '../entities/Client';
 import { User } from '../entities/User';
 import { ROLE } from '../types';
+import { OPERATIONAL_UPDATE_COLUMNS, PHI_FIELDS } from '../constants/phiFields';
 
 /**
- * Allowed client_info columns for update. Unknown keys in the payload are dropped
- * so schema cache / missing column errors are avoided.
+ * Allowed client_info columns for update (LEGACY).
+ * Includes both operational and PHI columns — used only by the old updateClient path.
+ * New code should use OPERATIONAL_UPDATE_COLUMNS from constants/phiFields.ts
  */
 const ALLOWED_CLIENT_INFO_UPDATE_COLUMNS = new Set([
   'first_name', 'last_name', 'email', 'role', 'phone_number', 'status', 'service_needed',
@@ -24,6 +26,43 @@ const ALLOWED_CLIENT_INFO_UPDATE_COLUMNS = new Set([
   'account_status', 'business', 'bio',
 ]);
 
+/**
+ * Explicit columns selected for lite/list queries.
+ * NO select('*'), NO PHI columns that shouldn't appear in list responses.
+ */
+const CLIENT_LITE_SELECT = `
+  id,
+  user_id,
+  first_name,
+  last_name,
+  email,
+  phone_number,
+  status,
+  service_needed,
+  portal_status,
+  requested_at,
+  updated_at
+`;
+
+/**
+ * Explicit columns selected for operational reads/writes (canonical mode).
+ */
+const CLIENT_OPERATIONAL_SELECT = `
+  id,
+  first_name,
+  last_name,
+  email,
+  phone_number,
+  status,
+  service_needed,
+  portal_status,
+  invited_at,
+  last_invite_sent_at,
+  invite_sent_count,
+  requested_at,
+  updated_at
+`;
+
 export class SupabaseClientRepository  {
   private supabaseClient: SupabaseClient;
 
@@ -34,17 +73,17 @@ export class SupabaseClientRepository  {
   }
 
   async findClientsLiteAll(): Promise<Client[]> {
-    // Simple query without join - client_info has the essential fields
+    // HIPAA: Explicit column selection — no select('*')
+    // Only operational fields needed for list display
     const { data, error } = await this.supabaseClient
       .from('client_info')
-      .select('*');
+      .select(CLIENT_LITE_SELECT);
 
     if (error) {
       console.error('findClientsLiteAll error:', error);
       throw new Error(error.message);
     }
 
-    console.log('findClientsLiteAll returned:', data?.length, 'clients');
     return data.map(row => this.mapToClient(row));
   }
 
@@ -100,17 +139,14 @@ export class SupabaseClientRepository  {
       return [];
     }
 
+    // HIPAA: Explicit column selection — no select('*'), no join with users
     const { data, error } = await this.supabaseClient
       .from('client_info')
-      .select(`
-        *,
-        users!user_id (*)
-      `)
+      .select(CLIENT_LITE_SELECT)
       .in('id', clientIds);
 
-
     if (error) throw new Error(error.message);
-    return data.map(user => this.mapToClient(user));
+    return data.map(row => this.mapToClient(row));
   }
 
   async findClientsDetailedAll(): Promise<Client[]> {
@@ -277,6 +313,99 @@ export class SupabaseClientRepository  {
     return data;
   }
 
+  /**
+   * Update ONLY operational fields for a client. PHI fields are stripped.
+   * Returns updated row with explicit operational columns.
+   *
+   * HIPAA: PHI fields (name, email, phone, dob, address, due_date, health)
+   * are silently dropped — they must go through the PHI Broker.
+   *
+   * @param clientId - The client UUID
+   * @param fields - Flat key-value object of fields to update
+   * @returns Updated row for mapping to ClientDetailDTO, or null if not found
+   */
+  async updateClientOperational(
+    clientId: string,
+    fields: Record<string, any>
+  ): Promise<{
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    phone_number: string | null;
+    status: string | null;
+    service_needed: string | null;
+    portal_status: string | null;
+    invited_at: string | null;
+    last_invite_sent_at: string | null;
+    invite_sent_count: number | null;
+    requested_at: string | null;
+    updated_at: string | null;
+  } | null> {
+    // Only allow operational columns — strip anything in PHI_FIELDS
+    const sanitized: Record<string, any> = {};
+    const dropped: string[] = [];
+    for (const [k, v] of Object.entries(fields)) {
+      if (OPERATIONAL_UPDATE_COLUMNS.has(k)) {
+        sanitized[k] = v;
+      } else {
+        dropped.push(k);
+      }
+    }
+    if (dropped.length > 0) {
+      console.warn('[SupabaseClientRepo] Dropped non-operational keys from update:', dropped);
+    }
+
+    // If nothing left after filtering, just return current data
+    if (Object.keys(sanitized).length === 0) {
+      return this.getClientById(clientId);
+    }
+
+    const { data, error } = await this.supabaseClient
+      .from('client_info')
+      .update(sanitized)
+      .eq('id', clientId)
+      .select(CLIENT_OPERATIONAL_SELECT)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      throw new Error(`Failed to update client operational fields: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  /**
+   * DEBT: Write-through cache for identity fields (first_name, last_name, email, phone_number).
+   * Keeps Supabase's client_info in sync with PHI Broker so list endpoints show current names.
+   * Broker (sokana-private) remains authoritative — this is just a display cache.
+   *
+   * TODO: Remove when list endpoint uses display_name/client_code instead of real names.
+   */
+  async updateIdentityCache(
+    clientId: string,
+    fields: { first_name?: string; last_name?: string; email?: string; phone_number?: string }
+  ): Promise<void> {
+    const patch: Record<string, any> = {};
+    if (fields.first_name !== undefined) patch.first_name = fields.first_name;
+    if (fields.last_name !== undefined) patch.last_name = fields.last_name;
+    if (fields.email !== undefined) patch.email = fields.email;
+    if (fields.phone_number !== undefined) patch.phone_number = fields.phone_number;
+
+    if (Object.keys(patch).length === 0) return;
+
+    const { error } = await this.supabaseClient
+      .from('client_info')
+      .update(patch)
+      .eq('id', clientId);
+
+    if (error) {
+      // Non-critical — log and continue, don't block the update response
+      throw new Error(`Identity cache update failed: ${error.message}`);
+    }
+  }
+
   async findClientDetailedById(clientId: string): Promise<Client> {
     const { data, error } = await this.supabaseClient
       .from('client_info')
@@ -307,9 +436,10 @@ export class SupabaseClientRepository  {
         status,
         user_id,
         users!user_id (
-          profile_picture,
-          first_name,
-          last_name
+          id,
+          firstname,
+          lastname,
+          email
         )
       `)
       .single()
@@ -467,16 +597,35 @@ export class SupabaseClientRepository  {
     if (error) throw new Error(error.message);
   }
 
-  // Helper to find client id's for a given doula
+  // Helper to find client id's for a given doula.
+  // Fails gracefully (returns []) if assignments table doesn't exist yet.
   private async getClientIdsAssignedToDoula(doulaId: string): Promise<string[]> {
-    const { data, error } = await this.supabaseClient
-      .from('assignments')
-      .select('client_id')
-      .eq('doula_id', doulaId)
-      .eq('status', 'active'); // Only get active assignments
+    try {
+      const { data, error } = await this.supabaseClient
+        .from('assignments')
+        .select('client_id')
+        .eq('doula_id', doulaId)
+        .eq('status', 'active');
 
-    if (error) throw new Error(error.message);
-    return data.map(entry => entry.client_id);
+      if (error) {
+        // Graceful: if table missing, doula just sees no clients
+        const msg = error.message.toLowerCase();
+        if (msg.includes('could not find') || msg.includes('schema cache') ||
+            msg.includes('does not exist') || msg.includes('relation')) {
+          console.warn('[ClientRepo] assignments table not found — returning empty list for doula');
+          return [];
+        }
+        throw new Error(error.message);
+      }
+      return data.map(entry => entry.client_id);
+    } catch (error: any) {
+      const msg = (error.message || '').toLowerCase();
+      if (msg.includes('assignments') && (msg.includes('does not exist') || msg.includes('schema cache'))) {
+        console.warn('[ClientRepo] assignments table not found — returning empty list for doula');
+        return [];
+      }
+      throw error;
+    }
   }
 
   // Helper to map database user to domain User

@@ -19,7 +19,9 @@ import { ClientMapper } from '../mappers/ClientMapper';
 import { ActivityMapper } from '../mappers/ActivityMapper';
 import { ApiResponse } from '../utils/responseBuilder';
 import { canAccessSensitive } from '../utils/sensitiveAccess';
-import { fetchClientPhi, PhiBrokerError } from '../services/phiBrokerService';
+import { fetchClientPhi, updateClientPhi } from '../services/phiBrokerService';
+import { splitClientPatch } from '../constants/phiFields';
+import { logger } from '../common/utils/logger';
 
 export class ClientController {
   private clientUseCase: ClientUseCase;
@@ -65,6 +67,15 @@ export class ClientController {
             return ClientMapper.toListItemDTO(client, isEligible);
           })
         );
+
+        // Source-of-truth instrumentation
+        logger.info({
+          sources: { operational: 'supabase', sensitive: 'none' },
+          keys: {
+            operational: dtos.length > 0 ? Object.keys(dtos[0]) : [],
+          },
+          count: dtos.length,
+        }, '[Client] list response composition');
 
         res.json(ApiResponse.list(dtos, dtos.length));
         return;
@@ -183,9 +194,14 @@ export class ClientController {
     // Step 6: Check authorization for sensitive/PHI data
     const { canAccess, assignedClientIds } = await canAccessSensitive(req.user, id);
 
-    // Step 7: Branch based on authorization
     if (!canAccess) {
-      // Unauthorized: Return operational-only DTO (PHI fields omitted)
+      // Source-of-truth instrumentation (operational only)
+      logger.info({
+        clientId: id,
+        sources: { operational: 'supabase', sensitive: 'skipped (unauthorized)' },
+        keys: { operational: Object.keys(dto) },
+      }, '[Client] detail response composition');
+
       res.json(ApiResponse.success(dto));
       return;
     }
@@ -198,19 +214,29 @@ export class ClientController {
         assignedClientIds,
       });
 
-      // Merge PHI fields into response (spread operator keeps only present keys)
       const merged = { ...dto, ...phiData };
 
-      // HIPAA: Do NOT log merged which may contain PHI
+      // Source-of-truth instrumentation (merged)
+      logger.info({
+        clientId: id,
+        sources: { operational: 'supabase', sensitive: 'phiBroker' },
+        keys: {
+          operational: Object.keys(dto),
+          sensitive: Object.keys(phiData || {}),
+          mergedSample: Object.keys(merged).slice(0, 20),
+        },
+      }, '[Client] detail response composition');
+
       res.json(ApiResponse.success(merged));
-    } catch (brokerError) {
-      // PHI Broker failed - return 502
-      if (brokerError instanceof PhiBrokerError) {
-        console.error('[ClientController] PHI Broker unavailable');
-        res.status(502).json(ApiResponse.error('Upstream PHI service unavailable', 'PHI_BROKER_ERROR'));
-        return;
-      }
-      throw brokerError;
+      return;
+    } catch (e) {
+      logger.error({
+        clientId: id,
+        errorName: (e as Error)?.name,
+        errorMessage: (e as Error)?.message,
+      }, '[Client] PHI broker error');
+      res.status(502).json(ApiResponse.error('Upstream PHI service unavailable', 'PHI_BROKER_ERROR'));
+      return;
     }
   } catch (error) {
     // HIPAA: Do not log error details which may contain client data
@@ -305,10 +331,15 @@ export class ClientController {
   //
   // updateClient
   //
-  // Updates client profile fields
+  // Split-write update: routes PHI fields to sokana-private (via PHI Broker)
+  // and operational fields to Supabase. Returns merged fresh read.
+  //
+  // PHI fields (sokana-private): first_name, last_name, email, phone_number,
+  //   date_of_birth, address/address_line1, due_date, health_history, allergies, etc.
+  // Operational fields (Supabase): status, service_needed, portal_status, and all others.
   //
   // returns:
-  //    Client with updatedAt timestamp
+  //    Canonical: { success: true, data: ClientDetailDTO (merged operational + PHI) }
   //
   async updateClient(
     req: AuthRequest,
@@ -316,179 +347,141 @@ export class ClientController {
   ): Promise<void> {
     const { id } = req.params;
     const updateData = req.body;
+    const readMode = process.env.SPLIT_DB_READ_MODE;
 
-    console.log('🔧 PUT /clients/:id - UPDATE REQUEST START');
-    console.log('Controller: Request details:', {
-      method: req.method,
-      url: req.url,
-      originalUrl: req.originalUrl,
-      path: req.path,
-      params: req.params,
-      id,
-      idType: typeof id
-    });
-
-    if (!id) {
-      res.status(400).json({ error: 'Missing client ID' });
+    // Require PRIMARY mode
+    if (readMode !== 'primary') {
+      res.status(501).json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
       return;
     }
 
-    // Validate that id looks like a UUID
+    // Validate client ID
+    if (!id) {
+      res.status(400).json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
+      return;
+    }
+
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(id)) {
-      console.error('Controller: Invalid client ID format:', id);
-      res.status(400).json({ error: `Invalid client ID format: ${id}. Expected UUID format.` });
+      res.status(400).json(ApiResponse.error(`Invalid client ID format: ${id}`, 'VALIDATION_ERROR'));
       return;
     }
 
-    console.log('📝 Controller: Frontend sent these fields to update:', {
-      clientId: id,
-      updateDataKeys: Object.keys(updateData),
-      updateDataCount: Object.keys(updateData).length
-    });
-
-    // Log specific fields we're looking for
-    const importantFields = [
-      'preferred_contact_method', 'preferred_name', 'pronouns', 'home_type',
-      'services_interested', 'phoneNumber', 'phone_number', 'firstname', 'lastname', 'email'
-    ];
-
-    console.log('🎯 Controller: Checking for important fields in request:');
-    importantFields.forEach(field => {
-      if (updateData[field] !== undefined) {
-        console.log(`  ✅ ${field}: "${updateData[field]}" (${typeof updateData[field]})`);
-      } else {
-        console.log(`  ❌ ${field}: undefined`);
-      }
-    });
+    if (!updateData || Object.keys(updateData).length === 0) {
+      res.status(400).json(ApiResponse.error('No fields to update', 'VALIDATION_ERROR'));
+      return;
+    }
 
     try {
-      const client = await this.clientUseCase.updateClientProfile(
-        id,
-        updateData
-      );
+      // ── Step 1: Split payload into operational (Supabase) vs PHI (broker) ──
+      const { operational, phi } = splitClientPatch(updateData);
 
-      console.log('✅ Controller: Client updated successfully in database');
-      console.log('📊 Controller: Full client object returned from use case:', {
-        clientId: client.id,
-        userObjectKeys: Object.keys(client.user),
-        userObjectKeyCount: Object.keys(client.user).length,
-        clientFields: {
-          serviceNeeded: client.serviceNeeded,
-          status: client.status,
-          phoneNumber: client.phoneNumber
-        }
-      });
+      logger.info({
+        clientId: id,
+        operationalKeys: Object.keys(operational),
+        phiKeyCount: Object.keys(phi).length, // don't log PHI field names in prod
+      }, '[Client] update payload split');
 
-      // Log what we're about to send back to frontend
-      const responseData = {
-        success: true,
-        client: {
-          // Basic client info
-          id: client.id,
-          updatedAt: client.updatedAt,
-          status: client.status,
-          serviceNeeded: client.serviceNeeded,
-          requestedAt: client.requestedAt,
-          phoneNumber: client.phoneNumber,
-
-          // All user/profile fields from client_info table
-          firstname: client.user.firstname,
-          lastname: client.user.lastname,
-          email: client.user.email,
-          role: client.user.role,
-
-          // All the fields that were missing from responses
-          preferred_contact_method: client.user.preferred_contact_method,
-          preferred_name: client.user.preferred_name,
-          payment_method: client.user.payment_method,  // Add this field
-          pronouns: client.user.pronouns,
-          home_type: client.user.home_type,
-          services_interested: client.user.services_interested,
-          phone_number: client.user.phone_number,
-          health_notes: client.user.health_notes,
-          service_specifics: client.user.service_specifics,
-          baby_sex: client.user.baby_sex,
-          baby_name: client.user.baby_name,
-          birth_hospital: client.user.birth_hospital,
-          birth_location: client.user.birth_location,
-          number_of_babies: client.user.number_of_babies,
-          provider_type: client.user.provider_type,
-          pregnancy_number: client.user.pregnancy_number,
-          had_previous_pregnancies: client.user.had_previous_pregnancies,
-          previous_pregnancies_count: client.user.previous_pregnancies_count,
-          living_children_count: client.user.living_children_count,
-          past_pregnancy_experience: client.user.past_pregnancy_experience,
-          service_support_details: client.user.service_support_details,
-          race_ethnicity: client.user.race_ethnicity,
-          primary_language: client.user.primary_language,
-          client_age_range: client.user.client_age_range,
-          insurance: client.user.insurance,
-          demographics_multi: client.user.demographics_multi,
-          pronouns_other: client.user.pronouns_other,
-          home_phone: client.user.home_phone,
-          home_access: client.user.home_access,
-          pets: client.user.pets,
-          relationship_status: client.user.relationship_status,
-          first_name: client.user.first_name,
-          last_name: client.user.last_name,
-          middle_name: client.user.middle_name,
-          mobile_phone: client.user.mobile_phone,
-          work_phone: client.user.work_phone,
-          referral_source: client.user.referral_source,
-          referral_name: client.user.referral_name,
-          referral_email: client.user.referral_email,
-
-          // Additional fields
-          address: client.user.address,
-          city: client.user.city,
-          state: client.user.state,
-          country: client.user.country,
-          zip_code: client.user.zip_code,
-          profile_picture: client.user.profile_picture,
-          account_status: client.user.account_status,
-          business: client.user.business,
-          bio: client.user.bio,
-          children_expected: client.user.children_expected,
-          service_needed: client.user.service_needed,
-          health_history: client.user.health_history,
-          allergies: client.user.allergies,
-          due_date: client.user.due_date,
-          annual_income: client.user.annual_income,
-          hospital: client.user.hospital,
-
-          // Client entity specific fields
-          childrenExpected: client.childrenExpected,
-          healthHistory: client.health_history,
-          dueDate: client.due_date,
-          babySex: client.baby_sex,
-          annualIncome: client.annual_income,
-          serviceSpecifics: client.service_specifics
-        }
+      // ── Step 2: Authorization check (one call, reuse result) ──
+      const { canAccess, assignedClientIds } = await canAccessSensitive(req.user, id);
+      const requester = {
+        role: req.user?.role || '',
+        userId: req.user?.id || '',
+        assignedClientIds,
       };
 
-      console.log('📤 Controller: Response being sent to frontend:', {
-        responseKeys: Object.keys(responseData.client),
-        responseKeyCount: Object.keys(responseData.client).length
-      });
+      // If PHI fields are present but user is not authorized → reject
+      if (Object.keys(phi).length > 0 && !canAccess) {
+        logger.warn({ clientId: id, role: req.user?.role }, '[Client] unauthorized PHI update attempt');
+        res.status(403).json(ApiResponse.error('Not authorized to update PHI fields', 'FORBIDDEN'));
+        return;
+      }
 
-      // Check if important fields are missing from response
-      console.log('⚠️  Controller: Missing fields in response (not sent to frontend):');
-      importantFields.forEach(field => {
-        if (updateData[field] !== undefined && !(field in responseData.client)) {
-          console.log(`  🚨 ${field}: "${updateData[field]}" was updated but NOT in response`);
+      const clientRepository = new SupabaseClientRepository(supabase);
+
+      // ── Step 3a: Write operational fields to Supabase ──
+      let operationalResult = null;
+      if (Object.keys(operational).length > 0) {
+        operationalResult = await clientRepository.updateClientOperational(id, operational);
+        if (!operationalResult) {
+          res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
+          return;
         }
-      });
+      }
 
-      console.log('🔧 PUT /clients/:id - UPDATE REQUEST COMPLETE');
-      console.log('=====================================');
+      // ── Step 3b: Write PHI fields to sokana-private (via broker) ──
+      let phiWriteResult = null;
+      if (Object.keys(phi).length > 0) {
+        phiWriteResult = await updateClientPhi(id, requester, phi);
 
-      res.json(responseData);
-    }
-    catch (error) {
-      console.error('❌ Controller: Error updating client:', error);
-      const err = this.handleError(error, res);
-      res.status(err.status).json({ error: err.message });
+        // DEBT: Write-through cache — keep Supabase identity fields in sync so list
+        // endpoint shows current names. Broker stays authoritative.
+        // TODO: Remove when list endpoint uses display_name/client_code instead of names.
+        if (phi.first_name || phi.last_name || phi.email || phi.phone_number) {
+          try {
+            await clientRepository.updateIdentityCache(id, {
+              first_name: phi.first_name,
+              last_name: phi.last_name,
+              email: phi.email,
+              phone_number: phi.phone_number,
+            });
+          } catch {
+            logger.warn({ clientId: id }, '[Client] identity cache write failed (non-blocking)');
+          }
+        }
+      }
+
+      // ── Step 4: Fresh read — get authoritative data from both sources ──
+      const freshOperational = operationalResult ?? await clientRepository.getClientById(id);
+      if (!freshOperational) {
+        res.status(404).json(ApiResponse.error('Client not found after update', 'NOT_FOUND'));
+        return;
+      }
+
+      // Compute eligibility
+      let isEligible = false;
+      try {
+        const eligibility = await this.eligibilityService.getInviteEligibility(id);
+        isEligible = eligibility.eligible;
+      } catch { /* swallow */ }
+
+      // Map operational to canonical DTO
+      const dto = ClientMapper.toDetailDTO(freshOperational, isEligible);
+
+      // Merge PHI for the response (if authorized)
+      let response: Record<string, any> = { ...dto };
+      if (canAccess) {
+        try {
+          // Use broker write result if we just wrote, otherwise fresh read
+          const freshPhi = phiWriteResult ?? await fetchClientPhi(id, requester);
+          response = { ...dto, ...freshPhi };
+        } catch {
+          // PHI fetch failed — return operational only, don't block update response
+          logger.warn({ clientId: id }, '[Client] PHI fetch failed after update, returning operational only');
+        }
+      }
+
+      // ── Step 5: Source-of-truth instrumentation ──
+      logger.info({
+        clientId: id,
+        sources: {
+          operational: Object.keys(operational).length > 0 ? 'supabase' : 'none',
+          sensitive: Object.keys(phi).length > 0 ? 'phiBroker' : 'none',
+        },
+        keys: {
+          operational: Object.keys(freshOperational),
+          sensitive: Object.keys(phiWriteResult ?? {}),
+          mergedSample: Object.keys(response).slice(0, 20),
+        },
+      }, '[Client] update response composition');
+
+      res.json(ApiResponse.success(response));
+    } catch (error) {
+      logger.error({ errorMessage: (error as Error)?.message }, '[Client] update error');
+      const err = this.handleError(error as Error, res);
+      if (!res.headersSent) {
+        res.status(err.status).json(ApiResponse.error(err.message));
+      }
     }
   }
 
@@ -554,7 +547,18 @@ export class ClientController {
       const dto = ActivityMapper.toDTO(row);
       res.json(ApiResponse.success(dto));
     } catch (error) {
-      const err = this.handleError(error, res);
+      // Graceful fallback: if client_activities table is missing, return 503 (not 500)
+      const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
+      const isTableMissing =
+        message.includes('client_activities') &&
+        (message.includes('could not find') || message.includes('schema cache') ||
+         message.includes('does not exist'));
+      if (isTableMissing) {
+        logger.warn('[Client] client_activities table missing — cannot create activity');
+        res.status(503).json(ApiResponse.error('Activities feature not available — table pending migration', 'SERVICE_UNAVAILABLE'));
+        return;
+      }
+      const err = this.handleError(error as Error, res);
       res.status(err.status).json(ApiResponse.error(err.message));
     }
   }
@@ -601,6 +605,19 @@ export class ClientController {
       // Return canonical list response
       res.json(ApiResponse.list(dtos, dtos.length));
     } catch (error) {
+      // Graceful fallback: if client_activities table is missing in schema, return empty list (no 500)
+      const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
+      const isTableMissing =
+        (message.includes('client_activities') || message.includes('failed to fetch activities')) &&
+        (message.includes('could not find the table') ||
+          message.includes('schema cache') ||
+          message.includes("relation") ||
+          message.includes('does not exist'));
+      if (isTableMissing) {
+        console.error('Error: Failed to fetch activities (table may be missing). Returning empty list.');
+        res.json(ApiResponse.list([], 0));
+        return;
+      }
       const err = this.handleError(error, res);
       res.status(err.status).json(ApiResponse.error(err.message));
     }
@@ -641,7 +658,11 @@ export class ClientController {
         }
       });
     } catch (error) {
-      const err = this.handleError(error, res);
+      if (ClientController.isTableMissing(error, 'assignments')) {
+        res.status(503).json({ error: 'Assignments feature not available — table pending migration' });
+        return;
+      }
+      const err = this.handleError(error as Error, res);
       res.status(err.status).json({ error: err.message });
     }
   }
@@ -670,7 +691,11 @@ export class ClientController {
         message: 'Doula unassigned successfully'
       });
     } catch (error) {
-      const err = this.handleError(error, res);
+      if (ClientController.isTableMissing(error, 'assignments')) {
+        res.status(503).json({ error: 'Assignments feature not available — table pending migration' });
+        return;
+      }
+      const err = this.handleError(error as Error, res);
       res.status(err.status).json({ error: err.message });
     }
   }
@@ -699,9 +724,24 @@ export class ClientController {
         doulas: doulas
       });
     } catch (error) {
-      const err = this.handleError(error, res);
+      if (ClientController.isTableMissing(error, 'assignments')) {
+        res.json({ success: true, doulas: [] });
+        return;
+      }
+      const err = this.handleError(error as Error, res);
       res.status(err.status).json({ error: err.message });
     }
+  }
+
+  /**
+   * Detect if an error is due to a missing table (schema cache / relation does not exist).
+   * Used for graceful degradation when tables haven't been migrated yet.
+   */
+  private static isTableMissing(error: unknown, tableName: string): boolean {
+    const msg = (error instanceof Error ? error.message : String(error)).toLowerCase();
+    return msg.includes(tableName) &&
+      (msg.includes('could not find') || msg.includes('schema cache') ||
+       msg.includes('does not exist') || msg.includes('relation'));
   }
 
   // Helper method to handle errors

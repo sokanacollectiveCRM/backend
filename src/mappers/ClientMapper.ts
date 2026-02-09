@@ -1,6 +1,7 @@
 import { Client } from '../entities/Client';
 import { ClientListItemDTO } from '../dto/response/ClientListItemDTO';
 import { ClientDetailDTO } from '../dto/response/ClientDetailDTO';
+import { logger } from '../common/utils/logger';
 
 /**
  * Maps Client entity to DTOs for API responses.
@@ -81,12 +82,14 @@ export class ClientMapper {
   ): ClientDetailDTO {
     // ONLY operational fields - no PHI
     // PHI fields are merged separately from PHI Broker response (in controller)
+    const phone_number = row.phone_number ?? undefined;
+    logger.info({ msg: '[ClientMapper] toDetailDTO', dto_phone_from_row: phone_number != null ? '(set)' : '(undefined)' });
     return {
       id: row.id,
       first_name: row.first_name || '',
       last_name: row.last_name || '',
       email: row.email ?? undefined,
-      phone_number: row.phone_number ?? undefined,
+      phone_number,
       status: row.status || 'lead',
       service_needed: row.service_needed ?? undefined,
       portal_status: row.portal_status ?? undefined,
