@@ -101,5 +101,10 @@ export function getAllowedOrigins(): string[] {
     optionalEnv('FRONTEND_URL_DEV'),
   ].filter(Boolean) as string[];
   const dev = IS_PRODUCTION ? [] : ['http://localhost:3001', 'http://localhost:3000', 'http://localhost:5050'];
-  return [...new Set([...fromOrigin, ...legacy, ...dev])];
+  const explicit = [...fromOrigin, ...legacy, ...dev];
+  // Production fallback: allow known deploy URLs when no env vars set
+  const prodDefaults = IS_PRODUCTION && explicit.length === 0
+    ? ['https://sokanacrm.vercel.app', 'https://crmbackend-six-wine.vercel.app']
+    : [];
+  return [...new Set([...explicit, ...prodDefaults])];
 }
