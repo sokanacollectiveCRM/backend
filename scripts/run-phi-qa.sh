@@ -91,9 +91,10 @@ fi
 # --- Step 3: Broker rejects unsigned call ---
 echo ""
 echo "Step 3: Broker POST /v1/phi/client without signature (expect 401 or 403)"
+# Use fixed placeholder body so broker always hits auth rejection path (some brokers 500 on long/real client_id body)
 UNAUTH_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BROKER_BASE/v1/phi/client" \
   -H "Content-Type: application/json" \
-  -d '{"client_id":"'"$CLIENT_ID'"','"'"'requester'"'"':{"role":"admin","user_id":"x"}}')
+  -d '{"client_id":"00000000-0000-0000-0000-000000000000","requester":{"role":"admin","user_id":"x"}}')
 
 if [[ "$UNAUTH_CODE" == "401" ]] || [[ "$UNAUTH_CODE" == "403" ]]; then
   echo -e "  ${GREEN}PASS${NC} (broker returned $UNAUTH_CODE — not public-open)"

@@ -10,7 +10,8 @@
  * - Only metadata is logged for audit purposes
  */
 
-import express, { Request, Response } from 'express';
+import crypto from 'crypto';
+import express, { Request, Response, NextFunction } from 'express';
 import { config } from 'dotenv';
 
 // Load environment variables
@@ -23,6 +24,12 @@ import { ResponseBuilder } from './utils/responseBuilder';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '8080', 10);
+
+// Request-scoped ID for correlation (no PHI)
+app.use((req: Request, _res: Response, next: NextFunction) => {
+  (req as Request & { requestId?: string }).requestId = crypto.randomUUID();
+  next();
+});
 
 // Parse JSON body and capture raw body for signature verification
 app.use(express.json({ verify: captureRawBody }));
@@ -41,18 +48,42 @@ app.get('/health', async (_req: Request, res: Response) => {
   }
 });
 
-// PHI endpoints (require signature verification)
-app.post('/v1/phi/client', verifySignature, getClientPhi);
+// PHI endpoints (require signature verification) — async errors passed to error handler
+function phiClientHandler(req: Request, res: Response, next: NextFunction): void {
+  Promise.resolve(getClientPhi(req, res)).catch((err: unknown) => {
+    const reqWithId = req as Request & { requestId?: string };
+    const requestId = reqWithId.requestId;
+    // HIPAA-safe: no PHI, no request body
+    console.error('[Server] Unhandled error in PHI handler', {
+      request_id: requestId,
+      error_name: err instanceof Error ? err.name : 'Unknown',
+      error_message: err instanceof Error ? err.message : String(err),
+    });
+    if (!res.headersSent) {
+      res.status(500).json(ResponseBuilder.error('Internal server error', 'INTERNAL_ERROR', requestId));
+    }
+    next();
+  });
+}
+app.post('/v1/phi/client', verifySignature, phiClientHandler);
 
 // 404 handler
 app.use((_req: Request, res: Response) => {
   res.status(404).json(ResponseBuilder.error('Not found', 'NOT_FOUND'));
 });
 
-// Error handler
-app.use((err: Error, _req: Request, res: Response, _next: express.NextFunction) => {
-  console.error('[Server] Unhandled error');
-  res.status(500).json(ResponseBuilder.error('Internal server error', 'INTERNAL_ERROR'));
+// Error handler (receives errors passed via next(err))
+app.use((err: Error, req: Request, res: Response, _next: express.NextFunction) => {
+  const reqWithId = req as Request & { requestId?: string };
+  const requestId = reqWithId.requestId;
+  console.error('[Server] Unhandled error', {
+    request_id: requestId,
+    error_name: err.name,
+    error_message: err.message,
+  });
+  if (!res.headersSent) {
+    res.status(500).json(ResponseBuilder.error('Internal server error', 'INTERNAL_ERROR', requestId));
+  }
 });
 
 // Graceful shutdown

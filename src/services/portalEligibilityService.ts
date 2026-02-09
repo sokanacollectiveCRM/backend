@@ -33,6 +33,10 @@ export class PortalEligibilityService {
         .maybeSingle();
 
       if (contractError) {
+        // PGRST205 = table/schema not in Supabase schema cache (e.g. contracts table missing or not exposed)
+        if (contractError.code === 'PGRST205' || (contractError.message && contractError.message.includes('Could not find the table'))) {
+          return { eligible: false, reason: 'Eligibility check unavailable (contracts table not found).' };
+        }
         console.error(`Error checking contract for client ${clientId}:`, contractError);
         throw new Error(`Failed to check contract status: ${contractError.message}`);
       }
@@ -58,6 +62,9 @@ export class PortalEligibilityService {
         .maybeSingle();
 
       if (paymentError) {
+        if (paymentError.code === 'PGRST205' || (paymentError.message && paymentError.message.includes('Could not find the table'))) {
+          return { eligible: false, reason: 'Eligibility check unavailable (payments table not found).', contractSignedAt };
+        }
         console.error(`Error checking payment for contract ${contract.id}:`, paymentError);
         throw new Error(`Failed to check payment status: ${paymentError.message}`);
       }
