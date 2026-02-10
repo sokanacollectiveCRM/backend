@@ -70,6 +70,13 @@ clientRoutes.delete('/delete',
   (req, res) => clientController.deleteClient(req, res)
 );
 
+// PHI-specific route (must come before generic /:id)
+clientRoutes.put('/:id/phi',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
+  (req, res) => clientController.updateClientPhi(req, res)
+);
+
 // Generic routes last
 clientRoutes.get('/:id',
   authMiddleware,

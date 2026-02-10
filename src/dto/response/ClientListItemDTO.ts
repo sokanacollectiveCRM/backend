@@ -26,6 +26,7 @@ export interface ClientListItemDTO {
   email?: string;
   phone_number?: string;
   status: string;
+  service_needed?: string;
   portal_status?: string;
   invited_at?: string;
   updated_at?: string;
