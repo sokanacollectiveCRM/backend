@@ -566,6 +566,140 @@ export class ClientController {
   }
 
   //
+  // updateClientPhi()
+  //
+  // PHI-only update: routes ONLY PHI fields to sokana-private (via PHI Broker).
+  // Rejects any non-PHI fields in the request body.
+  //
+  // Authorization: admin or assigned doula only
+  //
+  // PHI fields: first_name, last_name, email, phone_number, date_of_birth, due_date,
+  //   address_line1, address, city, state, zip_code, country,
+  //   health_history, health_notes, allergies, medications
+  //
+  // returns:
+  //    Canonical: { success: true, message?: string }
+  //
+  async updateClientPhi(
+    req: AuthRequest,
+    res: Response,
+  ): Promise<void> {
+    const { id } = req.params;
+    const updateData = req.body;
+    const readMode = process.env.SPLIT_DB_READ_MODE;
+
+    // Require PRIMARY mode
+    if (readMode !== 'primary') {
+      res.status(501).json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
+      return;
+    }
+
+    // Validate client ID
+    if (!id) {
+      res.status(400).json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
+      return;
+    }
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      res.status(400).json(ApiResponse.error(`Invalid client ID format: ${id}`, 'VALIDATION_ERROR'));
+      return;
+    }
+
+    if (!updateData || Object.keys(updateData).length === 0) {
+      res.status(400).json(ApiResponse.error('No fields to update', 'VALIDATION_ERROR'));
+      return;
+    }
+
+    try {
+      // ── Step 0: Normalize field names (camelCase/nested → canonical snake_case) ──
+      const normalized = normalizeClientPatch(updateData);
+
+      // ── Step 1: Split payload and validate that ONLY PHI fields are present ──
+      const { operational, phi } = splitClientPatch(normalized);
+
+      // Reject if any operational (non-PHI) fields are present
+      if (Object.keys(operational).length > 0) {
+        logger.warn({
+          clientId: id,
+          rejectedKeys: Object.keys(operational),
+        }, '[Client] PHI endpoint received non-PHI fields');
+        res.status(400).json(ApiResponse.error(
+          `This endpoint only accepts PHI fields. Non-PHI fields not allowed: ${Object.keys(operational).join(', ')}`,
+          'VALIDATION_ERROR'
+        ));
+        return;
+      }
+
+      // Ensure we have PHI fields to update
+      if (Object.keys(phi).length === 0) {
+        res.status(400).json(ApiResponse.error('No PHI fields to update', 'VALIDATION_ERROR'));
+        return;
+      }
+
+      logger.info({
+        clientId: id,
+        phiKeyCount: Object.keys(phi).length,
+      }, '[Client] PHI-only update payload validated');
+
+      // ── Step 2: Authorization check ──
+      const { canAccess, assignedClientIds } = await canAccessSensitive(req.user, id);
+      const requester = {
+        role: req.user?.role || '',
+        userId: req.user?.id || '',
+        assignedClientIds,
+      };
+
+      if (!canAccess) {
+        logger.warn({ clientId: id, role: req.user?.role }, '[Client] unauthorized PHI update attempt');
+        res.status(403).json(ApiResponse.error('Not authorized to update PHI fields', 'FORBIDDEN'));
+        return;
+      }
+
+      // ── Step 3: Verify client exists ──
+      const clientRepository = new SupabaseClientRepository(supabase);
+      const clientExists = await clientRepository.getClientById(id);
+      if (!clientExists) {
+        res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
+        return;
+      }
+
+      // ── Step 4: Write PHI fields to sokana-private (via broker) ──
+      const phiWriteResult = await updateClientPhi(id, requester, phi);
+
+      // ── Step 5: Write-through cache — keep Supabase identity fields in sync ──
+      // DEBT: Remove when list endpoint uses display_name/client_code instead of names
+      if (phi.first_name || phi.last_name || phi.email || phi.phone_number) {
+        try {
+          await clientRepository.updateIdentityCache(id, {
+            first_name: phi.first_name,
+            last_name: phi.last_name,
+            email: phi.email,
+            phone_number: phi.phone_number,
+          });
+        } catch {
+          logger.warn({ clientId: id }, '[Client] identity cache write failed (non-blocking)');
+        }
+      }
+
+      // ── Step 6: Source-of-truth instrumentation ──
+      logger.info({
+        clientId: id,
+        sources: { sensitive: 'phiBroker' },
+        keys: { sensitive: Object.keys(phiWriteResult ?? {}) },
+      }, '[Client] PHI-only update response composition');
+
+      res.json(ApiResponse.success({ message: 'PHI fields updated successfully' }));
+    } catch (error) {
+      logger.error({ errorMessage: (error as Error)?.message }, '[Client] PHI update error');
+      const err = this.handleError(error as Error, res);
+      if (!res.headersSent) {
+        res.status(err.status).json(ApiResponse.error(err.message));
+      }
+    }
+  }
+
+  //
   // createActivity()
   //
   // Creates a custom activity entry for a client
