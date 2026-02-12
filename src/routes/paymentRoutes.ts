@@ -1,10 +1,57 @@
 import express, { Request, Response } from 'express';
 import { ContractClientService } from '../services/contractClientService';
 import { SimplePaymentService } from '../services/simplePaymentService';
+import authMiddleware from '../middleware/authMiddleware';
+import authorizeRoles from '../middleware/authorizeRoles';
+import { listPaymentsFromCloudSql } from '../repositories/cloudSqlPaymentRepository';
+import { FEATURE_STRIPE } from '../config/env';
+import { paymentController } from '../controllers/paymentController';
 
 const router = express.Router();
 const contractService = new ContractClientService();
 const paymentService = new SimplePaymentService();
+
+// GET /api/payments — list payment rows from Cloud SQL (Financial tab). Auth required.
+const listPaymentsHandler = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const limit = Math.min(Number(req.query.limit) || 500, 1000);
+      const data = await listPaymentsFromCloudSql(limit);
+      res.json({ success: true, data });
+    } catch (error) {
+      const err = error as Error;
+      const msg = err?.message ?? '';
+      if (msg.includes('payments') && (msg.includes('does not exist') || msg.includes('relation'))) {
+        res.status(200).json({ success: true, data: [] });
+        return;
+      }
+      if (msg.includes('Cloud SQL') || msg.includes('CLOUD_SQL')) {
+        res.status(200).json({ success: true, data: [] });
+        return;
+      }
+      console.error('Error listing payments:', error);
+      res.status(500).json({ success: false, error: msg || 'Failed to list payments' });
+    }
+  };
+
+router.get('/', authMiddleware, (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']), listPaymentsHandler);
+router.get('', authMiddleware, (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']), listPaymentsHandler);
+
+// Stripe billing: charge customer's default payment method (admin or same user). Requires FEATURE_STRIPE.
+if (FEATURE_STRIPE) {
+  router.post(
+    '/customers/:customerId/charge',
+    authMiddleware,
+    (req: Request, res: Response, next) => {
+      const amount = req.body?.amount;
+      if (amount == null || typeof amount !== 'number' || amount <= 0) {
+        res.status(400).json({ success: false, error: 'amount (positive number, cents) is required' });
+        return;
+      }
+      next();
+    },
+    (req: Request, res: Response) => paymentController.processCharge(req, res)
+  );
+}
 
 // Get payment dashboard
 router.get('/dashboard', async (req, res) => {

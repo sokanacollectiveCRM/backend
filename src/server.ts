@@ -23,11 +23,14 @@ import contractPaymentRoutes from './routes/contractPaymentRoutes';
 import contractRoutes from './routes/contractRoutes';
 import contractSigningRoutes from './routes/contractSigningRoutes';
 import paymentRoutes from './routes/paymentRoutes';
+import invoiceRoutes from './routes/invoiceRoutes';
+import financialRoutes from './routes/financialRoutes';
 import pdfContractRoutes from './routes/pdfContractRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
 import requestRouter from './routes/requestRoute';
 import signNowRoutes from './routes/signNowRoutes';
 import userRoutes from './routes/specificUserRoutes';
+import { authController } from './index';
 
 const app: Express = express();
 
@@ -112,6 +115,8 @@ app.use((req, _res, next) => {
 });
 
 // ---- Mount other routes (wrapped for ESM/CJS compatibility) ----
+// Alias so frontend can use POST /login or POST /auth/login
+app.post('/login', (req, res) => authController.login(req, res));
 app.use('/auth', asMiddleware(authRoutes));
 app.use('/api/admin', asMiddleware(adminRoutes));
 app.use('/api/doulas', asMiddleware(doulaRoutes));
@@ -135,6 +140,8 @@ app.use('/api/contract-signing', asMiddleware(contractSigningRoutes));
 app.use('/api/dashboard', asMiddleware(dashboardRoutes));
 app.use('/api/pdf-contract', asMiddleware(pdfContractRoutes));
 app.use('/api/payments', asMiddleware(paymentRoutes));
+app.use('/api/invoices', asMiddleware(invoiceRoutes));
+app.use('/api/financial', asMiddleware(financialRoutes));
 app.use('/api/signnow', asMiddleware(signNowRoutes));
 app.use('/api/contract-payment', asMiddleware(contractPaymentRoutes));
 

@@ -1,5 +1,6 @@
 // src/features/quickbooks/utils/tokenUtils.ts
-import supabase from '../supabase';
+// QuickBooks OAuth tokens are stored in Google Cloud SQL (public.quickbooks_tokens), not Supabase.
+import { getPool } from '../db/cloudSqlPool';
 
 export interface TokenStore {
   realmId: string;
@@ -8,31 +9,44 @@ export interface TokenStore {
   expiresAt: string;
 }
 
+const QB_ENVIRONMENT = process.env.QUICKBOOKS_ENVIRONMENT || 'production';
+
 /**
- * Load the QuickBooks OAuth tokens.
+ * Load the QuickBooks OAuth tokens from Cloud SQL.
  */
 export async function getTokenFromDatabase(): Promise<TokenStore | null> {
-  console.log('🔍 [QB] Loading tokens from database...');
+  console.log('🔍 [QB] Loading tokens from Cloud SQL...');
 
-  const { data, error } = await supabase
-    .from('quickbooks_tokens')
-    .select('realm_id, access_token, refresh_token, expires_at')
-    .single();
+  const pool = getPool();
+  const { rows } = await pool.query<{
+    realm_id: string;
+    access_token: string;
+    refresh_token: string;
+    access_token_expires_at: Date | null;
+  }>(
+    `SELECT realm_id, access_token, refresh_token, access_token_expires_at
+     FROM public.quickbooks_tokens
+     WHERE environment = $1
+     ORDER BY updated_at DESC
+     LIMIT 1`,
+    [QB_ENVIRONMENT]
+  );
 
-  if (error) {
-    if (error.code === 'PGRST116') { // no rows found
-      console.log('❌ [QB] No tokens found in database');
-      return null;
-    }
-    console.error('❌ [QB] Database error loading tokens:', error.message);
-    throw new Error(`Could not load QuickBooks tokens: ${error.message}`);
+  if (!rows.length) {
+    console.log('❌ [QB] No tokens found in database');
+    return null;
   }
 
-  const tokens = {
-    realmId: data.realm_id,
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token,
-    expiresAt: data.expires_at,
+  const row = rows[0];
+  const expiresAt = row.access_token_expires_at
+    ? new Date(row.access_token_expires_at).toISOString()
+    : new Date(0).toISOString();
+
+  const tokens: TokenStore = {
+    realmId: row.realm_id,
+    accessToken: row.access_token,
+    refreshToken: row.refresh_token,
+    expiresAt,
   };
 
   console.log('✅ [QB] Tokens loaded successfully');
@@ -170,44 +184,40 @@ export async function getValidAccessToken(): Promise<string | null> {
 }
 
 /**
- * Save QuickBooks tokens to the database.
+ * Save QuickBooks tokens to Cloud SQL (upsert by realm_id + environment).
  */
 export async function saveTokensToDatabase(tokens: TokenStore): Promise<void> {
-  console.log('💾 [QB] Saving tokens to database...');
+  console.log('💾 [QB] Saving tokens to Cloud SQL...');
 
-  const { error } = await supabase
-    .from('quickbooks_tokens')
-    .upsert({
-      realm_id: tokens.realmId,
-      access_token: tokens.accessToken,
-      refresh_token: tokens.refreshToken,
-      expires_at: tokens.expiresAt,
-      updated_at: new Date().toISOString(),
-    });
+  const pool = getPool();
+  const expiresAt = new Date(tokens.expiresAt);
 
-  if (error) {
-    console.error('❌ [QB] Failed to save tokens:', error.message);
-    throw new Error(`Failed to save QuickBooks tokens: ${error.message}`);
-  }
+  await pool.query(
+    `INSERT INTO public.quickbooks_tokens (realm_id, access_token, refresh_token, access_token_expires_at, updated_at, environment)
+     VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, $5)
+     ON CONFLICT (realm_id, environment)
+     DO UPDATE SET
+       access_token = EXCLUDED.access_token,
+       refresh_token = EXCLUDED.refresh_token,
+       access_token_expires_at = EXCLUDED.access_token_expires_at,
+       updated_at = CURRENT_TIMESTAMP`,
+    [tokens.realmId, tokens.accessToken, tokens.refreshToken, expiresAt, QB_ENVIRONMENT]
+  );
 
   console.log('✅ [QB] Tokens saved successfully');
 }
 
-/** Delete QuickBooks tokens */
+/** Delete QuickBooks tokens from Cloud SQL (all rows for current environment). */
 export async function deleteTokens(): Promise<void> {
-  console.log('🗑️ [QB] Deleting tokens...');
+  console.log('🗑️ [QB] Deleting tokens from Cloud SQL...');
 
-  const { error } = await supabase
-    .from('quickbooks_tokens')
-    .delete()
-    .gt('realm_id', ''); // Delete all rows where realm_id > '' (which means all rows)
+  const pool = getPool();
+  const { rowCount } = await pool.query(
+    'DELETE FROM public.quickbooks_tokens WHERE environment = $1',
+    [QB_ENVIRONMENT]
+  );
 
-  if (error) {
-    console.error('❌ [QB] Failed to delete tokens:', error.message);
-    throw new Error(`Failed to delete QuickBooks tokens: ${error.message}`);
-  }
-
-  console.log('✅ [QB] Tokens deleted successfully');
+  console.log('✅ [QB] Tokens deleted successfully', rowCount != null ? `(${rowCount} row(s))` : '');
 }
 
 // Add these exports for the QuickBooks service

@@ -8,17 +8,21 @@ The Sokana Collective Backend is a comprehensive Node.js/Express.js application 
 
 ### High-Level Architecture
 
+**Data split:** Supabase = **auth only**. All application data = **Google Cloud SQL**. See [ARCHITECTURE_AUTH_AND_DATA.md](./ARCHITECTURE_AUTH_AND_DATA.md).
+
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Frontend      │    │   Backend       │    │   External      │
 │   (React/Next)  │◄──►│   (Express.js)  │◄──►│   Services      │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                                 │                       │
-                                ▼                       ▼
-                       ┌─────────────────┐    ┌─────────────────┐
-                       │   Database      │    │   Email/Payment │
-                       │   (Supabase)    │    │   (Stripe/QBO)  │
-                       └─────────────────┘    └─────────────────┘
+                    ┌───────────┴───────────┐           ▼
+                    ▼                       ▼   ┌─────────────────┐
+           ┌─────────────────┐     ┌─────────────────┐ │   Email/Payment │
+           │   Supabase      │     │   Google        │ │   (Stripe/QBO)   │
+           │   (Auth only)   │     │   Cloud SQL     │ └─────────────────┘
+           └─────────────────┘     │   (All data)    │
+                                   └─────────────────┘
 ```
 
 ## Technology Stack
@@ -27,8 +31,8 @@ The Sokana Collective Backend is a comprehensive Node.js/Express.js application 
 - **Runtime:** Node.js 18+
 - **Framework:** Express.js 4.21.2
 - **Language:** TypeScript 5.7.3
-- **Database:** Supabase (PostgreSQL)
-- **Authentication:** Supabase Auth
+- **Authentication:** Supabase Auth only (sessions, login, OAuth)
+- **Application data:** Google Cloud SQL (PostgreSQL) when `CLOUD_SQL_HOST` is set; see [ARCHITECTURE_AUTH_AND_DATA.md](./ARCHITECTURE_AUTH_AND_DATA.md)
 
 ### Key Dependencies
 - **Email:** Nodemailer 6.10.0

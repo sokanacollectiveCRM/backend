@@ -10,8 +10,8 @@ import { Client } from '../entities/Client';
 
 import { AuthRequest } from '../types';
 import { ClientUseCase } from '../usecase/clientUseCase';
+import { ClientRepository } from '../repositories/interface/clientRepository';
 import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
-import { SupabaseClientRepository } from '../repositories/supabaseClientRepository';
 import { SupabaseActivityRepository } from '../repositories/supabaseActivityRepository';
 import { PortalEligibilityService } from '../services/portalEligibilityService';
 import supabase from '../supabase';
@@ -19,7 +19,7 @@ import { ClientMapper } from '../mappers/ClientMapper';
 import { ActivityMapper } from '../mappers/ActivityMapper';
 import { ApiResponse } from '../utils/responseBuilder';
 import { canAccessSensitive } from '../utils/sensitiveAccess';
-import { fetchClientPhi, updateClientPhi } from '../services/phiBrokerService';
+import { updateClientPhi } from '../services/phiBrokerService';
 import { normalizeClientPatch, splitClientPatch, stripPhiAndDetect } from '../constants/phiFields';
 import { logger } from '../common/utils/logger';
 import { IS_PRODUCTION } from '../config/env';
@@ -27,13 +27,19 @@ import { IS_PRODUCTION } from '../config/env';
 export class ClientController {
   private clientUseCase: ClientUseCase;
   private assignmentRepository: SupabaseAssignmentRepository;
+  private clientRepository: ClientRepository;
   private eligibilityService: PortalEligibilityService;
 
-  constructor (clientUseCase: ClientUseCase, assignmentRepository: SupabaseAssignmentRepository) {
+  constructor (
+    clientUseCase: ClientUseCase,
+    assignmentRepository: SupabaseAssignmentRepository,
+    clientRepository: ClientRepository
+  ) {
     this.clientUseCase = clientUseCase;
     this.assignmentRepository = assignmentRepository;
+    this.clientRepository = clientRepository;
     this.eligibilityService = new PortalEligibilityService(supabase);
-  };
+  }
 
   //
   // getClients()
@@ -46,139 +52,45 @@ export class ClientController {
   async getClients(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { id, role } = req.user;
-      const { detailed } = req.query;
-      const readMode = process.env.SPLIT_DB_READ_MODE;
-
+      const { detailed, limit: limitParam } = req.query;
       const clients = detailed === 'true'
         ? await this.clientUseCase.getClientsDetailed(id, role)
         : await this.clientUseCase.getClientsLite(id, role);
 
-      // Canonical response format for split-DB primary mode
-      if (readMode === 'primary') {
-        // Compute eligibility and map to DTOs
-        const dtos = await Promise.all(
-          clients.map(async (client) => {
-            let isEligible = false;
-            try {
-              const eligibility = await this.eligibilityService.getInviteEligibility(client.id);
-              isEligible = eligibility.eligible;
-            } catch (error) {
-              console.error(`Error checking eligibility for client ${client.id}:`, error);
-            }
-            return ClientMapper.toListItemDTO(client, isEligible);
-          })
-        );
+      const limit = limitParam != null ? Math.min(Math.max(0, parseInt(String(limitParam), 10) || 0), 1000) : undefined;
+      const sliced = limit != null && limit > 0 ? clients.slice(0, limit) : clients;
 
-        // Production: strip PHI by default; enrich for admin and assigned doulas only
-        let safeDtos = dtos as Record<string, any>[];
-        if (IS_PRODUCTION) {
-          // Strip first (removes any PHI that may have come from entity)
-          const allPhiKeys: string[] = [];
-          safeDtos = dtos.map((d) => {
-            const { stripped, hadPhi, phiKeysFound } = stripPhiAndDetect(d as Record<string, any>);
-            if (hadPhi) allPhiKeys.push(...phiKeysFound);
-            return stripped;
-          });
-          if (allPhiKeys.length > 0) {
-            const uniqueKeys = [...new Set(allPhiKeys)];
-            logger.warn(
-              { phi_keys_stripped: uniqueKeys, count: dtos.length },
-              '[Client] SECURITY: PHI keys found in list response; stripped (values not logged)'
-            );
-          }
+      const dtos = sliced.map((client) => ClientMapper.toListItemDTO(client, false));
 
-          // Enrich with PHI for admin and assigned doulas (first_name, last_name, email)
-          const { canAccessSensitive } = await import('../utils/sensitiveAccess');
-          const { fetchClientPhi } = await import('../services/phiBrokerService');
-          const firstId = safeDtos[0]?.id as string | undefined;
-          const accessCheck = await canAccessSensitive(req.user!, firstId || '');
-          const requester = {
-            role: req.user?.role || '',
-            userId: req.user?.id || '',
-            assignedClientIds: accessCheck.assignedClientIds,
-          };
-          const canEnrich =
-            req.user?.role === 'admin' ||
-            (req.user?.role === 'doula' && requester.assignedClientIds.length > 0);
-          if (canEnrich) {
-            const enriched = await Promise.all(
-              safeDtos.map(async (dto) => {
-                const clientId = dto.id as string;
-                const access = await canAccessSensitive(req.user!, clientId);
-                if (!access.canAccess) return dto;
-                try {
-                  const phi = await fetchClientPhi(clientId, {
-                    ...requester,
-                    assignedClientIds: access.assignedClientIds,
-                  });
-                  if (phi.first_name || phi.last_name || phi.email) {
-                    return {
-                      ...dto,
-                      first_name: phi.first_name ?? dto.first_name,
-                      last_name: phi.last_name ?? dto.last_name,
-                      email: phi.email ?? dto.email,
-                    };
-                  }
-                } catch (e) {
-                  logger.warn({ clientId, err: (e as Error)?.message }, '[Client] PHI enrichment skipped for list item');
-                }
-                return dto;
-              })
-            );
-            safeDtos = enriched;
-          }
-        }
-
-        logger.info({
-          sources: { operational: 'supabase', sensitive: IS_PRODUCTION ? 'phiBroker (when authorized)' : 'none' },
-          keys: {
-            operational: safeDtos.length > 0 ? Object.keys(safeDtos[0]) : [],
-          },
-          count: safeDtos.length,
-        }, '[Client] list response composition');
-
-        res.json(ApiResponse.list(safeDtos, safeDtos.length));
-        return;
-      }
-
-      // Legacy response format (raw array) for non-primary modes
-      // Note: Avoid logging client data - HIPAA compliance
-
-      // Compute eligibility for each client and add to response
-      let clientsWithEligibility = await Promise.all(
-        clients.map(async (client) => {
-          const clientJson = client.toJson() as any;
-          try {
-            const eligibility = await this.eligibilityService.getInviteEligibility(client.id);
-            clientJson.is_eligible = eligibility.eligible;
-          } catch (error) {
-            // If eligibility check fails, default to false
-            logger.error({ err: error, clientId: client.id }, 'Error checking eligibility for client');
-            clientJson.is_eligible = false;
-          }
-          return clientJson;
-        })
-      );
-
-      // Production: strip any PHI from list response
+      let safeDtos = dtos as Record<string, unknown>[];
       if (IS_PRODUCTION) {
         const allPhiKeys: string[] = [];
-        clientsWithEligibility = clientsWithEligibility.map((row) => {
-          const { stripped, hadPhi, phiKeysFound } = stripPhiAndDetect(row);
+        safeDtos = dtos.map((d) => {
+          const { stripped, hadPhi, phiKeysFound } = stripPhiAndDetect(d as Record<string, any>);
           if (hadPhi) allPhiKeys.push(...phiKeysFound);
           return stripped;
         });
         if (allPhiKeys.length > 0) {
-          const uniqueKeys = [...new Set(allPhiKeys)];
           logger.warn(
-            { phi_keys_stripped: uniqueKeys, count: clientsWithEligibility.length },
-            '[Client] SECURITY: PHI keys found in list response; stripped (values not logged)'
+            { phi_keys_stripped: [...new Set(allPhiKeys)], count: safeDtos.length },
+            '[Client] SECURITY: PHI keys stripped from list (values not logged)'
           );
         }
       }
 
-      res.json(clientsWithEligibility);
+      logger.info({ source: 'cloud_sql', count: safeDtos.length }, '[Client] list response');
+      res.json(ApiResponse.list(safeDtos, safeDtos.length));
     } catch (getError) {
+      const msg = (getError instanceof Error ? getError.message : String(getError)) || '';
+      if (msg.includes('does not exist') && msg.toLowerCase().includes('column')) {
+        if (!res.headersSent) {
+          res.status(503).json({
+            error: 'phi_clients is missing columns required by the backend. Run migrations/alter_phi_clients_backend_columns.sql on your Cloud SQL database (sokana_private).',
+            code: 'CLOUD_SQL_SCHEMA',
+          });
+        }
+        return;
+      }
       const error = this.handleError(getError, res);
       if (!res.headersSent) {
         res.status(error.status).json({ error: error.message });
@@ -217,106 +129,61 @@ export class ClientController {
   //
   // getClientById()
   //
-  // Grab a specific client with detailed information.
-  // Includes PHI fields from PHI Broker (Cloud SQL) when user is authorized.
-  //
-  // Authorization for PHI:
-  // - admin: Always authorized
-  // - doula: Authorized only if assigned to client
-  // - other: PHI fields omitted
-  //
-  // returns:
-  //    ClientDetailDTO (operational fields always; PHI fields when authorized)
+  // Grab a specific client from Cloud SQL (phi_clients).
+  // Operational fields always; PHI fields only when user is authorized (admin or assigned doula).
   //
   async getClientById(req: AuthRequest, res: Response): Promise<void> {
   try {
     const { id } = req.params;
-    const readMode = process.env.SPLIT_DB_READ_MODE;
-
-    // Require PRIMARY mode - shadow mode disabled
-    if (readMode !== 'primary') {
-      res.status(501).json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
-      return;
-    }
-
-    // Step 1: Validate client ID
     if (!id) {
       res.status(400).json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
       return;
     }
 
-    // Step 2: Fetch operational data from Supabase (explicit columns, no PHI)
-    const clientRepository = new SupabaseClientRepository(supabase);
-    const clientRow = await clientRepository.getClientById(id);
-
-    // Step 3: Handle not found
+    const clientRow = await this.clientRepository.getClientById?.(id) ?? null;
     if (!clientRow) {
       res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
       return;
     }
 
-    // Step 4: Compute eligibility (optional, swallow errors)
-    let isEligible = false;
-    try {
-      const eligibility = await this.eligibilityService.getInviteEligibility(id);
-      isEligible = eligibility.eligible;
-    } catch (eligibilityError) {
-      // HIPAA: Do not log client identifiers, only generic error
-      console.error('Error checking eligibility');
-    }
+    const dto = ClientMapper.toDetailDTO(clientRow, false);
 
-    // Step 5: Map operational data to DTO
-    const dto = ClientMapper.toDetailDTO(clientRow, isEligible);
-
-    // Step 6: Check authorization for sensitive/PHI data
-    const { canAccess, assignedClientIds } = await canAccessSensitive(req.user, id);
-
+    const { canAccess } = await canAccessSensitive(req.user, id);
     if (!canAccess) {
-      // Source-of-truth instrumentation (operational only)
-      logger.info({
-        clientId: id,
-        sources: { operational: 'supabase', sensitive: 'skipped (unauthorized)' },
-        keys: { operational: Object.keys(dto) },
-      }, '[Client] detail response composition');
-
+      logger.info({ clientId: id, source: 'cloud_sql', phi: 'skipped (unauthorized)' }, '[Client] detail response');
       res.json(ApiResponse.success(dto));
       return;
     }
 
-    // Authorized: Fetch PHI from PHI Broker service
     try {
-      const phiData = await fetchClientPhi(id, {
-        role: req.user?.role || '',
-        userId: req.user?.id || '',
-        assignedClientIds,
-      });
-
-      const merged = { ...dto, ...phiData };
-
-      // Source-of-truth instrumentation (merged)
-      logger.info({
-        clientId: id,
-        sources: { operational: 'supabase', sensitive: 'phiBroker' },
-        keys: {
-          operational: Object.keys(dto),
-          sensitive: Object.keys(phiData || {}),
-          mergedSample: Object.keys(merged).slice(0, 20),
-        },
-      }, '[Client] detail response composition');
-
+      const fullClient = await this.clientRepository.findClientDetailedById(id);
+      const u = fullClient.user;
+      const merged: Record<string, unknown> = { ...dto };
+      if (fullClient.health_history != null) merged.health_history = fullClient.health_history;
+      if (fullClient.allergies != null) merged.allergies = fullClient.allergies;
+      if (fullClient.due_date != null) merged.due_date = fullClient.due_date instanceof Date ? fullClient.due_date.toISOString().slice(0, 10) : fullClient.due_date;
+      if (fullClient.annual_income != null) merged.annual_income = fullClient.annual_income;
+      if (fullClient.baby_sex != null) merged.baby_sex = fullClient.baby_sex;
+      if (u?.health_notes != null) merged.health_notes = u.health_notes;
+      if (u?.baby_name != null) merged.baby_name = u.baby_name;
+      if (u?.number_of_babies != null) merged.number_of_babies = u.number_of_babies;
+      if (u?.race_ethnicity != null) merged.race_ethnicity = u.race_ethnicity;
+      if (u?.client_age_range != null) merged.client_age_range = u.client_age_range;
+      if (u?.insurance != null) merged.insurance = u.insurance;
+      if (u?.pregnancy_number != null) merged.pregnancy_number = u.pregnancy_number;
+      if (u?.had_previous_pregnancies != null) merged.had_previous_pregnancies = u.had_previous_pregnancies;
+      if (u?.previous_pregnancies_count != null) merged.previous_pregnancies_count = u.previous_pregnancies_count;
+      if (u?.living_children_count != null) merged.living_children_count = u.living_children_count;
+      if (u?.past_pregnancy_experience != null) merged.past_pregnancy_experience = u.past_pregnancy_experience;
+      if ((u as any)?.medications != null) merged.medications = (u as any).medications;
+      if ((u as any)?.date_of_birth != null) merged.date_of_birth = typeof (u as any).date_of_birth === 'string' ? (u as any).date_of_birth : ((u as any).date_of_birth as Date)?.toISOString?.()?.slice(0, 10);
+      if ((u as any)?.address_line1 != null) merged.address_line1 = (u as any).address_line1;
+      logger.info({ clientId: id, source: 'cloud_sql', phi: 'included' }, '[Client] detail response');
       res.json(ApiResponse.success(merged));
-      return;
-    } catch (e) {
-      logger.error({
-        clientId: id,
-        errorName: (e as Error)?.name,
-        errorMessage: (e as Error)?.message,
-      }, '[Client] PHI broker error');
-      res.status(502).json(ApiResponse.error('Upstream PHI service unavailable', 'PHI_BROKER_ERROR'));
-      return;
+    } catch {
+      res.json(ApiResponse.success(dto));
     }
   } catch (error) {
-    // HIPAA: Do not log error details which may contain client data
     const err = this.handleError(error, res);
     if (!res.headersSent) {
       res.status(err.status).json(ApiResponse.error(err.message));
@@ -377,8 +244,7 @@ export class ClientController {
 
     try {
       // Use repository with explicit SELECT columns (no select('*'), no PHI)
-      const clientRepository = new SupabaseClientRepository(supabase);
-      const updatedRow = await clientRepository.updateClientStatusCanonical(clientId, status.trim());
+      const updatedRow = await this.clientRepository.updateClientStatusCanonical?.(clientId, status.trim()) ?? null;
 
       if (!updatedRow) {
         res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
@@ -477,12 +343,10 @@ export class ClientController {
         return;
       }
 
-      const clientRepository = new SupabaseClientRepository(supabase);
-
-      // ── Step 3a: Write operational fields to Supabase ──
+      // ── Step 3a: Write operational fields (Supabase or Cloud SQL) ──
       let operationalResult = null;
-      if (Object.keys(operational).length > 0) {
-        operationalResult = await clientRepository.updateClientOperational(id, operational);
+      if (Object.keys(operational).length > 0 && this.clientRepository.updateClientOperational) {
+        operationalResult = await this.clientRepository.updateClientOperational(id, operational);
         if (!operationalResult) {
           res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
           return;
@@ -499,7 +363,7 @@ export class ClientController {
         // TODO: Remove when list endpoint uses display_name/client_code instead of names.
         if (phi.first_name || phi.last_name || phi.email || phi.phone_number) {
           try {
-            await clientRepository.updateIdentityCache(id, {
+            await this.clientRepository.updateIdentityCache?.(id, {
               first_name: phi.first_name,
               last_name: phi.last_name,
               email: phi.email,
@@ -512,7 +376,7 @@ export class ClientController {
       }
 
       // ── Step 4: Fresh read — get authoritative data from both sources ──
-      const freshOperational = operationalResult ?? await clientRepository.getClientById(id);
+      const freshOperational = operationalResult ?? await this.clientRepository.getClientById?.(id) ?? null;
       if (!freshOperational) {
         res.status(404).json(ApiResponse.error('Client not found after update', 'NOT_FOUND'));
         return;
@@ -657,8 +521,7 @@ export class ClientController {
       }
 
       // ── Step 3: Verify client exists ──
-      const clientRepository = new SupabaseClientRepository(supabase);
-      const clientExists = await clientRepository.getClientById(id);
+      const clientExists = await this.clientRepository.getClientById?.(id) ?? null;
       if (!clientExists) {
         res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
         return;
@@ -667,11 +530,10 @@ export class ClientController {
       // ── Step 4: Write PHI fields to sokana-private (via broker) ──
       const phiWriteResult = await updateClientPhi(id, requester, phi);
 
-      // ── Step 5: Write-through cache — keep Supabase identity fields in sync ──
-      // DEBT: Remove when list endpoint uses display_name/client_code instead of names
+      // ── Step 5: Write-through cache — keep identity fields in sync ──
       if (phi.first_name || phi.last_name || phi.email || phi.phone_number) {
         try {
-          await clientRepository.updateIdentityCache(id, {
+          await this.clientRepository.updateIdentityCache?.(id, {
             first_name: phi.first_name,
             last_name: phi.last_name,
             email: phi.email,
@@ -738,8 +600,7 @@ export class ClientController {
 
     try {
       // Verify client exists (optional but preferred)
-      const clientRepository = new SupabaseClientRepository(supabase);
-      const clientExists = await clientRepository.getClientById(id);
+      const clientExists = await this.clientRepository.getClientById?.(id) ?? null;
       if (!clientExists) {
         res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
         return;
@@ -802,8 +663,7 @@ export class ClientController {
 
     try {
       // Verify client exists (optional but preferred)
-      const clientRepository = new SupabaseClientRepository(supabase);
-      const clientExists = await clientRepository.getClientById(id);
+      const clientExists = await this.clientRepository.getClientById?.(id) ?? null;
       if (!clientExists) {
         res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
         return;

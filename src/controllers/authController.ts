@@ -78,7 +78,11 @@ export class AuthController {
         maxAge: 3600000,
         path: '/',
       });
-      res.status(200).json({ message: 'Login successful', user: result.user.toJSON() });
+      res.status(200).json({
+        message: 'Login successful',
+        user: result.user.toJSON(),
+        token: result.token,
+      });
     }
     catch (loginError) {
       const error = this.handleError(loginError, res);
@@ -418,6 +422,9 @@ export class AuthController {
     } else if (error instanceof ConflictError) {
       return { status: 409, message: error.message};
     } else if (error instanceof AuthenticationError) {
+      if (error.message.includes('temporarily unavailable')) {
+        return { status: 503, message: error.message };
+      }
       return { status: 401, message: error.message};
     } else if (error instanceof NotFoundError) {
       return { status: 404, message: error.message};

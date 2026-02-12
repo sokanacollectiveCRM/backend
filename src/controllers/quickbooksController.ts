@@ -82,50 +82,27 @@ export const handleQuickBooksCallback: RequestHandler = async (req, res, next) =
     await handleAuthCallback(fullUrl)
     console.log('✅ [QB Callback] QuickBooks connected successfully');
 
-    // Get frontend URL from environment or default
+    // Get frontend URL and redirect path (default: QuickBooks integration page)
     const frontendUrl = process.env.FRONTEND_URL || process.env.FRONTEND_URL_DEV || 'http://localhost:3001';
-
-    // Redirect to dashboard with success message
-    const redirectUrl = `${frontendUrl}/dashboard?quickbooks=connected`;
+    const successPath = process.env.QUICKBOOKS_SUCCESS_REDIRECT_PATH || '/integrations/quickbooks';
+    const redirectUrl = `${frontendUrl}${successPath.startsWith('/') ? successPath : `/${successPath}`}?quickbooks=connected`;
     console.log('🔀 [QB Callback] Redirecting to:', redirectUrl);
 
-    res.send(`
-      <html><body>
-        <script>
-          // Try to notify opener if this was opened in a popup
-          if (window.opener) {
-            try {
-              window.opener.postMessage({
-                success: true,
-                source: 'quickbooks-oauth',
-                message: 'QuickBooks connected successfully'
-              }, '${frontendUrl}');
-              window.close();
-            } catch (e) {
-              console.error('Failed to notify opener:', e);
-              window.location.href = '${redirectUrl}';
-            }
-          } else {
-            // If no opener, redirect directly
-            window.location.href = '${redirectUrl}';
-          }
-        </script>
-        <p>QuickBooks connected successfully! Redirecting...</p>
-        <p>If you are not redirected, <a href="${redirectUrl}">click here</a>.</p>
-      </body></html>
-    `)
+    // Use HTTP redirect so the browser navigates immediately (no reliance on JavaScript)
+    res.redirect(302, redirectUrl);
   } catch (err) {
+    const message = err instanceof Error ? err.message : 'Connection failed';
     console.error('❌ [QB Callback] Error processing callback:', err);
     const frontendUrl = process.env.FRONTEND_URL || process.env.FRONTEND_URL_DEV || 'http://localhost:3001';
-    const errorRedirectUrl = `${frontendUrl}/dashboard?quickbooks=error&message=${encodeURIComponent(err instanceof Error ? err.message : 'Connection failed')}`;
+    const errorPath = process.env.QUICKBOOKS_SUCCESS_REDIRECT_PATH || '/integrations/quickbooks';
+    const errorRedirectUrl = `${frontendUrl}${errorPath.startsWith('/') ? errorPath : `/${errorPath}`}?quickbooks=error&message=${encodeURIComponent(message)}`;
 
     res.send(`
       <html><body>
-        <script>
-          window.location.href = '${errorRedirectUrl}';
-        </script>
-        <p>Error connecting QuickBooks. Redirecting...</p>
-        <p>If you are not redirected, <a href="${errorRedirectUrl}">click here</a>.</p>
+        <script>window.location.href = '${errorRedirectUrl}';</script>
+        <p><strong>Error connecting QuickBooks.</strong></p>
+        <p>${message}</p>
+        <p>Redirecting to app… If not, <a href="${errorRedirectUrl}">click here</a>.</p>
       </body></html>
     `)
   }

@@ -108,13 +108,24 @@ export async function updateClientPhi(
     });
 
     if (!response.ok) {
+      // Get error details from broker response
+      let errorDetails = 'Unknown error';
+      try {
+        const errorBody = await response.json();
+        errorDetails = errorBody.error || errorBody.message || JSON.stringify(errorBody);
+      } catch {
+        errorDetails = await response.text();
+      }
+
       // Log metadata only — never PHI values
       console.error('[PhiBroker] Update failed', {
         status: response.status,
         clientId,
         userId: requester.userId,
+        fieldKeys: Object.keys(fields), // Log field names (not values)
+        brokerError: errorDetails,
       });
-      throw new PhiBrokerError(`Broker update returned ${response.status}`);
+      throw new PhiBrokerError(`Broker update returned ${response.status}: ${errorDetails}`);
     }
 
     const result = await response.json() as { success: boolean; data?: PhiData; error?: string };

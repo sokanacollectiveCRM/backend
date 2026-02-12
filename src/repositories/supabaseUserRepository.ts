@@ -26,7 +26,11 @@ export class SupabaseUserRepository implements UserRepository {
       .maybeSingle(); // Use maybeSingle() instead of single() to avoid errors when no row found
 
     if (error) {
-      console.error(`Error finding user by email ${email}:`, error);
+      // Supabase auth-only: public.users may not exist; backend falls back to auth user. Don't log as error.
+      const isMissingTable = error.code === 'PGRST205' || (error.message && error.message.includes("Could not find the table 'public.users'"));
+      if (!isMissingTable) {
+        console.error(`Error finding user by email ${email}:`, error);
+      }
       return null;
     }
 

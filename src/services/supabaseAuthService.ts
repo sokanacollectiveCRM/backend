@@ -2,10 +2,28 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { User } from '../entities/User';
 import { UserRepository } from '../repositories/interface/userRepository';
 import { AuthService } from '../services/interface/authService';
+import { ROLE } from '../types';
 import {
   AuthenticationError,
   AuthorizationError
 } from './../domains/errors';
+
+/** Build app User from Supabase auth user when public.users is missing or has no row. */
+function userFromAuthUser(authUser: { id: string; email?: string; user_metadata?: Record<string, unknown>; app_metadata?: Record<string, unknown> }): User {
+  const meta = authUser.user_metadata || {};
+  const appMeta = authUser.app_metadata || {};
+  const role = (meta.role as string) || (appMeta.role as string) || 'client';
+  const validRole = ['admin', 'doula', 'client'].includes(role) ? (role as ROLE) : ROLE.CLIENT;
+  return new User({
+    id: authUser.id,
+    email: authUser.email || '',
+    firstname: (meta.first_name as string) || (meta.firstname as string) || '',
+    lastname: (meta.last_name as string) || (meta.lastname as string) || '',
+    first_name: (meta.first_name as string) || (meta.firstname as string) || '',
+    last_name: (meta.last_name as string) || (meta.lastname as string) || '',
+    role: validRole,
+  });
+}
 
 export class SupabaseAuthService implements AuthService {
   private supabaseClient: SupabaseClient;
@@ -62,28 +80,52 @@ export class SupabaseAuthService implements AuthService {
     password: string
   ): Promise<{user: User, token: string}> {
 
-    const { data, error } = await this.supabaseClient.auth.signInWithPassword({
-      email,
-      password: password
-    });
+    let result: Awaited<ReturnType<typeof this.supabaseClient.auth.signInWithPassword>>;
 
-    if (!data.session) {
-      throw new AuthenticationError("Invalid Credentials");
+    try {
+      result = await this.supabaseClient.auth.signInWithPassword({
+        email,
+        password: password
+      });
+    } catch (networkErr: unknown) {
+      const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);
+      const cause = networkErr instanceof Error && 'cause' in networkErr ? (networkErr.cause as { code?: string }) : undefined;
+      const isTimeoutOrNetwork =
+        msg.includes('fetch failed') ||
+        msg.includes('timeout') ||
+        msg.includes('ECONNREFUSED') ||
+        cause?.code === 'UND_ERR_CONNECT_TIMEOUT';
+      if (isTimeoutOrNetwork) {
+        console.warn('[auth] Supabase unreachable', { email: email?.trim?.() || '(missing)', reason: msg });
+        throw new AuthenticationError('Authentication service temporarily unavailable. Please try again.');
+      }
+      throw networkErr;
     }
 
+    const { data, error } = result;
+
     if (error) {
-      throw new AuthenticationError('Authentication error: Sign in failed from Supabase');
+      console.warn('[auth] Login failed', { email: email?.trim?.() || '(missing)', reason: error.message });
+      throw new AuthenticationError(error.message || 'Sign in failed from Supabase');
+    }
+
+    if (!data.session) {
+      console.warn('[auth] Login failed: no session', { email: email?.trim?.() || '(missing)' });
+      throw new AuthenticationError('Invalid Credentials');
     }
 
     const token = data.session.access_token;
+    const authUser = data.user;
 
     try {
       const user = await this.userRepository.findByEmail(email);
-
-      return { user, token };
-    } catch (error) {
-      throw new Error('Authentication error: User could not be found from repository');
+      if (user) {
+        return { user, token };
+      }
+    } catch {
+      // public.users missing or no row — use Supabase Auth as source of truth
     }
+    return { user: userFromAuthUser(authUser), token };
   }
 
   async getMe(
@@ -97,20 +139,14 @@ export class SupabaseAuthService implements AuthService {
     }
 
     try {
-      const user_profile = await this.userRepository.findByEmail(user.email);
-
-      if (!user_profile) {
-        throw new Error('Authentication error: User profile not found in repository');
+      const user_profile = await this.userRepository.findByEmail(user.email ?? '');
+      if (user_profile) {
+        return user_profile;
       }
-
-      return user_profile;
-
-    } catch (error: any) {
-      if (error.message.includes('not found')) {
-        throw error;
-      }
-      throw new Error(`Authentication error: getMe could not be found from repository: ${error.message}`);
+    } catch {
+      // public.users missing or no row
     }
+    return userFromAuthUser(user);
   }
 
   async logout(): Promise<void> {
@@ -166,10 +202,17 @@ export class SupabaseAuthService implements AuthService {
       throw new Error(error.message);
     }
 
-    // Fetch user from database
-    const user = await this.userRepository.findByEmail(data.user.email);
+    if (!data?.user) {
+      throw new Error('Invalid token');
+    }
 
-    return user;
+    try {
+      const user = await this.userRepository.findByEmail(data.user.email ?? '');
+      if (user) return user;
+    } catch {
+      // public.users missing or no row
+    }
+    return userFromAuthUser(data.user);
   }
 
   async getGoogleAuthUrl(

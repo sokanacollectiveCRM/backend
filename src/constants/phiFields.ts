@@ -119,14 +119,39 @@ export const OPERATIONAL_UPDATE_COLUMNS = new Set([
  * camelCase (phoneNumber), short (firstname), and alternate snake names.
  */
 const FIELD_ALIAS_MAP: Record<string, string> = {
-  // Identity
+  // Identity (both lowercase and camelCase variants)
   firstname: 'first_name',
+  firstName: 'first_name',
   lastname: 'last_name',
+  lastName: 'last_name',
   phoneNumber: 'phone_number',
+  phonenumber: 'phone_number',
+
+  // Dates
+  dateOfBirth: 'date_of_birth',
+  dateofbirth: 'date_of_birth',
+  dueDate: 'due_date',
+  duedate: 'due_date',
+
+  // Address
+  addressLine1: 'address_line1',
+  addressline1: 'address_line1',
+  zipCode: 'zip_code',
+  zipcode: 'zip_code',
+
+  // Clinical
+  healthHistory: 'health_history',
+  healthhistory: 'health_history',
+  healthNotes: 'health_notes',
+  healthnotes: 'health_notes',
 
   // Workflow / operational
   serviceNeeded: 'service_needed',
+  serviceneeded: 'service_needed',
   childrenExpected: 'children_expected',
+  childrenexpected: 'children_expected',
+  portalStatus: 'portal_status',
+  portalstatus: 'portal_status',
 };
 
 /**
