@@ -77,16 +77,8 @@ export class AuthUseCase {
     }
 
     try {
-      const existingUser = await this.userRepository.findByEmail(email);
-      if (!existingUser) {
-        throw new AuthorizationError("Invalid credentials. Please try again or contact the office.");
-      }
-      // let auth service return the user who just logged in alongside the session token
-      const { user, token } = await this.authService.login(
-        email,
-        password
-      );
-
+      // Authenticate with Supabase Auth first (auth.users). No dependency on public.users.
+      const { user, token } = await this.authService.login(email, password);
       return { user, token };
     } catch (error) {
       throw new AuthenticationError(error.message);

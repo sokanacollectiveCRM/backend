@@ -1,8 +1,19 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
+import { FEATURE_STRIPE } from '../config/env';
 import { StripePaymentService } from '../services/payments/stripePaymentService';
 
-const paymentService = new StripePaymentService();
+let paymentServiceInstance: StripePaymentService | null = null;
+
+function getPaymentService(): StripePaymentService {
+  if (!FEATURE_STRIPE) {
+    throw new Error('Stripe is disabled (FEATURE_STRIPE=false)');
+  }
+  if (!paymentServiceInstance) {
+    paymentServiceInstance = new StripePaymentService();
+  }
+  return paymentServiceInstance;
+}
 
 // Validation schemas
 const saveCardSchema = z.object({
@@ -33,7 +44,7 @@ class PaymentController {
         return;
       }
 
-      const card = await paymentService.saveCard({
+      const card = await getPaymentService().saveCard({
         customerId,
         cardToken,
       });
@@ -65,7 +76,7 @@ class PaymentController {
         return;
       }
 
-      const charge = await paymentService.chargeCard({
+      const charge = await getPaymentService().chargeCard({
         customerId,
         amount,
         description,
@@ -98,7 +109,7 @@ class PaymentController {
         return;
       }
 
-      const updatedCard = await paymentService.updateCard({
+      const updatedCard = await getPaymentService().updateCard({
         customerId,
         cardToken,
         paymentMethodId,
@@ -130,7 +141,7 @@ class PaymentController {
         return;
       }
 
-      const paymentMethods = await paymentService.getPaymentMethods(customerId);
+      const paymentMethods = await getPaymentService().getPaymentMethods(customerId);
 
       res.json({
         success: true,
@@ -156,7 +167,7 @@ class PaymentController {
         return;
       }
 
-      const customers = await paymentService.getCustomersWithStripeId();
+      const customers = await getPaymentService().getCustomersWithStripeId();
 
       res.json({
         success: true,

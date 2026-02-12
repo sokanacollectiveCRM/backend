@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 import { getStripe } from '../../config/stripe';
 import supabase from '../../supabase';
+import { insertPaymentToCloudSql } from '../../repositories/cloudSqlPaymentRepository';
 
 interface SaveCardParams {
   customerId: string;
@@ -252,6 +253,19 @@ export class StripePaymentService {
           ).catch(err => {
             console.error('❌ QuickBooks sync failed (non-blocking):', err);
           });
+        }
+      }
+
+      // Record payment in Google Cloud SQL payments table (for GET /api/payments and reconciliation)
+      if (paymentIntent.status === 'succeeded') {
+        const cloudSqlId = await insertPaymentToCloudSql({
+          client_id: customerId,
+          amount_cents: paymentIntent.amount,
+          transaction_id: paymentIntent.id,
+          description: paymentIntent.description ?? undefined,
+        });
+        if (cloudSqlId != null) {
+          console.log('Payment recorded in Cloud SQL payments, id:', cloudSqlId);
         }
       }
 

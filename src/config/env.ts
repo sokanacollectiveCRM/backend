@@ -100,7 +100,7 @@ export function getAllowedOrigins(): string[] {
     optionalEnv('FRONTEND_URL'),
     optionalEnv('FRONTEND_URL_DEV'),
   ].filter(Boolean) as string[];
-  const dev = IS_PRODUCTION ? [] : ['http://localhost:3001', 'http://localhost:3000', 'http://localhost:5050'];
+  const dev = IS_PRODUCTION ? [] : ['http://localhost:3001', 'http://localhost:3000', 'http://localhost:3002', 'http://localhost:5050'];
   const explicit = [...fromOrigin, ...legacy, ...dev];
   // Production fallback: allow known deploy URLs when no env vars set
   const prodDefaults = IS_PRODUCTION && explicit.length === 0

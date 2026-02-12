@@ -9,7 +9,7 @@ import { DoulaDocumentRepository } from './repositories/doulaDocumentRepository'
 import { RequestFormRepository } from './repositories/requestFormRepository';
 import { SupabaseActivityRepository } from './repositories/supabaseActivityRepository';
 import { SupabaseAssignmentRepository } from './repositories/supabaseAssignmentRepository';
-import { SupabaseClientRepository } from './repositories/supabaseClientRepository';
+import { CloudSqlClientRepository } from './repositories/cloudSqlClientRepository';
 import { SupabaseUserRepository } from './repositories/supabaseUserRepository';
 import { DoulaDocumentUploadService } from './services/doulaDocumentUploadService';
 import { RequestFormService } from './services/RequestFormService';
@@ -26,7 +26,8 @@ import { UserUseCase } from './usecase/userUseCase';
 //-----------------------------------------------
 const userRepository = new SupabaseUserRepository(supabase);
 const requestRepository = new RequestFormRepository(supabase);
-const clientRepository = new SupabaseClientRepository(supabase);
+// Client data comes only from Cloud SQL (sokana_private). Supabase is auth only.
+const clientRepository = new CloudSqlClientRepository();
 const activityRepository = new SupabaseActivityRepository(supabase);
 const assignmentRepository = new SupabaseAssignmentRepository(supabase);
 const doulaDocumentRepository = new DoulaDocumentRepository(supabase);
@@ -52,7 +53,7 @@ const contractUseCase = new ContractUseCase(contractService);
 const authController = new AuthController(authUseCase);
 const userController = new UserController(userUseCase);
 const requestFormController = new RequestFormController(requestService);
-const clientController = new ClientController(clientUseCase, assignmentRepository);
+const clientController = new ClientController(clientUseCase, assignmentRepository, clientRepository);
 const contractController = new ContractController(contractUseCase);
 const emailController = new EmailController();
 const doulaController = new DoulaController(
