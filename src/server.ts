@@ -17,6 +17,7 @@ import { logger } from './common/utils/logger';
 import emailRoutes from './routes/EmailRoutes';
 import authRoutes from './routes/authRoutes';
 import adminRoutes from './routes/adminRoutes';
+import doulasRoutes from './routes/doulas';
 import clientRoutes from './routes/clientRoutes';
 import doulaRoutes from './routes/doulaRoutes';
 import contractPaymentRoutes from './routes/contractPaymentRoutes';
@@ -118,6 +119,7 @@ app.use((req, _res, next) => {
 // Alias so frontend can use POST /login or POST /auth/login
 app.post('/login', (req, res) => authController.login(req, res));
 app.use('/auth', asMiddleware(authRoutes));
+app.use('/api', asMiddleware(doulasRoutes));
 app.use('/api/admin', asMiddleware(adminRoutes));
 app.use('/api/doulas', asMiddleware(doulaRoutes));
 app.use('/email', asMiddleware(emailRoutes));

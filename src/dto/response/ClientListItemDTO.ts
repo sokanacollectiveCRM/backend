@@ -25,6 +25,11 @@ export interface ClientListItemDTO {
   last_name: string;
   email?: string;
   phone_number?: string;
+  bio?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  country?: string;
   status: string;
   service_needed?: string;
   portal_status?: string;

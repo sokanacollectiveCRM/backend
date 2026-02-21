@@ -7,6 +7,12 @@ export type ClientOperationalRow = {
   last_name: string | null;
   email: string | null;
   phone_number: string | null;
+  address_line1: string | null;
+  bio: string | null;
+  city: string | null;
+  state: string | null;
+  zip_code: string | null;
+  country: string | null;
   status: string | null;
   service_needed: string | null;
   portal_status: string | null;

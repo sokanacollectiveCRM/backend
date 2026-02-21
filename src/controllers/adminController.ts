@@ -5,6 +5,7 @@ import { UserRepository } from '../repositories/interface/userRepository';
 import { ClientRepository } from '../repositories/interface/clientRepository';
 import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
 import { ACCOUNT_STATUS, CLIENT_STATUS, ROLE } from '../types';
+import { CloudSqlDoulaAssignmentService } from '../services/cloudSqlDoulaAssignmentService';
 import * as crypto from 'crypto';
 
 export class AdminController {
@@ -12,6 +13,7 @@ export class AdminController {
   private userRepository: UserRepository;
   private clientRepository: ClientRepository;
   private assignmentRepository: SupabaseAssignmentRepository;
+  private cloudSqlAssignmentService: CloudSqlDoulaAssignmentService;
 
   constructor(
     userRepository: UserRepository,
@@ -22,6 +24,7 @@ export class AdminController {
     this.userRepository = userRepository;
     this.clientRepository = clientRepository;
     this.assignmentRepository = assignmentRepository;
+    this.cloudSqlAssignmentService = new CloudSqlDoulaAssignmentService();
   }
 
   /**
@@ -172,8 +175,8 @@ export class AdminController {
         return;
       }
 
-      // Verify doula exists and is actually a doula
-      const doula = await this.userRepository.findById(doulaId);
+      // Verify doula exists in Cloud SQL doulas table
+      const doula = await this.cloudSqlAssignmentService.getDoulaById(doulaId);
       if (!doula) {
         res.status(404).json({
           success: false,
@@ -182,17 +185,8 @@ export class AdminController {
         return;
       }
 
-      if (doula.role !== ROLE.DOULA) {
-        res.status(400).json({
-          success: false,
-          error: 'User is not a doula'
-        });
-        return;
-      }
-
       // Check if assignment already exists
-      const existingAssignments = await this.assignmentRepository.getAssignedDoulas(clientId);
-      const alreadyAssigned = existingAssignments.some(a => a.doulaId === doulaId);
+      const alreadyAssigned = await this.cloudSqlAssignmentService.assignmentExists(clientId, doulaId);
 
       if (alreadyAssigned) {
         res.status(400).json({
@@ -202,27 +196,21 @@ export class AdminController {
         return;
       }
 
-      // Create the assignment
+      // Create the assignment in Cloud SQL
       const adminId = req.user?.id;
-      const authHeader = req.headers.authorization;
-      const accessToken = authHeader?.split(' ')[1];
-
-      const assignment = await this.assignmentRepository.assignDoula(
+      const assignment = await this.cloudSqlAssignmentService.assignDoula(
         clientId,
         doulaId,
         adminId,
-        accessToken
+        typeof notes === 'string' ? notes : undefined
       );
-
-      // Update assignment notes if provided
-      if (notes) {
-        await this.assignmentRepository.updateAssignmentNotes(assignment.id, notes);
-      }
 
       // Send email notifications to doula and client
       try {
         // Helper function to get full name from user, checking multiple name fields
         const getUserFullName = (user: any): string => {
+          if (user.fullName) return user.fullName;
+          if (user.full_name) return user.full_name;
           // Try firstname/lastname first
           const name1 = `${user.firstname || ''} ${user.lastname || ''}`.trim();
           if (name1) return name1;
@@ -243,7 +231,7 @@ export class AdminController {
 
         // Send email to doula
         await this.emailController.sendDoulaMatchNotification(
-          doula.email,
+          doula.email || '',
           doulaName,
           clientName,
           client.user.email,
@@ -255,10 +243,10 @@ export class AdminController {
           client.user.email,
           clientName,
           doulaName,
-          doula.email
+          doula.email || ''
         );
 
-        console.log(`📧 Sent match notification emails to doula (${doula.email}) and client (${client.user.email})`);
+        console.log(`📧 Sent match notification emails to doula (${doula.email || 'no-email'}) and client (${client.user.email})`);
       } catch (emailError) {
         console.error('Failed to send match notification emails:', emailError);
         // Don't fail the request if email fails
@@ -286,7 +274,7 @@ export class AdminController {
           },
           doula: {
             id: doula.id,
-            name: `${doula.firstname} ${doula.lastname}`,
+            name: doula.fullName,
             email: doula.email
           }
         }

@@ -12,7 +12,7 @@ const adminController = new AdminController(userRepository, clientRepository, as
 
 // Portal invite service and controller
 const portalInviteService = new PortalInviteService(supabase);
-const portalController = new PortalController(portalInviteService, clientRepository);
+const portalController = new PortalController(portalInviteService);
 
 // All admin routes require authentication and admin role
 adminRoutes.use(authMiddleware);

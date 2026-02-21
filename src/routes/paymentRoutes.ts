@@ -6,10 +6,13 @@ import authorizeRoles from '../middleware/authorizeRoles';
 import { listPaymentsFromCloudSql } from '../repositories/cloudSqlPaymentRepository';
 import { FEATURE_STRIPE } from '../config/env';
 import { paymentController } from '../controllers/paymentController';
+import { AuthRequest } from '../types';
+import { CloudSqlDoulaAssignmentService } from '../services/cloudSqlDoulaAssignmentService';
 
 const router = express.Router();
 const contractService = new ContractClientService();
 const paymentService = new SimplePaymentService();
+const cloudSqlAssignmentService = new CloudSqlDoulaAssignmentService();
 
 // GET /api/payments — list payment rows from Cloud SQL (Financial tab). Auth required.
 const listPaymentsHandler = async (req: Request, res: Response): Promise<void> => {
@@ -100,10 +103,30 @@ router.get('/contract/:contractId/schedule', async (req, res) => {
 });
 
 // Get payment history for a contract
-router.get('/contract/:contractId/history', async (req, res) => {
+router.get(
+  '/contract/:contractId/history',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula', 'client']),
+  async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { contractId } = req.params;
-    const history = await paymentService.getContractPayments(contractId);
+    let clientIdFilter: string | undefined;
+
+    // Client users can only see their own payment history.
+    if (req.user?.role === 'client') {
+      const ownClientId = await cloudSqlAssignmentService.getClientIdByAuthUserId(req.user.id);
+      if (!ownClientId) {
+        res.status(404).json({ success: false, error: 'Client profile not found' });
+        return;
+      }
+      clientIdFilter = ownClientId;
+    }
+
+    const history = await paymentService.getContractPayments(contractId, clientIdFilter);
+    if (history.length === 0) {
+      res.json({ success: true, data: [], message: 'No payment history found' });
+      return;
+    }
     res.json({ success: true, data: history });
   } catch (error) {
     console.error('Error getting payment history:', error);

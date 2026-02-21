@@ -24,6 +24,8 @@
     "update-doula-role": "tsx scripts/update-doula-role-only.ts",
     "test:doula": "tsx scripts/test-doula-endpoints.ts",
     "test:doula-invite": "tsx scripts/test-doula-invite-email.ts",
+    "verify:doula-endpoints": "tsx scripts/verify_doula_endpoints.ts",
+    "seed:admins": "ts-node scripts/seed_admins_from_supabase.ts",
     "signnow:coords": "tsx src/scripts/getSignNowCoordinates.ts",
     "signnow:send:ls": "tsx src/scripts/sendLaborSupportContract.ts",
     "start:cloudrun": "node dist/cloudrun.js"

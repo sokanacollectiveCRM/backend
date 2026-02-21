@@ -2,13 +2,16 @@ import { Response } from 'express';
 import { AuthenticationError, AuthorizationError, ConflictError, NotFoundError, ValidationError } from '../domains/errors';
 import { AuthRequest, UpdateRequest } from '../types';
 import { UserUseCase } from "../usecase/userUseCase";
+import { CloudSqlTeamService } from '../services/cloudSqlTeamService';
 
 
 export class UserController {
   private userUseCase: UserUseCase;
+  private cloudSqlTeamService: CloudSqlTeamService;
 
   constructor(userUseCase: UserUseCase) {
     this.userUseCase = userUseCase;
+    this.cloudSqlTeamService = new CloudSqlTeamService();
   }
 
   async getUserById(req: AuthRequest, res: Response): Promise<void> {
@@ -32,8 +35,8 @@ export class UserController {
   }
   async getAllTeamMembers(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const users = await this.userUseCase.getAllTeamMembers();
-      res.status(200).json(users.map(user => user.toJSON()));
+      const users = await this.cloudSqlTeamService.listTeamMembers();
+      res.status(200).json(users);
     } catch (error) {
       this.handleError(error, res);
     }
@@ -41,7 +44,7 @@ export class UserController {
 
   async getAllDoulas(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const doulas = await this.userUseCase.getDoulasList();
+      const doulas = await this.cloudSqlTeamService.listDoulas();
       res.json({
         success: true,
         doulas: doulas.map(d => ({
@@ -49,8 +52,8 @@ export class UserController {
           firstname: d.firstname,
           lastname: d.lastname,
           email: d.email,
-          profile_picture: d.profile_picture,
-          bio: d.bio,
+          profile_picture: null,
+          bio: null,
           phone_number: d.phone_number
         }))
       });
@@ -62,29 +65,16 @@ export class UserController {
   async deleteMember(req: AuthRequest, res: Response): Promise<void> {
     try {
       const userId = req.params.id;
-      const adminUser = req.user;
-
-      console.log(`🗑️  Admin ${adminUser?.id} (${adminUser?.email}) attempting to delete team member ${userId}`);
-
-      // Try to get user info before deletion for logging (optional)
-      let userInfo = null;
-      try {
-        userInfo = await this.userUseCase.getUserById(userId);
-        console.log(`📋 Deleting user: ${userInfo.email} (${userInfo.firstname} ${userInfo.lastname}), Role: ${userInfo.role}`);
-      } catch (error) {
-        console.log(`⚠️  Could not fetch user info for ${userId} before deletion, proceeding anyway`);
+      const removed = await this.cloudSqlTeamService.deleteTeamMember(userId);
+      if (!removed) {
+        res.status(404).json({ success: false, error: 'Team member not found' });
+        return;
       }
-
-      await this.userUseCase.deleteMember(userId);
-
-      const userEmail = userInfo?.email || userId;
-      console.log(`✅ Successfully deleted team member ${userId}${userInfo ? ` (${userInfo.email})` : ''} by admin ${adminUser?.id}`);
       res.status(200).json({
         success: true,
-        message: `Team member${userInfo ? ` ${userInfo.email}` : ''} has been deleted successfully`
+        message: 'Team member has been deleted successfully'
       });
     } catch (error) {
-      console.error(`❌ Error deleting team member ${req.params.id}:`, error.message);
       this.handleError(error, res);
     }
   }
@@ -158,18 +148,35 @@ export class UserController {
 
   async addTeamMember(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { firstname, lastname, email, role } = req.body;
+      const { firstname, lastname, email, role, phone_number } = req.body;
 
       if (!firstname || !lastname || !email || !role) {
         res.status(400).json({ error: 'Missing required fields' });
         return;
       }
 
-      const newMember = await this.userUseCase.addMember(firstname, lastname, email, role);
+      const normalizedRole = String(role).toLowerCase();
+      if (normalizedRole !== 'doula' && normalizedRole !== 'admin') {
+        res.status(400).json({ error: 'Role must be either "admin" or "doula"' });
+        return;
+      }
+
+      const newMember = await this.cloudSqlTeamService.addTeamMember({
+        firstname: String(firstname).trim(),
+        lastname: String(lastname).trim(),
+        email: String(email).trim(),
+        role: normalizedRole as 'admin' | 'doula',
+        phone_number: typeof phone_number === 'string' ? phone_number : null,
+      });
       res.status(201).json(newMember);
     } catch (error) {
-      console.error('Error adding team member:', error);
-      res.status(500).json({ error: error.message });
+      const message = (error as Error)?.message || 'Failed to add team member';
+      const lower = message.toLowerCase();
+      if (lower.includes('already') || lower.includes('exists') || lower.includes('duplicate')) {
+        res.status(409).json({ error: message });
+        return;
+      }
+      res.status(500).json({ error: message });
     }
   }
 
@@ -177,9 +184,12 @@ export class UserController {
     try {
       const userId = req.params.id;
       const updateData = req.body;
-
-      const updatedMember = await this.userUseCase.updateTeamMember(userId, updateData);
-      res.status(200).json(updatedMember.toJSON());
+      const updatedMember = await this.cloudSqlTeamService.updateTeamMember(userId, updateData);
+      if (!updatedMember) {
+        res.status(404).json({ error: 'Team member not found' });
+        return;
+      }
+      res.status(200).json(updatedMember);
     } catch (error) {
       this.handleError(error, res);
     }

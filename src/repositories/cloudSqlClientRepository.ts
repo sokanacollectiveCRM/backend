@@ -11,9 +11,10 @@ import { User } from '../entities/User';
 import { ClientRepository, ClientOperationalRow } from './interface/clientRepository';
 import { ROLE } from '../types';
 import { getPool } from '../db/cloudSqlPool';
+import { NotFoundError } from '../domains/errors';
 
 const OPERATIONAL_COLUMNS = `
-  id, first_name, last_name, email, phone AS phone_number, status, service_needed,
+  id, first_name, last_name, email, phone AS phone_number, address_line1, bio, city, state, zip_code, country, status, service_needed,
   portal_status, invited_at, last_invite_sent_at, invite_sent_count,
   requested_at, updated_at
 `;
@@ -67,6 +68,7 @@ function mapRowToClient(row: Record<string, any>): Client {
     referral_source: row.referral_source,
     referral_name: row.referral_name,
     referral_email: row.referral_email,
+    bio: row.bio,
   });
 
   return new Client(
@@ -185,7 +187,7 @@ export class CloudSqlClientRepository implements ClientRepository {
       'race_ethnicity', 'primary_language', 'client_age_range', 'insurance', 'annual_income',
       'preferred_contact_method', 'relationship_status', 'referral_source', 'referral_name',
       'referral_email', 'address_line1', 'address_line2', 'city', 'state', 'zip_code',
-      'country', 'date_of_birth', 'due_date', 'profile_picture',
+      'country', 'bio', 'date_of_birth', 'due_date', 'profile_picture',
     ]);
     const raw = fieldsToUpdate as Record<string, any>;
     const setParts: string[] = [];
@@ -224,7 +226,7 @@ export class CloudSqlClientRepository implements ClientRepository {
       [clientId]
     );
     if (result.rowCount === 0) {
-      throw new Error(`Client not found: ${clientId}`);
+      throw new NotFoundError(`Client not found: ${clientId}`);
     }
   }
 
@@ -264,17 +266,33 @@ export class CloudSqlClientRepository implements ClientRepository {
     fields: Record<string, any>
   ): Promise<ClientOperationalRow | null> {
     const allowed = new Set([
-      'first_name', 'last_name', 'email', 'phone_number', 'status', 'service_needed',
-      'portal_status', 'invited_at', 'last_invite_sent_at', 'invite_sent_count',
+      // identity + contact
+      'first_name', 'last_name', 'email', 'phone_number', 'phone',
+      // operational workflow
+      'status', 'service_needed', 'portal_status', 'invited_at', 'last_invite_sent_at', 'invite_sent_count',
+      // profile + address
+      'address_line1', 'address', 'city', 'state', 'zip_code', 'country', 'bio',
+      // clinical/profile fields stored in Cloud SQL phi_clients
+      'date_of_birth', 'due_date', 'health_history', 'health_notes', 'allergies', 'medications',
+      'annual_income', 'baby_sex', 'baby_name', 'number_of_babies', 'race_ethnicity',
+      'client_age_range', 'insurance', 'pregnancy_number', 'had_previous_pregnancies',
+      'previous_pregnancies_count', 'living_children_count', 'past_pregnancy_experience',
     ]);
+    const columnValues = new Map<string, any>();
+    for (const [k, v] of Object.entries(fields)) {
+      if (!allowed.has(k) || v === undefined) continue;
+      let col = k;
+      if (k === 'phone_number') col = 'phone';
+      if (k === 'phone') col = 'phone';
+      if (k === 'address') col = 'address_line1';
+      columnValues.set(col, v);
+    }
     const setParts: string[] = [];
     const values: any[] = [];
     let i = 1;
-    for (const [k, v] of Object.entries(fields)) {
-      if (!allowed.has(k) || v === undefined) continue;
-      const col = k === 'phone_number' ? 'phone' : k;
+    for (const [col, value] of columnValues.entries()) {
       setParts.push(`${col} = $${i++}`);
-      values.push(v);
+      values.push(value);
     }
     if (setParts.length === 0) return this.getClientById(clientId);
     setParts.push('updated_at = CURRENT_TIMESTAMP');

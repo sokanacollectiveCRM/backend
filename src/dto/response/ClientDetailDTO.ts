@@ -32,6 +32,12 @@ export interface ClientDetailDTO {
 
   email?: string;
   phone_number?: string;
+  address?: string;
+  bio?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  country?: string;
 
   status: string;
   service_needed?: string;

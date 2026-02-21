@@ -1,19 +1,15 @@
 import { Response } from 'express';
 import { AuthRequest } from '../types';
 import { PortalInviteService } from '../services/portalInviteService';
-import { ClientRepository } from '../repositories/interface/clientRepository';
-import supabase from '../supabase';
+import { NotFoundError, ValidationError } from '../domains/errors';
 
 export class PortalController {
   private portalInviteService: PortalInviteService;
-  private clientRepository: ClientRepository;
 
   constructor(
-    portalInviteService: PortalInviteService,
-    clientRepository: ClientRepository
+    portalInviteService: PortalInviteService
   ) {
     this.portalInviteService = portalInviteService;
-    this.clientRepository = clientRepository;
   }
 
   /**
@@ -33,37 +29,10 @@ export class PortalController {
         return;
       }
 
-      console.log(`📧 Admin ${adminUser.id} (${adminUser.email}) inviting client ${clientId} to portal`);
-
-      // Load client to verify exists and get email (use direct query to avoid relationship issues)
-      // We'll get email directly from client_info table
-      const { data: clientData, error: clientError } = await supabase
-        .from('client_info')
-        .select('id, email')
-        .eq('id', clientId)
-        .single();
-
-      if (clientError || !clientData) {
-        res.status(404).json({
-          ok: false,
-          error: { code: 'NOT_FOUND', message: 'Client not found' }
-        });
-        return;
-      }
-
-      if (!clientData.email) {
-        res.status(400).json({
-          ok: false,
-          error: { code: 'INVALID_CLIENT', message: 'Client has no email address' }
-        });
-        return;
-      }
-
       // Invite client
       const result = await this.portalInviteService.inviteClientToPortal(
         clientId,
-        adminUser.id,
-        clientData.email
+        adminUser.id
       );
 
       // Return success response
@@ -87,6 +56,22 @@ export class PortalController {
       });
 
       // Handle specific error types
+      if (error instanceof NotFoundError) {
+        res.status(404).json({
+          ok: false,
+          error: { code: 'NOT_FOUND', message: error.message }
+        });
+        return;
+      }
+
+      if (error instanceof ValidationError) {
+        res.status(400).json({
+          ok: false,
+          error: { code: 'INVALID_CLIENT', message: error.message }
+        });
+        return;
+      }
+
       if (error.message?.includes('not eligible') || error.message?.includes('Invite available')) {
         res.status(409).json({
           ok: false,
@@ -136,23 +121,6 @@ export class PortalController {
         return;
       }
 
-      console.log(`📧 Admin ${adminUser.id} (${adminUser.email}) resending portal invite for client ${clientId}`);
-
-      // Verify client exists (use direct query to avoid relationship issues)
-      const { data: clientData, error: clientError } = await supabase
-        .from('client_info')
-        .select('id')
-        .eq('id', clientId)
-        .single();
-
-      if (clientError || !clientData) {
-        res.status(404).json({
-          ok: false,
-          error: { code: 'NOT_FOUND', message: 'Client not found' }
-        });
-        return;
-      }
-
       // Resend invite
       const result = await this.portalInviteService.resendPortalInvite(
         clientId,
@@ -180,6 +148,22 @@ export class PortalController {
       });
 
       // Handle specific error types
+      if (error instanceof NotFoundError) {
+        res.status(404).json({
+          ok: false,
+          error: { code: 'NOT_FOUND', message: error.message }
+        });
+        return;
+      }
+
+      if (error instanceof ValidationError) {
+        res.status(400).json({
+          ok: false,
+          error: { code: 'INVALID_CLIENT', message: error.message }
+        });
+        return;
+      }
+
       if (error.message?.includes('not eligible') || error.message?.includes('Invite available')) {
         res.status(409).json({
           ok: false,
@@ -228,16 +212,9 @@ export class PortalController {
         return;
       }
 
-      console.log(`🔍 Getting portal status for user ${user.id} (${user.email})`);
-
-      // Find client_info record by auth_user_id
-      const { data: client, error: clientError } = await supabase
-        .from('client_info')
-        .select('id, email, portal_status, invited_at, last_invite_sent_at, invite_sent_count, last_login_at')
-        .eq('auth_user_id', user.id)
-        .single();
-
-      if (clientError || !client) {
+      console.log(`Getting portal status`, { userId: user.id });
+      const client = await this.portalInviteService.getPortalStatusByAuthUserId(user.id);
+      if (!client) {
         // Client not found - might not be a portal user
         res.status(404).json({
           ok: false,
@@ -256,21 +233,13 @@ export class PortalController {
         return;
       }
 
-      // Update last_login_at if portal is active
-      if (client.portal_status === 'active' || client.portal_status === 'invited') {
-        await supabase
-          .from('client_info')
-          .update({ last_login_at: new Date().toISOString() })
-          .eq('id', client.id);
-      }
-
       res.status(200).json({
         ok: true,
         portal_status: client.portal_status,
         invited_at: client.invited_at,
         last_invite_sent_at: client.last_invite_sent_at,
         invite_sent_count: client.invite_sent_count,
-        last_login_at: client.last_login_at
+        last_login_at: null
       });
     } catch (error: any) {
       console.error(`❌ Error getting portal status:`, {
@@ -302,23 +271,6 @@ export class PortalController {
         return;
       }
 
-      console.log(`🚫 Admin ${adminUser.id} (${adminUser.email}) disabling portal access for client ${clientId}`);
-
-      // Verify client exists (use direct query to avoid relationship issues)
-      const { data: clientData, error: clientError } = await supabase
-        .from('client_info')
-        .select('id')
-        .eq('id', clientId)
-        .single();
-
-      if (clientError || !clientData) {
-        res.status(404).json({
-          ok: false,
-          error: { code: 'NOT_FOUND', message: 'Client not found' }
-        });
-        return;
-      }
-
       // Disable access
       const result = await this.portalInviteService.disablePortalAccess(clientId);
 
@@ -341,6 +293,14 @@ export class PortalController {
         adminId: req.user?.id,
         error: error.message
       });
+
+      if (error instanceof NotFoundError) {
+        res.status(404).json({
+          ok: false,
+          error: { code: 'NOT_FOUND', message: error.message }
+        });
+        return;
+      }
 
       res.status(500).json({
         ok: false,

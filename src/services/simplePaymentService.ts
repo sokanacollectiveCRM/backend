@@ -1,4 +1,5 @@
 import supabase from '../supabase';
+import { getPool } from '../db/cloudSqlPool';
 
 export interface PaymentSchedule {
   id: string;
@@ -214,21 +215,60 @@ export class SimplePaymentService {
   /**
    * Get all payments for a contract (payment history)
    */
-  async getContractPayments(contractId: string): Promise<PaymentRecord[]> {
+  async getContractPayments(contractId: string, clientId?: string): Promise<PaymentRecord[]> {
     console.log('💳 Getting payment history for contract:', contractId);
+    type CloudSqlPaymentHistoryRow = {
+      id: number;
+      contract_id: string | null;
+      amount: string;
+      method: string | null;
+      txn_date: Date | null;
+    };
 
-    const { data, error } = await supabase
-      .from('contract_payments')
-      .select('*')
-      .eq('contract_id', contractId)
-      .order('due_date', { ascending: true });
+    try {
+      const query = clientId
+        ? `
+          SELECT id, contract_id, amount, method, txn_date
+          FROM public.payments
+          WHERE contract_id = $1 AND client_id = $2
+          ORDER BY txn_date ASC NULLS LAST, id ASC
+        `
+        : `
+          SELECT id, contract_id, amount, method, txn_date
+          FROM public.payments
+          WHERE contract_id = $1
+          ORDER BY txn_date ASC NULLS LAST, id ASC
+        `;
+      const values = clientId ? [contractId, clientId] : [contractId];
+      const { rows } = await getPool().query<CloudSqlPaymentHistoryRow>(query, values);
 
-    if (error) {
-      console.error('❌ Error getting contract payments:', error);
-      throw new Error(`Failed to get contract payments: ${error.message}`);
+      return rows.map((row): PaymentRecord => {
+        const normalizedType = ((row.method || '').toLowerCase().includes('deposit')
+          ? 'deposit'
+          : (row.method || '').toLowerCase().includes('final')
+            ? 'final'
+            : 'installment') as PaymentRecord['payment_type'];
+
+        return {
+          id: String(row.id),
+          contract_id: row.contract_id || contractId,
+          payment_type: normalizedType,
+          amount: Number(row.amount),
+          payment_number: 1,
+          total_payments: 1,
+          status: 'succeeded',
+          is_overdue: false,
+          created_at: row.txn_date ? new Date(row.txn_date).toISOString() : new Date(0).toISOString(),
+        };
+      });
+    } catch (error) {
+      const msg = (error as Error)?.message || '';
+      if (msg.includes('contract_id') && msg.includes('does not exist')) {
+        return [];
+      }
+      console.error('❌ Error getting contract payments from Cloud SQL:', error);
+      throw new Error(`Failed to get contract payments: ${msg}`);
     }
-
-    return data as PaymentRecord[];
   }
 
   /**

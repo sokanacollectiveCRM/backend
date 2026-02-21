@@ -19,8 +19,9 @@ import { ClientMapper } from '../mappers/ClientMapper';
 import { ActivityMapper } from '../mappers/ActivityMapper';
 import { ApiResponse } from '../utils/responseBuilder';
 import { canAccessSensitive } from '../utils/sensitiveAccess';
-import { updateClientPhi } from '../services/phiBrokerService';
+import { updateClientPhi, fetchClientPhi } from '../services/phiBrokerService';
 import { normalizeClientPatch, splitClientPatch, stripPhiAndDetect } from '../constants/phiFields';
+import { CloudSqlDoulaAssignmentService } from '../services/cloudSqlDoulaAssignmentService';
 import { logger } from '../common/utils/logger';
 import { IS_PRODUCTION } from '../config/env';
 
@@ -29,6 +30,7 @@ export class ClientController {
   private assignmentRepository: SupabaseAssignmentRepository;
   private clientRepository: ClientRepository;
   private eligibilityService: PortalEligibilityService;
+  private cloudSqlAssignmentService: CloudSqlDoulaAssignmentService;
 
   constructor (
     clientUseCase: ClientUseCase,
@@ -39,6 +41,40 @@ export class ClientController {
     this.assignmentRepository = assignmentRepository;
     this.clientRepository = clientRepository;
     this.eligibilityService = new PortalEligibilityService(supabase);
+    this.cloudSqlAssignmentService = new CloudSqlDoulaAssignmentService();
+  }
+
+  private static readonly PROFILE_FIELD_RULES: Record<string, number> = {
+    bio: 2000,
+    city: 120,
+    state: 60,
+    zip_code: 20,
+    country: 80,
+  };
+
+  private sanitizeProfilePatchFields(input: Record<string, any>): { ok: true; value: Record<string, any> } | { ok: false; message: string } {
+    const normalized = { ...input };
+    for (const [field, maxLen] of Object.entries(ClientController.PROFILE_FIELD_RULES)) {
+      if (!(field in normalized)) continue;
+      const raw = normalized[field];
+      if (raw === null) {
+        normalized[field] = null;
+        continue;
+      }
+      if (typeof raw !== 'string') {
+        return { ok: false, message: `${field} must be a string` };
+      }
+      const trimmed = raw.trim();
+      if (trimmed.length === 0) {
+        normalized[field] = null;
+        continue;
+      }
+      if (trimmed.length > maxLen) {
+        return { ok: false, message: `${field} exceeds max length ${maxLen}` };
+      }
+      normalized[field] = trimmed;
+    }
+    return { ok: true, value: normalized };
   }
 
   //
@@ -62,7 +98,7 @@ export class ClientController {
 
       const dtos = sliced.map((client) => ClientMapper.toListItemDTO(client, false));
 
-      let safeDtos = dtos as Record<string, unknown>[];
+      let safeDtos = dtos as unknown as Record<string, unknown>[];
       if (IS_PRODUCTION) {
         const allPhiKeys: string[] = [];
         safeDtos = dtos.map((d) => {
@@ -135,12 +171,28 @@ export class ClientController {
   async getClientById(req: AuthRequest, res: Response): Promise<void> {
   try {
     const { id } = req.params;
-    if (!id) {
+    let targetClientId = id;
+    if (!targetClientId) {
       res.status(400).json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
       return;
     }
 
-    const clientRow = await this.clientRepository.getClientById?.(id) ?? null;
+    // Clients may send either client_id or auth_user_id in :id.
+    if (req.user?.role === 'client') {
+      const ownClientId = await this.cloudSqlAssignmentService.getClientIdByAuthUserId(req.user.id);
+      if (!ownClientId) {
+        res.status(404).json(ApiResponse.error('Client profile not found', 'NOT_FOUND'));
+        return;
+      }
+      const sentAuthUserId = targetClientId === req.user.id;
+      if (!sentAuthUserId && targetClientId !== ownClientId) {
+        res.status(403).json(ApiResponse.error('Forbidden: cannot access another client profile', 'FORBIDDEN'));
+        return;
+      }
+      targetClientId = ownClientId;
+    }
+
+    const clientRow = await this.clientRepository.getClientById?.(targetClientId) ?? null;
     if (!clientRow) {
       res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
       return;
@@ -148,15 +200,16 @@ export class ClientController {
 
     const dto = ClientMapper.toDetailDTO(clientRow, false);
 
-    const { canAccess } = await canAccessSensitive(req.user, id);
-    if (!canAccess) {
-      logger.info({ clientId: id, source: 'cloud_sql', phi: 'skipped (unauthorized)' }, '[Client] detail response');
+    const { canAccess } = await canAccessSensitive(req.user, targetClientId);
+    const canAccessForResponse = canAccess || req.user?.role === 'client';
+    if (!canAccessForResponse) {
+      logger.info({ clientId: targetClientId, source: 'cloud_sql', phi: 'skipped (unauthorized)' }, '[Client] detail response');
       res.json(ApiResponse.success(dto));
       return;
     }
 
     try {
-      const fullClient = await this.clientRepository.findClientDetailedById(id);
+      const fullClient = await this.clientRepository.findClientDetailedById(targetClientId);
       const u = fullClient.user;
       const merged: Record<string, unknown> = { ...dto };
       if (fullClient.health_history != null) merged.health_history = fullClient.health_history;
@@ -178,7 +231,13 @@ export class ClientController {
       if ((u as any)?.medications != null) merged.medications = (u as any).medications;
       if ((u as any)?.date_of_birth != null) merged.date_of_birth = typeof (u as any).date_of_birth === 'string' ? (u as any).date_of_birth : ((u as any).date_of_birth as Date)?.toISOString?.()?.slice(0, 10);
       if ((u as any)?.address_line1 != null) merged.address_line1 = (u as any).address_line1;
-      logger.info({ clientId: id, source: 'cloud_sql', phi: 'included' }, '[Client] detail response');
+      if ((u as any)?.address_line1 != null) merged.address = (u as any).address_line1;
+      if ((u as any)?.city != null) merged.city = (u as any).city;
+      if ((u as any)?.state != null) merged.state = (u as any).state;
+      if ((u as any)?.zip_code != null) merged.zipCode = (u as any).zip_code;
+      if ((u as any)?.country != null) merged.country = (u as any).country;
+      if ((u as any)?.bio != null) merged.bio = (u as any).bio;
+      logger.info({ clientId: targetClientId, source: 'cloud_sql', phi: 'included' }, '[Client] detail response');
       res.json(ApiResponse.success(merged));
     } catch {
       res.json(ApiResponse.success(dto));
@@ -289,6 +348,7 @@ export class ClientController {
     res: Response,
   ): Promise<void> {
     const { id } = req.params;
+    let targetClientId = id;
     const updateData = req.body;
     const readMode = process.env.SPLIT_DB_READ_MODE;
 
@@ -299,14 +359,14 @@ export class ClientController {
     }
 
     // Validate client ID
-    if (!id) {
+    if (!targetClientId) {
       res.status(400).json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
       return;
     }
 
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(id)) {
-      res.status(400).json(ApiResponse.error(`Invalid client ID format: ${id}`, 'VALIDATION_ERROR'));
+    if (!uuidRegex.test(targetClientId)) {
+      res.status(400).json(ApiResponse.error(`Invalid client ID format: ${targetClientId}`, 'VALIDATION_ERROR'));
       return;
     }
 
@@ -315,12 +375,41 @@ export class ClientController {
       return;
     }
 
+    // Clients can only update their own record.
+    if (req.user?.role === 'client') {
+      const ownClientId = await this.cloudSqlAssignmentService.getClientIdByAuthUserId(req.user.id);
+      if (!ownClientId) {
+        res.status(404).json(ApiResponse.error('Client profile not found', 'NOT_FOUND'));
+        return;
+      }
+      // Frontend may send auth user id in :id; accept both auth id and resolved client id.
+      const sentAuthUserId = targetClientId === req.user.id;
+      if (!sentAuthUserId && ownClientId !== targetClientId) {
+        res.status(403).json(ApiResponse.error('Forbidden: cannot update another client profile', 'FORBIDDEN'));
+        return;
+      }
+      targetClientId = ownClientId;
+    }
+
     try {
-      // ── Step 0: Normalize field names (camelCase/nested → canonical snake_case) ──
-      const normalized = normalizeClientPatch(updateData);
+      // ── Step 0: Normalize + validate profile/address field lengths ──
+      const normalizedRaw = normalizeClientPatch(updateData);
+      const sanitized = this.sanitizeProfilePatchFields(normalizedRaw);
+      if (!sanitized.ok) {
+        res.status(400).json(ApiResponse.error(sanitized.message, 'VALIDATION_ERROR'));
+        return;
+      }
+      const normalized = sanitized.value;
 
       // ── Step 1: Split payload into operational (Supabase) vs PHI (broker) ──
-      const { operational, phi } = splitClientPatch(normalized);
+      let { operational, phi } = splitClientPatch(normalized);
+
+      // Cloud SQL is now canonical for client profile data; for self-service client
+      // updates, route all fields to Cloud SQL and skip PHI broker split/gating.
+      if (req.user?.role === 'client') {
+        operational = { ...operational, ...phi };
+        phi = {};
+      }
 
       logger.info({
         clientId: id,
@@ -329,7 +418,7 @@ export class ClientController {
       }, '[Client] update payload split');
 
       // ── Step 2: Authorization check (one call, reuse result) ──
-      const { canAccess, assignedClientIds } = await canAccessSensitive(req.user, id);
+      const { canAccess, assignedClientIds } = await canAccessSensitive(req.user, targetClientId);
       const requester = {
         role: req.user?.role || '',
         userId: req.user?.id || '',
@@ -346,7 +435,7 @@ export class ClientController {
       // ── Step 3a: Write operational fields (Supabase or Cloud SQL) ──
       let operationalResult = null;
       if (Object.keys(operational).length > 0 && this.clientRepository.updateClientOperational) {
-        operationalResult = await this.clientRepository.updateClientOperational(id, operational);
+        operationalResult = await this.clientRepository.updateClientOperational(targetClientId, operational);
         if (!operationalResult) {
           res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
           return;
@@ -356,14 +445,14 @@ export class ClientController {
       // ── Step 3b: Write PHI fields to sokana-private (via broker) ──
       let phiWriteResult = null;
       if (Object.keys(phi).length > 0) {
-        phiWriteResult = await updateClientPhi(id, requester, phi);
+        phiWriteResult = await updateClientPhi(targetClientId, requester, phi);
 
         // DEBT: Write-through cache — keep Supabase identity fields in sync so list
         // endpoint shows current names. Broker stays authoritative.
         // TODO: Remove when list endpoint uses display_name/client_code instead of names.
         if (phi.first_name || phi.last_name || phi.email || phi.phone_number) {
           try {
-            await this.clientRepository.updateIdentityCache?.(id, {
+            await this.clientRepository.updateIdentityCache?.(targetClientId, {
               first_name: phi.first_name,
               last_name: phi.last_name,
               email: phi.email,
@@ -376,7 +465,7 @@ export class ClientController {
       }
 
       // ── Step 4: Fresh read — get authoritative data from both sources ──
-      const freshOperational = operationalResult ?? await this.clientRepository.getClientById?.(id) ?? null;
+      const freshOperational = operationalResult ?? await this.clientRepository.getClientById?.(targetClientId) ?? null;
       if (!freshOperational) {
         res.status(404).json(ApiResponse.error('Client not found after update', 'NOT_FOUND'));
         return;
@@ -385,19 +474,51 @@ export class ClientController {
       // Compute eligibility
       let isEligible = false;
       try {
-        const eligibility = await this.eligibilityService.getInviteEligibility(id);
+        const eligibility = await this.eligibilityService.getInviteEligibility(targetClientId);
         isEligible = eligibility.eligible;
       } catch { /* swallow */ }
 
       // Map operational to canonical DTO
       const dto = ClientMapper.toDetailDTO(freshOperational, isEligible);
 
-      // Merge PHI for the response (if authorized)
+      // Merge PHI for the response (if authorized / self client view)
       let response: Record<string, any> = { ...dto };
-      if (canAccess) {
+      if (req.user?.role === 'client') {
+        try {
+          const fullClient = await this.clientRepository.findClientDetailedById(targetClientId);
+          const u = fullClient.user as any;
+          if (fullClient.health_history != null) response.health_history = fullClient.health_history;
+          if (fullClient.allergies != null) response.allergies = fullClient.allergies;
+          if (fullClient.due_date != null) response.due_date = fullClient.due_date instanceof Date ? fullClient.due_date.toISOString().slice(0, 10) : fullClient.due_date;
+          if (fullClient.annual_income != null) response.annual_income = fullClient.annual_income;
+          if (fullClient.baby_sex != null) response.baby_sex = fullClient.baby_sex;
+          if (u?.health_notes != null) response.health_notes = u.health_notes;
+          if (u?.baby_name != null) response.baby_name = u.baby_name;
+          if (u?.number_of_babies != null) response.number_of_babies = u.number_of_babies;
+          if (u?.race_ethnicity != null) response.race_ethnicity = u.race_ethnicity;
+          if (u?.client_age_range != null) response.client_age_range = u.client_age_range;
+          if (u?.insurance != null) response.insurance = u.insurance;
+          if (u?.pregnancy_number != null) response.pregnancy_number = u.pregnancy_number;
+          if (u?.had_previous_pregnancies != null) response.had_previous_pregnancies = u.had_previous_pregnancies;
+          if (u?.previous_pregnancies_count != null) response.previous_pregnancies_count = u.previous_pregnancies_count;
+          if (u?.living_children_count != null) response.living_children_count = u.living_children_count;
+          if (u?.past_pregnancy_experience != null) response.past_pregnancy_experience = u.past_pregnancy_experience;
+          if (u?.medications != null) response.medications = u.medications;
+          if (u?.date_of_birth != null) response.date_of_birth = typeof u.date_of_birth === 'string' ? u.date_of_birth : (u.date_of_birth as Date)?.toISOString?.()?.slice(0, 10);
+          if (u?.address_line1 != null) response.address_line1 = u.address_line1;
+          if (u?.address_line1 != null) response.address = u.address_line1;
+          if (u?.city != null) response.city = u.city;
+          if (u?.state != null) response.state = u.state;
+          if (u?.zip_code != null) response.zipCode = u.zip_code;
+          if (u?.country != null) response.country = u.country;
+          if (u?.bio != null) response.bio = u.bio;
+        } catch {
+          logger.warn({ clientId: targetClientId }, '[Client] self profile merge failed after update');
+        }
+      } else if (canAccess) {
         try {
           // Use broker write result if we just wrote, otherwise fresh read
-          const freshPhi = phiWriteResult ?? await fetchClientPhi(id, requester);
+          const freshPhi = phiWriteResult ?? await fetchClientPhi(targetClientId, requester);
           response = { ...dto, ...freshPhi };
         } catch {
           // PHI fetch failed — return operational only, don't block update response
@@ -407,9 +528,9 @@ export class ClientController {
 
       // ── Step 5: Source-of-truth instrumentation ──
       logger.info({
-        clientId: id,
+        clientId: targetClientId,
         sources: {
-          operational: Object.keys(operational).length > 0 ? 'supabase' : 'none',
+          operational: Object.keys(operational).length > 0 ? 'cloud_sql' : 'none',
           sensitive: Object.keys(phi).length > 0 ? 'phiBroker' : 'none',
         },
         keys: {
@@ -476,8 +597,14 @@ export class ClientController {
     }
 
     try {
-      // ── Step 0: Normalize field names (camelCase/nested → canonical snake_case) ──
-      const normalized = normalizeClientPatch(updateData);
+      // ── Step 0: Normalize + validate profile/address field lengths ──
+      const normalizedRaw = normalizeClientPatch(updateData);
+      const sanitized = this.sanitizeProfilePatchFields(normalizedRaw);
+      if (!sanitized.ok) {
+        res.status(400).json(ApiResponse.error(sanitized.message, 'VALIDATION_ERROR'));
+        return;
+      }
+      const normalized = sanitized.value;
 
       // ── Step 1: Split payload and validate that ONLY PHI fields are present ──
       const { operational, phi } = splitClientPatch(normalized);
@@ -715,11 +842,13 @@ export class ClientController {
         return;
       }
 
-      const assignment = await this.assignmentRepository.assignDoula(
-        clientId,
-        doulaId,
-        req.user?.id
-      );
+      const alreadyAssigned = await this.cloudSqlAssignmentService.assignmentExists(clientId, doulaId);
+      if (alreadyAssigned) {
+        res.status(409).json({ error: 'This doula is already assigned to this client' });
+        return;
+      }
+
+      const assignment = await this.cloudSqlAssignmentService.assignDoula(clientId, doulaId, req.user?.id);
 
       res.json({
         success: true,
@@ -758,17 +887,17 @@ export class ClientController {
         return;
       }
 
-      await this.assignmentRepository.unassignDoula(clientId, doulaId);
+      const removed = await this.cloudSqlAssignmentService.unassignDoula(clientId, doulaId);
+      if (!removed) {
+        res.status(404).json({ error: 'Assignment not found' });
+        return;
+      }
 
       res.json({
         success: true,
         message: 'Doula unassigned successfully'
       });
     } catch (error) {
-      if (ClientController.isTableMissing(error, 'assignments')) {
-        res.status(503).json({ error: 'Assignments feature not available — table pending migration' });
-        return;
-      }
       const err = this.handleError(error as Error, res);
       res.status(err.status).json({ error: err.message });
     }
@@ -784,14 +913,30 @@ export class ClientController {
   //
   async getAssignedDoulas(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { id: clientId } = req.params;
+      const { id } = req.params;
+      let targetClientId = id;
 
-      if (!clientId) {
+      if (!targetClientId) {
         res.status(400).json({ error: 'Missing clientId' });
         return;
       }
 
-      const doulas = await this.assignmentRepository.getAssignedDoulas(clientId);
+      // Clients can only read their own assigned doulas.
+      if (req.user?.role === 'client') {
+        const ownClientId = await this.cloudSqlAssignmentService.getClientIdByAuthUserId(req.user.id);
+        if (!ownClientId) {
+          res.status(404).json({ error: 'Client profile not found' });
+          return;
+        }
+        const sentAuthUserId = targetClientId === req.user.id;
+        if (!sentAuthUserId && ownClientId !== targetClientId) {
+          res.status(403).json({ error: 'Forbidden: cannot access other client assignments' });
+          return;
+        }
+        targetClientId = ownClientId;
+      }
+
+      const doulas = await this.cloudSqlAssignmentService.getAssignedDoulas(targetClientId);
 
       res.json({
         success: true,

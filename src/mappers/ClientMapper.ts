@@ -41,6 +41,11 @@ export class ClientMapper {
       last_name: user?.lastname || user?.last_name || '',
       email: user?.email,
       phone_number: entity.phoneNumber || user?.phone_number || user?.mobile_phone,
+      bio: user?.bio || undefined,
+      city: user?.city || undefined,
+      state: user?.state || undefined,
+      zipCode: user?.zip_code != null && user?.zip_code !== -1 ? String(user.zip_code) : undefined,
+      country: user?.country || undefined,
       status: entity.status,
       service_needed: entity.serviceNeeded,
       portal_status: entity.portal_status,
@@ -70,6 +75,12 @@ export class ClientMapper {
       last_name: string | null;
       email: string | null;
       phone_number: string | null;
+      address_line1: string | null;
+      bio: string | null;
+      city: string | null;
+      state: string | null;
+      zip_code: string | null;
+      country: string | null;
       status: string | null;
       service_needed: string | null;
       portal_status: string | null;
@@ -91,6 +102,12 @@ export class ClientMapper {
       last_name: row.last_name || '',
       email: row.email ?? undefined,
       phone_number,
+      address: row.address_line1 ?? undefined,
+      bio: row.bio ?? undefined,
+      city: row.city ?? undefined,
+      state: row.state ?? undefined,
+      zipCode: row.zip_code ?? undefined,
+      country: row.country ?? undefined,
       status: row.status || 'lead',
       service_needed: row.service_needed ?? undefined,
       portal_status: row.portal_status ?? undefined,

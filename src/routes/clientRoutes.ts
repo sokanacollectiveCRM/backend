@@ -3,7 +3,6 @@ import { clientController, userController } from '../index';
 import { PortalController } from '../controllers/portalController';
 import { PortalInviteService } from '../services/portalInviteService';
 import supabase from '../supabase';
-import { clientRepository } from '../index';
 import authMiddleware from '../middleware/authMiddleware';
 import authorizeRoles from '../middleware/authorizeRoles';
 
@@ -11,7 +10,7 @@ const clientRoutes: Router = express.Router();
 
 // Portal controller for client portal endpoints
 const portalInviteService = new PortalInviteService(supabase);
-const portalController = new PortalController(portalInviteService, clientRepository);
+const portalController = new PortalController(portalInviteService);
 
 // Team specific routes
 clientRoutes.get('/team/all',
@@ -86,14 +85,14 @@ clientRoutes.get('/:id',
 
 clientRoutes.put('/:id',
   authMiddleware,
-  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula', 'client']),
   (req, res) => clientController.updateClient(req, res)
 );
 
 // PATCH alias — same handler, proper REST semantics for partial updates
 clientRoutes.patch('/:id',
   authMiddleware,
-  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula', 'client']),
   (req, res) => clientController.updateClient(req, res)
 );
 
@@ -125,7 +124,7 @@ clientRoutes.delete('/:id/assign-doula/:doulaId',
 
 clientRoutes.get('/:id/assigned-doulas',
   authMiddleware,
-  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula', 'client']),
   (req, res) => clientController.getAssignedDoulas(req, res)
 );
 

@@ -65,6 +65,15 @@ Start the server in production mode:
 npm start
 ```
 
+Seed Cloud SQL `public.admins` from Supabase Auth IDs:
+
+```
+export SUPABASE_URL=...
+export SUPABASE_SERVICE_ROLE_KEY=...
+export DATABASE_URL=...
+npm run seed:admins
+```
+
 ## File organization
 
 Feel free to modify stuff inside the `src` directory or the `README`:
