@@ -20,13 +20,12 @@ import { ActivityMapper } from '../mappers/ActivityMapper';
 import { ApiResponse } from '../utils/responseBuilder';
 import { canAccessSensitive } from '../utils/sensitiveAccess';
 import { updateClientPhi, fetchClientPhi } from '../services/phiBrokerService';
-import { normalizeClientPatch, splitClientPatch, stripPhiAndDetect } from '../constants/phiFields';
+import { normalizeClientPatch, splitClientPatch } from '../constants/phiFields';
 import {
   CloudSqlDoulaAssignmentService,
   normalizeDoulaAssignmentRole,
 } from '../services/cloudSqlDoulaAssignmentService';
 import { logger } from '../common/utils/logger';
-import { IS_PRODUCTION } from '../config/env';
 
 export class ClientController {
   private clientUseCase: ClientUseCase;
@@ -100,25 +99,8 @@ export class ClientController {
       const sliced = limit != null && limit > 0 ? clients.slice(0, limit) : clients;
 
       const dtos = sliced.map((client) => ClientMapper.toListItemDTO(client, false));
-
-      let safeDtos = dtos as unknown as Record<string, unknown>[];
-      if (IS_PRODUCTION) {
-        const allPhiKeys: string[] = [];
-        safeDtos = dtos.map((d) => {
-          const { stripped, hadPhi, phiKeysFound } = stripPhiAndDetect(d as Record<string, any>);
-          if (hadPhi) allPhiKeys.push(...phiKeysFound);
-          return stripped;
-        });
-        if (allPhiKeys.length > 0) {
-          logger.warn(
-            { phi_keys_stripped: [...new Set(allPhiKeys)], count: safeDtos.length },
-            '[Client] SECURITY: PHI keys stripped from list (values not logged)'
-          );
-        }
-      }
-
-      logger.info({ source: 'cloud_sql', count: safeDtos.length }, '[Client] list response');
-      res.json(ApiResponse.list(safeDtos, safeDtos.length));
+      logger.info({ source: 'cloud_sql', count: dtos.length }, '[Client] list response');
+      res.json(ApiResponse.list(dtos, dtos.length));
     } catch (getError) {
       const msg = (getError instanceof Error ? getError.message : String(getError)) || '';
       if (msg.includes('does not exist') && msg.toLowerCase().includes('column')) {
