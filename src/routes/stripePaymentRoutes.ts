@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import { getStripe } from '../config/stripe';
 import { stripe as stripeConfig } from '../config/env';
+import { getPool } from '../db/cloudSqlPool';
 import { ContractClientService } from '../services/contractClientService';
 import { StripePaymentService } from '../services/stripePaymentService';
 import supabase from '../supabase';
@@ -24,22 +25,31 @@ router.post('/contract/:contractId/create-payment', async (req: Request, res: Re
 
     console.log('💳 Creating payment intent for contract after signing:', contractId);
 
-    // Verify contract is signed
-    const { data: contract, error: contractError } = await supabase
-      .from('contracts')
-      .select('status')
-      .eq('id', contractId)
-      .single();
-
-    if (contractError || !contract) {
-      res.status(404).json({ success: false, error: 'Contract not found' });
+    // Verify contract is signed (phi_contracts or Supabase contracts)
+    const pool = getPool();
+    const { rows: phiRows } = await pool.query<{ status: string }>(
+      'SELECT status FROM phi_contracts WHERE id = $1 LIMIT 1',
+      [contractId]
+    );
+    let contractStatus: string | null = phiRows[0]?.status ?? null;
+    if (!contractStatus) {
+      const { data: supabaseContract } = await supabase
+        .from('contracts')
+        .select('status')
+        .eq('id', contractId)
+        .single();
+      contractStatus = supabaseContract?.status ?? null;
     }
-
-    if (contract.status !== 'signed') {
+    if (!contractStatus) {
+      res.status(404).json({ success: false, error: 'Contract not found' });
+      return;
+    }
+    if (contractStatus !== 'signed') {
       res.status(400).json({
         success: false,
         error: 'Contract must be signed before processing payment'
       });
+      return;
     }
 
     // Create payment intent for next payment
@@ -50,6 +60,7 @@ router.post('/contract/:contractId/create-payment', async (req: Request, res: Re
         success: false,
         error: 'No pending payments found for this contract'
       });
+      return;
     }
 
     res.json({

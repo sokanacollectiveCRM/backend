@@ -1,5 +1,16 @@
 import { getPool } from '../db/cloudSqlPool';
 
+export type DoulaAssignmentRole = 'primary' | 'backup';
+
+export function normalizeDoulaAssignmentRole(raw: unknown): DoulaAssignmentRole | null {
+  if (typeof raw !== 'string') return null;
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === 'primary' || normalized === 'backup') {
+    return normalized;
+  }
+  return null;
+}
+
 export interface CloudSqlAssignmentResult {
   id: string;
   clientId: string;
@@ -7,6 +18,7 @@ export interface CloudSqlAssignmentResult {
   assignedAt: Date | null;
   assignedBy?: string;
   notes?: string;
+  role?: DoulaAssignmentRole | null;
   status: 'active';
   updatedAt: Date;
 }
@@ -21,6 +33,7 @@ export interface CloudSqlAssignedDoula {
   id: string;
   doulaId: string;
   assignedAt: Date | null;
+  role?: DoulaAssignmentRole | null;
   status: 'active';
   doula: {
     id: string;
@@ -85,24 +98,27 @@ export class CloudSqlDoulaAssignmentService {
     clientId: string,
     doulaId: string,
     assignedBy?: string,
-    notes?: string
+    notes?: string,
+    role?: DoulaAssignmentRole
   ): Promise<CloudSqlAssignmentResult> {
     const { rows } = await getPool().query<{
       client_id: string;
       doula_id: string;
       assigned_at: Date | null;
       notes: string | null;
+      role: string | null;
       updated_at: Date;
     }>(
       `
-      INSERT INTO public.doula_assignments (client_id, doula_id, notes, assigned_at)
-      VALUES ($1::uuid, $2::uuid, $3, NOW())
-      RETURNING client_id, doula_id, assigned_at, notes, updated_at
+      INSERT INTO public.doula_assignments (client_id, doula_id, notes, role, assigned_at)
+      VALUES ($1::uuid, $2::uuid, $3, $4, NOW())
+      RETURNING client_id, doula_id, assigned_at, notes, role, updated_at
       `,
-      [clientId, doulaId, notes ?? null]
+      [clientId, doulaId, notes ?? null, role ?? null]
     );
 
     const row = rows[0];
+    const normalizedRole = normalizeDoulaAssignmentRole(row.role);
     return {
       id: `${row.client_id}:${row.doula_id}`,
       clientId: row.client_id,
@@ -110,6 +126,7 @@ export class CloudSqlDoulaAssignmentService {
       assignedAt: row.assigned_at ? new Date(row.assigned_at) : null,
       assignedBy,
       notes: row.notes ?? undefined,
+      role: normalizedRole,
       status: 'active',
       updatedAt: new Date(row.updated_at),
     };
@@ -132,6 +149,7 @@ export class CloudSqlDoulaAssignmentService {
       client_id: string;
       doula_id: string;
       assigned_at: Date | null;
+      role: string | null;
       doula_email: string | null;
       doula_phone: string | null;
       full_name: string | null;
@@ -141,6 +159,7 @@ export class CloudSqlDoulaAssignmentService {
         da.client_id,
         da.doula_id,
         da.assigned_at,
+        da.role,
         d.email AS doula_email,
         d.phone AS doula_phone,
         d.full_name
@@ -156,10 +175,12 @@ export class CloudSqlDoulaAssignmentService {
       const fullName = row.full_name || '';
       const [first = '', ...rest] = fullName.trim().split(/\s+/);
       const last = rest.join(' ');
+      const normalizedRole = normalizeDoulaAssignmentRole(row.role);
       return {
         id: `${row.client_id}:${row.doula_id}`,
         doulaId: row.doula_id,
         assignedAt: row.assigned_at ? new Date(row.assigned_at) : null,
+        role: normalizedRole,
         status: 'active',
         doula: {
           id: row.doula_id,

@@ -5,7 +5,10 @@ import { UserRepository } from '../repositories/interface/userRepository';
 import { ClientRepository } from '../repositories/interface/clientRepository';
 import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
 import { ACCOUNT_STATUS, CLIENT_STATUS, ROLE } from '../types';
-import { CloudSqlDoulaAssignmentService } from '../services/cloudSqlDoulaAssignmentService';
+import {
+  CloudSqlDoulaAssignmentService,
+  normalizeDoulaAssignmentRole,
+} from '../services/cloudSqlDoulaAssignmentService';
 import * as crypto from 'crypto';
 
 export class AdminController {
@@ -145,13 +148,22 @@ export class AdminController {
    */
   async matchDoulaWithClient(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { clientId, doulaId, notes } = req.body;
+      const { clientId, doulaId, notes, role } = req.body;
 
       // Validate required fields
       if (!clientId || !doulaId) {
         res.status(400).json({
           success: false,
           error: 'Missing required fields: clientId and doulaId are required'
+        });
+        return;
+      }
+
+      const normalizedRole = role === undefined ? undefined : normalizeDoulaAssignmentRole(role);
+      if (role !== undefined && !normalizedRole) {
+        res.status(400).json({
+          success: false,
+          error: "Invalid role. Allowed values are 'primary' or 'backup'"
         });
         return;
       }
@@ -202,7 +214,8 @@ export class AdminController {
         clientId,
         doulaId,
         adminId,
-        typeof notes === 'string' ? notes : undefined
+        typeof notes === 'string' ? notes : undefined,
+        normalizedRole
       );
 
       // Send email notifications to doula and client
@@ -265,6 +278,7 @@ export class AdminController {
             assignedAt: assignment.assignedAt,
             assignedBy: assignment.assignedBy,
             notes: notes || assignment.notes,
+            role: assignment.role,
             status: assignment.status
           },
           client: {

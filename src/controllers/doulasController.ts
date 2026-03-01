@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import {
   DoulasService,
+  DoulaAssignmentRole,
   DoulaAssignmentsQuery,
   DoulaListQuery,
   UpdateDoulaAssignmentInput,
@@ -40,6 +41,17 @@ function validateNullableString(value: unknown, fieldName: string): string | nul
   if (value === undefined || value === null) return null;
   if (typeof value !== 'string') return `${fieldName} must be a string or null`;
   return null;
+}
+
+function normalizeAssignmentRole(value: unknown): DoulaAssignmentRole | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'primary' || normalized === 'backup') {
+    return normalized;
+  }
+  return undefined;
 }
 
 function validateDate(value: string | undefined, fieldName: string): string | null {
@@ -228,6 +240,11 @@ export class DoulasController {
       res.status(400).json({ error: sourceTimestampTypeError });
       return;
     }
+    const roleNormalized = normalizeAssignmentRole(body.role);
+    if (body.role !== undefined && roleNormalized === undefined) {
+      res.status(400).json({ error: "role must be 'primary', 'backup', or null" });
+      return;
+    }
 
     const assignedAtRaw = body.assignedAt;
     if (assignedAtRaw !== undefined && assignedAtRaw !== null && typeof assignedAtRaw !== 'string') {
@@ -246,6 +263,7 @@ export class DoulasController {
       hospital: body.hospital === undefined ? undefined : (body.hospital as string | null),
       notes: body.notes === undefined ? undefined : (body.notes as string | null),
       assignedAt: body.assignedAt === undefined ? undefined : (body.assignedAt as string | null),
+      role: roleNormalized,
       sourceTimestamp:
         body.sourceTimestamp === undefined ? undefined : (body.sourceTimestamp as string | null),
     };

@@ -96,45 +96,49 @@ export class SimplePaymentService {
   }
 
   /**
-   * Get payment summary for a contract
+   * Get payment summary for a contract (Cloud SQL payment_schedules + payment_installments)
    */
   async getPaymentSummary(contractId: string): Promise<PaymentSummary> {
     console.log('💰 Getting payment summary for contract:', contractId);
 
     try {
-      // Get payment schedule
-      const { data: schedule, error: scheduleError } = await supabase
-        .from('payment_schedules')
-        .select('*')
-        .eq('contract_id', contractId)
-        .single();
+      const pool = getPool();
 
-      if (scheduleError) {
-        throw new Error(`Payment schedule not found: ${scheduleError.message}`);
+      const { rows: scheduleRows } = await pool.query<{ id: string; total_amount: string }>(
+        'SELECT id, total_amount FROM payment_schedules WHERE contract_id = $1 ORDER BY created_at DESC LIMIT 1',
+        [contractId]
+      );
+
+      if (scheduleRows.length === 0) {
+        throw new Error(`Payment schedule not found for contract ${contractId}`);
       }
 
-      // Get installments using schedule_id
-      const { data: installments, error: installmentsError } = await supabase
-        .from('payment_installments')
-        .select('*')
-        .eq('schedule_id', schedule.id)
-        .order('due_date', { ascending: true });
-
-      if (installmentsError) {
-        throw new Error(`Installments not found: ${installmentsError.message}`);
-      }
-
-      // Calculate summary
+      const schedule = scheduleRows[0];
       const totalAmount = parseFloat(schedule.total_amount);
+
+      const { rows: installments } = await pool.query<{
+        id: string;
+        amount: string;
+        due_date: string | null;
+        status: string | null;
+      }>(
+        'SELECT id, amount, due_date, status FROM payment_installments WHERE schedule_id = $1 ORDER BY due_date ASC NULLS LAST',
+        [schedule.id]
+      );
+
+      const isPaid = (s: string | null) =>
+        s === 'succeeded' || s === 'completed' || s === 'paid';
       const totalPaid = installments
-        .filter(inst => inst.status === 'completed')
+        .filter(inst => isPaid(inst.status))
         .reduce((sum, inst) => sum + parseFloat(inst.amount), 0);
       const totalDue = totalAmount - totalPaid;
 
-      // Find next payment
-      const nextPayment = installments.find(inst => inst.status === 'pending');
-      const overduePayments = installments.filter(inst =>
-        inst.status === 'pending' && new Date(inst.due_date) < new Date()
+      const nextPayment = installments.find(inst => !isPaid(inst.status));
+      const overduePayments = installments.filter(
+        inst =>
+          !isPaid(inst.status) &&
+          inst.due_date &&
+          new Date(inst.due_date) < new Date()
       );
 
       const summary: PaymentSummary = {
@@ -142,7 +146,7 @@ export class SimplePaymentService {
         total_paid: totalPaid,
         total_due: totalDue,
         overdue_amount: overduePayments.reduce((sum, inst) => sum + parseFloat(inst.amount), 0),
-        next_payment_due: nextPayment?.due_date,
+        next_payment_due: nextPayment?.due_date ?? undefined,
         next_payment_amount: nextPayment ? parseFloat(nextPayment.amount) : 0,
         payment_count: installments.length,
         overdue_count: overduePayments.length
@@ -150,10 +154,9 @@ export class SimplePaymentService {
 
       console.log('✅ Payment summary calculated:', summary);
       return summary;
-
     } catch (error) {
       console.error('❌ Error getting payment summary:', error);
-      throw new Error(`Failed to get payment summary: ${error.message}`);
+      throw new Error(`Failed to get payment summary: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -272,7 +275,7 @@ export class SimplePaymentService {
   }
 
   /**
-   * Update payment status (when payment is processed)
+   * Update payment status (Cloud SQL payment_installments or Supabase contract_payments)
    */
   async updatePaymentStatus(
     paymentId: string,
@@ -282,23 +285,32 @@ export class SimplePaymentService {
   ): Promise<PaymentRecord> {
     console.log('🔄 Updating payment status:', paymentId, 'to', status);
 
-    const updateData: any = {
-      status
-    };
-
-    if (stripePaymentIntentId) {
-      updateData.stripe_payment_intent_id = stripePaymentIntentId;
+    // Try Cloud SQL payment_installments first (Labor Support)
+    try {
+      const pool = getPool();
+      const { rowCount } = await pool.query(
+        `UPDATE payment_installments
+         SET status = $1, stripe_payment_intent_id = COALESCE($2, stripe_payment_intent_id), notes = COALESCE($3, notes), updated_at = CURRENT_TIMESTAMP
+         WHERE id = $4`,
+        [status, stripePaymentIntentId ?? null, notes ?? null, paymentId]
+      );
+      if (rowCount && rowCount > 0) {
+        console.log('✅ Payment installment status updated (Cloud SQL)');
+        const { rows } = await pool.query<PaymentRecord>('SELECT * FROM payment_installments WHERE id = $1', [paymentId]);
+        return rows[0] as PaymentRecord;
+      }
+    } catch (err) {
+      console.warn('Cloud SQL payment_installments update failed, trying Supabase:', err);
     }
 
-    if (notes) {
-      updateData.notes = notes;
-    }
-
-    // Set appropriate timestamp based on status
+    // Fall back to Supabase contract_payments
+    const updateData: any = { status };
+    if (stripePaymentIntentId) updateData.stripe_payment_intent_id = stripePaymentIntentId;
+    if (notes) updateData.notes = notes;
     switch (status) {
       case 'succeeded':
         updateData.completed_at = new Date().toISOString();
-        updateData.is_overdue = false; // Clear overdue flag when paid
+        updateData.is_overdue = false;
         break;
       case 'failed':
         updateData.failed_at = new Date().toISOString();

@@ -2,6 +2,7 @@ import express, { Router } from 'express';
 
 import authMiddleware from '../middleware/authMiddleware';
 import authorizeRoles from '../middleware/authorizeRoles';
+import { getPool } from '../db/cloudSqlPool';
 import supabase from '../supabase';
 
 const dashboardRoutes: Router = express.Router();
@@ -66,9 +67,9 @@ const fetchMonthlyRevenue = async (
   if (error) {
     if (isMissingRelationError(error)) {
       console.warn(
-        '[dashboard] payments table missing. Returning revenue null.'
+        '[dashboard] Supabase payment_tracking missing, trying Cloud SQL...'
       );
-      return null;
+      return fetchMonthlyRevenueFromCloudSql(sinceIso, nowIso);
     }
 
     console.error('[dashboard] Failed to compute monthly revenue:', error);
@@ -86,6 +87,27 @@ const fetchMonthlyRevenue = async (
     },
     0
   );
+};
+
+const fetchMonthlyRevenueFromCloudSql = async (
+  sinceIso: string,
+  nowIso: string
+): Promise<number | null> => {
+  try {
+    const pool = getPool();
+    const { rows } = await pool.query<{ amount: string }>(
+      `SELECT COALESCE(SUM(amount), 0)::text as amount
+       FROM payment_installments
+       WHERE due_date >= $1::date AND due_date <= $2::date
+         AND status IN ('succeeded', 'completed', 'paid')`,
+      [sinceIso.split('T')[0], nowIso.split('T')[0]]
+    );
+    const total = parseFloat(rows[0]?.amount ?? '0');
+    return Number.isFinite(total) ? total : 0;
+  } catch (err) {
+    console.warn('[dashboard] Cloud SQL revenue fallback failed:', err);
+    return null;
+  }
 };
 
 dashboardRoutes.get(
@@ -166,34 +188,37 @@ dashboardRoutes.get(
       today.setHours(0, 0, 0, 0);
       const todayIso = today.toISOString().split('T')[0];
 
-      // Query clients with future or today's due dates
+      let events: { id: string; type: string; title: string; date: string; color: string }[] = [];
+
+      // Try Supabase client_info first
       const { data, error } = await supabase
         .from('client_info')
-        .select('id, firstname, lastname, due_date')
+        .select('id, first_name, last_name, due_date')
         .not('due_date', 'is', null)
         .gte('due_date', todayIso);
 
       if (error) {
-        console.error('[dashboard/calendar] Failed to fetch due dates:', error);
-        throw error;
+        if (isMissingRelationError(error)) {
+          console.warn(
+            '[dashboard/calendar] Supabase client_info missing, trying Cloud SQL...'
+          );
+          events = await fetchCalendarEventsFromCloudSql(todayIso);
+        } else {
+          console.error('[dashboard/calendar] Failed to fetch due dates:', error);
+          throw error;
+        }
+      } else if (data && data.length > 0) {
+        events = data
+          .map((client: { id: string; first_name?: string; last_name?: string; due_date: string }) => ({
+            id: client.id,
+            type: 'pregnancyDueDate',
+            title:
+              `EDD – Baby Due (${client.first_name || ''} ${client.last_name || ''})`.trim(),
+            date: client.due_date,
+            color: '#34A853',
+          }))
+          .sort((a, b) => a.date.localeCompare(b.date));
       }
-
-      if (!data || data.length === 0) {
-        res.status(200).json({ events: [] });
-        return;
-      }
-
-      // Map to calendar events
-      const events = data
-        .map((client: any) => ({
-          id: client.id,
-          type: 'pregnancyDueDate',
-          title:
-            `EDD – Baby Due (${client.firstname || ''} ${client.lastname || ''})`.trim(),
-          date: client.due_date,
-          color: '#34A853',
-        }))
-        .sort((a: any, b: any) => a.date.localeCompare(b.date));
 
       res.status(200).json({ events });
     } catch (error) {
@@ -208,5 +233,36 @@ dashboardRoutes.get(
     }
   }
 );
+
+const fetchCalendarEventsFromCloudSql = async (
+  todayIso: string
+): Promise<{ id: string; type: string; title: string; date: string; color: string }[]> => {
+  try {
+    const pool = getPool();
+    const { rows } = await pool.query<{
+      id: string;
+      first_name: string | null;
+      last_name: string | null;
+      due_date: string | null;
+    }>(
+      `SELECT id, first_name, last_name, due_date
+       FROM phi_clients
+       WHERE due_date IS NOT NULL AND due_date >= $1
+       ORDER BY due_date ASC`,
+      [todayIso]
+    );
+    return rows.map((client) => ({
+      id: client.id,
+      type: 'pregnancyDueDate',
+      title:
+        `EDD – Baby Due (${client.first_name || ''} ${client.last_name || ''})`.trim(),
+      date: client.due_date!,
+      color: '#34A853',
+    }));
+  } catch (err) {
+    console.warn('[dashboard/calendar] Cloud SQL fallback failed:', err);
+    return [];
+  }
+};
 
 export default dashboardRoutes;

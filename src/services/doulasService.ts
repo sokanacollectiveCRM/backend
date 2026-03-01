@@ -1,5 +1,16 @@
 import { getPool } from '../db/cloudSqlPool';
 
+export type DoulaAssignmentRole = 'primary' | 'backup';
+
+function normalizeDoulaAssignmentRole(raw: unknown): DoulaAssignmentRole | null {
+  if (typeof raw !== 'string') return null;
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === 'primary' || normalized === 'backup') {
+    return normalized;
+  }
+  return null;
+}
+
 export interface DoulaListQuery {
   q?: string;
   includeCounts: boolean;
@@ -39,6 +50,7 @@ export interface DoulaAssignmentRowDto {
   doulaEmail: string | null;
   hospital: string | null;
   assignedAt: string | null;
+  role: DoulaAssignmentRole | null;
   sourceTimestamp: string | null;
   notes: string | null;
   updatedAt: string;
@@ -48,6 +60,7 @@ export interface UpdateDoulaAssignmentInput {
   hospital?: string | null;
   notes?: string | null;
   assignedAt?: string | null;
+  role?: DoulaAssignmentRole | null;
   sourceTimestamp?: string | null;
 }
 
@@ -75,6 +88,7 @@ interface DoulaAssignmentDbRow {
   doula_email: string | null;
   hospital: string | null;
   assigned_at: Date | string | null;
+  role: string | null;
   source_timestamp: Date | string | null;
   notes: string | null;
   updated_at: Date | string;
@@ -99,6 +113,7 @@ function toText(value: unknown): string | null {
 }
 
 function mapAssignmentRow(row: DoulaAssignmentDbRow): DoulaAssignmentRowDto {
+  const normalizedRole = normalizeDoulaAssignmentRole(row.role);
   return {
     clientId: row.client_id,
     clientFirstName: row.client_first_name,
@@ -110,6 +125,7 @@ function mapAssignmentRow(row: DoulaAssignmentDbRow): DoulaAssignmentRowDto {
     doulaEmail: row.doula_email,
     hospital: row.hospital,
     assignedAt: toIso(row.assigned_at),
+    role: normalizedRole,
     sourceTimestamp: toText(row.source_timestamp),
     notes: row.notes,
     updatedAt: toIso(row.updated_at) ?? new Date(0).toISOString(),
@@ -277,6 +293,7 @@ export class DoulasService {
         d.email AS doula_email,
         da.hospital,
         da.assigned_at,
+        da.role,
         da.source_timestamp,
         da.notes,
         da.updated_at
@@ -307,6 +324,7 @@ export class DoulasService {
         d.email AS doula_email,
         da.hospital,
         da.assigned_at,
+        da.role,
         da.source_timestamp,
         da.notes,
         da.updated_at
@@ -345,6 +363,11 @@ export class DoulasService {
       setClauses.push(`assigned_at = $${values.length}::timestamp`);
     }
 
+    if (input.role !== undefined) {
+      values.push(input.role ?? null);
+      setClauses.push(`role = $${values.length}`);
+    }
+
     if (input.sourceTimestamp !== undefined) {
       values.push(input.sourceTimestamp ?? null);
       setClauses.push(`source_timestamp = $${values.length}`);
@@ -377,6 +400,7 @@ export class DoulasService {
         (SELECT email FROM public.doulas WHERE id = doula_id) AS doula_email,
         hospital,
         assigned_at,
+        role,
         source_timestamp,
         notes,
         updated_at

@@ -21,7 +21,10 @@ import { ApiResponse } from '../utils/responseBuilder';
 import { canAccessSensitive } from '../utils/sensitiveAccess';
 import { updateClientPhi, fetchClientPhi } from '../services/phiBrokerService';
 import { normalizeClientPatch, splitClientPatch, stripPhiAndDetect } from '../constants/phiFields';
-import { CloudSqlDoulaAssignmentService } from '../services/cloudSqlDoulaAssignmentService';
+import {
+  CloudSqlDoulaAssignmentService,
+  normalizeDoulaAssignmentRole,
+} from '../services/cloudSqlDoulaAssignmentService';
 import { logger } from '../common/utils/logger';
 import { IS_PRODUCTION } from '../config/env';
 
@@ -835,10 +838,16 @@ export class ClientController {
   async assignDoula(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { id: clientId } = req.params;
-      const { doulaId } = req.body;
+      const { doulaId, role } = req.body;
 
       if (!clientId || !doulaId) {
         res.status(400).json({ error: 'Missing clientId or doulaId' });
+        return;
+      }
+
+      const normalizedRole = role === undefined ? undefined : normalizeDoulaAssignmentRole(role);
+      if (role !== undefined && !normalizedRole) {
+        res.status(400).json({ error: "Invalid role. Allowed values are 'primary' or 'backup'" });
         return;
       }
 
@@ -848,7 +857,13 @@ export class ClientController {
         return;
       }
 
-      const assignment = await this.cloudSqlAssignmentService.assignDoula(clientId, doulaId, req.user?.id);
+      const assignment = await this.cloudSqlAssignmentService.assignDoula(
+        clientId,
+        doulaId,
+        req.user?.id,
+        undefined,
+        normalizedRole
+      );
 
       res.json({
         success: true,
@@ -857,6 +872,7 @@ export class ClientController {
           doulaId: assignment.doulaId,
           clientId: assignment.clientId,
           assignedAt: assignment.assignedAt,
+          role: assignment.role,
           status: assignment.status
         }
       });
