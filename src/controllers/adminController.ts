@@ -9,6 +9,7 @@ import {
   CloudSqlDoulaAssignmentService,
   normalizeDoulaAssignmentRole,
 } from '../services/cloudSqlDoulaAssignmentService';
+import { ASSIGNMENT_SERVICE_CATALOG, normalizeAssignmentServices } from '../constants/assignmentServices';
 import * as crypto from 'crypto';
 
 export class AdminController {
@@ -148,7 +149,7 @@ export class AdminController {
    */
   async matchDoulaWithClient(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { clientId, doulaId, notes, role } = req.body;
+      const { clientId, doulaId, notes, role, services } = req.body;
 
       // Validate required fields
       if (!clientId || !doulaId) {
@@ -164,6 +165,15 @@ export class AdminController {
         res.status(400).json({
           success: false,
           error: "Invalid role. Allowed values are 'primary' or 'backup'"
+        });
+        return;
+      }
+
+      const normalizedServices = normalizeAssignmentServices(services);
+      if (!normalizedServices) {
+        res.status(400).json({
+          success: false,
+          error: `services is required and must include one or more values from: ${ASSIGNMENT_SERVICE_CATALOG.join(', ')}`
         });
         return;
       }
@@ -215,7 +225,8 @@ export class AdminController {
         doulaId,
         adminId,
         typeof notes === 'string' ? notes : undefined,
-        normalizedRole
+        normalizedRole,
+        normalizedServices
       );
 
       // Send email notifications to doula and client
@@ -275,6 +286,7 @@ export class AdminController {
             id: assignment.id,
             clientId: assignment.clientId,
             doulaId: assignment.doulaId,
+            services: assignment.services,
             assignedAt: assignment.assignedAt,
             assignedBy: assignment.assignedBy,
             notes: notes || assignment.notes,

@@ -28,6 +28,38 @@ function getRequiredEnv(name: string): string {
 
 let pool: Pool | null = null;
 
+const TRANSIENT_ERROR_CODES = new Set([
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'EPIPE',
+  'ETIMEDOUT',
+  '57P01', // admin_shutdown
+  '57P02', // crash_shutdown
+  '57P03', // cannot_connect_now
+  '53300', // too_many_connections
+]);
+
+const isTransientPoolError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const code = String((error as { code?: string }).code || '').toUpperCase();
+  if (code && TRANSIENT_ERROR_CODES.has(code)) {
+    return true;
+  }
+
+  const message = String((error as { message?: string }).message || '').toLowerCase();
+  return (
+    message.includes('connection terminated unexpectedly') ||
+    message.includes('connection reset') ||
+    message.includes('server closed the connection unexpectedly')
+  );
+};
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
 /**
  * Returns the shared Cloud SQL pool. Call once at boot to fail fast if env is missing.
  */
@@ -51,7 +83,52 @@ export function getPool(): Pool {
     user,
     password,
     ssl: ssl as boolean | object,
+    keepAlive: true,
+    idleTimeoutMillis: parseInt(process.env.CLOUD_SQL_IDLE_TIMEOUT_MS || '30000', 10),
+    connectionTimeoutMillis: parseInt(
+      process.env.CLOUD_SQL_CONNECT_TIMEOUT_MS || '10000',
+      10
+    ),
+    max: parseInt(process.env.CLOUD_SQL_MAX_CLIENTS || '10', 10),
   });
 
   return pool;
+}
+
+export async function queryCloudSql<T = any>(
+  text: string,
+  params: any[] = [],
+  retries = 2
+): Promise<{ rows: T[]; rowCount: number | null }> {
+  let attempt = 0;
+  while (true) {
+    try {
+      const p = getPool();
+      const result = await p.query<T>(text, params);
+      return { rows: result.rows, rowCount: result.rowCount };
+    } catch (error) {
+      if (attempt >= retries || !isTransientPoolError(error)) {
+        throw error;
+      }
+
+      attempt += 1;
+      console.warn(
+        `[cloud-sql] transient query failure (attempt ${attempt}/${retries + 1}), retrying...`,
+        (error as Error).message
+      );
+
+      // Reset the pool so retries use a fresh connection if the current socket is stale.
+      if (pool) {
+        try {
+          await pool.end();
+        } catch {
+          // Ignore close errors; retry will recreate the pool.
+        } finally {
+          pool = null;
+        }
+      }
+
+      await sleep(150 * attempt);
+    }
+  }
 }

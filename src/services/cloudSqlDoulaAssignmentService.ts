@@ -1,4 +1,5 @@
 import { getPool } from '../db/cloudSqlPool';
+import { normalizeAssignmentServices } from '../constants/assignmentServices';
 
 export type DoulaAssignmentRole = 'primary' | 'backup';
 
@@ -15,6 +16,7 @@ export interface CloudSqlAssignmentResult {
   id: string;
   clientId: string;
   doulaId: string;
+  services: string[];
   assignedAt: Date | null;
   assignedBy?: string;
   notes?: string;
@@ -32,6 +34,7 @@ export interface CloudSqlDoulaRow {
 export interface CloudSqlAssignedDoula {
   id: string;
   doulaId: string;
+  services: string[];
   assignedAt: Date | null;
   role?: DoulaAssignmentRole | null;
   status: 'active';
@@ -99,22 +102,29 @@ export class CloudSqlDoulaAssignmentService {
     doulaId: string,
     assignedBy?: string,
     notes?: string,
-    role?: DoulaAssignmentRole
+    role?: DoulaAssignmentRole,
+    services?: string[]
   ): Promise<CloudSqlAssignmentResult> {
+    const normalizedServices = normalizeAssignmentServices(services);
+    if (!normalizedServices) {
+      throw new Error('services must be a non-empty array of valid service names');
+    }
+
     const { rows } = await getPool().query<{
       client_id: string;
       doula_id: string;
+      services: string[] | null;
       assigned_at: Date | null;
       notes: string | null;
       role: string | null;
       updated_at: Date;
     }>(
       `
-      INSERT INTO public.doula_assignments (client_id, doula_id, notes, role, assigned_at)
-      VALUES ($1::uuid, $2::uuid, $3, $4, NOW())
-      RETURNING client_id, doula_id, assigned_at, notes, role, updated_at
+      INSERT INTO public.doula_assignments (client_id, doula_id, notes, role, services, assigned_at)
+      VALUES ($1::uuid, $2::uuid, $3, $4, $5::text[], NOW())
+      RETURNING client_id, doula_id, services, assigned_at, notes, role, updated_at
       `,
-      [clientId, doulaId, notes ?? null, role ?? null]
+      [clientId, doulaId, notes ?? null, role ?? null, normalizedServices]
     );
 
     const row = rows[0];
@@ -123,6 +133,7 @@ export class CloudSqlDoulaAssignmentService {
       id: `${row.client_id}:${row.doula_id}`,
       clientId: row.client_id,
       doulaId: row.doula_id,
+      services: row.services ?? [],
       assignedAt: row.assigned_at ? new Date(row.assigned_at) : null,
       assignedBy,
       notes: row.notes ?? undefined,
@@ -148,6 +159,7 @@ export class CloudSqlDoulaAssignmentService {
     const { rows } = await getPool().query<{
       client_id: string;
       doula_id: string;
+      services: string[] | null;
       assigned_at: Date | null;
       role: string | null;
       doula_email: string | null;
@@ -158,6 +170,7 @@ export class CloudSqlDoulaAssignmentService {
       SELECT
         da.client_id,
         da.doula_id,
+        da.services,
         da.assigned_at,
         da.role,
         d.email AS doula_email,
@@ -179,6 +192,7 @@ export class CloudSqlDoulaAssignmentService {
       return {
         id: `${row.client_id}:${row.doula_id}`,
         doulaId: row.doula_id,
+        services: row.services ?? [],
         assignedAt: row.assigned_at ? new Date(row.assigned_at) : null,
         role: normalizedRole,
         status: 'active',

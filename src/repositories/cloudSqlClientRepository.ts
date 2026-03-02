@@ -10,7 +10,7 @@ import { Client } from '../entities/Client';
 import { User } from '../entities/User';
 import { ClientRepository, ClientOperationalRow } from './interface/clientRepository';
 import { ROLE } from '../types';
-import { getPool } from '../db/cloudSqlPool';
+import { queryCloudSql } from '../db/cloudSqlPool';
 import { NotFoundError } from '../domains/errors';
 
 const OPERATIONAL_COLUMNS = `
@@ -94,21 +94,21 @@ function mapRowToClient(row: Record<string, any>): Client {
 
 export class CloudSqlClientRepository implements ClientRepository {
   async findClientsLiteAll(): Promise<Client[]> {
-    const { rows } = await getPool().query(
+    const { rows } = await queryCloudSql(
       `SELECT ${OPERATIONAL_COLUMNS} FROM phi_clients ORDER BY updated_at DESC NULLS LAST`
     );
     return rows.map((r: Record<string, any>) => mapRowToClient(r));
   }
 
   async findClientsDetailedAll(): Promise<Client[]> {
-    const { rows } = await getPool().query(
+    const { rows } = await queryCloudSql(
       `SELECT * FROM phi_clients ORDER BY updated_at DESC NULLS LAST`
     );
     return rows.map((r: Record<string, any>) => mapRowToClient(r));
   }
 
   private async getClientIdsAssignedToDoula(doulaId: string): Promise<string[]> {
-    const { rows } = await getPool().query<{ client_id: string }>(
+    const { rows } = await queryCloudSql<{ client_id: string }>(
       `SELECT client_id FROM assignments WHERE doula_id = $1 AND status = 'active'`,
       [doulaId]
     );
@@ -118,7 +118,7 @@ export class CloudSqlClientRepository implements ClientRepository {
   async findClientsLiteByDoula(userId: string): Promise<Client[]> {
     const clientIds = await this.getClientIdsAssignedToDoula(userId);
     if (clientIds.length === 0) return [];
-    const { rows } = await getPool().query(
+    const { rows } = await queryCloudSql(
       `SELECT ${OPERATIONAL_COLUMNS} FROM phi_clients WHERE id = ANY($1::uuid[]) ORDER BY updated_at DESC NULLS LAST`,
       [clientIds]
     );
@@ -128,7 +128,7 @@ export class CloudSqlClientRepository implements ClientRepository {
   async findClientsDetailedByDoula(userId: string): Promise<Client[]> {
     const clientIds = await this.getClientIdsAssignedToDoula(userId);
     if (clientIds.length === 0) return [];
-    const { rows } = await getPool().query(
+    const { rows } = await queryCloudSql(
       `SELECT * FROM phi_clients WHERE id = ANY($1::uuid[]) ORDER BY updated_at DESC NULLS LAST`,
       [clientIds]
     );
@@ -136,7 +136,7 @@ export class CloudSqlClientRepository implements ClientRepository {
   }
 
   async findClientLiteById(clientId: string): Promise<Client> {
-    const { rows } = await getPool().query(
+    const { rows } = await queryCloudSql(
       `SELECT * FROM phi_clients WHERE id = $1`,
       [clientId]
     );
@@ -159,7 +159,7 @@ export class CloudSqlClientRepository implements ClientRepository {
   }
 
   async findClientsByStatus(status: string): Promise<Client[]> {
-    const { rows } = await getPool().query(
+    const { rows } = await queryCloudSql(
       `SELECT * FROM phi_clients WHERE status = $1 ORDER BY updated_at DESC NULLS LAST`,
       [status]
     );
@@ -167,7 +167,7 @@ export class CloudSqlClientRepository implements ClientRepository {
   }
 
   async updateStatus(clientId: string, status: string): Promise<Client> {
-    await getPool().query(
+    await queryCloudSql(
       `UPDATE phi_clients SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
       [status, clientId]
     );
@@ -213,7 +213,7 @@ export class CloudSqlClientRepository implements ClientRepository {
     }
     setParts.push('updated_at = CURRENT_TIMESTAMP');
     values.push(clientId);
-    await getPool().query(
+    await queryCloudSql(
       `UPDATE phi_clients SET ${setParts.join(', ')} WHERE id = $${i}`,
       values
     );
@@ -221,7 +221,7 @@ export class CloudSqlClientRepository implements ClientRepository {
   }
 
   async deleteClient(clientId: string): Promise<void> {
-    const result = await getPool().query(
+    const result = await queryCloudSql(
       'DELETE FROM phi_clients WHERE id = $1',
       [clientId]
     );
@@ -231,7 +231,7 @@ export class CloudSqlClientRepository implements ClientRepository {
   }
 
   async exportCSV(): Promise<string | null> {
-    const { rows } = await getPool().query(
+    const { rows } = await queryCloudSql(
       `SELECT first_name, last_name, annual_income, address_line1 FROM phi_clients`
     );
     if (rows.length === 0) return null;
@@ -246,7 +246,7 @@ export class CloudSqlClientRepository implements ClientRepository {
   // ---- Canonical methods (used by clientController in primary mode) ----
 
   async getClientById(clientId: string): Promise<ClientOperationalRow | null> {
-    const { rows } = await getPool().query<ClientOperationalRow>(
+    const { rows } = await queryCloudSql<ClientOperationalRow>(
       `SELECT ${OPERATIONAL_COLUMNS} FROM phi_clients WHERE id = $1`,
       [clientId]
     );
@@ -254,7 +254,7 @@ export class CloudSqlClientRepository implements ClientRepository {
   }
 
   async updateClientStatusCanonical(clientId: string, status: string): Promise<ClientOperationalRow | null> {
-    await getPool().query(
+    await queryCloudSql(
       `UPDATE phi_clients SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
       [status, clientId]
     );
@@ -297,7 +297,7 @@ export class CloudSqlClientRepository implements ClientRepository {
     if (setParts.length === 0) return this.getClientById(clientId);
     setParts.push('updated_at = CURRENT_TIMESTAMP');
     values.push(clientId);
-    await getPool().query(
+    await queryCloudSql(
       `UPDATE phi_clients SET ${setParts.join(', ')} WHERE id = $${i}`,
       values
     );
@@ -318,7 +318,7 @@ export class CloudSqlClientRepository implements ClientRepository {
     if (setParts.length === 0) return;
     setParts.push('updated_at = CURRENT_TIMESTAMP');
     values.push(clientId);
-    await getPool().query(
+    await queryCloudSql(
       `UPDATE phi_clients SET ${setParts.join(', ')} WHERE id = $${i}`,
       values
     );

@@ -40,6 +40,7 @@ export interface DoulaRowDto {
 }
 
 export interface DoulaAssignmentRowDto {
+  id: string;
   clientId: string;
   clientFirstName: string;
   clientLastName: string;
@@ -51,6 +52,7 @@ export interface DoulaAssignmentRowDto {
   hospital: string | null;
   assignedAt: string | null;
   role: DoulaAssignmentRole | null;
+  services: string[];
   sourceTimestamp: string | null;
   notes: string | null;
   updatedAt: string;
@@ -61,6 +63,7 @@ export interface UpdateDoulaAssignmentInput {
   notes?: string | null;
   assignedAt?: string | null;
   role?: DoulaAssignmentRole | null;
+  services?: string[];
   sourceTimestamp?: string | null;
 }
 
@@ -89,9 +92,21 @@ interface DoulaAssignmentDbRow {
   hospital: string | null;
   assigned_at: Date | string | null;
   role: string | null;
+  services: string[] | null;
   source_timestamp: Date | string | null;
   notes: string | null;
   updated_at: Date | string;
+}
+
+function isMissingServicesColumnError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = String((error as { code?: string }).code || '');
+  const message = String((error as { message?: string }).message || '').toLowerCase();
+  return (
+    code === '42703' &&
+    message.includes('services') &&
+    message.includes('doula_assignments')
+  );
 }
 
 function toIso(value: Date | string | null | undefined): string | null {
@@ -115,6 +130,7 @@ function toText(value: unknown): string | null {
 function mapAssignmentRow(row: DoulaAssignmentDbRow): DoulaAssignmentRowDto {
   const normalizedRole = normalizeDoulaAssignmentRole(row.role);
   return {
+    id: `${row.client_id}:${row.doula_id}`,
     clientId: row.client_id,
     clientFirstName: row.client_first_name,
     clientLastName: row.client_last_name,
@@ -126,6 +142,7 @@ function mapAssignmentRow(row: DoulaAssignmentDbRow): DoulaAssignmentRowDto {
     hospital: row.hospital,
     assignedAt: toIso(row.assigned_at),
     role: normalizedRole,
+    services: row.services ?? [],
     sourceTimestamp: toText(row.source_timestamp),
     notes: row.notes,
     updatedAt: toIso(row.updated_at) ?? new Date(0).toISOString(),
@@ -294,6 +311,7 @@ export class DoulasService {
         da.hospital,
         da.assigned_at,
         da.role,
+        da.services,
         da.source_timestamp,
         da.notes,
         da.updated_at
@@ -302,17 +320,7 @@ export class DoulasService {
       LIMIT $${limitIdx}
       OFFSET $${offsetIdx}
     `;
-    const dataRes = await pool.query<DoulaAssignmentDbRow>(dataSql, [...values, query.limit, query.offset]);
-
-    const data: DoulaAssignmentRowDto[] = dataRes.rows.map(mapAssignmentRow);
-
-    return { data, count };
-  }
-
-  async getDoulaAssignment(clientId: string, doulaId: string): Promise<DoulaAssignmentRowDto | null> {
-    const pool = getPool();
-    const { rows } = await pool.query<DoulaAssignmentDbRow>(
-      `
+    const legacyDataSql = `
       SELECT
         da.client_id,
         pc.first_name AS client_first_name,
@@ -325,6 +333,47 @@ export class DoulasService {
         da.hospital,
         da.assigned_at,
         da.role,
+        ARRAY[]::text[] AS services,
+        da.source_timestamp,
+        da.notes,
+        da.updated_at
+      ${fromSql}
+      ${sortClause}
+      LIMIT $${limitIdx}
+      OFFSET $${offsetIdx}
+    `;
+
+    let dataRes;
+    try {
+      dataRes = await pool.query<DoulaAssignmentDbRow>(dataSql, [...values, query.limit, query.offset]);
+    } catch (error) {
+      if (!isMissingServicesColumnError(error)) {
+        throw error;
+      }
+      dataRes = await pool.query<DoulaAssignmentDbRow>(legacyDataSql, [...values, query.limit, query.offset]);
+    }
+
+    const data: DoulaAssignmentRowDto[] = dataRes.rows.map(mapAssignmentRow);
+
+    return { data, count };
+  }
+
+  async getDoulaAssignment(clientId: string, doulaId: string): Promise<DoulaAssignmentRowDto | null> {
+    const pool = getPool();
+    const sql = `
+      SELECT
+        da.client_id,
+        pc.first_name AS client_first_name,
+        pc.last_name AS client_last_name,
+        pc.email AS client_email,
+        pc.phone AS client_phone,
+        da.doula_id,
+        d.full_name AS doula_full_name,
+        d.email AS doula_email,
+        da.hospital,
+        da.assigned_at,
+        da.role,
+        da.services,
         da.source_timestamp,
         da.notes,
         da.updated_at
@@ -333,9 +382,40 @@ export class DoulasService {
       JOIN public.phi_clients pc ON pc.id = da.client_id
       WHERE da.client_id = $1::uuid AND da.doula_id = $2::uuid
       LIMIT 1
-      `,
-      [clientId, doulaId]
-    );
+      `;
+    const legacySql = `
+      SELECT
+        da.client_id,
+        pc.first_name AS client_first_name,
+        pc.last_name AS client_last_name,
+        pc.email AS client_email,
+        pc.phone AS client_phone,
+        da.doula_id,
+        d.full_name AS doula_full_name,
+        d.email AS doula_email,
+        da.hospital,
+        da.assigned_at,
+        da.role,
+        ARRAY[]::text[] AS services,
+        da.source_timestamp,
+        da.notes,
+        da.updated_at
+      FROM public.doula_assignments da
+      JOIN public.doulas d ON d.id = da.doula_id
+      JOIN public.phi_clients pc ON pc.id = da.client_id
+      WHERE da.client_id = $1::uuid AND da.doula_id = $2::uuid
+      LIMIT 1
+      `;
+
+    let rows: DoulaAssignmentDbRow[];
+    try {
+      ({ rows } = await pool.query<DoulaAssignmentDbRow>(sql, [clientId, doulaId]));
+    } catch (error) {
+      if (!isMissingServicesColumnError(error)) {
+        throw error;
+      }
+      ({ rows } = await pool.query<DoulaAssignmentDbRow>(legacySql, [clientId, doulaId]));
+    }
 
     return rows[0] ? mapAssignmentRow(rows[0]) : null;
   }
@@ -346,7 +426,7 @@ export class DoulasService {
     input: UpdateDoulaAssignmentInput
   ): Promise<DoulaAssignmentRowDto | null> {
     const setClauses: string[] = [];
-    const values: Array<string | null> = [];
+    const values: unknown[] = [];
 
     if (input.hospital !== undefined) {
       values.push(input.hospital ?? null);
@@ -368,6 +448,11 @@ export class DoulasService {
       setClauses.push(`role = $${values.length}`);
     }
 
+    if (input.services !== undefined) {
+      values.push(input.services);
+      setClauses.push(`services = $${values.length}::text[]`);
+    }
+
     if (input.sourceTimestamp !== undefined) {
       values.push(input.sourceTimestamp ?? null);
       setClauses.push(`source_timestamp = $${values.length}`);
@@ -383,8 +468,7 @@ export class DoulasService {
     const doulaParamIdx = values.length;
 
     const pool = getPool();
-    const { rows } = await pool.query<DoulaAssignmentDbRow>(
-      `
+    const sql = `
       UPDATE public.doula_assignments
       SET ${setClauses.join(', ')}
       WHERE client_id = $${clientParamIdx}::uuid
@@ -401,12 +485,83 @@ export class DoulasService {
         hospital,
         assigned_at,
         role,
+        services,
         source_timestamp,
         notes,
         updated_at
-      `,
-      values
-    );
+      `;
+
+    let rows: DoulaAssignmentDbRow[];
+    try {
+      ({ rows } = await pool.query<DoulaAssignmentDbRow>(sql, values));
+    } catch (error) {
+      if (isMissingServicesColumnError(error) && input.services !== undefined) {
+        throw new Error(
+          'doula_assignments.services column is missing. Run migration src/db/migrations/add_services_to_doula_assignments.sql'
+        );
+      }
+      if (!isMissingServicesColumnError(error)) {
+        throw error;
+      }
+
+      const legacyValues: unknown[] = [];
+      const legacySetClauses: string[] = [];
+
+      if (input.hospital !== undefined) {
+        legacyValues.push(input.hospital ?? null);
+        legacySetClauses.push(`hospital = $${legacyValues.length}`);
+      }
+      if (input.notes !== undefined) {
+        legacyValues.push(input.notes ?? null);
+        legacySetClauses.push(`notes = $${legacyValues.length}`);
+      }
+      if (input.assignedAt !== undefined) {
+        legacyValues.push(input.assignedAt ?? null);
+        legacySetClauses.push(`assigned_at = $${legacyValues.length}::timestamp`);
+      }
+      if (input.role !== undefined) {
+        legacyValues.push(input.role ?? null);
+        legacySetClauses.push(`role = $${legacyValues.length}`);
+      }
+      if (input.sourceTimestamp !== undefined) {
+        legacyValues.push(input.sourceTimestamp ?? null);
+        legacySetClauses.push(`source_timestamp = $${legacyValues.length}`);
+      }
+
+      if (!legacySetClauses.length) {
+        return this.getDoulaAssignment(clientId, doulaId);
+      }
+
+      legacySetClauses.push('updated_at = NOW()');
+      legacyValues.push(clientId, doulaId);
+      const clientParam = legacyValues.length - 1;
+      const doulaParam = legacyValues.length;
+
+      const legacySql = `
+        UPDATE public.doula_assignments
+        SET ${retainedSetClauses.join(', ')}
+        WHERE client_id = $${clientParam}::uuid
+          AND doula_id = $${doulaParam}::uuid
+        RETURNING
+          client_id,
+          (SELECT first_name FROM public.phi_clients WHERE id = client_id) AS client_first_name,
+          (SELECT last_name FROM public.phi_clients WHERE id = client_id) AS client_last_name,
+          (SELECT email FROM public.phi_clients WHERE id = client_id) AS client_email,
+          (SELECT phone FROM public.phi_clients WHERE id = client_id) AS client_phone,
+          doula_id,
+          (SELECT full_name FROM public.doulas WHERE id = doula_id) AS doula_full_name,
+          (SELECT email FROM public.doulas WHERE id = doula_id) AS doula_email,
+          hospital,
+          assigned_at,
+          role,
+          ARRAY[]::text[] AS services,
+          source_timestamp,
+          notes,
+          updated_at
+      `;
+
+      ({ rows } = await pool.query<DoulaAssignmentDbRow>(legacySql, legacyValues));
+    }
 
     return rows[0] ? mapAssignmentRow(rows[0]) : null;
   }

@@ -6,6 +6,7 @@ import {
   DoulaListQuery,
   UpdateDoulaAssignmentInput,
 } from '../services/doulasService';
+import { ASSIGNMENT_SERVICE_CATALOG, normalizeAssignmentServices } from '../constants/assignmentServices';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
@@ -246,6 +247,17 @@ export class DoulasController {
       return;
     }
 
+    let normalizedServices: string[] | undefined;
+    if (body.services !== undefined) {
+      normalizedServices = normalizeAssignmentServices(body.services);
+      if (!normalizedServices) {
+        res.status(400).json({
+          error: `services must be a non-empty array using values from: ${ASSIGNMENT_SERVICE_CATALOG.join(', ')}`,
+        });
+        return;
+      }
+    }
+
     const assignedAtRaw = body.assignedAt;
     if (assignedAtRaw !== undefined && assignedAtRaw !== null && typeof assignedAtRaw !== 'string') {
       res.status(400).json({ error: 'assignedAt must be an ISO date-time string or null' });
@@ -264,6 +276,7 @@ export class DoulasController {
       notes: body.notes === undefined ? undefined : (body.notes as string | null),
       assignedAt: body.assignedAt === undefined ? undefined : (body.assignedAt as string | null),
       role: roleNormalized,
+      services: normalizedServices,
       sourceTimestamp:
         body.sourceTimestamp === undefined ? undefined : (body.sourceTimestamp as string | null),
     };

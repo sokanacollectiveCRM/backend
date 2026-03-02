@@ -25,6 +25,7 @@ import {
   CloudSqlDoulaAssignmentService,
   normalizeDoulaAssignmentRole,
 } from '../services/cloudSqlDoulaAssignmentService';
+import { ASSIGNMENT_SERVICE_CATALOG, normalizeAssignmentServices } from '../constants/assignmentServices';
 import { logger } from '../common/utils/logger';
 
 export class ClientController {
@@ -79,6 +80,25 @@ export class ClientController {
     return { ok: true, value: normalized };
   }
 
+  private static isTransientCloudSqlError(error: unknown): boolean {
+    if (!error || typeof error !== 'object') {
+      return false;
+    }
+
+    const code = String((error as { code?: string }).code || '').toUpperCase();
+    const message = String((error as { message?: string }).message || '').toLowerCase();
+
+    return (
+      code === 'ECONNRESET' ||
+      code === 'ECONNREFUSED' ||
+      code === 'ETIMEDOUT' ||
+      code === 'EPIPE' ||
+      message.includes('econnreset') ||
+      message.includes('connection reset') ||
+      message.includes('connection terminated unexpectedly')
+    );
+  }
+
   //
   // getClients()
   //
@@ -102,6 +122,19 @@ export class ClientController {
       logger.info({ source: 'cloud_sql', count: dtos.length }, '[Client] list response');
       res.json(ApiResponse.list(dtos, dtos.length));
     } catch (getError) {
+      if (ClientController.isTransientCloudSqlError(getError)) {
+        logger.warn('[Client] transient Cloud SQL error while listing clients; returning empty list');
+        res.setHeader('x-data-degraded', 'cloud-sql-transient');
+        res.json(
+          ApiResponse.list([], 0, {
+            degraded: true,
+            source: 'cloud_sql',
+            reason: 'transient_connection_error',
+          })
+        );
+        return;
+      }
+
       const msg = (getError instanceof Error ? getError.message : String(getError)) || '';
       if (msg.includes('does not exist') && msg.toLowerCase().includes('column')) {
         if (!res.headersSent) {
@@ -820,10 +853,18 @@ export class ClientController {
   async assignDoula(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { id: clientId } = req.params;
-      const { doulaId, role } = req.body;
+      const { doulaId, role, services } = req.body;
 
       if (!clientId || !doulaId) {
         res.status(400).json({ error: 'Missing clientId or doulaId' });
+        return;
+      }
+
+      const normalizedServices = normalizeAssignmentServices(services);
+      if (!normalizedServices) {
+        res.status(400).json({
+          error: `services is required and must contain one or more valid values: ${ASSIGNMENT_SERVICE_CATALOG.join(', ')}`,
+        });
         return;
       }
 
@@ -844,7 +885,8 @@ export class ClientController {
         doulaId,
         req.user?.id,
         undefined,
-        normalizedRole
+        normalizedRole,
+        normalizedServices
       );
 
       res.json({
@@ -853,12 +895,22 @@ export class ClientController {
           id: assignment.id,
           doulaId: assignment.doulaId,
           clientId: assignment.clientId,
+          services: assignment.services,
           assignedAt: assignment.assignedAt,
           role: assignment.role,
           status: assignment.status
         }
       });
     } catch (error) {
+      const msg = (error instanceof Error ? error.message : String(error)).toLowerCase();
+      if (msg.includes('doula_assignments') && msg.includes('services') && msg.includes('does not exist')) {
+        res.status(503).json({
+          error:
+            'Doula assignment services are not available yet. Run migration src/db/migrations/add_services_to_doula_assignments.sql',
+          code: 'CLOUD_SQL_SCHEMA',
+        });
+        return;
+      }
       if (ClientController.isTableMissing(error, 'assignments')) {
         res.status(503).json({ error: 'Assignments feature not available — table pending migration' });
         return;

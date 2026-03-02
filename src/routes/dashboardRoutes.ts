@@ -2,7 +2,7 @@ import express, { Router } from 'express';
 
 import authMiddleware from '../middleware/authMiddleware';
 import authorizeRoles from '../middleware/authorizeRoles';
-import { getPool } from '../db/cloudSqlPool';
+import { queryCloudSql } from '../db/cloudSqlPool';
 import supabase from '../supabase';
 
 const dashboardRoutes: Router = express.Router();
@@ -94,8 +94,7 @@ const fetchMonthlyRevenueFromCloudSql = async (
   nowIso: string
 ): Promise<number | null> => {
   try {
-    const pool = getPool();
-    const { rows } = await pool.query<{ amount: string }>(
+    const { rows } = await queryCloudSql<{ amount: string }>(
       `SELECT COALESCE(SUM(amount), 0)::text as amount
        FROM payment_installments
        WHERE due_date >= $1::date AND due_date <= $2::date
@@ -238,8 +237,7 @@ const fetchCalendarEventsFromCloudSql = async (
   todayIso: string
 ): Promise<{ id: string; type: string; title: string; date: string; color: string }[]> => {
   try {
-    const pool = getPool();
-    const { rows } = await pool.query<{
+    const { rows } = await queryCloudSql<{
       id: string;
       first_name: string | null;
       last_name: string | null;
