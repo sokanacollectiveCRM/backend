@@ -1,0 +1,27 @@
+---
+description: Require frontend preflight skill before each task
+alwaysApply: true
+---
+
+# Mandatory Preflight Skill
+
+Before starting implementation, first apply:
+- `.cursor/skills/sokana-frontend-preflight-scan/SKILL.md`
+
+## Rule
+
+- Preflight is required for every task.
+- Before any new backend task, backend must check frontend handoff queue first.
+
+## Required before every backend task
+
+- Check `.cursor/handoffs/open/` for open `frontend->backend` tasks.
+- Explicitly communicate one of:
+  - `open_handoff_tasks_found` with file names, or
+  - `no_open_handoff_tasks`.
+- If open tasks exist, prioritize them before unrelated new implementation unless user explicitly overrides.
+
+## Required before coding
+
+- Update `.cursor/skills/sokana-doula-cloudsql-sync/frontend-context.md` first.
+- Record files scanned and compatibility assumptions.

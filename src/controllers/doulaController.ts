@@ -3,27 +3,30 @@ import { AuthRequest } from '../types';
 import { DoulaDocumentRepository } from '../repositories/doulaDocumentRepository';
 import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
 import { SupabaseUserRepository } from '../repositories/supabaseUserRepository';
-import { SupabaseActivityRepository } from '../repositories/supabaseActivityRepository';
 import { DoulaDocumentUploadService } from '../services/doulaDocumentUploadService';
 import { UserUseCase } from '../usecase/userUseCase';
 import { ClientUseCase } from '../usecase/clientUseCase';
 import { File as MulterFile } from 'multer';
 import supabase from '../supabase';
+import { NotFoundError } from '../domains/errors';
+import { CloudSqlTeamService } from '../services/cloudSqlTeamService';
+import { ActivityRepository } from '../repositories/interface/activityRepository';
 
 export class DoulaController {
   private documentRepository: DoulaDocumentRepository;
   private assignmentRepository: SupabaseAssignmentRepository;
   private userRepository: SupabaseUserRepository;
-  private activityRepository: SupabaseActivityRepository;
+  private activityRepository: ActivityRepository;
   private uploadService: DoulaDocumentUploadService;
   private userUseCase: UserUseCase;
   private clientUseCase: ClientUseCase;
+  private cloudSqlTeamService: CloudSqlTeamService;
 
   constructor(
     documentRepository: DoulaDocumentRepository,
     assignmentRepository: SupabaseAssignmentRepository,
     userRepository: SupabaseUserRepository,
-    activityRepository: SupabaseActivityRepository,
+    activityRepository: ActivityRepository,
     uploadService: DoulaDocumentUploadService,
     userUseCase: UserUseCase,
     clientUseCase: ClientUseCase
@@ -35,6 +38,12 @@ export class DoulaController {
     this.uploadService = uploadService;
     this.userUseCase = userUseCase;
     this.clientUseCase = clientUseCase;
+    this.cloudSqlTeamService = new CloudSqlTeamService();
+  }
+
+  private isMissingRelationError(error: any, relationName: string): boolean {
+    const message = String(error?.message || '').toLowerCase();
+    return message.includes(`relation "${relationName.toLowerCase()}" does not exist`) || message.includes(`public.${relationName.toLowerCase()}`);
   }
 
   /**
@@ -191,6 +200,25 @@ export class DoulaController {
       });
     } catch (error: any) {
       console.error('Error fetching documents:', error);
+      const message = String(error?.message || '');
+      const lowered = message.toLowerCase();
+      const isMissingDocumentsTable =
+        message.includes("Could not find the table 'public.doula_documents'") ||
+        (lowered.includes('public.doula_documents') && lowered.includes('schema')) ||
+        (lowered.includes('doula_documents') &&
+          (lowered.includes('does not exist') ||
+            lowered.includes('schema cache') ||
+            lowered.includes('could not find the table')));
+      if (isMissingDocumentsTable) {
+        res.json({
+          success: true,
+          documents: [],
+          degraded: true,
+          source: 'supabase',
+          reason: 'doula_documents_table_missing',
+        });
+        return;
+      }
       res.status(500).json({
         error: error.message || 'Failed to fetch documents'
       });
@@ -269,6 +297,16 @@ export class DoulaController {
       });
     } catch (error: any) {
       console.error('Error fetching assigned clients:', error);
+      if (this.isMissingRelationError(error, 'assignments')) {
+        res.json({
+          success: true,
+          clients: [],
+          degraded: true,
+          source: 'cloud_sql',
+          reason: 'assignments_table_missing'
+        });
+        return;
+      }
       res.status(500).json({
         error: error.message || 'Failed to fetch clients'
       });
@@ -294,9 +332,10 @@ export class DoulaController {
         return;
       }
 
-      // Verify client is assigned to doula
-      const assignedClients = await this.assignmentRepository.getAssignedClients(doulaId);
-      if (!assignedClients.includes(clientId)) {
+      // Verify client is assigned to doula using Cloud SQL-backed client list.
+      const assignedClients = await this.clientUseCase.getClientsLite(doulaId, 'doula');
+      const hasAssignment = assignedClients.some((client) => client.id === clientId);
+      if (!hasAssignment) {
         res.status(403).json({
           error: 'You do not have access to this client'
         });
@@ -329,23 +368,27 @@ export class DoulaController {
   async logHours(req: AuthRequest, res: Response): Promise<void> {
     try {
       const doulaId = req.user?.id;
-      const { client_id, start_time, end_time, note } = req.body;
+      const clientId = req.body?.client_id ?? req.body?.clientId;
+      const startTime = req.body?.start_time ?? req.body?.startTime;
+      const endTime = req.body?.end_time ?? req.body?.endTime;
+      const note = req.body?.note ?? req.body?.notes ?? req.body?.description;
 
       if (!doulaId) {
         res.status(401).json({ error: 'Unauthorized' });
         return;
       }
 
-      if (!client_id || !start_time || !end_time) {
+      if (!clientId || !startTime || !endTime) {
         res.status(400).json({
-          error: 'Missing required fields: client_id, start_time, end_time'
+          error: 'Missing required fields: client_id/clientId, start_time/startTime, end_time/endTime'
         });
         return;
       }
 
-      // Verify client is assigned to doula
-      const assignedClients = await this.assignmentRepository.getAssignedClients(doulaId);
-      if (!assignedClients.includes(client_id)) {
+      // Verify client is assigned to doula using Cloud SQL-backed assignment join.
+      const assignedClients = await this.clientUseCase.getClientsLite(doulaId, 'doula');
+      const hasAssignment = assignedClients.some((client) => client.id === clientId);
+      if (!hasAssignment) {
         res.status(403).json({
           error: 'You can only log hours for clients assigned to you'
         });
@@ -355,9 +398,9 @@ export class DoulaController {
       // Log hours
       const workEntry = await this.userUseCase.addNewHours(
         doulaId,
-        client_id,
-        new Date(start_time),
-        new Date(end_time),
+        clientId,
+        new Date(startTime),
+        new Date(endTime),
         note || ''
       );
 
@@ -388,13 +431,19 @@ export class DoulaController {
       // Get all hours for this doula
       const allHours = await this.userUseCase.getHoursById(doulaId);
 
-      // Filter to only include hours for assigned clients
-      const assignedClients = await this.assignmentRepository.getAssignedClients(doulaId);
+      // Filter to only include hours for clients assigned in Cloud SQL.
+      const assignedClients = await this.clientUseCase.getClientsLite(doulaId, 'doula');
+      const assignedClientIds = new Set(assignedClients.map((client) => client.id));
       const filteredHours = allHours.filter((entry: any) => {
         // Handle both possible client structures: entry.client?.id or entry.client?.user?.id
         const clientId = entry.client?.id || entry.client?.user?.id;
-        return clientId && assignedClients.includes(clientId);
+        return clientId && assignedClientIds.has(clientId);
       });
+
+      // Avoid 304/no-body caching behavior for frequently changing dashboard data.
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
 
       res.json({
         success: true,
@@ -402,6 +451,16 @@ export class DoulaController {
       });
     } catch (error: any) {
       console.error('Error fetching hours:', error);
+      if (this.isMissingRelationError(error, 'hours')) {
+        res.json({
+          success: true,
+          hours: [],
+          degraded: true,
+          source: 'cloud_sql',
+          reason: 'hours_table_missing'
+        });
+        return;
+      }
       res.status(500).json({
         error: error.message || 'Failed to fetch hours'
       });
@@ -435,9 +494,10 @@ export class DoulaController {
         return;
       }
 
-      // Verify client is assigned to doula
-      const assignedClients = await this.assignmentRepository.getAssignedClients(doulaId);
-      if (!assignedClients.includes(clientId)) {
+      // Verify client is assigned to doula using Cloud SQL-backed assignment join.
+      const assignedClients = await this.clientUseCase.getClientsLite(doulaId, 'doula');
+      const hasAssignment = assignedClients.some((client) => client.id === clientId);
+      if (!hasAssignment) {
         res.status(403).json({
           error: 'You can only add activities for clients assigned to you'
         });
@@ -460,6 +520,15 @@ export class DoulaController {
       });
     } catch (error: any) {
       console.error('Error adding activity:', error);
+      if (this.isMissingRelationError(error, 'client_activities')) {
+        res.status(503).json({
+          error: 'Activities feature not available - client_activities table pending migration',
+          degraded: true,
+          source: 'cloud_sql',
+          reason: 'client_activities_table_missing',
+        });
+        return;
+      }
       res.status(500).json({
         error: error.message || 'Failed to add activity'
       });
@@ -485,9 +554,10 @@ export class DoulaController {
         return;
       }
 
-      // Verify client is assigned to doula
-      const assignedClients = await this.assignmentRepository.getAssignedClients(doulaId);
-      if (!assignedClients.includes(clientId)) {
+      // Verify client is assigned to doula using Cloud SQL-backed assignment join.
+      const assignedClients = await this.clientUseCase.getClientsLite(doulaId, 'doula');
+      const hasAssignment = assignedClients.some((client) => client.id === clientId);
+      if (!hasAssignment) {
         res.status(403).json({
           error: 'You do not have access to this client'
         });
@@ -503,6 +573,16 @@ export class DoulaController {
       });
     } catch (error: any) {
       console.error('Error fetching activities:', error);
+      if (this.isMissingRelationError(error, 'client_activities')) {
+        res.json({
+          success: true,
+          activities: [],
+          degraded: true,
+          source: 'cloud_sql',
+          reason: 'client_activities_table_missing',
+        });
+        return;
+      }
       res.status(500).json({
         error: error.message || 'Failed to fetch activities'
       });
@@ -520,11 +600,44 @@ export class DoulaController {
         res.status(401).json({ error: 'Unauthorized' });
         return;
       }
-
-      const user = await this.userUseCase.getUserById(doulaId);
-      if (!user) {
-        res.status(404).json({ error: 'Profile not found' });
+      const cloudSqlMember = await this.cloudSqlTeamService.getTeamMemberById(doulaId);
+      if (cloudSqlMember && cloudSqlMember.role === 'doula') {
+        const reqUserJson = req.user?.toJSON?.() as any;
+        const profile = {
+          id: cloudSqlMember.id,
+          email: cloudSqlMember.email,
+          firstname: cloudSqlMember.firstname,
+          lastname: cloudSqlMember.lastname,
+          fullName: cloudSqlMember.fullName,
+          role: 'doula',
+          phone_number: cloudSqlMember.phone_number,
+          address: cloudSqlMember.address ?? '',
+          city: cloudSqlMember.city ?? '',
+          state: cloudSqlMember.state ?? '',
+          country: cloudSqlMember.country ?? '',
+          zip_code: cloudSqlMember.zip_code ?? '',
+          bio: cloudSqlMember.bio ?? '',
+          account_status: cloudSqlMember.account_status,
+          profile_picture: reqUserJson?.profile_picture ?? null,
+          created_at: cloudSqlMember.created_at,
+          updatedAt: cloudSqlMember.updated_at,
+        };
+        res.json({
+          success: true,
+          profile,
+        });
         return;
+      }
+
+      let user;
+      try {
+        user = await this.userUseCase.getUserById(doulaId);
+      } catch (error) {
+        if (error instanceof NotFoundError && req.user) {
+          user = req.user;
+        } else {
+          throw error;
+        }
       }
 
       res.json({
@@ -550,50 +663,77 @@ export class DoulaController {
         res.status(401).json({ error: 'Unauthorized' });
         return;
       }
+      // Filter out undefined/null values but keep empty strings for explicit clearing.
+      const fieldsToUpdate = Object.entries(req.body || {}).reduce((acc, [key, value]) => {
+        if (value !== undefined && value !== null) {
+          (acc as any)[key] = value;
+        }
+        return acc;
+      }, {} as Record<string, any>);
 
-      console.log(`📝 Doula ${doulaId} (${req.user?.email}) attempting to update profile`);
+      const cloudSqlUpdateData: {
+        firstname?: string;
+        lastname?: string;
+        fullName?: string;
+        email?: string;
+        phone?: string | null;
+        phone_number?: string | null;
+        address?: string | null;
+        city?: string | null;
+        state?: string | null;
+        country?: string | null;
+        zip_code?: string | null;
+        account_status?: string;
+        bio?: string | null;
+      } = {};
 
-      // Get current user for comparison
-      const currentUser = await this.userUseCase.getUserById(doulaId);
-      if (!currentUser) {
-        console.error(`❌ Profile not found for doula ${doulaId}`);
+      if (fieldsToUpdate.firstname !== undefined) cloudSqlUpdateData.firstname = String(fieldsToUpdate.firstname);
+      if (fieldsToUpdate.lastname !== undefined) cloudSqlUpdateData.lastname = String(fieldsToUpdate.lastname);
+      if (fieldsToUpdate.fullName !== undefined) cloudSqlUpdateData.fullName = String(fieldsToUpdate.fullName);
+      if (fieldsToUpdate.email !== undefined) cloudSqlUpdateData.email = String(fieldsToUpdate.email);
+      if (fieldsToUpdate.phone !== undefined) cloudSqlUpdateData.phone = fieldsToUpdate.phone;
+      if (fieldsToUpdate.phone_number !== undefined) cloudSqlUpdateData.phone_number = fieldsToUpdate.phone_number;
+      if (fieldsToUpdate.address !== undefined) cloudSqlUpdateData.address = fieldsToUpdate.address;
+      if (fieldsToUpdate.city !== undefined) cloudSqlUpdateData.city = fieldsToUpdate.city;
+      if (fieldsToUpdate.state !== undefined) cloudSqlUpdateData.state = fieldsToUpdate.state;
+      if (fieldsToUpdate.country !== undefined) cloudSqlUpdateData.country = fieldsToUpdate.country;
+      if (fieldsToUpdate.zip_code !== undefined) cloudSqlUpdateData.zip_code = fieldsToUpdate.zip_code;
+      if (fieldsToUpdate.account_status !== undefined) cloudSqlUpdateData.account_status = String(fieldsToUpdate.account_status);
+      if (fieldsToUpdate.bio !== undefined) cloudSqlUpdateData.bio = fieldsToUpdate.bio;
+
+      const updatedMember = await this.cloudSqlTeamService.updateTeamMember(doulaId, cloudSqlUpdateData);
+      if (!updatedMember || updatedMember.role !== 'doula') {
         res.status(404).json({ error: 'Profile not found' });
         return;
       }
 
-      console.log(`📋 Current profile state - Address: "${currentUser.address}", City: "${currentUser.city}", State: "${currentUser.state}"`);
-
-      // Update user with new data
-      const updateData = req.body;
-
-      // Log all received fields, especially address
-      console.log(`📥 Received update data:`, JSON.stringify(updateData, null, 2));
-      console.log(`🏠 Address field specifically: "${updateData.address}" (type: ${typeof updateData.address})`);
-
-      // Filter out undefined/null values but keep empty strings for explicit clearing
-      const fieldsToUpdate = Object.entries(updateData).reduce((acc, [key, value]) => {
-        if (value !== undefined && value !== null) {
-          acc[key] = value;
-        }
-        return acc;
-      }, {} as any);
-
-      console.log(`📤 Fields to update (filtered):`, JSON.stringify(fieldsToUpdate, null, 2));
-      console.log(`🎯 Targeting user ID: ${doulaId} (authenticated doula)`);
-
-      // Use update() instead of save() to properly update all fields
-      const updatedUser = await this.userRepository.update(doulaId, fieldsToUpdate);
-
-      console.log(`✅ Profile updated successfully for doula ${doulaId}`);
-      console.log(`📋 Updated profile - Address: "${updatedUser.address}", City: "${updatedUser.city}", State: "${updatedUser.state}"`);
+      const reqUserJson = req.user?.toJSON?.() as any;
+      const profile = {
+        id: updatedMember.id,
+        email: updatedMember.email,
+        firstname: updatedMember.firstname,
+        lastname: updatedMember.lastname,
+        fullName: updatedMember.fullName,
+        role: 'doula',
+        phone_number: updatedMember.phone_number,
+        address: updatedMember.address ?? '',
+        city: updatedMember.city ?? '',
+        state: updatedMember.state ?? '',
+        country: updatedMember.country ?? '',
+        zip_code: updatedMember.zip_code ?? '',
+        bio: updatedMember.bio ?? '',
+        account_status: updatedMember.account_status,
+        profile_picture: reqUserJson?.profile_picture ?? null,
+        created_at: updatedMember.created_at,
+        updatedAt: updatedMember.updated_at,
+      };
 
       res.json({
         success: true,
-        profile: updatedUser.toJSON()
+        profile,
       });
     } catch (error: any) {
-      console.error(`❌ Error updating profile for doula ${req.user?.id}:`, error.message);
-      console.error('Full error:', error);
+      console.error(`Error updating profile for doula ${req.user?.id}:`, error?.message || error);
       res.status(500).json({
         error: error.message || 'Failed to update profile'
       });

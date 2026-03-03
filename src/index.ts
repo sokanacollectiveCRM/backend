@@ -7,7 +7,7 @@ import { RequestFormController } from './controllers/requestFormController';
 import { UserController } from './controllers/userController';
 import { DoulaDocumentRepository } from './repositories/doulaDocumentRepository';
 import { RequestFormRepository } from './repositories/requestFormRepository';
-import { SupabaseActivityRepository } from './repositories/supabaseActivityRepository';
+import { CloudSqlActivityRepository } from './repositories/cloudSqlActivityRepository';
 import { SupabaseAssignmentRepository } from './repositories/supabaseAssignmentRepository';
 import { CloudSqlClientRepository } from './repositories/cloudSqlClientRepository';
 import { SupabaseUserRepository } from './repositories/supabaseUserRepository';
@@ -28,7 +28,7 @@ const userRepository = new SupabaseUserRepository(supabase);
 const requestRepository = new RequestFormRepository(supabase);
 // Client data comes only from Cloud SQL (sokana_private). Supabase is auth only.
 const clientRepository = new CloudSqlClientRepository();
-const activityRepository = new SupabaseActivityRepository(supabase);
+const activityRepository = new CloudSqlActivityRepository(supabase);
 const assignmentRepository = new SupabaseAssignmentRepository(supabase);
 const doulaDocumentRepository = new DoulaDocumentRepository(supabase);
 

@@ -208,11 +208,14 @@ export class SupabaseAuthService implements AuthService {
 
     try {
       const user = await this.userRepository.findByEmail(data.user.email ?? '');
-      if (user) return user;
+      if (user) {
+        return user;
+      }
     } catch {
       // public.users missing or no row
     }
-    return userFromAuthUser(data.user);
+    const fallbackUser = userFromAuthUser(data.user);
+    return fallbackUser;
   }
 
   async getGoogleAuthUrl(

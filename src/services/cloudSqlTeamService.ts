@@ -9,8 +9,14 @@ export interface TeamMemberDto {
   fullName: string;
   email: string;
   role: 'admin' | 'doula';
-  account_status: 'approved';
+  account_status: string;
   phone_number: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  zip_code: string | null;
+  bio?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -22,6 +28,13 @@ interface DoulaRow {
   full_name: string;
   email: string | null;
   phone: string | null;
+  account_status?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  zip_code?: string | null;
+  bio?: string | null;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -59,8 +72,14 @@ function mapRow(row: DoulaRow): TeamMemberDto {
     fullName: row.full_name,
     email: row.email ?? '',
     role: 'doula',
-    account_status: 'approved',
+    account_status: row.account_status ?? 'approved',
     phone_number: row.phone ?? null,
+    address: row.address ?? null,
+    city: row.city ?? null,
+    state: row.state ?? null,
+    country: row.country ?? null,
+    zip_code: row.zip_code ?? null,
+    bio: row.bio ?? null,
     created_at: toIso(row.created_at),
     updated_at: toIso(row.updated_at),
   };
@@ -77,6 +96,11 @@ function mapAdminRow(row: AdminRow): TeamMemberDto {
     role: 'admin',
     account_status: 'approved',
     phone_number: row.phone ?? null,
+    address: null,
+    city: null,
+    state: null,
+    country: null,
+    zip_code: null,
     created_at: toIso(row.created_at),
     updated_at: toIso(row.updated_at),
   };
@@ -130,7 +154,7 @@ export class CloudSqlTeamService {
     const pool = getPool();
     const { rows } = await pool.query<DoulaRow>(
       `
-      SELECT id, full_name, email, phone, created_at, updated_at
+      SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, created_at, updated_at
       FROM public.doulas
       WHERE id = $1::uuid
       LIMIT 1
@@ -169,9 +193,13 @@ export class CloudSqlTeamService {
     const fullName = `${input.firstname} ${input.lastname}`.trim();
     const { rows } = await getPool().query<DoulaRow>(
       `
-      INSERT INTO public.doulas (id, full_name, email, phone, created_at, updated_at)
-      VALUES (COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, NOW(), NOW())
-      RETURNING id, full_name, email, phone, created_at, updated_at
+      INSERT INTO public.doulas (
+        id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, created_at, updated_at
+      )
+      VALUES (
+        COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, 'approved', NULL, NULL, NULL, NULL, NULL, NULL, NOW(), NOW()
+      )
+      RETURNING id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, created_at, updated_at
       `,
       [input.id ?? null, fullName, input.email.toLowerCase().trim(), input.phone_number ?? null]
     );
@@ -278,6 +306,13 @@ export class CloudSqlTeamService {
       email?: string;
       phone_number?: string | null;
       phone?: string | null;
+      address?: string | null;
+      city?: string | null;
+      state?: string | null;
+      country?: string | null;
+      zip_code?: string | null;
+      account_status?: string;
+      bio?: string | null;
     }
   ): Promise<TeamMemberDto | null> {
     const existing = await this.getTeamMemberById(id);
@@ -287,6 +322,13 @@ export class CloudSqlTeamService {
       || `${input.firstname ?? existing.firstname} ${input.lastname ?? existing.lastname}`.trim();
     const email = input.email?.trim().toLowerCase() || existing.email;
     const phone = input.phone ?? input.phone_number ?? existing.phone_number ?? null;
+    const address = input.address !== undefined ? input.address : (existing.address ?? null);
+    const city = input.city !== undefined ? input.city : (existing.city ?? null);
+    const state = input.state !== undefined ? input.state : (existing.state ?? null);
+    const country = input.country !== undefined ? input.country : (existing.country ?? null);
+    const zipCode = input.zip_code !== undefined ? input.zip_code : (existing.zip_code ?? null);
+    const accountStatus = input.account_status?.trim() || existing.account_status || 'approved';
+    const bio = input.bio !== undefined ? input.bio : (existing.bio ?? null);
 
     if (existing.role === 'admin') {
       const { rows } = await getPool().query<AdminRow>(
@@ -310,11 +352,18 @@ export class CloudSqlTeamService {
       SET full_name = $1,
           email = $2,
           phone = $3,
+          address = $4,
+          city = $5,
+          state = $6,
+          country = $7,
+          zip_code = $8,
+          account_status = $9,
+          bio = $10,
           updated_at = NOW()
-      WHERE id = $4::uuid
-      RETURNING id, full_name, email, phone, created_at, updated_at
+      WHERE id = $11::uuid
+      RETURNING id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, created_at, updated_at
       `,
-      [fullName, email, phone, id]
+      [fullName, email, phone, address, city, state, country, zipCode, accountStatus, bio, id]
     );
     return rows[0] ? mapRow(rows[0]) : null;
   }

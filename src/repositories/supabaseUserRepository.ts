@@ -6,6 +6,7 @@ import { Client } from '../entities/Client';
 import { WORK_ENTRY_ROW } from '../entities/Hours';
 import { NOTE } from '../entities/Note';
 import { User } from '../entities/User';
+import { queryCloudSql } from '../db/cloudSqlPool';
 import { UserRepository } from '../repositories/interface/userRepository';
 import { ROLE } from '../types';
 
@@ -306,51 +307,67 @@ async findClientsById(id: string): Promise<any> {
 
   async getHoursById(id: string): Promise<any> {
     try {
-      // Get all hours entries for this doula
-      const { data: hoursData, error: hoursError } = await this.supabaseClient
-        .from('hours')
-        .select('*')
-        .eq('doula_id', id);
+      const { rows } = await queryCloudSql<{
+        id: string;
+        start_time: Date | string;
+        end_time: Date | string;
+        doula_id: string;
+        doula_full_name: string | null;
+        client_id: string;
+        client_first_name: string | null;
+        client_last_name: string | null;
+      }>(
+        `
+        SELECT
+          h.id,
+          h.start_time,
+          h.end_time,
+          h.doula_id,
+          d.full_name AS doula_full_name,
+          h.client_id,
+          pc.first_name AS client_first_name,
+          pc.last_name AS client_last_name
+        FROM public.hours h
+        LEFT JOIN public.doulas d ON d.id = h.doula_id
+        LEFT JOIN public.phi_clients pc ON pc.id = h.client_id
+        WHERE h.doula_id = $1::uuid
+        ORDER BY h.start_time DESC
+        `,
+        [id]
+      );
 
-      if (hoursError) throw new Error(hoursError.message);
-      if (!hoursData) {
-        return []
-      };
-
-      // Get doula data once (since it's the same for all entries)
-      const doulaData = await this.findById(id);
-      if (!doulaData) throw new Error(`Doula with ID ${id} not found`);
-
-      // Process each hour entry to include client data
-      const result = await Promise.all(hoursData.map(async (entry) => {
-        const clientData = await this.findClientsById(entry.client_id);
-        if(!clientData) {
-          console.log("clientData is null, entry is", entry);
-        }
-        // console.log("in getHoursById in supabaseUsersRepository, clientData (to which we are accessing clientData.firstname) is ", clientData);
-        const noteData = await this.findNoteByWorkLogId(entry.id);
-
-
-
+      return rows.map((entry) => {
+        const doulaNameParts = (entry.doula_full_name || '').trim().split(/\s+/).filter(Boolean);
+        const doulaFirstname = doulaNameParts[0] || '';
+        const doulaLastname = doulaNameParts.slice(1).join(' ');
+        const client = {
+          id: entry.client_id,
+          firstname: entry.client_first_name ?? '',
+          lastname: entry.client_last_name ?? '',
+          // Backward compatibility for UIs that still read client.user.*
+          user: {
+            id: entry.client_id,
+            firstname: entry.client_first_name ?? '',
+            lastname: entry.client_last_name ?? '',
+          },
+        };
         return {
           id: entry.id,
           start_time: entry.start_time,
           end_time: entry.end_time,
+          startTime: entry.start_time,
+          endTime: entry.end_time,
+          doula_id: entry.doula_id,
+          client_id: entry.client_id,
           doula: {
-            id: doulaData.id,
-            firstname: doulaData.firstname,
-            lastname: doulaData.lastname
+            id: entry.doula_id,
+            firstname: doulaFirstname,
+            lastname: doulaLastname,
           },
-          client: clientData ? {
-            id: clientData.user.id,
-            firstname: clientData.user.firstname,
-            lastname: clientData.user.lastname
-          } : null,
-          note: noteData ? noteData : null
+          client,
+          note: null,
         };
-      }));
-
-      return result;
+      });
     } catch (error) {
       throw new Error(`Failed to get user's hours: ${error.message}`);
     }
@@ -358,48 +375,65 @@ async findClientsById(id: string): Promise<any> {
 
   async getAllHours(): Promise<any> {
     try {
-      // Get all hours entries for this doula
-      const { data: hoursData, error: hoursError } = await this.supabaseClient
-        .from('hours')
-        .select('*')
+      const { rows } = await queryCloudSql<{
+        id: string;
+        start_time: Date | string;
+        end_time: Date | string;
+        doula_id: string;
+        doula_full_name: string | null;
+        client_id: string;
+        client_first_name: string | null;
+        client_last_name: string | null;
+      }>(
+        `
+        SELECT
+          h.id,
+          h.start_time,
+          h.end_time,
+          h.doula_id,
+          d.full_name AS doula_full_name,
+          h.client_id,
+          pc.first_name AS client_first_name,
+          pc.last_name AS client_last_name
+        FROM public.hours h
+        LEFT JOIN public.doulas d ON d.id = h.doula_id
+        LEFT JOIN public.phi_clients pc ON pc.id = h.client_id
+        ORDER BY h.start_time DESC
+        `
+      );
 
-      if (hoursError) throw new Error(hoursError.message);
-      if (!hoursData) {
-        return []
-      };
-
-      // Process each hour entry to include client data
-      const result = await Promise.all(hoursData.map(async (entry) => {
-        // console.log("entry is", entry);
-        const clientData = await this.findClientsById(entry.client_id);
-        const noteData = await this.findNoteByWorkLogId(entry.id);
-        const doulaData = await this.findById(entry.doula_id);
-        if (!doulaData) throw new Error(`Doula with the ID ${entry.doula_id} not found, inside getAllHours()`);
-
-        if(!clientData) {
-          console.log("clientData is null in getAllHours, entry is", entry);
-        }
-
-
+      return rows.map((entry) => {
+        const doulaNameParts = (entry.doula_full_name || '').trim().split(/\s+/).filter(Boolean);
+        const doulaFirstname = doulaNameParts[0] || '';
+        const doulaLastname = doulaNameParts.slice(1).join(' ');
+        const client = {
+          id: entry.client_id,
+          firstname: entry.client_first_name ?? '',
+          lastname: entry.client_last_name ?? '',
+          // Backward compatibility for UIs that still read client.user.*
+          user: {
+            id: entry.client_id,
+            firstname: entry.client_first_name ?? '',
+            lastname: entry.client_last_name ?? '',
+          },
+        };
         return {
           id: entry.id,
           start_time: entry.start_time,
           end_time: entry.end_time,
+          startTime: entry.start_time,
+          endTime: entry.end_time,
+          doula_id: entry.doula_id,
+          client_id: entry.client_id,
           doula: {
-            id: doulaData.id,
-            firstname: doulaData.firstname,
-            lastname: doulaData.lastname
+            id: entry.doula_id,
+            firstname: doulaFirstname,
+            lastname: doulaLastname,
           },
-          client: clientData ? {
-            id: clientData.id,
-            firstname: clientData.user.firstname,
-            lastname: clientData.user.lastname
-          } : null,
-          note: noteData ? noteData : null
+          client,
+          note: null,
         };
-      }));
-
-      return result;
+      });
     } catch (error) {
       throw new Error(`Failed to get all hours: ${error.message}`);
     }
@@ -538,44 +572,16 @@ async findClientsById(id: string): Promise<any> {
   }
 
   async addNewHours(doula_id: string, client_id: string, start_time: Date, end_time: Date, note: string): Promise<WORK_ENTRY_ROW> {
-    const { data: hoursData, error: hoursError } = await this.supabaseClient
-      .from('hours')
-      .insert([
-        {
-          doula_id: doula_id,
-          client_id: client_id,
-          start_time: start_time,
-          end_time: end_time
-        }
-      ])
-      .select();
-
-      if (hoursError) {
-        throw new Error(`Failed to post new user: ${hoursError.message}`);
-      }
-
-      // console.log("hoursData is" , hoursData);
-      // console.log("the id contained in hoursData is", hoursData[0].id);
-
-    if(note != "") {
-      // console.log("note is not empty and about to call https call, note is", note);
-      const { data: noteData, error: noteError } = await this.supabaseClient
-      .from('notes')
-      .insert([
-        {
-          content: note,
-          created_by: doula_id,
-          work_log_id: hoursData[0].id,
-          visibility: "public"
-        }
-      ])
-      .select();
-
-      if(noteError) {
-        throw new Error(`The note field is nonempty but failed to add note, ${noteError.message}`);
-      }
-    }
-
-    return hoursData[0];
+    const _ignoredNote = note;
+    void _ignoredNote;
+    const { rows } = await queryCloudSql<WORK_ENTRY_ROW>(
+      `
+      INSERT INTO public.hours (doula_id, client_id, start_time, end_time, created_at, updated_at)
+      VALUES ($1::uuid, $2::uuid, $3::timestamptz, $4::timestamptz, NOW(), NOW())
+      RETURNING id, doula_id, client_id, start_time, end_time
+      `,
+      [doula_id, client_id, start_time, end_time]
+    );
+    return rows[0];
   }
 }

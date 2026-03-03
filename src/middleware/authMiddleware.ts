@@ -53,7 +53,7 @@ const authMiddleware = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const token = getSessionToken(req);
+    const { token, source } = getSessionTokenAndSource(req);
 
     if (!token) {
       logger.warn({

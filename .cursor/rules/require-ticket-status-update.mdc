@@ -1,0 +1,16 @@
+---
+description: Always update ticket/handoff status when task completes
+alwaysApply: true
+---
+
+# Ticket Status Completion Rule
+
+For any task linked to a ticket or handoff file:
+
+1. Update ticket status at completion (e.g. `open` -> `closed` or `ready_for_verification`).
+2. Update checklist items and add a short completion summary.
+3. Move ticket file out of `.cursor/handoffs/open/` when closed:
+   - preferred target: `.cursor/handoffs/closed/`
+4. If anything remains, keep status open and explicitly list remaining items.
+
+Do not finish a task without updating ticket status.
