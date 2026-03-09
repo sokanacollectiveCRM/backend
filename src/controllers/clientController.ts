@@ -855,6 +855,10 @@ export class ClientController {
       const { id: clientId } = req.params;
       const { doulaId, role, services } = req.body;
 
+      // #region agent log
+      fetch('http://127.0.0.1:7707/ingest/a673d138-3b5f-48fc-88e2-e0e1aadca9bb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0cc71c'},body:JSON.stringify({sessionId:'0cc71c',location:'clientController.ts:assignDoula',message:'assignDoula request body',data:{clientId,doulaId,role,servicesReceived:services,servicesType:typeof services,servicesIsArray:Array.isArray(services)},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+      // #endregion
+
       if (!clientId || !doulaId) {
         res.status(400).json({ error: 'Missing clientId or doulaId' });
         return;
@@ -862,6 +866,9 @@ export class ClientController {
 
       const normalizedServices = normalizeAssignmentServices(services);
       if (!normalizedServices) {
+        // #region agent log
+        fetch('http://127.0.0.1:7707/ingest/a673d138-3b5f-48fc-88e2-e0e1aadca9bb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0cc71c'},body:JSON.stringify({sessionId:'0cc71c',location:'clientController.ts:assignDoula',message:'services validation failed',data:{services,normalizedServices},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+        // #endregion
         res.status(400).json({
           error: `services is required and must contain one or more valid values: ${ASSIGNMENT_SERVICE_CATALOG.join(', ')}`,
         });

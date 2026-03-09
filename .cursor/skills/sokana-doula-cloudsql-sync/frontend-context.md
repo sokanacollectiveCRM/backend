@@ -247,3 +247,12 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 ### Action
 - [x] Context updated
 - [x] Implementation started
+
+## Preflight Update 2026-03-09 (Doula Assign services 400)
+
+### Task
+- Debug "Failed to assign doula: 400 services is required" — DoulaAssignment.tsx calls assignDoula without services; backend requires services.
+
+### Contract Findings
+- DoulaAssignment.tsx: assignDoula(clientId, doulaId, { role }) — no services sent
+- Backend: POST /clients/:id/assign-doula requires services

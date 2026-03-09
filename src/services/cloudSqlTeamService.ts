@@ -110,32 +110,24 @@ export class CloudSqlTeamService {
   async listTeamMembers(): Promise<TeamMemberDto[]> {
     const pool = getPool();
     try {
-      const { rows } = await pool.query<{
-        id: string;
-        full_name: string;
-        email: string | null;
-        phone: string | null;
-        role: 'admin' | 'doula';
-        created_at: Date | string;
-        updated_at: Date | string;
-      }>(
+      const { rows } = await pool.query<DoulaRow & { role: 'admin' | 'doula' }>(
         `
-        SELECT id, full_name, email, phone, 'doula'::text AS role, created_at, updated_at
+        SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, 'doula'::text AS role, created_at, updated_at
         FROM public.doulas
         UNION ALL
-        SELECT id, full_name, email, phone, 'admin'::text AS role, created_at, updated_at
+        SELECT id, full_name, email, phone, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'admin'::text AS role, created_at, updated_at
         FROM public.admins
         ORDER BY full_name ASC
         `
       );
-      return rows.map((r) => r.role === 'admin' ? mapAdminRow(r) : mapRow(r));
+      return rows.map((r) => r.role === 'admin' ? mapAdminRow(r as unknown as AdminRow) : mapRow(r));
     } catch (error) {
       // Backward compatibility: if admins table doesn't exist yet, return doulas only.
       const msg = (error as Error)?.message || '';
       if (msg.includes('public.admins') && msg.includes('does not exist')) {
         const { rows } = await pool.query<DoulaRow>(
           `
-          SELECT id, full_name, email, phone, created_at, updated_at
+          SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, created_at, updated_at
           FROM public.doulas
           ORDER BY full_name ASC
           `
