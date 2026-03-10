@@ -4,6 +4,7 @@ import { DoulaDocumentRepository } from '../repositories/doulaDocumentRepository
 import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
 import { SupabaseUserRepository } from '../repositories/supabaseUserRepository';
 import { DoulaDocumentUploadService } from '../services/doulaDocumentUploadService';
+import { DoulaDocumentCompletenessService } from '../services/doulaDocumentCompletenessService';
 import { UserUseCase } from '../usecase/userUseCase';
 import { ClientUseCase } from '../usecase/clientUseCase';
 import { File as MulterFile } from 'multer';
@@ -11,6 +12,11 @@ import supabase from '../supabase';
 import { NotFoundError } from '../domains/errors';
 import { CloudSqlTeamService } from '../services/cloudSqlTeamService';
 import { ActivityRepository } from '../repositories/interface/activityRepository';
+import {
+  ALL_DOULA_DOCUMENT_TYPES,
+  MAX_DOCUMENT_SIZE_BYTES,
+  ALLOWED_MIME_TYPES,
+} from '../constants/doulaDocuments';
 
 export class DoulaController {
   private documentRepository: DoulaDocumentRepository;
@@ -18,6 +24,7 @@ export class DoulaController {
   private userRepository: SupabaseUserRepository;
   private activityRepository: ActivityRepository;
   private uploadService: DoulaDocumentUploadService;
+  private completenessService: DoulaDocumentCompletenessService;
   private userUseCase: UserUseCase;
   private clientUseCase: ClientUseCase;
   private cloudSqlTeamService: CloudSqlTeamService;
@@ -36,6 +43,7 @@ export class DoulaController {
     this.userRepository = userRepository;
     this.activityRepository = activityRepository;
     this.uploadService = uploadService;
+    this.completenessService = new DoulaDocumentCompletenessService(documentRepository);
     this.userUseCase = userUseCase;
     this.clientUseCase = clientUseCase;
     this.cloudSqlTeamService = new CloudSqlTeamService();
@@ -70,13 +78,33 @@ export class DoulaController {
         return;
       }
 
-      // Validate document type
-      const validTypes = ['background_check', 'license', 'other'];
+      const validTypes = ALL_DOULA_DOCUMENT_TYPES;
       if (!validTypes.includes(document_type)) {
         res.status(400).json({
           error: `Invalid document_type. Must be one of: ${validTypes.join(', ')}`
         });
         return;
+      }
+
+      // Validate file size (backend enforcement - never trust client)
+      if (file.size > MAX_DOCUMENT_SIZE_BYTES) {
+        res.status(400).json({
+          error: `File size exceeds ${MAX_DOCUMENT_SIZE_BYTES / (1024 * 1024)}MB limit`
+        });
+        return;
+      }
+      if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+        res.status(400).json({
+          error: `Invalid file type. Allowed: PDF, PNG, JPG, JPEG`
+        });
+        return;
+      }
+
+      // Replace: if doula already has a document of this type, delete old one first
+      const existingDoc = await this.documentRepository.getCurrentDocumentByType(doulaId, document_type);
+      if (existingDoc) {
+        await this.uploadService.deleteDocument(existingDoc.filePath);
+        await this.documentRepository.deleteDocument(existingDoc.id);
       }
 
       // Get user's access token from request
@@ -144,7 +172,7 @@ export class DoulaController {
   }
 
   /**
-   * Get all documents for the authenticated doula
+   * Get all documents and completeness for the authenticated doula
    * GET /api/doulas/documents
    */
   async getMyDocuments(req: AuthRequest, res: Response): Promise<void> {
@@ -156,6 +184,7 @@ export class DoulaController {
       }
 
       const documents = await this.documentRepository.getDocumentsByDoulaId(doulaId);
+      const completeness = await this.completenessService.getCompleteness(doulaId);
 
       // Generate signed URLs for each document (valid for 1 hour)
       const documentsWithUrls = await Promise.all(
@@ -165,30 +194,38 @@ export class DoulaController {
             return {
               id: doc.id,
               documentType: doc.documentType,
+              document_type: doc.documentType,
               fileName: doc.fileName,
-              fileUrl: signedUrl, // Return signed URL for frontend
+              file_name: doc.fileName,
+              fileUrl: signedUrl,
               fileSize: doc.fileSize,
+              file_size: doc.fileSize,
               mimeType: doc.mimeType,
-              uploadedAt: doc.uploadedAt,
-              expiresAt: doc.expiresAt,
-              status: doc.status,
-              notes: doc.notes
-            };
-          } catch (error: any) {
-            console.error(`Error generating signed URL for document ${doc.id}:`, error);
-            // Return document without URL if signing fails
-            return {
-              id: doc.id,
-              documentType: doc.documentType,
-              fileName: doc.fileName,
-              fileUrl: null, // Indicate URL generation failed
-              fileSize: doc.fileSize,
-              mimeType: doc.mimeType,
-              uploadedAt: doc.uploadedAt,
+              mime_type: doc.mimeType,
+              uploadedAt: doc.uploadedAt?.toISOString?.() ?? doc.uploadedAt,
+              uploaded_at: doc.uploadedAt?.toISOString?.() ?? doc.uploadedAt,
               expiresAt: doc.expiresAt,
               status: doc.status,
               notes: doc.notes,
-              error: 'Failed to generate access URL'
+              rejectionReason: doc.rejectionReason,
+              rejection_reason: doc.rejectionReason,
+            };
+          } catch (error: any) {
+            console.error(`Error generating signed URL for document ${doc.id}:`, error);
+            return {
+              id: doc.id,
+              documentType: doc.documentType,
+              document_type: doc.documentType,
+              fileName: doc.fileName,
+              file_name: doc.fileName,
+              fileUrl: null,
+              fileSize: doc.fileSize,
+              file_size: doc.fileSize,
+              mimeType: doc.mimeType,
+              uploadedAt: doc.uploadedAt?.toISOString?.(),
+              status: doc.status,
+              notes: doc.notes,
+              rejectionReason: doc.rejectionReason,
             };
           }
         })
@@ -196,7 +233,22 @@ export class DoulaController {
 
       res.json({
         success: true,
-        documents: documentsWithUrls
+        documents: documentsWithUrls,
+        completeness: {
+          total_required: completeness.totalRequired,
+          total_complete: completeness.totalComplete,
+          missing_types: completeness.missingTypes,
+          has_all_required_documents: completeness.hasAllRequiredDocuments,
+          can_be_active: completeness.canBeActive,
+          items: completeness.items.map((i) => ({
+            document_type: i.documentType,
+            status: i.status,
+            document_id: i.documentId,
+            file_name: i.fileName,
+            uploaded_at: i.uploadedAt,
+            rejection_reason: i.rejectionReason,
+          })),
+        },
       });
     } catch (error: any) {
       console.error('Error fetching documents:', error);
@@ -222,6 +274,153 @@ export class DoulaController {
       res.status(500).json({
         error: error.message || 'Failed to fetch documents'
       });
+    }
+  }
+
+  /**
+   * Get documents and completeness for a doula (admin only)
+   * GET /api/admin/doulas/:doulaId/documents
+   */
+  async getDoulaDocumentsAdmin(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { doulaId } = req.params;
+      if (!doulaId) {
+        res.status(400).json({ error: 'Missing doula ID' });
+        return;
+      }
+
+      const documents = await this.documentRepository.getDocumentsByDoulaId(doulaId);
+      const completeness = await this.completenessService.getCompleteness(doulaId);
+
+      const documentsWithUrls = await Promise.all(
+        documents.map(async (doc) => {
+          try {
+            const signedUrl = await this.documentRepository.getSignedUrl(doc.filePath, 3600);
+            return {
+              id: doc.id,
+              documentType: doc.documentType,
+              fileName: doc.fileName,
+              fileUrl: signedUrl,
+              fileSize: doc.fileSize,
+              mimeType: doc.mimeType,
+              uploadedAt: doc.uploadedAt?.toISOString?.(),
+              status: doc.status,
+              notes: doc.notes,
+              rejectionReason: doc.rejectionReason,
+              reviewedAt: doc.reviewedAt?.toISOString?.(),
+              reviewedBy: doc.reviewedBy,
+            };
+          } catch {
+            return {
+              id: doc.id,
+              documentType: doc.documentType,
+              fileName: doc.fileName,
+              fileUrl: null,
+              fileSize: doc.fileSize,
+              status: doc.status,
+              rejectionReason: doc.rejectionReason,
+            };
+          }
+        })
+      );
+
+      res.json({
+        success: true,
+        documents: documentsWithUrls,
+        completeness: {
+          total_required: completeness.totalRequired,
+          total_complete: completeness.totalComplete,
+          missing_types: completeness.missingTypes,
+          has_all_required_documents: completeness.hasAllRequiredDocuments,
+          can_be_active: completeness.canBeActive,
+          items: completeness.items,
+        },
+      });
+    } catch (error: any) {
+      console.error('Error fetching doula documents (admin):', error);
+      res.status(500).json({ error: error.message || 'Failed to fetch documents' });
+    }
+  }
+
+  /**
+   * Review (approve/reject) a document (admin only)
+   * PATCH /api/admin/doulas/:doulaId/documents/:documentId/review
+   */
+  async reviewDocument(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const adminId = req.user?.id;
+      const { doulaId, documentId } = req.params;
+      const { status, rejection_reason } = req.body;
+
+      if (!adminId || !doulaId || !documentId) {
+        res.status(400).json({ error: 'Missing required parameters' });
+        return;
+      }
+      if (!['approved', 'rejected'].includes(status)) {
+        res.status(400).json({ error: 'status must be "approved" or "rejected"' });
+        return;
+      }
+
+      const document = await this.documentRepository.getDocumentById(documentId);
+      if (!document) {
+        res.status(404).json({ error: 'Document not found' });
+        return;
+      }
+      if (document.doulaId !== doulaId) {
+        res.status(403).json({ error: 'Document does not belong to this doula' });
+        return;
+      }
+
+      const updated = await this.documentRepository.updateDocumentStatus(
+        documentId,
+        status,
+        adminId,
+        status === 'rejected' ? rejection_reason : undefined
+      );
+
+      res.json({
+        success: true,
+        document: {
+          id: updated.id,
+          documentType: updated.documentType,
+          status: updated.status,
+          rejectionReason: updated.rejectionReason,
+        },
+      });
+    } catch (error: any) {
+      console.error('Error reviewing document:', error);
+      res.status(500).json({ error: error.message || 'Failed to review document' });
+    }
+  }
+
+  /**
+   * Get signed URL for a document (admin only)
+   * GET /api/admin/doulas/:doulaId/documents/:documentId/url
+   */
+  async getDocumentUrl(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { doulaId, documentId } = req.params;
+
+      const document = await this.documentRepository.getDocumentById(documentId);
+      if (!document) {
+        res.status(404).json({ error: 'Document not found' });
+        return;
+      }
+      if (document.doulaId !== doulaId) {
+        res.status(403).json({ error: 'Document does not belong to this doula' });
+        return;
+      }
+
+      const signedUrl = await this.documentRepository.getSignedUrl(document.filePath, 3600);
+
+      res.json({
+        success: true,
+        url: signedUrl,
+        expiresIn: 3600,
+      });
+    } catch (error: any) {
+      console.error('Error getting document URL:', error);
+      res.status(500).json({ error: error.message || 'Failed to get document URL' });
     }
   }
 

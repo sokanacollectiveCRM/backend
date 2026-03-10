@@ -3,15 +3,21 @@ import { AuthenticationError, AuthorizationError, ConflictError, NotFoundError, 
 import { AuthRequest, UpdateRequest } from '../types';
 import { UserUseCase } from "../usecase/userUseCase";
 import { CloudSqlTeamService } from '../services/cloudSqlTeamService';
+import { DoulaDocumentCompletenessService } from '../services/doulaDocumentCompletenessService';
 
 
 export class UserController {
   private userUseCase: UserUseCase;
   private cloudSqlTeamService: CloudSqlTeamService;
+  private documentCompletenessService: DoulaDocumentCompletenessService | null;
 
-  constructor(userUseCase: UserUseCase) {
+  constructor(
+    userUseCase: UserUseCase,
+    documentCompletenessService?: DoulaDocumentCompletenessService | null
+  ) {
     this.userUseCase = userUseCase;
     this.cloudSqlTeamService = new CloudSqlTeamService();
+    this.documentCompletenessService = documentCompletenessService ?? null;
   }
 
   async getUserById(req: AuthRequest, res: Response): Promise<void> {
@@ -184,6 +190,28 @@ export class UserController {
     try {
       const userId = req.params.id;
       const updateData = req.body;
+
+      // When setting account_status to 'approved' for a doula, enforce document completeness
+      const newStatus = updateData.account_status?.trim?.();
+      if (newStatus === 'approved' && this.documentCompletenessService) {
+        const member = await this.cloudSqlTeamService.getTeamMemberById(userId);
+        if (member && member.role === 'doula') {
+          const completeness = await this.documentCompletenessService.getCompleteness(userId);
+          if (!completeness.canBeActive) {
+            const missing = completeness.missingTypes.join(', ');
+            const notApproved = completeness.items
+              .filter((i) => i.status !== 'approved')
+              .map((i) => i.documentType)
+              .join(', ');
+            const msg = notApproved
+              ? `Cannot activate doula: required documents not all approved. Pending: ${notApproved}`
+              : `Cannot activate doula: missing required documents. Missing: ${missing}`;
+            res.status(400).json({ error: msg });
+            return;
+          }
+        }
+      }
+
       const updatedMember = await this.cloudSqlTeamService.updateTeamMember(userId, updateData);
       if (!updatedMember) {
         res.status(404).json({ error: 'Team member not found' });

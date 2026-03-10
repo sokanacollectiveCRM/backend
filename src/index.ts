@@ -12,6 +12,7 @@ import { SupabaseAssignmentRepository } from './repositories/supabaseAssignmentR
 import { CloudSqlClientRepository } from './repositories/cloudSqlClientRepository';
 import { SupabaseUserRepository } from './repositories/supabaseUserRepository';
 import { DoulaDocumentUploadService } from './services/doulaDocumentUploadService';
+import { DoulaDocumentCompletenessService } from './services/doulaDocumentCompletenessService';
 import { RequestFormService } from './services/RequestFormService';
 import { SupabaseAuthService } from './services/supabaseAuthService';
 import { SupabaseContractService } from './services/supabaseContractService';
@@ -50,8 +51,9 @@ const contractUseCase = new ContractUseCase(contractService);
 //-----------------------------------------------
 // Controllers (API Layer)
 //-----------------------------------------------
+const doulaDocumentCompletenessService = new DoulaDocumentCompletenessService(doulaDocumentRepository);
 const authController = new AuthController(authUseCase);
-const userController = new UserController(userUseCase);
+const userController = new UserController(userUseCase, doulaDocumentCompletenessService);
 const requestFormController = new RequestFormController(requestService);
 const clientController = new ClientController(clientUseCase, assignmentRepository, clientRepository);
 const contractController = new ContractController(contractUseCase);

@@ -10,8 +10,11 @@ export interface DoulaDocument {
   mimeType?: string;
   uploadedAt: Date;
   expiresAt?: Date;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'uploaded' | 'approved' | 'rejected';
   notes?: string;
+  reviewedAt?: Date;
+  reviewedBy?: string;
+  rejectionReason?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -73,7 +76,7 @@ export class DoulaDocumentRepository {
         mime_type: data.mimeType,
         expires_at: data.expiresAt,
         notes: data.notes,
-        status: 'pending'
+        status: 'uploaded'
       })
       .select()
       .single();
@@ -141,16 +144,24 @@ export class DoulaDocumentRepository {
   }
 
   /**
-   * Update document status
+   * Update document status (admin review)
    */
   async updateDocumentStatus(
     documentId: string,
-    status: 'pending' | 'approved' | 'rejected',
-    notes?: string
+    status: 'uploaded' | 'approved' | 'rejected',
+    reviewedBy: string,
+    rejectionReason?: string
   ): Promise<DoulaDocument> {
-    const updateData: any = { status };
-    if (notes !== undefined) {
-      updateData.notes = notes;
+    const updateData: Record<string, unknown> = {
+      status,
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: reviewedBy,
+    };
+    if (rejectionReason !== undefined) {
+      updateData.rejection_reason = rejectionReason;
+    }
+    if (status === 'approved') {
+      updateData.rejection_reason = null;
     }
 
     const { data, error } = await this.supabaseClient
@@ -168,6 +179,31 @@ export class DoulaDocumentRepository {
   }
 
   /**
+   * Get current (most recent) document per document type for a doula.
+   * Returns one document per type - the latest uploaded.
+   */
+  async getCurrentDocumentsByDoulaId(doulaId: string): Promise<DoulaDocument[]> {
+    const { data, error } = await this.supabaseClient
+      .from('doula_documents')
+      .select('*')
+      .eq('doula_id', doulaId)
+      .order('uploaded_at', { ascending: false });
+
+    if (error) {
+      throw new Error(`Failed to fetch documents: ${error.message}`);
+    }
+
+    const mapped = data.map((doc) => this.mapToDocument(doc));
+    const byType = new Map<string, DoulaDocument>();
+    for (const doc of mapped) {
+      if (!byType.has(doc.documentType)) {
+        byType.set(doc.documentType, doc);
+      }
+    }
+    return Array.from(byType.values());
+  }
+
+  /**
    * Delete a document
    */
   async deleteDocument(documentId: string): Promise<void> {
@@ -179,6 +215,14 @@ export class DoulaDocumentRepository {
     if (error) {
       throw new Error(`Failed to delete document: ${error.message}`);
     }
+  }
+
+  /**
+   * Get current (most recent) document for a specific type and doula.
+   */
+  async getCurrentDocumentByType(doulaId: string, documentType: string): Promise<DoulaDocument | null> {
+    const current = await this.getCurrentDocumentsByDoulaId(doulaId);
+    return current.find((d) => d.documentType === documentType) ?? null;
   }
 
   /**
@@ -203,10 +247,13 @@ export class DoulaDocumentRepository {
       mimeType: data.mime_type,
       uploadedAt: new Date(data.uploaded_at),
       expiresAt: data.expires_at ? new Date(data.expires_at) : undefined,
-      status: data.status,
+      status: data.status === 'pending' ? 'uploaded' : data.status,
       notes: data.notes,
+      reviewedAt: data.reviewed_at ? new Date(data.reviewed_at) : undefined,
+      reviewedBy: data.reviewed_by,
+      rejectionReason: data.rejection_reason,
       createdAt: new Date(data.created_at),
-      updatedAt: new Date(data.updated_at)
+      updatedAt: new Date(data.updated_at),
     };
   }
 }

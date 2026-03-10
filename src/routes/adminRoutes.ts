@@ -3,7 +3,7 @@ import { AdminController } from '../controllers/adminController';
 import { PortalController } from '../controllers/portalController';
 import authMiddleware from '../middleware/authMiddleware';
 import authorizeRoles from '../middleware/authorizeRoles';
-import { userRepository, clientRepository, assignmentRepository } from '../index';
+import { userRepository, clientRepository, assignmentRepository, doulaController } from '../index';
 import { PortalInviteService } from '../services/portalInviteService';
 import supabase from '../supabase';
 
@@ -55,6 +55,23 @@ adminRoutes.post(
   '/clients/:id/portal/disable',
   (req, res, next) => authorizeRoles(req, res, next, ['admin']),
   (req, res) => portalController.disableAccess(req, res)
+);
+
+// Admin doula document management
+adminRoutes.get(
+  '/doulas/:doulaId/documents',
+  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
+  (req, res) => doulaController.getDoulaDocumentsAdmin(req, res)
+);
+adminRoutes.patch(
+  '/doulas/:doulaId/documents/:documentId/review',
+  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
+  (req, res) => doulaController.reviewDocument(req, res)
+);
+adminRoutes.get(
+  '/doulas/:doulaId/documents/:documentId/url',
+  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
+  (req, res) => doulaController.getDocumentUrl(req, res)
 );
 
 export default adminRoutes;
