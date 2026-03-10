@@ -37,6 +37,7 @@ export class ClientMapper {
     // ONLY operational fields - no PHI
     return {
       id: entity.id,
+      client_number: entity.clientNumber,
       first_name: user?.firstname || user?.first_name || '',
       last_name: user?.lastname || user?.last_name || '',
       email: user?.email,
@@ -71,6 +72,7 @@ export class ClientMapper {
   static toDetailDTO(
     row: {
       id: string;
+      client_number?: string | null;
       first_name: string | null;
       last_name: string | null;
       email: string | null;
@@ -98,6 +100,7 @@ export class ClientMapper {
     logger.info({ msg: '[ClientMapper] toDetailDTO', dto_phone_from_row: phone_number != null ? '(set)' : '(undefined)' });
     return {
       id: row.id,
+      client_number: row.client_number ?? undefined,
       first_name: row.first_name || '',
       last_name: row.last_name || '',
       email: row.email ?? undefined,

@@ -26,6 +26,7 @@
 export interface ClientDetailDTO {
   // ========== OPERATIONAL FIELDS (always included) ==========
   id: string;
+  client_number?: string;
 
   first_name: string;
   last_name: string;

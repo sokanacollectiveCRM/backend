@@ -204,6 +204,7 @@ export interface RequestFormData {
 
 export interface RequestFormResponse {
   id: string;
+  client_number?: string;
   status: RequestStatus;
   requested?: string;
   created_at: string;

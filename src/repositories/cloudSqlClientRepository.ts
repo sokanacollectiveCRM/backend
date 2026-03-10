@@ -14,7 +14,7 @@ import { queryCloudSql } from '../db/cloudSqlPool';
 import { NotFoundError } from '../domains/errors';
 
 const OPERATIONAL_COLUMNS = `
-  id, first_name, last_name, email, phone AS phone_number, address_line1, bio, city, state, zip_code, country, status, service_needed,
+  id, client_number, first_name, last_name, email, phone AS phone_number, address_line1, bio, city, state, zip_code, country, status, service_needed,
   portal_status, invited_at, last_invite_sent_at, invite_sent_count,
   requested_at, updated_at
 `;
@@ -88,7 +88,8 @@ function mapRowToClient(row: Record<string, any>): Client {
     row.annual_income ?? undefined,
     row.service_specifics ?? undefined,
     row.phone_number ?? undefined,
-    row.portal_status ?? undefined
+    row.portal_status ?? undefined,
+    row.client_number ?? undefined
   );
 }
 

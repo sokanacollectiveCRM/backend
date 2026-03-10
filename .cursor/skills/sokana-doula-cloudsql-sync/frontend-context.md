@@ -253,6 +253,29 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 ### Task
 - Debug "Failed to assign doula: 400 services is required" — DoulaAssignment.tsx calls assignDoula without services; backend requires services.
 
+## Preflight Update 2026-03-10 (Unique client number)
+
+### Gate Result
+- run_preflight
+
+### Task
+- Auto-generate unique client_number when new client submits intake/request form.
+
+### Files Scanned
+- backend: src/repositories/requestFormRepository.ts, cloudSqlClientRepository.ts, ClientMapper.ts
+- frontend-crm: src/api/dto/client.dto.ts, src/api/mappers/client.mapper.ts, src/domain/client.ts, src/features/clients/components/users-columns.tsx, LeadProfileModal.tsx
+
+### Contract Findings
+- Backend generates `client_number` (format CL-NNNNN) on phi_clients insert via sequence.
+- Client list (GET /clients) and detail (GET /clients/:id) now include `client_number`.
+- Frontend DTOs, mappers, and domain types updated; Client # column added to leads table; profile modal shows Client #.
+
+### Drift Risk
+- Existing phi_clients have null client_number; only new form submissions get one. Frontend tolerates missing value.
+
+### Required Compatibility
+- Preserve client_number in ClientListItemDTO and ClientDetailDTO; display as read-only in CRM.
+
 ### Contract Findings
 - DoulaAssignment.tsx: assignDoula(clientId, doulaId, { role }) — no services sent
 - Backend: POST /clients/:id/assign-doula requires services

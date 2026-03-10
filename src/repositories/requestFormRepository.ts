@@ -21,6 +21,7 @@ export class RequestFormRepository {
             const insertSql = `
                 INSERT INTO phi_clients (
                     id,
+                    client_number,
                     first_name,
                     last_name,
                     email,
@@ -47,12 +48,15 @@ export class RequestFormRepository {
                     portal_status,
                     requested_at
                 ) VALUES (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+                    $1,
+                    'CL-' || LPAD(nextval('phi_clients_client_number_seq')::text, 5, '0'),
+                    $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
                     $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
                 )
+                RETURNING client_number
             `;
 
-            await getPool().query(insertSql, [
+            const result = await getPool().query<{ client_number: string }>(insertSql, [
                 id,
                 formData.firstname,
                 formData.lastname,
@@ -80,9 +84,11 @@ export class RequestFormRepository {
                 'not_invited',
                 now,
             ]);
+            const clientNumber = result.rows[0]?.client_number ?? null;
 
             const response: RequestFormResponse = {
                 id,
+                client_number: clientNumber ?? undefined,
                 status: 'pending' as RequestStatus,
                 requested: now,
                 created_at: now,

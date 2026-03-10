@@ -3,6 +3,7 @@ import { Client } from '../../entities/Client';
 /** Operational row shape for canonical getClientById / update responses (no PHI in type). */
 export type ClientOperationalRow = {
   id: string;
+  client_number: string | null;
   first_name: string | null;
   last_name: string | null;
   email: string | null;
