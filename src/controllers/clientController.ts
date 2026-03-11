@@ -414,7 +414,7 @@ export class ClientController {
       const normalizedRaw = normalizeClientPatch(updateData);
       const sanitized = this.sanitizeProfilePatchFields(normalizedRaw);
       if (!sanitized.ok) {
-        res.status(400).json(ApiResponse.error(sanitized.message, 'VALIDATION_ERROR'));
+        res.status(400).json(ApiResponse.error((sanitized as { ok: false; message: string }).message, 'VALIDATION_ERROR'));
         return;
       }
       const normalized = sanitized.value;
@@ -619,7 +619,7 @@ export class ClientController {
       const normalizedRaw = normalizeClientPatch(updateData);
       const sanitized = this.sanitizeProfilePatchFields(normalizedRaw);
       if (!sanitized.ok) {
-        res.status(400).json(ApiResponse.error(sanitized.message, 'VALIDATION_ERROR'));
+        res.status(400).json(ApiResponse.error((sanitized as { ok: false; message: string }).message, 'VALIDATION_ERROR'));
         return;
       }
       const normalized = sanitized.value;

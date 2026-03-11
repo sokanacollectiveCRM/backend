@@ -12,6 +12,7 @@ import { Request, Response } from 'express';
 import { ClientController } from '../controllers/clientController';
 import { ClientUseCase } from '../usecase/clientUseCase';
 import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
+import { ClientRepository } from '../repositories/interface/clientRepository';
 import { AuthRequest, ROLE } from '../types';
 import * as phiBrokerService from '../services/phiBrokerService';
 import * as sensitiveAccess from '../utils/sensitiveAccess';
@@ -40,7 +41,18 @@ describe('PUT /clients/:id/phi', () => {
     // Create mocks
     mockClientUseCase = {} as jest.Mocked<ClientUseCase>;
     mockAssignmentRepository = {} as jest.Mocked<SupabaseAssignmentRepository>;
-    clientController = new ClientController(mockClientUseCase, mockAssignmentRepository);
+    const mockClientRepository: ClientRepository = {
+      getClientById: jest.fn().mockResolvedValue({
+        id: clientId,
+        status: 'active',
+        serviceNeeded: 'Birth Support',
+      }),
+      updateIdentityCache: jest.fn().mockResolvedValue(undefined),
+    } as unknown as ClientRepository;
+    clientController = new ClientController(mockClientUseCase, mockAssignmentRepository, mockClientRepository);
+
+    // Mock SupabaseClientRepository to return same shape (for any code that instantiates it)
+    (SupabaseClientRepository as jest.Mock).mockImplementation(() => mockClientRepository);
 
     // Mock response object
     mockResponse = {
@@ -58,17 +70,6 @@ describe('PUT /clients/:id/phi', () => {
         role: ROLE.ADMIN,
       } as any,
     };
-
-    // Mock SupabaseClientRepository
-    const mockClientRepository = {
-      getClientById: jest.fn().mockResolvedValue({
-        id: clientId,
-        status: 'active',
-        serviceNeeded: 'Birth Support',
-      }),
-      updateIdentityCache: jest.fn().mockResolvedValue(undefined),
-    };
-    (SupabaseClientRepository as jest.Mock).mockImplementation(() => mockClientRepository);
 
     // Mock canAccessSensitive - default to authorized admin
     (sensitiveAccess.canAccessSensitive as jest.Mock).mockResolvedValue({

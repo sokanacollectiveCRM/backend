@@ -539,7 +539,7 @@ export class DoulasService {
 
       const legacySql = `
         UPDATE public.doula_assignments
-        SET ${retainedSetClauses.join(', ')}
+        SET ${legacySetClauses.join(', ')}
         WHERE client_id = $${clientParam}::uuid
           AND doula_id = $${doulaParam}::uuid
         RETURNING
