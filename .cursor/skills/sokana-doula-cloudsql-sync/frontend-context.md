@@ -279,3 +279,29 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 ### Contract Findings
 - DoulaAssignment.tsx: assignDoula(clientId, doulaId, { role }) — no services sent
 - Backend: POST /clients/:id/assign-doula requires services
+
+## Preflight Update 2026-03-11 (Doula documents ID mismatch)
+
+### Gate Result
+- run_preflight
+
+### Task
+- Fix admin doula documents: ID mismatch between Cloud SQL doula id and Supabase auth user id in doula_documents.
+
+### Files Scanned
+- backend: src/controllers/doulaController.ts, src/services/cloudSqlTeamService.ts, src/repositories/doulaDocumentRepository.ts
+- frontend-crm: src/api/doulas/doulaService.ts, src/features/doula-dashboard/components/DocumentsTab.tsx
+
+### Contract Findings
+- Admin document endpoints: GET /api/admin/doulas/:doulaId/documents, PATCH review, GET url. Frontend admin UI calls these with Cloud SQL doula id.
+- Documents stored in Supabase doula_documents with doula_id = Supabase auth user id. When Cloud SQL doula id ≠ auth id, admin saw empty list.
+
+### Drift Risk
+- None. Backend fallback is transparent; frontend contract unchanged.
+
+### Required Compatibility
+- No frontend changes. Response shape unchanged.
+
+### Action
+- [x] Context updated
+- [x] Implementation started

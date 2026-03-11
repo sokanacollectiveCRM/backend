@@ -17,6 +17,7 @@ export interface TeamMemberDto {
   country: string | null;
   zip_code: string | null;
   bio?: string | null;
+  profile_picture?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -35,6 +36,7 @@ interface DoulaRow {
   country?: string | null;
   zip_code?: string | null;
   bio?: string | null;
+  profile_picture?: string | null;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -80,6 +82,7 @@ function mapRow(row: DoulaRow): TeamMemberDto {
     country: row.country ?? null,
     zip_code: row.zip_code ?? null,
     bio: row.bio ?? null,
+    profile_picture: row.profile_picture ?? null,
     created_at: toIso(row.created_at),
     updated_at: toIso(row.updated_at),
   };
@@ -112,10 +115,10 @@ export class CloudSqlTeamService {
     try {
       const { rows } = await pool.query<DoulaRow & { role: 'admin' | 'doula' }>(
         `
-        SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, 'doula'::text AS role, created_at, updated_at
+        SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, 'doula'::text AS role, created_at, updated_at
         FROM public.doulas
         UNION ALL
-        SELECT id, full_name, email, phone, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'admin'::text AS role, created_at, updated_at
+        SELECT id, full_name, email, phone, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'admin'::text AS role, created_at, updated_at
         FROM public.admins
         ORDER BY full_name ASC
         `
@@ -127,7 +130,7 @@ export class CloudSqlTeamService {
       if (msg.includes('public.admins') && msg.includes('does not exist')) {
         const { rows } = await pool.query<DoulaRow>(
           `
-          SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, created_at, updated_at
+          SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, created_at, updated_at
           FROM public.doulas
           ORDER BY full_name ASC
           `
@@ -146,7 +149,7 @@ export class CloudSqlTeamService {
     const pool = getPool();
     const { rows } = await pool.query<DoulaRow>(
       `
-      SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, created_at, updated_at
+      SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, created_at, updated_at
       FROM public.doulas
       WHERE id = $1::uuid
       LIMIT 1
@@ -353,11 +356,24 @@ export class CloudSqlTeamService {
           bio = $10,
           updated_at = NOW()
       WHERE id = $11::uuid
-      RETURNING id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, created_at, updated_at
+      RETURNING id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, created_at, updated_at
       `,
       [fullName, email, phone, address, city, state, country, zipCode, accountStatus, bio, id]
     );
     return rows[0] ? mapRow(rows[0]) : null;
+  }
+
+  async updateDoulaProfilePicture(doulaId: string, profilePictureUrl: string): Promise<boolean> {
+    const pool = getPool();
+    const result = await pool.query(
+      `
+      UPDATE public.doulas
+      SET profile_picture = $1, updated_at = NOW()
+      WHERE id = $2::uuid
+      `,
+      [profilePictureUrl, doulaId]
+    );
+    return (result.rowCount ?? 0) > 0;
   }
 
   async deleteTeamMember(id: string): Promise<boolean> {

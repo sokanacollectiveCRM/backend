@@ -11,6 +11,7 @@ import { File as MulterFile } from 'multer';
 import supabase from '../supabase';
 import { NotFoundError } from '../domains/errors';
 import { CloudSqlTeamService } from '../services/cloudSqlTeamService';
+import { DoulaDocumentIdResolver } from '../services/doulaDocumentIdResolver';
 import { ActivityRepository } from '../repositories/interface/activityRepository';
 import {
   ALL_DOULA_DOCUMENT_TYPES,
@@ -28,6 +29,7 @@ export class DoulaController {
   private userUseCase: UserUseCase;
   private clientUseCase: ClientUseCase;
   private cloudSqlTeamService: CloudSqlTeamService;
+  private documentIdResolver: DoulaDocumentIdResolver;
 
   constructor(
     documentRepository: DoulaDocumentRepository,
@@ -47,6 +49,7 @@ export class DoulaController {
     this.userUseCase = userUseCase;
     this.clientUseCase = clientUseCase;
     this.cloudSqlTeamService = new CloudSqlTeamService();
+    this.documentIdResolver = new DoulaDocumentIdResolver(this.cloudSqlTeamService);
   }
 
   private isMissingRelationError(error: any, relationName: string): boolean {
@@ -289,8 +292,18 @@ export class DoulaController {
         return;
       }
 
-      const documents = await this.documentRepository.getDocumentsByDoulaId(doulaId);
-      const completeness = await this.completenessService.getCompleteness(doulaId);
+      let documents = await this.documentRepository.getDocumentsByDoulaId(doulaId);
+      let effectiveDocDoulaId = doulaId;
+
+      if (documents.length === 0) {
+        const resolvedId = await this.documentIdResolver.getEffectiveDocumentDoulaId(doulaId);
+        if (resolvedId !== doulaId) {
+          documents = await this.documentRepository.getDocumentsByDoulaId(resolvedId);
+          effectiveDocDoulaId = resolvedId;
+        }
+      }
+
+      const completeness = await this.completenessService.getCompleteness(effectiveDocDoulaId);
 
       const documentsWithUrls = await Promise.all(
         documents.map(async (doc) => {
@@ -366,7 +379,8 @@ export class DoulaController {
         res.status(404).json({ error: 'Document not found' });
         return;
       }
-      if (document.doulaId !== doulaId) {
+      const isOwned = await this.documentIdResolver.isDocumentOwnedByDoula(doulaId, document.doulaId);
+      if (!isOwned) {
         res.status(403).json({ error: 'Document does not belong to this doula' });
         return;
       }
@@ -406,7 +420,8 @@ export class DoulaController {
         res.status(404).json({ error: 'Document not found' });
         return;
       }
-      if (document.doulaId !== doulaId) {
+      const isOwned = await this.documentIdResolver.isDocumentOwnedByDoula(doulaId, document.doulaId);
+      if (!isOwned) {
         res.status(403).json({ error: 'Document does not belong to this doula' });
         return;
       }
@@ -789,6 +804,68 @@ export class DoulaController {
   }
 
   /**
+   * Upload doula's profile picture (headshot)
+   * POST /api/doulas/profile/picture
+   */
+  async uploadProfilePicture(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const doulaId = req.user?.id;
+      if (!doulaId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+      const file = req.file as MulterFile;
+      if (!file) {
+        res.status(400).json({ error: 'No file uploaded' });
+        return;
+      }
+      const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!allowedMimes.includes(file.mimetype)) {
+        res.status(400).json({ error: 'Invalid file type. Allowed: JPEG, PNG, WebP' });
+        return;
+      }
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (file.size > maxSize) {
+        res.status(400).json({ error: 'File size exceeds 5MB limit' });
+        return;
+      }
+      const user = req.user!;
+      const imageUrl = await this.userUseCase.uploadProfilePicture(user, file);
+      const updated = await this.cloudSqlTeamService.updateDoulaProfilePicture(doulaId, imageUrl);
+      if (!updated) {
+        res.status(404).json({ error: 'Doula profile not found' });
+        return;
+      }
+      const cloudSqlMember = await this.cloudSqlTeamService.getTeamMemberById(doulaId);
+      const profile = cloudSqlMember && cloudSqlMember.role === 'doula' ? {
+        id: cloudSqlMember.id,
+        email: cloudSqlMember.email,
+        firstname: cloudSqlMember.firstname,
+        lastname: cloudSqlMember.lastname,
+        fullName: cloudSqlMember.fullName,
+        role: 'doula' as const,
+        phone_number: cloudSqlMember.phone_number,
+        address: cloudSqlMember.address ?? '',
+        city: cloudSqlMember.city ?? '',
+        state: cloudSqlMember.state ?? '',
+        country: cloudSqlMember.country ?? '',
+        zip_code: cloudSqlMember.zip_code ?? '',
+        bio: cloudSqlMember.bio ?? '',
+        account_status: cloudSqlMember.account_status,
+        profile_picture: cloudSqlMember.profile_picture ?? imageUrl,
+        created_at: cloudSqlMember.created_at,
+        updatedAt: cloudSqlMember.updated_at,
+      } : { profile_picture: imageUrl };
+      res.json({ success: true, profile });
+    } catch (error: any) {
+      console.error('Error uploading doula profile picture:', error);
+      res.status(500).json({
+        error: error?.message || 'Failed to upload profile picture',
+      });
+    }
+  }
+
+  /**
    * Get doula's own profile
    * GET /api/doulas/profile
    */
@@ -817,7 +894,7 @@ export class DoulaController {
           zip_code: cloudSqlMember.zip_code ?? '',
           bio: cloudSqlMember.bio ?? '',
           account_status: cloudSqlMember.account_status,
-          profile_picture: reqUserJson?.profile_picture ?? null,
+          profile_picture: cloudSqlMember.profile_picture ?? reqUserJson?.profile_picture ?? null,
           created_at: cloudSqlMember.created_at,
           updatedAt: cloudSqlMember.updated_at,
         };
@@ -922,7 +999,7 @@ export class DoulaController {
         zip_code: updatedMember.zip_code ?? '',
         bio: updatedMember.bio ?? '',
         account_status: updatedMember.account_status,
-        profile_picture: reqUserJson?.profile_picture ?? null,
+        profile_picture: updatedMember.profile_picture ?? reqUserJson?.profile_picture ?? null,
         created_at: updatedMember.created_at,
         updatedAt: updatedMember.updated_at,
       };

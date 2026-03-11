@@ -12,6 +12,12 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max for documents
 });
 
+// Profile picture upload: 5MB max, images only
+const profilePictureUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max for headshots
+});
+
 // Existing routes
 doulaRoutes.get('/',
   authMiddleware,
@@ -105,6 +111,14 @@ doulaRoutes.put(
   authMiddleware,
   (req, res, next) => authorizeRoles(req, res, next, ['doula']),
   (req, res) => doulaController.updateMyProfile(req, res)
+);
+
+doulaRoutes.post(
+  '/profile/picture',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['doula']),
+  profilePictureUpload.single('profile_picture'),
+  (req, res) => doulaController.uploadProfilePicture(req, res)
 );
 
 export default doulaRoutes;
