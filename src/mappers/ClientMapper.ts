@@ -91,6 +91,11 @@ export class ClientMapper {
       invite_sent_count: number | null;
       requested_at: string | null;
       updated_at: string | null;
+      payment_method?: string | null;
+      insurance_provider?: string | null;
+      insurance_member_id?: string | null;
+      policy_number?: string | null;
+      self_pay_card_info?: string | null;
     },
     isEligible?: boolean
   ): ClientDetailDTO {
@@ -119,6 +124,11 @@ export class ClientMapper {
       invite_sent_count: row.invite_sent_count ?? undefined,
       requested_at: row.requested_at ?? undefined,
       updated_at: row.updated_at ?? undefined,
+      payment_method: row.payment_method ?? undefined,
+      insurance_provider: row.insurance_provider ?? undefined,
+      insurance_member_id: row.insurance_member_id ?? undefined,
+      policy_number: row.policy_number ?? undefined,
+      self_pay_card_info: row.self_pay_card_info ?? undefined,
       is_eligible: isEligible,
     };
   }

@@ -16,7 +16,8 @@ import { NotFoundError } from '../domains/errors';
 const OPERATIONAL_COLUMNS = `
   id, client_number, first_name, last_name, email, phone AS phone_number, address_line1, bio, city, state, zip_code, country, status, service_needed,
   portal_status, invited_at, last_invite_sent_at, invite_sent_count,
-  requested_at, updated_at
+  requested_at, updated_at,
+  payment_method, insurance_provider, insurance_member_id, policy_number, self_pay_card_info
 `;
 
 /** Map Cloud SQL clients row (no users join) to Client entity. */
@@ -44,6 +45,10 @@ function mapRowToClient(row: Record<string, any>): Client {
     preferred_contact_method: row.preferred_contact_method,
     preferred_name: row.preferred_name,
     payment_method: row.payment_method,
+    insurance_provider: row.insurance_provider,
+    insurance_member_id: row.insurance_member_id,
+    policy_number: row.policy_number,
+    self_pay_card_info: row.self_pay_card_info,
     pronouns: row.pronouns,
     home_type: row.home_type,
     services_interested: row.services_interested,
@@ -182,6 +187,7 @@ export class CloudSqlClientRepository implements ClientRepository {
     const allowed = new Set([
       'first_name', 'last_name', 'email', 'phone_number', 'status', 'service_needed',
       'portal_status', 'pronouns', 'preferred_name', 'payment_method', 'home_type',
+      'insurance_provider', 'insurance_member_id', 'policy_number', 'self_pay_card_info',
       'services_interested', 'health_notes', 'health_history', 'allergies', 'medications',
       'baby_name', 'baby_sex', 'number_of_babies', 'birth_hospital', 'provider_type',
       'pregnancy_number', 'had_previous_pregnancies', 'previous_pregnancies_count',
@@ -280,7 +286,8 @@ export class CloudSqlClientRepository implements ClientRepository {
       'annual_income', 'baby_sex', 'baby_name', 'number_of_babies', 'race_ethnicity',
       'client_age_range', 'insurance', 'pregnancy_number', 'had_previous_pregnancies',
       'previous_pregnancies_count', 'living_children_count', 'past_pregnancy_experience',
-      'birth_outcomes',
+      'birth_outcomes', 'payment_method', 'insurance_provider', 'insurance_member_id',
+      'policy_number', 'self_pay_card_info',
     ]);
     const columnValues = new Map<string, any>();
     for (const [k, v] of Object.entries(fields)) {
@@ -326,5 +333,40 @@ export class CloudSqlClientRepository implements ClientRepository {
       `UPDATE phi_clients SET ${setParts.join(', ')} WHERE id = $${i}`,
       values
     );
+  }
+
+  async getClientBilling(clientId: string): Promise<ClientOperationalRow | null> {
+    return this.getClientById(clientId);
+  }
+
+  async updateClientBilling(clientId: string, fields: Record<string, any>): Promise<ClientOperationalRow | null> {
+    const allowed = new Set([
+      'payment_method',
+      'insurance_provider',
+      'insurance_member_id',
+      'policy_number',
+      'self_pay_card_info',
+    ]);
+    const setParts: string[] = [];
+    const values: any[] = [];
+    let i = 1;
+
+    for (const [key, value] of Object.entries(fields)) {
+      if (!allowed.has(key) || value === undefined) continue;
+      setParts.push(`${key} = $${i++}`);
+      values.push(value);
+    }
+
+    if (setParts.length === 0) {
+      return this.getClientBilling(clientId);
+    }
+
+    setParts.push('updated_at = CURRENT_TIMESTAMP');
+    values.push(clientId);
+    await queryCloudSql(
+      `UPDATE phi_clients SET ${setParts.join(', ')} WHERE id = $${i}`,
+      values
+    );
+    return this.getClientBilling(clientId);
   }
 }

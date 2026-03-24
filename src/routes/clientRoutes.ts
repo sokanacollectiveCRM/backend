@@ -1,4 +1,5 @@
 import express, { Router } from 'express';
+import multer from 'multer';
 import { clientController, userController } from '../index';
 import { PortalController } from '../controllers/portalController';
 import { PortalInviteService } from '../services/portalInviteService';
@@ -7,6 +8,10 @@ import authMiddleware from '../middleware/authMiddleware';
 import authorizeRoles from '../middleware/authorizeRoles';
 
 const clientRoutes: Router = express.Router();
+const clientDocumentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
 
 // Portal controller for client portal endpoints
 const portalInviteService = new PortalInviteService(supabase);
@@ -56,6 +61,43 @@ clientRoutes.get('/',
   (req, res) => clientController.getClients(req, res)
 );
 
+clientRoutes.post('/me/documents',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['client']),
+  clientDocumentUpload.single('file'),
+  (req, res) => clientController.uploadMyDocument(req, res)
+);
+
+clientRoutes.get('/me/documents',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['client']),
+  (req, res) => clientController.getMyDocuments(req, res)
+);
+
+clientRoutes.get('/me/documents/:documentId/url',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['client']),
+  (req, res) => clientController.getMyDocumentUrl(req, res)
+);
+
+clientRoutes.delete('/me/documents/:documentId',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['client']),
+  (req, res) => clientController.deleteMyDocument(req, res)
+);
+
+clientRoutes.get('/:clientId/documents',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
+  (req, res) => clientController.getClientDocuments(req, res)
+);
+
+clientRoutes.get('/:clientId/documents/:documentId/url',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
+  (req, res) => clientController.getClientDocumentUrl(req, res)
+);
+
 // Specific routes must come before generic /:id route
 clientRoutes.put('/status',
   authMiddleware,
@@ -74,6 +116,30 @@ clientRoutes.put('/:id/phi',
   authMiddleware,
   (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
   (req, res) => clientController.updateClientPhi(req, res)
+);
+
+clientRoutes.get('/me/billing',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['client']),
+  (req, res) => clientController.getClientBilling(req, res)
+);
+
+clientRoutes.put('/me/billing',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['client']),
+  (req, res) => clientController.updateClientBilling(req, res)
+);
+
+clientRoutes.get('/:id/billing',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
+  (req, res) => clientController.getClientBilling(req, res)
+);
+
+clientRoutes.put('/:id/billing',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
+  (req, res) => clientController.updateClientBilling(req, res)
 );
 
 // Generic routes last

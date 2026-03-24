@@ -28,24 +28,47 @@ import { ASSIGNMENT_SERVICE_CATALOG, normalizeAssignmentServices } from '../cons
 import { logger } from '../common/utils/logger';
 import { getSupabaseAdmin } from '../supabase';
 import { ActivityDTO } from '../dto/response/ActivityDTO';
+import { ClientDocumentRepository, ClientDocument } from '../repositories/clientDocumentRepository';
+import { ClientDocumentUploadService } from '../services/clientDocumentUploadService';
+import { File as MulterFile } from 'multer';
+import {
+  CLIENT_DOCUMENT_ALLOWED_EXTENSIONS,
+  CLIENT_DOCUMENT_ALLOWED_MIME_TYPES,
+  CLIENT_DOCUMENT_CATEGORY_BILLING,
+  CLIENT_DOCUMENT_TYPE_INSURANCE_CARD,
+  MAX_CLIENT_DOCUMENT_SIZE_BYTES,
+} from '../constants/clientDocuments';
 
 export class ClientController {
+  private static readonly BILLING_PAYMENT_METHODS = new Set([
+    'Self-Pay',
+    'Private Insurance',
+    'Medicaid',
+    'Other',
+  ]);
+
   private clientUseCase: ClientUseCase;
   private assignmentRepository: SupabaseAssignmentRepository;
   private clientRepository: ClientRepository;
   private eligibilityService: PortalEligibilityService;
   private cloudSqlAssignmentService: CloudSqlDoulaAssignmentService;
+  private clientDocumentRepository?: ClientDocumentRepository;
+  private clientDocumentUploadService?: ClientDocumentUploadService;
 
   constructor (
     clientUseCase: ClientUseCase,
     assignmentRepository: SupabaseAssignmentRepository,
-    clientRepository: ClientRepository
+    clientRepository: ClientRepository,
+    clientDocumentRepository?: ClientDocumentRepository,
+    clientDocumentUploadService?: ClientDocumentUploadService
   ) {
     this.clientUseCase = clientUseCase;
     this.assignmentRepository = assignmentRepository;
     this.clientRepository = clientRepository;
     this.eligibilityService = new PortalEligibilityService(supabase);
     this.cloudSqlAssignmentService = new CloudSqlDoulaAssignmentService();
+    this.clientDocumentRepository = clientDocumentRepository;
+    this.clientDocumentUploadService = clientDocumentUploadService;
   }
 
   private static readonly PROFILE_FIELD_RULES: Record<string, number> = {
@@ -81,6 +104,117 @@ export class ClientController {
     return { ok: true, value: normalized };
   }
 
+  private trimNullableString(value: unknown): string | null | undefined {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  private normalizeBillingRow(row: Record<string, any> | null | undefined): Record<string, any> | null {
+    if (!row) return null;
+    return {
+      payment_method: row.payment_method ?? null,
+      insurance_provider: row.insurance_provider ?? null,
+      insurance_member_id: row.insurance_member_id ?? null,
+      policy_number: row.policy_number ?? null,
+      self_pay_card_info: row.self_pay_card_info ?? null,
+      updated_at: row.updated_at ?? null,
+    };
+  }
+
+  private validateBillingPayload(input: Record<string, any>): { value?: Record<string, any>; message?: string } {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      return { message: 'Invalid request body' };
+    }
+
+    const paymentMethodRaw = this.trimNullableString(input.payment_method);
+    if (!paymentMethodRaw) {
+      return { message: 'payment_method is required' };
+    }
+    if (!ClientController.BILLING_PAYMENT_METHODS.has(paymentMethodRaw)) {
+      return { message: 'payment_method must be one of: Self-Pay, Private Insurance, Medicaid, Other' };
+    }
+
+    const insuranceProvider = this.trimNullableString(input.insurance_provider);
+    const insuranceMemberId = this.trimNullableString(input.insurance_member_id);
+    const policyNumber = this.trimNullableString(input.policy_number);
+    const selfPayCardInfo = this.trimNullableString(input.self_pay_card_info);
+
+    if (paymentMethodRaw === 'Self-Pay') {
+      if (!selfPayCardInfo) {
+        return { message: 'self_pay_card_info is required when payment_method is Self-Pay' };
+      }
+
+      return {
+        value: {
+          payment_method: paymentMethodRaw,
+          insurance_provider: null,
+          insurance_member_id: null,
+          policy_number: null,
+          self_pay_card_info: selfPayCardInfo,
+        },
+      };
+    }
+
+    if (!insuranceProvider) {
+      return { message: 'insurance_provider is required when payment_method is not Self-Pay' };
+    }
+
+    return {
+      value: {
+        payment_method: paymentMethodRaw,
+        insurance_provider: insuranceProvider,
+        insurance_member_id: insuranceMemberId ?? null,
+        policy_number: policyNumber ?? null,
+        self_pay_card_info: null,
+      },
+    };
+  }
+
+  private async resolveBillingTargetClientId(req: AuthRequest, idParam?: string): Promise<{ clientId?: string; status?: number; body?: ReturnType<typeof ApiResponse.error> }> {
+    if (req.user?.role === 'client') {
+      const ownClientId = await this.cloudSqlAssignmentService.getClientIdByAuthUserId(req.user.id);
+      if (!ownClientId) {
+        return { status: 404, body: ApiResponse.error('Client profile not found', 'NOT_FOUND') };
+      }
+
+      if (idParam) {
+        const sentAuthUserId = idParam === req.user.id;
+        if (!sentAuthUserId && idParam !== ownClientId) {
+          return { status: 403, body: ApiResponse.error('Forbidden: cannot access another client billing profile', 'FORBIDDEN') };
+        }
+      }
+
+      return { clientId: ownClientId };
+    }
+
+    if (!idParam) {
+      return { status: 400, body: ApiResponse.error('Missing client ID', 'VALIDATION_ERROR') };
+    }
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(idParam)) {
+      return { status: 400, body: ApiResponse.error(`Invalid client ID format: ${idParam}`, 'VALIDATION_ERROR') };
+    }
+
+    return { clientId: idParam };
+  }
+
+  private async ensureBillingAccess(req: AuthRequest, clientId: string): Promise<{ status?: number; body?: ReturnType<typeof ApiResponse.error> }> {
+    if (req.user?.role === 'client') {
+      return {};
+    }
+
+    const { canAccess } = await canAccessSensitive(req.user, clientId);
+    if (!canAccess) {
+      return { status: 403, body: ApiResponse.error('Forbidden', 'FORBIDDEN') };
+    }
+
+    return {};
+  }
+
   private static isTransientCloudSqlError(error: unknown): boolean {
     if (!error || typeof error !== 'object') {
       return false;
@@ -98,6 +232,291 @@ export class ClientController {
       message.includes('connection reset') ||
       message.includes('connection terminated unexpectedly')
     );
+  }
+
+  private getClientDocumentRepository(): ClientDocumentRepository {
+    if (!this.clientDocumentRepository) {
+      throw new Error('Client document repository is not configured');
+    }
+    return this.clientDocumentRepository;
+  }
+
+  private getClientDocumentUploadService(): ClientDocumentUploadService {
+    if (!this.clientDocumentUploadService) {
+      throw new Error('Client document upload service is not configured');
+    }
+    return this.clientDocumentUploadService;
+  }
+
+  private getFileExtension(fileName: string): string {
+    const index = fileName.lastIndexOf('.');
+    if (index <= 0 || index === fileName.length - 1) {
+      return '';
+    }
+    return fileName.slice(index).toLowerCase();
+  }
+
+  private mapClientDocument(document: ClientDocument) {
+    return {
+      id: document.id,
+      document_type: document.documentType,
+      file_name: document.fileName,
+      uploaded_at: document.uploadedAt.toISOString(),
+      status: document.status,
+      content_type: document.mimeType ?? null,
+    };
+  }
+
+  private async resolveOwnClientId(authUserId: string): Promise<string | null> {
+    return this.cloudSqlAssignmentService.getClientIdByAuthUserId(authUserId);
+  }
+
+  private async authorizeStaffClientDocumentAccess(req: AuthRequest, res: Response, clientId: string): Promise<boolean> {
+    if (!req.user?.id || !req.user.role) {
+      res.status(401).json({ error: 'Unauthorized staff access' });
+      return false;
+    }
+
+    if (req.user.role === 'admin') {
+      return true;
+    }
+
+    const { canAccess } = await canAccessSensitive(req.user, clientId);
+    if (!canAccess) {
+      res.status(403).json({ error: 'Unauthorized staff access' });
+      return false;
+    }
+
+    return true;
+  }
+
+  private static isClientDocumentsTableMissing(error: unknown): boolean {
+    return ClientController.isTableMissing(error, 'client_documents');
+  }
+
+  async uploadMyDocument(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        res.status(401).json({ error: 'Unauthenticated client' });
+        return;
+      }
+
+      const clientId = await this.resolveOwnClientId(req.user.id);
+      if (!clientId) {
+        res.status(404).json({ error: 'Client profile not found' });
+        return;
+      }
+
+      const file = req.file as MulterFile | undefined;
+      if (!file) {
+        res.status(400).json({ error: 'Missing file' });
+        return;
+      }
+
+      const documentType = String(req.body.documentType || req.body.document_type || '').trim();
+      if (documentType !== CLIENT_DOCUMENT_TYPE_INSURANCE_CARD) {
+        res.status(400).json({ error: 'Unsupported document type' });
+        return;
+      }
+
+      const category = typeof req.body.category === 'string' ? req.body.category.trim() : '';
+      if (category && category !== CLIENT_DOCUMENT_CATEGORY_BILLING) {
+        res.status(400).json({ error: 'category must be billing' });
+        return;
+      }
+
+      if (file.size > MAX_CLIENT_DOCUMENT_SIZE_BYTES) {
+        res.status(400).json({ error: 'File size exceeds 10 MB limit' });
+        return;
+      }
+
+      const fileExtension = this.getFileExtension(file.originalname);
+      const hasAllowedExtension = CLIENT_DOCUMENT_ALLOWED_EXTENSIONS.includes(fileExtension as typeof CLIENT_DOCUMENT_ALLOWED_EXTENSIONS[number]);
+      const hasAllowedMimeType = CLIENT_DOCUMENT_ALLOWED_MIME_TYPES.includes(file.mimetype as typeof CLIENT_DOCUMENT_ALLOWED_MIME_TYPES[number]);
+      if (!hasAllowedExtension || !hasAllowedMimeType) {
+        res.status(400).json({ error: 'Unsupported file type. Only .jpg, .jpeg, .png, and .pdf are allowed' });
+        return;
+      }
+
+      const uploaded = await this.getClientDocumentUploadService().uploadDocument(
+        file,
+        clientId,
+        CLIENT_DOCUMENT_TYPE_INSURANCE_CARD
+      );
+
+      const document = await this.getClientDocumentRepository().createDocument({
+        clientId,
+        documentType: CLIENT_DOCUMENT_TYPE_INSURANCE_CARD,
+        category: CLIENT_DOCUMENT_CATEGORY_BILLING,
+        fileName: uploaded.fileName,
+        filePath: uploaded.filePath,
+        fileSize: uploaded.fileSize,
+        mimeType: uploaded.mimeType,
+      });
+
+      res.status(201).json({
+        success: true,
+        data: this.mapClientDocument(document),
+      });
+    } catch (error) {
+      if (ClientController.isClientDocumentsTableMissing(error)) {
+        res.status(503).json({ error: 'Client documents feature not available until client_documents migration is applied' });
+        return;
+      }
+
+      const err = this.handleError(error as Error, res);
+      res.status(err.status).json({ error: err.message });
+    }
+  }
+
+  async getMyDocuments(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        res.status(401).json({ error: 'Unauthenticated client' });
+        return;
+      }
+
+      const clientId = await this.resolveOwnClientId(req.user.id);
+      if (!clientId) {
+        res.status(404).json({ error: 'Client profile not found' });
+        return;
+      }
+
+      const documents = await this.getClientDocumentRepository().getDocumentsByClientId(clientId);
+      res.json({
+        success: true,
+        documents: documents.map((document) => this.mapClientDocument(document)),
+      });
+    } catch (error) {
+      if (ClientController.isClientDocumentsTableMissing(error)) {
+        res.json({ success: true, documents: [] });
+        return;
+      }
+
+      const err = this.handleError(error as Error, res);
+      res.status(err.status).json({ error: err.message });
+    }
+  }
+
+  async getMyDocumentUrl(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        res.status(401).json({ error: 'Unauthenticated client' });
+        return;
+      }
+
+      const clientId = await this.resolveOwnClientId(req.user.id);
+      if (!clientId) {
+        res.status(404).json({ error: 'Client profile not found' });
+        return;
+      }
+
+      const document = await this.getClientDocumentRepository().getDocumentById(req.params.documentId);
+      if (!document || document.clientId !== clientId) {
+        res.status(404).json({ error: 'Document not found' });
+        return;
+      }
+
+      const url = await this.getClientDocumentRepository().getSignedUrl(document.filePath);
+      res.json({ success: true, url });
+    } catch (error) {
+      const err = this.handleError(error as Error, res);
+      res.status(err.status).json({ error: err.message });
+    }
+  }
+
+  async deleteMyDocument(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        res.status(401).json({ error: 'Unauthenticated client' });
+        return;
+      }
+
+      const clientId = await this.resolveOwnClientId(req.user.id);
+      if (!clientId) {
+        res.status(404).json({ error: 'Client profile not found' });
+        return;
+      }
+
+      const { documentId } = req.params;
+      if (!documentId) {
+        res.status(400).json({ error: 'Missing document ID' });
+        return;
+      }
+
+      const document = await this.getClientDocumentRepository().getDocumentById(documentId);
+      if (!document || document.clientId !== clientId) {
+        res.status(404).json({ error: 'Document not found' });
+        return;
+      }
+
+      await this.getClientDocumentUploadService().deleteDocument(document.filePath);
+      await this.getClientDocumentRepository().deleteDocument(documentId);
+
+      res.json({
+        success: true,
+        message: 'Document deleted successfully',
+      });
+    } catch (error) {
+      const err = this.handleError(error as Error, res);
+      res.status(err.status).json({ error: err.message });
+    }
+  }
+
+  async getClientDocuments(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { clientId } = req.params;
+      if (!clientId) {
+        res.status(400).json({ error: 'Missing clientId' });
+        return;
+      }
+
+      const authorized = await this.authorizeStaffClientDocumentAccess(req, res, clientId);
+      if (!authorized) {
+        return;
+      }
+
+      const documents = await this.getClientDocumentRepository().getDocumentsByClientId(clientId);
+      res.json({
+        success: true,
+        documents: documents.map((document) => this.mapClientDocument(document)),
+      });
+    } catch (error) {
+      if (ClientController.isClientDocumentsTableMissing(error)) {
+        res.json({ success: true, documents: [] });
+        return;
+      }
+
+      const err = this.handleError(error as Error, res);
+      res.status(err.status).json({ error: err.message });
+    }
+  }
+
+  async getClientDocumentUrl(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { clientId, documentId } = req.params;
+      if (!clientId || !documentId) {
+        res.status(400).json({ error: 'Missing clientId or documentId' });
+        return;
+      }
+
+      const authorized = await this.authorizeStaffClientDocumentAccess(req, res, clientId);
+      if (!authorized) {
+        return;
+      }
+
+      const document = await this.getClientDocumentRepository().getDocumentById(documentId);
+      if (!document || document.clientId !== clientId) {
+        res.status(404).json({ error: 'Document not found' });
+        return;
+      }
+
+      const url = await this.getClientDocumentRepository().getSignedUrl(document.filePath);
+      res.json({ success: true, url });
+    } catch (error) {
+      const err = this.handleError(error as Error, res);
+      res.status(err.status).json({ error: err.message });
+    }
   }
 
   private async enrichCreatorNames(dtos: ActivityDTO[]): Promise<ActivityDTO[]> {
@@ -747,6 +1166,88 @@ export class ClientController {
       res.json(ApiResponse.success({ message: 'PHI fields updated successfully' }));
     } catch (error) {
       logger.error({ errorMessage: (error as Error)?.message }, '[Client] PHI update error');
+      const err = this.handleError(error as Error, res);
+      if (!res.headersSent) {
+        res.status(err.status).json(ApiResponse.error(err.message));
+      }
+    }
+  }
+
+  async getClientBilling(req: AuthRequest, res: Response): Promise<void> {
+    const readMode = process.env.SPLIT_DB_READ_MODE;
+    if (readMode !== 'primary') {
+      res.status(501).json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
+      return;
+    }
+
+    try {
+      const resolved = await this.resolveBillingTargetClientId(req, req.params.id);
+      if (!resolved.clientId) {
+        res.status(resolved.status || 400).json(resolved.body || ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
+        return;
+      }
+
+      const access = await this.ensureBillingAccess(req, resolved.clientId);
+      if (access.status) {
+        res.status(access.status).json(access.body);
+        return;
+      }
+
+      const billingRow = await this.clientRepository.getClientBilling?.(resolved.clientId)
+        ?? await this.clientRepository.getClientById?.(resolved.clientId)
+        ?? null;
+
+      if (!billingRow) {
+        res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
+        return;
+      }
+
+      res.json(ApiResponse.success(this.normalizeBillingRow(billingRow)));
+    } catch (error) {
+      const err = this.handleError(error as Error, res);
+      if (!res.headersSent) {
+        res.status(err.status).json(ApiResponse.error(err.message));
+      }
+    }
+  }
+
+  async updateClientBilling(req: AuthRequest, res: Response): Promise<void> {
+    const readMode = process.env.SPLIT_DB_READ_MODE;
+    if (readMode !== 'primary') {
+      res.status(501).json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
+      return;
+    }
+
+    try {
+      const resolved = await this.resolveBillingTargetClientId(req, req.params.id);
+      if (!resolved.clientId) {
+        res.status(resolved.status || 400).json(resolved.body || ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
+        return;
+      }
+
+      const access = await this.ensureBillingAccess(req, resolved.clientId);
+      if (access.status) {
+        res.status(access.status).json(access.body);
+        return;
+      }
+
+      const validated = this.validateBillingPayload(req.body);
+      if (!validated.value) {
+        res.status(400).json(ApiResponse.error(validated.message || 'Invalid request body', 'VALIDATION_ERROR'));
+        return;
+      }
+
+      const updated = await this.clientRepository.updateClientBilling?.(resolved.clientId, validated.value)
+        ?? await this.clientRepository.updateClientOperational?.(resolved.clientId, validated.value)
+        ?? null;
+
+      if (!updated) {
+        res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
+        return;
+      }
+
+      res.json(ApiResponse.success(this.normalizeBillingRow(updated)));
+    } catch (error) {
       const err = this.handleError(error as Error, res);
       if (!res.headersSent) {
         res.status(err.status).json(ApiResponse.error(err.message));

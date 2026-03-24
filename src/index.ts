@@ -6,12 +6,14 @@ import { EmailController } from './controllers/emailController';
 import { RequestFormController } from './controllers/requestFormController';
 import { UserController } from './controllers/userController';
 import { DoulaDocumentRepository } from './repositories/doulaDocumentRepository';
+import { ClientDocumentRepository } from './repositories/clientDocumentRepository';
 import { RequestFormRepository } from './repositories/requestFormRepository';
 import { CloudSqlActivityRepository } from './repositories/cloudSqlActivityRepository';
 import { SupabaseAssignmentRepository } from './repositories/supabaseAssignmentRepository';
 import { CloudSqlClientRepository } from './repositories/cloudSqlClientRepository';
 import { SupabaseUserRepository } from './repositories/supabaseUserRepository';
 import { DoulaDocumentUploadService } from './services/doulaDocumentUploadService';
+import { ClientDocumentUploadService } from './services/clientDocumentUploadService';
 import { DoulaDocumentCompletenessService } from './services/doulaDocumentCompletenessService';
 import { RequestFormService } from './services/RequestFormService';
 import { SupabaseAuthService } from './services/supabaseAuthService';
@@ -32,6 +34,7 @@ const clientRepository = new CloudSqlClientRepository();
 const activityRepository = new CloudSqlActivityRepository(supabase);
 const assignmentRepository = new SupabaseAssignmentRepository(supabase);
 const doulaDocumentRepository = new DoulaDocumentRepository(supabase);
+const clientDocumentRepository = new ClientDocumentRepository(supabase);
 
 //-----------------------------------------------
 // Services (External Integrations)
@@ -40,6 +43,7 @@ const authService = new SupabaseAuthService(supabase, userRepository);
 const requestService = new RequestFormService(requestRepository);
 const contractService = new SupabaseContractService(supabase);
 const doulaDocumentUploadService = new DoulaDocumentUploadService(supabase);
+const clientDocumentUploadService = new ClientDocumentUploadService(supabase);
 //-----------------------------------------------
 // Use Cases (Business Logic)
 //-----------------------------------------------
@@ -55,7 +59,13 @@ const doulaDocumentCompletenessService = new DoulaDocumentCompletenessService(do
 const authController = new AuthController(authUseCase);
 const userController = new UserController(userUseCase, doulaDocumentCompletenessService);
 const requestFormController = new RequestFormController(requestService);
-const clientController = new ClientController(clientUseCase, assignmentRepository, clientRepository);
+const clientController = new ClientController(
+  clientUseCase,
+  assignmentRepository,
+  clientRepository,
+  clientDocumentRepository,
+  clientDocumentUploadService
+);
 const contractController = new ContractController(contractUseCase);
 const emailController = new EmailController();
 const doulaController = new DoulaController(

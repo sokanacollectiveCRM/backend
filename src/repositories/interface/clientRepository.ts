@@ -22,6 +22,11 @@ export type ClientOperationalRow = {
   invite_sent_count: number | null;
   requested_at: string | null;
   updated_at: string | null;
+  payment_method?: string | null;
+  insurance_provider?: string | null;
+  insurance_member_id?: string | null;
+  policy_number?: string | null;
+  self_pay_card_info?: string | null;
 };
 
 export interface ClientRepository {
@@ -101,4 +106,14 @@ export interface ClientRepository {
    * Write-through cache for identity (first_name, last_name, email, phone_number).
    */
   updateIdentityCache?(clientId: string, fields: { first_name?: string; last_name?: string; email?: string; phone_number?: string }): Promise<void>;
+
+  /**
+   * Get billing fields for a client.
+   */
+  getClientBilling?(clientId: string): Promise<ClientOperationalRow | null>;
+
+  /**
+   * Update billing fields for a client and return the fresh billing row.
+   */
+  updateClientBilling?(clientId: string, fields: Record<string, any>): Promise<ClientOperationalRow | null>;
 }

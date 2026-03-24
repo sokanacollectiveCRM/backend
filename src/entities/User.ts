@@ -31,6 +31,10 @@ export class User {
   preferred_contact_method?: string;
   preferred_name?: string;
   payment_method?: string;  // Add this field
+  insurance_provider?: string;
+  insurance_member_id?: string;
+  policy_number?: string;
+  self_pay_card_info?: string;
   home_type?: string;
   services_interested?: string[];
   phone_number?: string;
@@ -100,6 +104,10 @@ export class User {
     preferred_contact_method?: string;
     preferred_name?: string;
     payment_method?: string;  // Add this field
+    insurance_provider?: string;
+    insurance_member_id?: string;
+    policy_number?: string;
+    self_pay_card_info?: string;
     home_type?: string;
     services_interested?: string[];
     phone_number?: string;
@@ -167,6 +175,10 @@ export class User {
       this.preferred_contact_method = data.preferred_contact_method;
       this.preferred_name = data.preferred_name;
       this.payment_method = data.payment_method;  // Add this field
+      this.insurance_provider = data.insurance_provider;
+      this.insurance_member_id = data.insurance_member_id;
+      this.policy_number = data.policy_number;
+      this.self_pay_card_info = data.self_pay_card_info;
       this.home_type = data.home_type;
       this.services_interested = data.services_interested;
       this.phone_number = data.phone_number;
@@ -241,6 +253,10 @@ export class User {
       preferred_contact_method: this.preferred_contact_method,
       preferred_name: this.preferred_name,
       payment_method: this.payment_method,  // Add this field
+      insurance_provider: this.insurance_provider,
+      insurance_member_id: this.insurance_member_id,
+      policy_number: this.policy_number,
+      self_pay_card_info: this.self_pay_card_info,
       home_type: this.home_type,
       services_interested: this.services_interested,
       phone_number: this.phone_number,

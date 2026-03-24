@@ -31,6 +31,7 @@ describe('PUT /clients/:id/phi', () => {
   let mockResponse: Partial<Response>;
   let mockClientUseCase: jest.Mocked<ClientUseCase>;
   let mockAssignmentRepository: jest.Mocked<SupabaseAssignmentRepository>;
+  let mockClientRepository: jest.Mocked<ClientRepository>;
 
   const clientId = '123e4567-e89b-12d3-a456-426614174000';
 
@@ -41,14 +42,14 @@ describe('PUT /clients/:id/phi', () => {
     // Create mocks
     mockClientUseCase = {} as jest.Mocked<ClientUseCase>;
     mockAssignmentRepository = {} as jest.Mocked<SupabaseAssignmentRepository>;
-    const mockClientRepository: ClientRepository = {
+    mockClientRepository = {
       getClientById: jest.fn().mockResolvedValue({
         id: clientId,
         status: 'active',
         serviceNeeded: 'Birth Support',
       }),
       updateIdentityCache: jest.fn().mockResolvedValue(undefined),
-    } as unknown as ClientRepository;
+    } as unknown as jest.Mocked<ClientRepository>;
     clientController = new ClientController(mockClientUseCase, mockAssignmentRepository, mockClientRepository);
 
     // Mock SupabaseClientRepository to return same shape (for any code that instantiates it)
@@ -177,11 +178,7 @@ describe('PUT /clients/:id/phi', () => {
     });
 
     it('should reject if client not found', async () => {
-      const mockClientRepository = {
-        getClientById: jest.fn().mockResolvedValue(null),
-        updateIdentityCache: jest.fn(),
-      };
-      (SupabaseClientRepository as jest.Mock).mockImplementation(() => mockClientRepository);
+      mockClientRepository.getClientById!.mockResolvedValue(null);
 
       mockRequest.body = { first_name: 'Jane' };
 
@@ -363,11 +360,8 @@ describe('PUT /clients/:id/phi', () => {
     });
 
     it('should update identity cache for name/email/phone changes', async () => {
-      const mockClientRepository = {
-        getClientById: jest.fn().mockResolvedValue({ id: clientId }),
-        updateIdentityCache: jest.fn().mockResolvedValue(undefined),
-      };
-      (SupabaseClientRepository as jest.Mock).mockImplementation(() => mockClientRepository);
+      mockClientRepository.getClientById!.mockResolvedValue({ id: clientId } as any);
+      mockClientRepository.updateIdentityCache!.mockResolvedValue(undefined);
 
       mockRequest.body = {
         first_name: 'Jane',
@@ -392,11 +386,8 @@ describe('PUT /clients/:id/phi', () => {
     });
 
     it('should NOT update identity cache for non-identity PHI fields', async () => {
-      const mockClientRepository = {
-        getClientById: jest.fn().mockResolvedValue({ id: clientId }),
-        updateIdentityCache: jest.fn().mockResolvedValue(undefined),
-      };
-      (SupabaseClientRepository as jest.Mock).mockImplementation(() => mockClientRepository);
+      mockClientRepository.getClientById!.mockResolvedValue({ id: clientId } as any);
+      mockClientRepository.updateIdentityCache!.mockResolvedValue(undefined);
 
       mockRequest.body = {
         health_history: 'No known conditions',
