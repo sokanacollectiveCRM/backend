@@ -99,7 +99,7 @@ clientRoutes.patch('/:id',
 // Activity/Notes routes
 clientRoutes.get('/:id/activities',
   authMiddleware,
-  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula', 'client']),
   (req, res) => clientController.getClientActivities(req, res)
 );
 

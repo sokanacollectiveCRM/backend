@@ -15,26 +15,35 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+async function findUserByEmail(supabaseClient: ReturnType<typeof createClient>, email: string) {
+  const target = email.toLowerCase();
+  const perPage = 1000;
+  for (let page = 1; page <= 50; page += 1) {
+    const { data, error } = await supabaseClient.auth.admin.listUsers({ page, perPage });
+    if (error) return { user: undefined as undefined, error };
+    const users = data?.users ?? [];
+    const user = users.find((u) => (u.email || '').toLowerCase() === target);
+    if (user) return { user, error: undefined };
+    if (users.length < perPage) break;
+  }
+  return { user: undefined, error: undefined };
+}
+
 async function setClientPassword(email: string, password: string) {
   console.log(`🔐 Setting password for: ${email}\n`);
 
   try {
-    // Step 1: Find the auth user by email
-    const { data: { users }, error: listError } = await supabase.auth.admin.listUsers();
+    // Step 1: Find the auth user by email (paginate — listUsers is paged)
+    const { user, error: listError } = await findUserByEmail(supabase, email);
 
     if (listError) {
       console.error('❌ Error listing users:', listError);
       return;
     }
 
-    const user = users?.find(u => u.email?.toLowerCase() === email.toLowerCase());
-
     if (!user) {
-      console.error(`❌ User not found: ${email}`);
-      console.log('\nAvailable users:');
-      users?.slice(0, 10).forEach(u => {
-        console.log(`  - ${u.email} (${u.id})`);
-      });
+      console.error(`❌ User not found in Supabase Auth: ${email}`);
+      console.log('(User must exist in Authentication → Users. Leads in Cloud SQL alone do not get a login.)');
       return;
     }
 

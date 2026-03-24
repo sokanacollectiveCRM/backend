@@ -63,7 +63,7 @@ export CLOUD_SQL_PASSWORD='PASTE_PASSWORD_HERE'
 export CLOUD_SQL_SSLMODE=disable
 ```
 
-Or add these to `.env` (ensure `.env` is in `.gitignore`).
+Or add these to `.env` (ensure `.env` is in `.gitignore`). **Preferred:** Use project `.env` which already has `CLOUD_SQL_*` — scripts/check-cloudsql-data.ts and backend load it via dotenv.
 
 ---
 

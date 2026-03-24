@@ -73,6 +73,8 @@ export interface ClientDetailDTO {
   // Health
   health_history?: string;
   health_notes?: string;
+  /** Doula-entered narrative birth summary (not structured / not checkboxes). */
+  birth_outcomes?: string;
   allergies?: string;
   medications?: string;
 

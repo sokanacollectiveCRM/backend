@@ -9,7 +9,9 @@ class Activity {
     description,
     metadata,
     timestamp = new Date(),
-    createdBy
+    createdBy,
+    createdByName,
+    createdByRole
   ) {
     this.id = id;
     this.clientId = clientId;
@@ -18,6 +20,8 @@ class Activity {
     this.metadata = metadata;
     this.timestamp = timestamp;
     this.createdBy = createdBy;
+    this.createdByName = createdByName;
+    this.createdByRole = createdByRole;
   }
   toJson() {
     return {
@@ -28,6 +32,8 @@ class Activity {
       metadata: this.metadata,
       timestamp: this.timestamp,
       createdBy: this.createdBy,
+      createdByName: this.createdByName,
+      createdByRole: this.createdByRole,
     };
   }
 }

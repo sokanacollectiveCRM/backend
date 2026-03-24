@@ -305,3 +305,36 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 ### Action
 - [x] Context updated
 - [x] Implementation started
+
+## Preflight Update 2026-03-19 (Doula profile demographics)
+
+### Gate Result
+- run_preflight
+
+### Task
+- Doula Profile tab: gender, pronouns, required multi-select race/ethnicity, optional other details; persisted on `public.doulas`.
+
+### Contract Findings
+- `GET/PUT /api/doulas/profile` returns/accepts `gender`, `pronouns`, `race_ethnicity` (string[]), `race_ethnicity_other`, `other_demographic_details`.
+- Migration: `src/db/migrations/add_doula_demographics_to_doulas.sql`.
+
+### Action
+- [x] Context updated
+
+## Preflight Update 2026-03-19 (Client-visible doula activities)
+
+### Gate Result
+- run_preflight
+
+### Task
+- Doulas mark activities as visible to clients; clients only receive filtered list on `GET /clients/:id/activities`.
+
+### Contract Findings
+- `client_activities.metadata` jsonb stores `visibleToClient` (boolean). Default hidden for legacy rows (strict `=== true` to show).
+- `POST /api/doulas/clients/:clientId/activities` accepts `visibleToClient` / `visible_to_client`.
+- `GET /clients/:id/activities` reads Cloud SQL (same store as doula activities); role `client` allowed for own client id only; response filtered to visible entries.
+- `POST /clients/:id/activity` (admin/doula) accepts optional `visible_to_client` / `visibleToClient`; persists via Cloud SQL `createActivity`.
+- Activity DTO may include `visible_to_client` and `metadata` for staff UIs.
+
+### Action
+- [x] Context updated

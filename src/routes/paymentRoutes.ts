@@ -4,8 +4,6 @@ import { SimplePaymentService } from '../services/simplePaymentService';
 import authMiddleware from '../middleware/authMiddleware';
 import authorizeRoles from '../middleware/authorizeRoles';
 import { listPaymentsFromCloudSql } from '../repositories/cloudSqlPaymentRepository';
-import { FEATURE_STRIPE } from '../config/env';
-import { paymentController } from '../controllers/paymentController';
 import { AuthRequest } from '../types';
 import { CloudSqlDoulaAssignmentService } from '../services/cloudSqlDoulaAssignmentService';
 
@@ -38,23 +36,6 @@ const listPaymentsHandler = async (req: Request, res: Response): Promise<void> =
 
 router.get('/', authMiddleware, (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']), listPaymentsHandler);
 router.get('', authMiddleware, (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']), listPaymentsHandler);
-
-// Stripe billing: charge customer's default payment method (admin or same user). Requires FEATURE_STRIPE.
-if (FEATURE_STRIPE) {
-  router.post(
-    '/customers/:customerId/charge',
-    authMiddleware,
-    (req: Request, res: Response, next) => {
-      const amount = req.body?.amount;
-      if (amount == null || typeof amount !== 'number' || amount <= 0) {
-        res.status(400).json({ success: false, error: 'amount (positive number, cents) is required' });
-        return;
-      }
-      next();
-    },
-    (req: Request, res: Response) => paymentController.processCharge(req, res)
-  );
-}
 
 // Get payment dashboard
 router.get('/dashboard', async (req, res) => {

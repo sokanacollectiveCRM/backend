@@ -10,7 +10,9 @@ export class Activity {
     public description?: string,
     public metadata?: ActivityMetadata,
     public timestamp: Date = new Date(),
-    public createdBy?: string
+    public createdBy?: string,
+    public createdByName?: string,
+    public createdByRole?: string
   ) {}
 
   toJson(): Object {
@@ -21,7 +23,9 @@ export class Activity {
       description: this.description,
       metadata: this.metadata,
       timestamp: this.timestamp,
-      createdBy: this.createdBy
+      createdBy: this.createdBy,
+      createdByName: this.createdByName,
+      createdByRole: this.createdByRole
     };
   }
-} 
+}

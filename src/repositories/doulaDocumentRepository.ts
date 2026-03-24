@@ -218,6 +218,38 @@ export class DoulaDocumentRepository {
   }
 
   /**
+   * Update doula document metadata fields without moving storage object.
+   */
+  async updateDocumentMetadata(
+    documentId: string,
+    updates: { fileName?: string; documentType?: string }
+  ): Promise<DoulaDocument | null> {
+    const updateData: Record<string, unknown> = {};
+    if (typeof updates.fileName === 'string') {
+      updateData.file_name = updates.fileName;
+    }
+    if (typeof updates.documentType === 'string') {
+      updateData.document_type = updates.documentType;
+    }
+
+    const { data, error } = await this.supabaseClient
+      .from('doula_documents')
+      .update(updateData)
+      .eq('id', documentId)
+      .select('*')
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return null;
+      }
+      throw new Error(`Failed to update document metadata: ${error.message}`);
+    }
+
+    return this.mapToDocument(data);
+  }
+
+  /**
    * Get current (most recent) document for a specific type and doula.
    */
   async getCurrentDocumentByType(doulaId: string, documentType: string): Promise<DoulaDocument | null> {

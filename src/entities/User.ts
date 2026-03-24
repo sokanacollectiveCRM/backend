@@ -35,6 +35,8 @@ export class User {
   services_interested?: string[];
   phone_number?: string;
   health_notes?: string;
+  /** Doula narrative: delivery type, complications, interventions, birth weight, etc. */
+  birth_outcomes?: string;
   service_specifics?: string;
   baby_sex?: string;
   baby_name?: string;
@@ -102,6 +104,7 @@ export class User {
     services_interested?: string[];
     phone_number?: string;
     health_notes?: string;
+    birth_outcomes?: string;
     service_specifics?: string;
     baby_sex?: string;
     baby_name?: string;
@@ -168,6 +171,7 @@ export class User {
       this.services_interested = data.services_interested;
       this.phone_number = data.phone_number;
       this.health_notes = data.health_notes;
+      this.birth_outcomes = data.birth_outcomes;
       this.service_specifics = data.service_specifics;
       this.baby_sex = data.baby_sex;
       this.baby_name = data.baby_name;
@@ -241,6 +245,7 @@ export class User {
       services_interested: this.services_interested,
       phone_number: this.phone_number,
       health_notes: this.health_notes,
+      birth_outcomes: this.birth_outcomes,
       service_specifics: this.service_specifics,
       baby_sex: this.baby_sex,
       baby_name: this.baby_name,

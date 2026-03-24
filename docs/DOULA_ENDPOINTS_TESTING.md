@@ -118,6 +118,19 @@ curl -X POST http://localhost:5050/api/doulas/documents \
   -F "notes=Test background check"
 ```
 
+**Update Document Metadata (display name and/or type):**
+```bash
+curl -X PATCH http://localhost:5050/api/doulas/documents/DOCUMENT_ID \
+  -H "Authorization: Bearer YOUR_DOULA_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"file_name":"updated-background-check","document_type":"background_check"}'
+```
+
+Notes:
+- This endpoint updates `doula_documents.file_name` and/or `doula_documents.document_type`.
+- It does not move/re-upload the storage object.
+- File extension policy: existing extension is preserved. If omitted, backend appends current extension. If changed, request is rejected.
+
 **Get My Documents:**
 ```bash
 curl -X GET http://localhost:5050/api/doulas/documents \

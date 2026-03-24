@@ -60,6 +60,7 @@ function mapRowToClient(row: Record<string, any>): Client {
     living_children_count: row.living_children_count,
     past_pregnancy_experience: row.past_pregnancy_experience,
     service_support_details: row.service_support_details,
+    birth_outcomes: row.birth_outcomes,
     race_ethnicity: row.race_ethnicity,
     primary_language: row.primary_language,
     client_age_range: row.client_age_range,
@@ -185,6 +186,7 @@ export class CloudSqlClientRepository implements ClientRepository {
       'baby_name', 'baby_sex', 'number_of_babies', 'birth_hospital', 'provider_type',
       'pregnancy_number', 'had_previous_pregnancies', 'previous_pregnancies_count',
       'living_children_count', 'past_pregnancy_experience', 'service_support_details',
+      'birth_outcomes',
       'race_ethnicity', 'primary_language', 'client_age_range', 'insurance', 'annual_income',
       'preferred_contact_method', 'relationship_status', 'referral_source', 'referral_name',
       'referral_email', 'address_line1', 'address_line2', 'city', 'state', 'zip_code',
@@ -278,6 +280,7 @@ export class CloudSqlClientRepository implements ClientRepository {
       'annual_income', 'baby_sex', 'baby_name', 'number_of_babies', 'race_ethnicity',
       'client_age_range', 'insurance', 'pregnancy_number', 'had_previous_pregnancies',
       'previous_pregnancies_count', 'living_children_count', 'past_pregnancy_experience',
+      'birth_outcomes',
     ]);
     const columnValues = new Map<string, any>();
     for (const [k, v] of Object.entries(fields)) {

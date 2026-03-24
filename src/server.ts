@@ -8,7 +8,6 @@ import cookieParser from 'cookie-parser';
 import pinoHttp from 'pino-http';
 
 import {
-  FEATURE_STRIPE,
   FEATURE_QUICKBOOKS,
   IS_PRODUCTION,
   getAllowedOrigins,
@@ -20,7 +19,6 @@ import adminRoutes from './routes/adminRoutes';
 import doulasRoutes from './routes/doulas';
 import clientRoutes from './routes/clientRoutes';
 import doulaRoutes from './routes/doulaRoutes';
-import contractPaymentRoutes from './routes/contractPaymentRoutes';
 import contractRoutes from './routes/contractRoutes';
 import contractSigningRoutes from './routes/contractSigningRoutes';
 import paymentRoutes from './routes/paymentRoutes';
@@ -62,13 +60,6 @@ if (!IS_PRODUCTION) {
 }
 
 app.use(cookieParser());
-
-// ---- Mount Stripe webhook BEFORE JSON parsing (raw body required) ----
-if (FEATURE_STRIPE) {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const stripePaymentRoutes = require('./routes/stripePaymentRoutes').default;
-  app.use('/api/stripe', asMiddleware(stripePaymentRoutes));
-}
 
 app.use(express.json());
 
@@ -126,6 +117,8 @@ app.use('/email', asMiddleware(emailRoutes));
 app.use('/requestService', asMiddleware(requestRouter));
 app.use('/clients', asMiddleware(clientRoutes));
 app.use('/client', asMiddleware(clientRoutes)); // alias
+app.use('/api/clients', asMiddleware(clientRoutes)); // alias for frontend paths
+app.use('/api/client', asMiddleware(clientRoutes)); // alias for frontend paths
 
 if (FEATURE_QUICKBOOKS) {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -145,7 +138,6 @@ app.use('/api/payments', asMiddleware(paymentRoutes));
 app.use('/api/invoices', asMiddleware(invoiceRoutes));
 app.use('/api/financial', asMiddleware(financialRoutes));
 app.use('/api/signnow', asMiddleware(signNowRoutes));
-app.use('/api/contract-payment', asMiddleware(contractPaymentRoutes));
 
 // DEV-only debug routes — NEVER in production (no token/cookie endpoints)
 if (!IS_PRODUCTION && process.env.ENABLE_DEBUG_ENDPOINTS === 'true') {

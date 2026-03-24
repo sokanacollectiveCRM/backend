@@ -12,7 +12,6 @@ import { AuthRequest } from '../types';
 import { ClientUseCase } from '../usecase/clientUseCase';
 import { ClientRepository } from '../repositories/interface/clientRepository';
 import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
-import { SupabaseActivityRepository } from '../repositories/supabaseActivityRepository';
 import { PortalEligibilityService } from '../services/portalEligibilityService';
 import supabase from '../supabase';
 import { ClientMapper } from '../mappers/ClientMapper';
@@ -27,6 +26,8 @@ import {
 } from '../services/cloudSqlDoulaAssignmentService';
 import { ASSIGNMENT_SERVICE_CATALOG, normalizeAssignmentServices } from '../constants/assignmentServices';
 import { logger } from '../common/utils/logger';
+import { getSupabaseAdmin } from '../supabase';
+import { ActivityDTO } from '../dto/response/ActivityDTO';
 
 export class ClientController {
   private clientUseCase: ClientUseCase;
@@ -97,6 +98,51 @@ export class ClientController {
       message.includes('connection reset') ||
       message.includes('connection terminated unexpectedly')
     );
+  }
+
+  private async enrichCreatorNames(dtos: ActivityDTO[]): Promise<ActivityDTO[]> {
+    const unresolvedIds = Array.from(
+      new Set(
+        dtos
+          .filter((d) => d.created_by && (!d.created_by_name || d.created_by_name === 'Staff member'))
+          .map((d) => d.created_by as string)
+      )
+    );
+    if (!unresolvedIds.length) return dtos;
+
+    const supabase = getSupabaseAdmin();
+    const resolved = new Map<string, { name: string; role?: string }>();
+
+    await Promise.all(
+      unresolvedIds.map(async (id) => {
+        try {
+          const { data, error } = await supabase.auth.admin.getUserById(id);
+          if (error || !data?.user) return;
+          const meta = (data.user.user_metadata as Record<string, unknown> | undefined) || {};
+          const appMeta = (data.user.app_metadata as Record<string, unknown> | undefined) || {};
+          const first = String(meta.first_name ?? meta.firstname ?? '').trim();
+          const last = String(meta.last_name ?? meta.lastname ?? '').trim();
+          const full = `${first} ${last}`.trim();
+          const email = String(data.user.email || '').trim();
+          const role = String(meta.role ?? appMeta.role ?? '').trim() || undefined;
+          const name = full || email || 'Staff member';
+          resolved.set(id, { name, role });
+        } catch {
+          // leave as Staff member on lookup failures
+        }
+      })
+    );
+
+    return dtos.map((d) => {
+      if (!d.created_by) return d;
+      const hit = resolved.get(d.created_by);
+      if (!hit) return d;
+      return {
+        ...d,
+        created_by_name: hit.name || d.created_by_name || 'Staff member',
+        created_by_role: d.created_by_role || hit.role,
+      };
+    });
   }
 
   //
@@ -236,6 +282,7 @@ export class ClientController {
       if (fullClient.annual_income != null) merged.annual_income = fullClient.annual_income;
       if (fullClient.baby_sex != null) merged.baby_sex = fullClient.baby_sex;
       if (u?.health_notes != null) merged.health_notes = u.health_notes;
+      if ((u as any)?.birth_outcomes != null) merged.birth_outcomes = (u as any).birth_outcomes;
       if (u?.baby_name != null) merged.baby_name = u.baby_name;
       if (u?.number_of_babies != null) merged.number_of_babies = u.number_of_babies;
       if (u?.race_ethnicity != null) merged.race_ethnicity = u.race_ethnicity;
@@ -511,6 +558,7 @@ export class ClientController {
           if (fullClient.annual_income != null) response.annual_income = fullClient.annual_income;
           if (fullClient.baby_sex != null) response.baby_sex = fullClient.baby_sex;
           if (u?.health_notes != null) response.health_notes = u.health_notes;
+          if ((u as any)?.birth_outcomes != null) response.birth_outcomes = (u as any).birth_outcomes;
           if (u?.baby_name != null) response.baby_name = u.baby_name;
           if (u?.number_of_babies != null) response.number_of_babies = u.number_of_babies;
           if (u?.race_ethnicity != null) response.race_ethnicity = u.race_ethnicity;
@@ -729,8 +777,14 @@ export class ClientController {
       return;
     }
 
-    // Canonical field names: activity_type, content
-    const { activity_type, content } = req.body;
+    // Canonical field names: activity_type, content; optional visible_to_client / visibleToClient and metadata
+    const {
+      activity_type,
+      content,
+      metadata,
+      visible_to_client: visibleSnake,
+      visibleToClient
+    } = req.body;
 
     // Validate request body
     if (!activity_type || typeof activity_type !== 'string' || activity_type.trim() === '') {
@@ -751,20 +805,35 @@ export class ClientController {
         return;
       }
 
-      // Determine createdBy from authenticated user
-      const createdBy = req.user?.id || null;
+      const userId = req.user?.id ?? '';
+      const visible =
+        visibleToClient === true ||
+        visibleSnake === true ||
+        visibleToClient === 'true' ||
+        visibleSnake === 'true';
+      const creatorName = `${req.user?.firstname || ''} ${req.user?.lastname || ''}`.trim() ||
+        (req.user?.email || '').trim() ||
+        'Staff member';
+      const creatorRole = req.user?.role ? String(req.user.role) : 'staff';
+      const incomingMetadata =
+        metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+          ? { ...metadata }
+          : {};
 
-      // Create activity with explicit column selection
-      const activityRepository = new SupabaseActivityRepository(supabase);
-      const row = await activityRepository.createActivityCanonical(
+      const activity = await this.clientUseCase.createActivity(
         id,
-        createdBy,
         activity_type.trim(),
-        content.trim()
+        content.trim(),
+        {
+          ...incomingMetadata,
+          visibleToClient: visible,
+          createdByName: creatorName,
+          createdByRole: creatorRole,
+        },
+        userId
       );
 
-      // Map to DTO and return canonical response
-      const dto = ActivityMapper.toDTO(row);
+      const dto = ActivityMapper.fromCloudActivity(activity);
       res.json(ApiResponse.success(dto));
     } catch (error) {
       // Graceful fallback: if client_activities table is missing, return 503 (not 500)
@@ -806,23 +875,42 @@ export class ClientController {
       return;
     }
 
+    let targetClientId = id;
+    if (req.user?.role === 'client') {
+      const ownClientId = await this.cloudSqlAssignmentService.getClientIdByAuthUserId(req.user.id);
+      if (!ownClientId) {
+        res.status(404).json(ApiResponse.error('Client profile not found', 'NOT_FOUND'));
+        return;
+      }
+      const sentAuthUserId = targetClientId === req.user.id;
+      if (!sentAuthUserId && targetClientId !== ownClientId) {
+        res.status(403).json(ApiResponse.error('Forbidden: cannot access another client profile', 'FORBIDDEN'));
+        return;
+      }
+      targetClientId = ownClientId;
+    }
+
     try {
-      // Verify client exists (optional but preferred)
-      const clientExists = await this.clientRepository.getClientById?.(id) ?? null;
+      const clientExists = await this.clientRepository.getClientById?.(targetClientId) ?? null;
       if (!clientExists) {
         res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
         return;
       }
 
-      // Fetch activities with explicit column selection
-      const activityRepository = new SupabaseActivityRepository(supabase);
-      const rows = await activityRepository.getActivitiesByClientIdCanonical(id);
+      const activities = await this.clientUseCase.getClientActivities(targetClientId);
+      const forViewer =
+        req.user?.role === 'client'
+          ? activities.filter((a) =>
+              ActivityMapper.isVisibleToClientMetadata(
+                a.metadata as Record<string, unknown> | undefined
+              )
+            )
+          : activities;
 
-      // Map to DTOs
-      const dtos = rows.map(row => ActivityMapper.toDTO(row));
+      const dtos = forViewer.map((a) => ActivityMapper.fromCloudActivity(a));
+      const enriched = await this.enrichCreatorNames(dtos);
 
-      // Return canonical list response
-      res.json(ApiResponse.list(dtos, dtos.length));
+      res.json(ApiResponse.list(enriched, enriched.length));
     } catch (error) {
       // Graceful fallback: if client_activities table is missing in schema, return empty list (no 500)
       const message = (error instanceof Error ? error.message : String(error)).toLowerCase();

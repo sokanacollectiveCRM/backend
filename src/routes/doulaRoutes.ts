@@ -53,6 +53,13 @@ doulaRoutes.delete(
   (req, res) => doulaController.deleteDocument(req, res)
 );
 
+doulaRoutes.patch(
+  '/documents/:documentId',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['doula']),
+  (req, res) => doulaController.renameDocument(req, res)
+);
+
 // Client access routes (assigned clients only)
 doulaRoutes.get(
   '/clients',
@@ -96,6 +103,13 @@ doulaRoutes.get(
   authMiddleware,
   (req, res, next) => authorizeRoles(req, res, next, ['doula']),
   (req, res) => doulaController.getClientActivities(req, res)
+);
+
+doulaRoutes.patch(
+  '/clients/:clientId/activities/:activityId',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['doula']),
+  (req, res) => doulaController.patchClientActivity(req, res)
 );
 
 // Profile management routes

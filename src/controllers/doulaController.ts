@@ -13,11 +13,21 @@ import { NotFoundError } from '../domains/errors';
 import { CloudSqlTeamService } from '../services/cloudSqlTeamService';
 import { DoulaDocumentIdResolver } from '../services/doulaDocumentIdResolver';
 import { ActivityRepository } from '../repositories/interface/activityRepository';
+import { ActivityMapper } from '../mappers/ActivityMapper';
+import { logger } from '../common/utils/logger';
 import {
   ALL_DOULA_DOCUMENT_TYPES,
   MAX_DOCUMENT_SIZE_BYTES,
   ALLOWED_MIME_TYPES,
 } from '../constants/doulaDocuments';
+import {
+  MAX_DOULA_DOCUMENT_FILE_NAME_LENGTH,
+  renameDoulaDocumentSchema,
+} from '../dto/request/RenameDoulaDocumentRequestDTO';
+import { sanitizeDoulaRaceEthnicity } from '../constants/doulaDemographics';
+import type { TeamMemberDto } from '../services/cloudSqlTeamService';
+import { getSupabaseAdmin } from '../supabase';
+import { ActivityDTO } from '../dto/response/ActivityDTO';
 
 export class DoulaController {
   private documentRepository: DoulaDocumentRepository;
@@ -52,9 +62,62 @@ export class DoulaController {
     this.documentIdResolver = new DoulaDocumentIdResolver(this.cloudSqlTeamService);
   }
 
+  private getFileExtension(fileName: string): string {
+    const index = fileName.lastIndexOf('.');
+    if (index <= 0 || index === fileName.length - 1) {
+      return '';
+    }
+    return fileName.slice(index).toLowerCase();
+  }
+
   private isMissingRelationError(error: any, relationName: string): boolean {
     const message = String(error?.message || '').toLowerCase();
     return message.includes(`relation "${relationName.toLowerCase()}" does not exist`) || message.includes(`public.${relationName.toLowerCase()}`);
+  }
+
+  private async enrichCreatorNames(dtos: ActivityDTO[]): Promise<ActivityDTO[]> {
+    const unresolvedIds = Array.from(
+      new Set(
+        dtos
+          .filter((d) => d.created_by && (!d.created_by_name || d.created_by_name === 'Staff member'))
+          .map((d) => d.created_by as string)
+      )
+    );
+    if (!unresolvedIds.length) return dtos;
+
+    const supabase = getSupabaseAdmin();
+    const resolved = new Map<string, { name: string; role?: string }>();
+
+    await Promise.all(
+      unresolvedIds.map(async (id) => {
+        try {
+          const { data, error } = await supabase.auth.admin.getUserById(id);
+          if (error || !data?.user) return;
+          const meta = (data.user.user_metadata as Record<string, unknown> | undefined) || {};
+          const appMeta = (data.user.app_metadata as Record<string, unknown> | undefined) || {};
+          const first = String(meta.first_name ?? meta.firstname ?? '').trim();
+          const last = String(meta.last_name ?? meta.lastname ?? '').trim();
+          const full = `${first} ${last}`.trim();
+          const email = String(data.user.email || '').trim();
+          const role = String(meta.role ?? appMeta.role ?? '').trim() || undefined;
+          const name = full || email || 'Staff member';
+          resolved.set(id, { name, role });
+        } catch {
+          // leave as Staff member on lookup failures
+        }
+      })
+    );
+
+    return dtos.map((d) => {
+      if (!d.created_by) return d;
+      const hit = resolved.get(d.created_by);
+      if (!hit) return d;
+      return {
+        ...d,
+        created_by_name: hit.name || d.created_by_name || 'Staff member',
+        created_by_role: d.created_by_role || hit.role,
+      };
+    });
   }
 
   /**
@@ -312,26 +375,47 @@ export class DoulaController {
             return {
               id: doc.id,
               documentType: doc.documentType,
+              document_type: doc.documentType,
               fileName: doc.fileName,
+              file_name: doc.fileName,
               fileUrl: signedUrl,
               fileSize: doc.fileSize,
+              file_size: doc.fileSize,
               mimeType: doc.mimeType,
-              uploadedAt: doc.uploadedAt?.toISOString?.(),
+              mime_type: doc.mimeType,
+              uploadedAt: doc.uploadedAt?.toISOString?.() ?? doc.uploadedAt,
+              uploaded_at: doc.uploadedAt?.toISOString?.() ?? doc.uploadedAt,
               status: doc.status,
               notes: doc.notes,
               rejectionReason: doc.rejectionReason,
-              reviewedAt: doc.reviewedAt?.toISOString?.(),
+              rejection_reason: doc.rejectionReason,
+              reviewedAt: doc.reviewedAt?.toISOString?.() ?? doc.reviewedAt,
+              reviewed_at: doc.reviewedAt?.toISOString?.() ?? doc.reviewedAt,
               reviewedBy: doc.reviewedBy,
+              reviewed_by: doc.reviewedBy,
             };
           } catch {
             return {
               id: doc.id,
               documentType: doc.documentType,
+              document_type: doc.documentType,
               fileName: doc.fileName,
+              file_name: doc.fileName,
               fileUrl: null,
               fileSize: doc.fileSize,
+              file_size: doc.fileSize,
+              mimeType: doc.mimeType,
+              mime_type: doc.mimeType,
+              uploadedAt: doc.uploadedAt?.toISOString?.() ?? doc.uploadedAt,
+              uploaded_at: doc.uploadedAt?.toISOString?.() ?? doc.uploadedAt,
               status: doc.status,
+              notes: doc.notes,
               rejectionReason: doc.rejectionReason,
+              rejection_reason: doc.rejectionReason,
+              reviewedAt: doc.reviewedAt?.toISOString?.() ?? doc.reviewedAt,
+              reviewed_at: doc.reviewedAt?.toISOString?.() ?? doc.reviewedAt,
+              reviewedBy: doc.reviewedBy,
+              reviewed_by: doc.reviewedBy,
             };
           }
         })
@@ -436,6 +520,132 @@ export class DoulaController {
     } catch (error: any) {
       console.error('Error getting document URL:', error);
       res.status(500).json({ error: error.message || 'Failed to get document URL' });
+    }
+  }
+
+  /**
+   * Update doula document metadata (display name and/or document type)
+   * PATCH /api/doulas/documents/:documentId
+   *
+   * Policy: keep existing file extension. Request may omit extension; when omitted, existing extension is appended.
+   */
+  async renameDocument(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const doulaId = req.user?.id;
+      const { documentId } = req.params;
+
+      if (!doulaId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      if (!documentId) {
+        res.status(400).json({ error: 'Missing document ID' });
+        return;
+      }
+
+      const parsed = renameDoulaDocumentSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid request body' });
+        return;
+      }
+
+      logger.info(
+        {
+          context: 'DoulaController.renameDocument',
+          doulaId,
+          documentId,
+          requestedFileNameLength: parsed.data.file_name?.length,
+          requestedDocumentType: parsed.data.document_type,
+          outcome: 'attempt',
+        },
+        'Doula document rename requested'
+      );
+
+      const document = await this.documentRepository.getDocumentById(documentId);
+      if (!document) {
+        logger.warn(
+          { context: 'DoulaController.renameDocument', doulaId, documentId, outcome: 'not_found' },
+          'Doula document rename failed: document not found'
+        );
+        res.status(404).json({ error: 'Document not found' });
+        return;
+      }
+
+      if (document.doulaId !== doulaId) {
+        logger.warn(
+          { context: 'DoulaController.renameDocument', doulaId, documentId, outcome: 'forbidden' },
+          'Doula document rename forbidden'
+        );
+        res.status(403).json({ error: 'You do not have permission to rename this document' });
+        return;
+      }
+
+      let normalizedFileName: string | undefined;
+      if (typeof parsed.data.file_name === 'string') {
+        const existingExtension = this.getFileExtension(document.fileName);
+        const requestedExtension = this.getFileExtension(parsed.data.file_name);
+
+        if (existingExtension && requestedExtension && existingExtension !== requestedExtension) {
+          res.status(400).json({ error: `file_name extension must remain "${existingExtension}"` });
+          return;
+        }
+
+        normalizedFileName = existingExtension && !requestedExtension
+          ? `${parsed.data.file_name}${existingExtension}`
+          : parsed.data.file_name;
+        if (normalizedFileName.length > MAX_DOULA_DOCUMENT_FILE_NAME_LENGTH) {
+          res.status(400).json({ error: `file_name must be ${MAX_DOULA_DOCUMENT_FILE_NAME_LENGTH} characters or fewer` });
+          return;
+        }
+      }
+
+      const updated = await this.documentRepository.updateDocumentMetadata(documentId, {
+        fileName: normalizedFileName,
+        documentType: parsed.data.document_type,
+      });
+      if (!updated) {
+        res.status(404).json({ error: 'Document not found' });
+        return;
+      }
+
+      logger.info(
+        {
+          context: 'DoulaController.renameDocument',
+          doulaId,
+          documentId,
+          outcome: 'success',
+        },
+        'Doula document renamed'
+      );
+
+      res.status(200).json({
+        success: true,
+        document: {
+          id: updated.id,
+          documentType: updated.documentType,
+          document_type: updated.documentType,
+          fileName: updated.fileName,
+          file_name: updated.fileName,
+          status: updated.status,
+          uploadedAt: updated.uploadedAt?.toISOString?.() ?? updated.uploadedAt,
+          uploaded_at: updated.uploadedAt?.toISOString?.() ?? updated.uploadedAt,
+          updatedAt: updated.updatedAt?.toISOString?.() ?? updated.updatedAt,
+          updated_at: updated.updatedAt?.toISOString?.() ?? updated.updatedAt,
+        },
+      });
+    } catch (error: any) {
+      logger.error(
+        {
+          context: 'DoulaController.renameDocument',
+          errorMessage: error?.message,
+          documentId: req.params?.documentId,
+          doulaId: req.user?.id,
+          outcome: 'error',
+        },
+        'Error renaming doula document'
+      );
+      res.status(500).json({ error: error.message || 'Failed to rename document' });
     }
   }
 
@@ -689,7 +899,7 @@ export class DoulaController {
     try {
       const doulaId = req.user?.id;
       const { clientId } = req.params;
-      const { type, description, metadata } = req.body;
+      const { type, description, metadata, visibleToClient, visible_to_client } = req.body;
 
       if (!doulaId) {
         res.status(401).json({ error: 'Unauthorized' });
@@ -718,19 +928,37 @@ export class DoulaController {
         return;
       }
 
+      const visible =
+        visibleToClient === true ||
+        visible_to_client === true ||
+        visibleToClient === 'true' ||
+        visible_to_client === 'true';
+      const creatorName = `${req.user?.firstname || ''} ${req.user?.lastname || ''}`.trim() ||
+        (req.user?.email || '').trim() ||
+        'Staff member';
+      const creatorRole = req.user?.role ? String(req.user.role) : 'staff';
+      const baseMeta =
+        metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? { ...metadata } : {};
+      const mergedMetadata = {
+        ...baseMeta,
+        visibleToClient: visible,
+        createdByName: creatorName,
+        createdByRole: creatorRole,
+      };
+
       // Create activity
       const activity = await this.activityRepository.createActivity({
         clientId,
         type,
         description,
-        metadata: metadata || {},
+        metadata: mergedMetadata,
         timestamp: new Date(),
         createdBy: doulaId
       });
 
       res.status(201).json({
         success: true,
-        activity: activity.toJson()
+        activity: ActivityMapper.fromCloudActivity(activity)
       });
     } catch (error: any) {
       console.error('Error adding activity:', error);
@@ -781,9 +1009,12 @@ export class DoulaController {
       // Get activities
       const activities = await this.activityRepository.getActivitiesByClientId(clientId);
 
+      const dtos = activities.map((activity) => ActivityMapper.fromCloudActivity(activity));
+      const enriched = await this.enrichCreatorNames(dtos);
+
       res.json({
         success: true,
-        activities: activities.map(activity => activity.toJson())
+        activities: enriched
       });
     } catch (error: any) {
       console.error('Error fetching activities:', error);
@@ -799,6 +1030,81 @@ export class DoulaController {
       }
       res.status(500).json({
         error: error.message || 'Failed to fetch activities'
+      });
+    }
+  }
+
+  /**
+   * Toggle whether an existing activity is visible on the client portal
+   * PATCH /api/doulas/clients/:clientId/activities/:activityId
+   */
+  async patchClientActivity(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const doulaId = req.user?.id;
+      const { clientId, activityId } = req.params;
+      const { visibleToClient, visible_to_client } = req.body ?? {};
+
+      if (!doulaId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      if (!clientId || !activityId) {
+        res.status(400).json({ error: 'Missing client ID or activity ID' });
+        return;
+      }
+
+      let nextVisible: boolean;
+      if (typeof visibleToClient === 'boolean') {
+        nextVisible = visibleToClient;
+      } else if (typeof visible_to_client === 'boolean') {
+        nextVisible = visible_to_client;
+      } else if (visibleToClient === 'true' || visible_to_client === 'true') {
+        nextVisible = true;
+      } else if (visibleToClient === 'false' || visible_to_client === 'false') {
+        nextVisible = false;
+      } else {
+        res.status(400).json({
+          error: 'Provide visibleToClient (boolean) to update portal visibility',
+        });
+        return;
+      }
+
+      const assignedClients = await this.clientUseCase.getClientsLite(doulaId, 'doula');
+      const hasAssignment = assignedClients.some((client) => client.id === clientId);
+      if (!hasAssignment) {
+        res.status(403).json({
+          error: 'You do not have access to this client',
+        });
+        return;
+      }
+
+      const updated = await this.activityRepository.updateActivityMetadataMerge(activityId, clientId, {
+        visibleToClient: nextVisible,
+      });
+
+      if (!updated) {
+        res.status(404).json({ error: 'Activity not found' });
+        return;
+      }
+
+      res.json({
+        success: true,
+        activity: ActivityMapper.fromCloudActivity(updated),
+      });
+    } catch (error: any) {
+      console.error('Error patching activity:', error);
+      if (this.isMissingRelationError(error, 'client_activities')) {
+        res.status(503).json({
+          error: 'Activities feature not available - client_activities table pending migration',
+          degraded: true,
+          source: 'cloud_sql',
+          reason: 'client_activities_table_missing',
+        });
+        return;
+      }
+      res.status(500).json({
+        error: error.message || 'Failed to update activity',
       });
     }
   }
@@ -837,25 +1143,12 @@ export class DoulaController {
         return;
       }
       const cloudSqlMember = await this.cloudSqlTeamService.getTeamMemberById(doulaId);
-      const profile = cloudSqlMember && cloudSqlMember.role === 'doula' ? {
-        id: cloudSqlMember.id,
-        email: cloudSqlMember.email,
-        firstname: cloudSqlMember.firstname,
-        lastname: cloudSqlMember.lastname,
-        fullName: cloudSqlMember.fullName,
-        role: 'doula' as const,
-        phone_number: cloudSqlMember.phone_number,
-        address: cloudSqlMember.address ?? '',
-        city: cloudSqlMember.city ?? '',
-        state: cloudSqlMember.state ?? '',
-        country: cloudSqlMember.country ?? '',
-        zip_code: cloudSqlMember.zip_code ?? '',
-        bio: cloudSqlMember.bio ?? '',
-        account_status: cloudSqlMember.account_status,
-        profile_picture: cloudSqlMember.profile_picture ?? imageUrl,
-        created_at: cloudSqlMember.created_at,
-        updatedAt: cloudSqlMember.updated_at,
-      } : { profile_picture: imageUrl };
+      const profile =
+        cloudSqlMember && cloudSqlMember.role === 'doula'
+          ? this.buildDoulaProfilePayload(cloudSqlMember, {
+              profilePictureFallback: cloudSqlMember.profile_picture ?? imageUrl,
+            })
+          : { profile_picture: imageUrl };
       res.json({ success: true, profile });
     } catch (error: any) {
       console.error('Error uploading doula profile picture:', error);
@@ -879,25 +1172,7 @@ export class DoulaController {
       const cloudSqlMember = await this.cloudSqlTeamService.getTeamMemberById(doulaId);
       if (cloudSqlMember && cloudSqlMember.role === 'doula') {
         const reqUserJson = req.user?.toJSON?.() as any;
-        const profile = {
-          id: cloudSqlMember.id,
-          email: cloudSqlMember.email,
-          firstname: cloudSqlMember.firstname,
-          lastname: cloudSqlMember.lastname,
-          fullName: cloudSqlMember.fullName,
-          role: 'doula',
-          phone_number: cloudSqlMember.phone_number,
-          address: cloudSqlMember.address ?? '',
-          city: cloudSqlMember.city ?? '',
-          state: cloudSqlMember.state ?? '',
-          country: cloudSqlMember.country ?? '',
-          zip_code: cloudSqlMember.zip_code ?? '',
-          bio: cloudSqlMember.bio ?? '',
-          account_status: cloudSqlMember.account_status,
-          profile_picture: cloudSqlMember.profile_picture ?? reqUserJson?.profile_picture ?? null,
-          created_at: cloudSqlMember.created_at,
-          updatedAt: cloudSqlMember.updated_at,
-        };
+        const profile = this.buildDoulaProfilePayload(cloudSqlMember, { reqUserJson });
         res.json({
           success: true,
           profile,
@@ -961,6 +1236,11 @@ export class DoulaController {
         zip_code?: string | null;
         account_status?: string;
         bio?: string | null;
+        gender?: string | null;
+        pronouns?: string | null;
+        race_ethnicity?: string[] | null;
+        race_ethnicity_other?: string | null;
+        other_demographic_details?: string | null;
       } = {};
 
       if (fieldsToUpdate.firstname !== undefined) cloudSqlUpdateData.firstname = String(fieldsToUpdate.firstname);
@@ -976,6 +1256,25 @@ export class DoulaController {
       if (fieldsToUpdate.zip_code !== undefined) cloudSqlUpdateData.zip_code = fieldsToUpdate.zip_code;
       if (fieldsToUpdate.account_status !== undefined) cloudSqlUpdateData.account_status = String(fieldsToUpdate.account_status);
       if (fieldsToUpdate.bio !== undefined) cloudSqlUpdateData.bio = fieldsToUpdate.bio;
+      if (fieldsToUpdate.gender !== undefined) {
+        const g = String(fieldsToUpdate.gender).trim();
+        cloudSqlUpdateData.gender = g.length ? g : null;
+      }
+      if (fieldsToUpdate.pronouns !== undefined) {
+        const p = String(fieldsToUpdate.pronouns).trim();
+        cloudSqlUpdateData.pronouns = p.length ? p : null;
+      }
+      if (fieldsToUpdate.race_ethnicity !== undefined) {
+        cloudSqlUpdateData.race_ethnicity = sanitizeDoulaRaceEthnicity(fieldsToUpdate.race_ethnicity);
+      }
+      if (fieldsToUpdate.race_ethnicity_other !== undefined) {
+        const t = String(fieldsToUpdate.race_ethnicity_other).trim();
+        cloudSqlUpdateData.race_ethnicity_other = t.length ? t : null;
+      }
+      if (fieldsToUpdate.other_demographic_details !== undefined) {
+        const t = String(fieldsToUpdate.other_demographic_details).trim();
+        cloudSqlUpdateData.other_demographic_details = t.length ? t : null;
+      }
 
       const updatedMember = await this.cloudSqlTeamService.updateTeamMember(doulaId, cloudSqlUpdateData);
       if (!updatedMember || updatedMember.role !== 'doula') {
@@ -984,25 +1283,7 @@ export class DoulaController {
       }
 
       const reqUserJson = req.user?.toJSON?.() as any;
-      const profile = {
-        id: updatedMember.id,
-        email: updatedMember.email,
-        firstname: updatedMember.firstname,
-        lastname: updatedMember.lastname,
-        fullName: updatedMember.fullName,
-        role: 'doula',
-        phone_number: updatedMember.phone_number,
-        address: updatedMember.address ?? '',
-        city: updatedMember.city ?? '',
-        state: updatedMember.state ?? '',
-        country: updatedMember.country ?? '',
-        zip_code: updatedMember.zip_code ?? '',
-        bio: updatedMember.bio ?? '',
-        account_status: updatedMember.account_status,
-        profile_picture: updatedMember.profile_picture ?? reqUserJson?.profile_picture ?? null,
-        created_at: updatedMember.created_at,
-        updatedAt: updatedMember.updated_at,
-      };
+      const profile = this.buildDoulaProfilePayload(updatedMember, { reqUserJson });
 
       res.json({
         success: true,
@@ -1014,5 +1295,41 @@ export class DoulaController {
         error: error.message || 'Failed to update profile'
       });
     }
+  }
+
+  private buildDoulaProfilePayload(
+    member: TeamMemberDto,
+    opts: { reqUserJson?: Record<string, unknown>; profilePictureFallback?: string | null } = {}
+  ) {
+    const reqUserJson = opts.reqUserJson;
+    const race = Array.isArray(member.race_ethnicity) ? member.race_ethnicity : [];
+    return {
+      id: member.id,
+      email: member.email,
+      firstname: member.firstname,
+      lastname: member.lastname,
+      fullName: member.fullName,
+      role: 'doula' as const,
+      phone_number: member.phone_number,
+      address: member.address ?? '',
+      city: member.city ?? '',
+      state: member.state ?? '',
+      country: member.country ?? '',
+      zip_code: member.zip_code ?? '',
+      bio: member.bio ?? '',
+      gender: member.gender ?? '',
+      pronouns: member.pronouns ?? '',
+      race_ethnicity: race,
+      race_ethnicity_other: member.race_ethnicity_other ?? '',
+      other_demographic_details: member.other_demographic_details ?? '',
+      account_status: member.account_status,
+      profile_picture:
+        opts.profilePictureFallback ??
+        member.profile_picture ??
+        (reqUserJson?.profile_picture as string | null | undefined) ??
+        null,
+      created_at: member.created_at,
+      updatedAt: member.updated_at,
+    };
   }
 }

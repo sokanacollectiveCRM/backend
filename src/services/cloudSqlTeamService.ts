@@ -18,6 +18,11 @@ export interface TeamMemberDto {
   zip_code: string | null;
   bio?: string | null;
   profile_picture?: string | null;
+  gender?: string | null;
+  pronouns?: string | null;
+  race_ethnicity?: string[] | null;
+  race_ethnicity_other?: string | null;
+  other_demographic_details?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -37,6 +42,11 @@ interface DoulaRow {
   zip_code?: string | null;
   bio?: string | null;
   profile_picture?: string | null;
+  gender?: string | null;
+  pronouns?: string | null;
+  race_ethnicity?: string[] | null;
+  race_ethnicity_other?: string | null;
+  other_demographic_details?: string | null;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -67,6 +77,12 @@ function splitFullName(fullName: string): { firstname: string; lastname: string 
 
 function mapRow(row: DoulaRow): TeamMemberDto {
   const { firstname, lastname } = splitFullName(row.full_name);
+  const race =
+    row.race_ethnicity == null
+      ? null
+      : Array.isArray(row.race_ethnicity)
+        ? [...row.race_ethnicity]
+        : null;
   return {
     id: row.id,
     firstname,
@@ -83,6 +99,11 @@ function mapRow(row: DoulaRow): TeamMemberDto {
     zip_code: row.zip_code ?? null,
     bio: row.bio ?? null,
     profile_picture: row.profile_picture ?? null,
+    gender: row.gender ?? null,
+    pronouns: row.pronouns ?? null,
+    race_ethnicity: race,
+    race_ethnicity_other: row.race_ethnicity_other ?? null,
+    other_demographic_details: row.other_demographic_details ?? null,
     created_at: toIso(row.created_at),
     updated_at: toIso(row.updated_at),
   };
@@ -149,7 +170,9 @@ export class CloudSqlTeamService {
     const pool = getPool();
     const { rows } = await pool.query<DoulaRow>(
       `
-      SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, created_at, updated_at
+      SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture,
+             gender, pronouns, race_ethnicity, race_ethnicity_other, other_demographic_details,
+             created_at, updated_at
       FROM public.doulas
       WHERE id = $1::uuid
       LIMIT 1
@@ -308,6 +331,11 @@ export class CloudSqlTeamService {
       zip_code?: string | null;
       account_status?: string;
       bio?: string | null;
+      gender?: string | null;
+      pronouns?: string | null;
+      race_ethnicity?: string[] | null;
+      race_ethnicity_other?: string | null;
+      other_demographic_details?: string | null;
     }
   ): Promise<TeamMemberDto | null> {
     const existing = await this.getTeamMemberById(id);
@@ -324,6 +352,18 @@ export class CloudSqlTeamService {
     const zipCode = input.zip_code !== undefined ? input.zip_code : (existing.zip_code ?? null);
     const accountStatus = input.account_status?.trim() || existing.account_status || 'approved';
     const bio = input.bio !== undefined ? input.bio : (existing.bio ?? null);
+    const gender = input.gender !== undefined ? input.gender : (existing.gender ?? null);
+    const pronouns = input.pronouns !== undefined ? input.pronouns : (existing.pronouns ?? null);
+    const raceEthnicity =
+      input.race_ethnicity !== undefined ? input.race_ethnicity : (existing.race_ethnicity ?? null);
+    const raceEthnicityOther =
+      input.race_ethnicity_other !== undefined
+        ? input.race_ethnicity_other
+        : (existing.race_ethnicity_other ?? null);
+    const otherDemographicDetails =
+      input.other_demographic_details !== undefined
+        ? input.other_demographic_details
+        : (existing.other_demographic_details ?? null);
 
     if (existing.role === 'admin') {
       const { rows } = await getPool().query<AdminRow>(
@@ -354,11 +394,35 @@ export class CloudSqlTeamService {
           zip_code = $8,
           account_status = $9,
           bio = $10,
+          gender = $11,
+          pronouns = $12,
+          race_ethnicity = $13,
+          race_ethnicity_other = $14,
+          other_demographic_details = $15,
           updated_at = NOW()
-      WHERE id = $11::uuid
-      RETURNING id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, created_at, updated_at
+      WHERE id = $16::uuid
+      RETURNING id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture,
+                gender, pronouns, race_ethnicity, race_ethnicity_other, other_demographic_details,
+                created_at, updated_at
       `,
-      [fullName, email, phone, address, city, state, country, zipCode, accountStatus, bio, id]
+      [
+        fullName,
+        email,
+        phone,
+        address,
+        city,
+        state,
+        country,
+        zipCode,
+        accountStatus,
+        bio,
+        gender,
+        pronouns,
+        raceEthnicity,
+        raceEthnicityOther,
+        otherDemographicDetails,
+        id,
+      ]
     );
     return rows[0] ? mapRow(rows[0]) : null;
   }

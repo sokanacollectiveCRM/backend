@@ -100,7 +100,19 @@ export function getAllowedOrigins(): string[] {
     optionalEnv('FRONTEND_URL'),
     optionalEnv('FRONTEND_URL_DEV'),
   ].filter(Boolean) as string[];
-  const dev = IS_PRODUCTION ? [] : ['http://localhost:3001', 'http://localhost:3000', 'http://localhost:3002', 'http://localhost:5050'];
+  // Include Vite (5173) and preview (4173) so CRM frontend can call API from npm run dev / preview.
+  const dev = IS_PRODUCTION
+    ? []
+    : [
+        'http://localhost:3001',
+        'http://localhost:3000',
+        'http://localhost:3002',
+        'http://localhost:5050',
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+        'http://localhost:4173',
+        'http://127.0.0.1:4173',
+      ];
   const explicit = [...fromOrigin, ...legacy, ...dev];
   // Production fallback: allow known deploy URLs when no env vars set
   const prodDefaults = IS_PRODUCTION && explicit.length === 0

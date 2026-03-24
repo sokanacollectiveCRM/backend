@@ -176,6 +176,42 @@ export class SupabaseActivityRepository implements ActivityRepository {
     return data.map(row => this.mapToActivity(row));
   }
 
+  async updateActivityMetadataMerge(
+    activityId: string,
+    clientId: string,
+    metadataPatch: Record<string, unknown>
+  ): Promise<Activity | null> {
+    const { data: existing, error: fetchError } = await this.supabaseClient
+      .from('client_activities')
+      .select('id, client_id, metadata')
+      .eq('id', activityId)
+      .eq('client_id', clientId)
+      .maybeSingle();
+
+    if (fetchError || !existing) {
+      return null;
+    }
+
+    const merged = {
+      ...((existing.metadata as Record<string, unknown>) || {}),
+      ...metadataPatch,
+    };
+
+    const { data, error } = await this.supabaseClient
+      .from('client_activities')
+      .update({ metadata: merged })
+      .eq('id', activityId)
+      .eq('client_id', clientId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Failed to update activity metadata: ${error?.message || 'unknown'}`);
+    }
+
+    return this.mapToActivity(data);
+  }
+
   private mapToActivity(data: any): Activity {
     return new Activity(
       data.id,
