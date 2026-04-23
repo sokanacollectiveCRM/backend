@@ -42,10 +42,22 @@ import {
 export class ClientController {
   private static readonly BILLING_PAYMENT_METHODS = new Set([
     'Self-Pay',
+    'Commercial Insurance',
     'Private Insurance',
     'Medicaid',
     'Other',
   ]);
+
+  private static readonly BILLING_FIELDS = new Set([
+    'payment_method',
+    'insurance',
+    'insurance_provider',
+    'insurance_member_id',
+    'policy_number',
+    'self_pay_card_info',
+  ]);
+
+  private static readonly ZIP_CODE_REGEX = /^(?:\d{5})(?:-\d{4})?$/;
 
   private clientUseCase: ClientUseCase;
   private assignmentRepository: SupabaseAssignmentRepository;
@@ -79,7 +91,10 @@ export class ClientController {
     country: 80,
   };
 
-  private sanitizeProfilePatchFields(input: Record<string, any>): { ok: true; value: Record<string, any> } | { ok: false; message: string } {
+  private sanitizeProfilePatchFields(
+    input: Record<string, any>,
+    options: { requireZipCode?: boolean } = {}
+  ): { ok: true; value: Record<string, any> } | { ok: false; message: string } {
     const normalized = { ...input };
     for (const [field, maxLen] of Object.entries(ClientController.PROFILE_FIELD_RULES)) {
       if (!(field in normalized)) continue;
@@ -88,10 +103,14 @@ export class ClientController {
         normalized[field] = null;
         continue;
       }
-      if (typeof raw !== 'string') {
+      const stringValue =
+        field === 'zip_code' && typeof raw === 'number' && Number.isFinite(raw)
+          ? String(raw)
+          : raw;
+      if (typeof stringValue !== 'string') {
         return { ok: false, message: `${field} must be a string` };
       }
-      const trimmed = raw.trim();
+      const trimmed = stringValue.trim();
       if (trimmed.length === 0) {
         normalized[field] = null;
         continue;
@@ -99,9 +118,47 @@ export class ClientController {
       if (trimmed.length > maxLen) {
         return { ok: false, message: `${field} exceeds max length ${maxLen}` };
       }
+      if (field === 'zip_code') {
+        if (trimmed.length === 0) {
+          if (options.requireZipCode) {
+            return { ok: false, message: 'zip_code is required when updating address information' };
+          }
+          normalized[field] = null;
+          continue;
+        }
+        if (!ClientController.ZIP_CODE_REGEX.test(trimmed)) {
+          return { ok: false, message: 'zip_code must be a valid ZIP code' };
+        }
+      }
       normalized[field] = trimmed;
     }
     return { ok: true, value: normalized };
+  }
+
+  private extractBillingPatch(input: Record<string, any>): Record<string, any> {
+    const billing: Record<string, any> = {};
+    for (const [key, value] of Object.entries(input)) {
+      if (ClientController.BILLING_FIELDS.has(key)) {
+        billing[key] = value;
+      }
+    }
+    return billing;
+  }
+
+  private stripBillingPatch(input: Record<string, any>): Record<string, any> {
+    const profile: Record<string, any> = {};
+    for (const [key, value] of Object.entries(input)) {
+      if (!ClientController.BILLING_FIELDS.has(key)) {
+        profile[key] = value;
+      }
+    }
+    return profile;
+  }
+
+  private hasProfileAddressFields(input: Record<string, any>): boolean {
+    return ['address_line1', 'address', 'city', 'state', 'country'].some((field) =>
+      Object.prototype.hasOwnProperty.call(input, field)
+    );
   }
 
   private trimNullableString(value: unknown): string | null | undefined {
@@ -114,7 +171,7 @@ export class ClientController {
 
   private normalizeBillingRow(row: Record<string, any> | null | undefined): Record<string, any> | null {
     if (!row) return null;
-    return {
+    const normalized: Record<string, any> = {
       payment_method: row.payment_method ?? null,
       insurance_provider: row.insurance_provider ?? null,
       insurance_member_id: row.insurance_member_id ?? null,
@@ -122,6 +179,10 @@ export class ClientController {
       self_pay_card_info: row.self_pay_card_info ?? null,
       updated_at: row.updated_at ?? null,
     };
+    if (row.insurance != null) {
+      normalized.insurance = row.insurance;
+    }
+    return normalized;
   }
 
   private validateBillingPayload(input: Record<string, any>): { value?: Record<string, any>; message?: string } {
@@ -134,26 +195,31 @@ export class ClientController {
       return { message: 'payment_method is required' };
     }
     if (!ClientController.BILLING_PAYMENT_METHODS.has(paymentMethodRaw)) {
-      return { message: 'payment_method must be one of: Self-Pay, Private Insurance, Medicaid, Other' };
+      return { message: 'payment_method must be one of: Self-Pay, Commercial Insurance, Private Insurance, Medicaid, Other' };
     }
 
     const insuranceProvider = this.trimNullableString(input.insurance_provider);
     const insuranceMemberId = this.trimNullableString(input.insurance_member_id);
     const policyNumber = this.trimNullableString(input.policy_number);
     const selfPayCardInfo = this.trimNullableString(input.self_pay_card_info);
+    const insurance = this.trimNullableString(input.insurance);
+
+    const billingValue: Record<string, any> = {
+      payment_method: paymentMethodRaw,
+      insurance_provider: null,
+      insurance_member_id: null,
+      policy_number: null,
+      self_pay_card_info: null,
+    };
+    if (insurance != null) {
+      billingValue.insurance = insurance;
+    }
 
     if (paymentMethodRaw === 'Self-Pay') {
-      if (!selfPayCardInfo) {
-        return { message: 'self_pay_card_info is required when payment_method is Self-Pay' };
-      }
-
       return {
         value: {
-          payment_method: paymentMethodRaw,
-          insurance_provider: null,
-          insurance_member_id: null,
-          policy_number: null,
-          self_pay_card_info: selfPayCardInfo,
+          ...billingValue,
+          self_pay_card_info: selfPayCardInfo ?? null,
         },
       };
     }
@@ -161,14 +227,19 @@ export class ClientController {
     if (!insuranceProvider) {
       return { message: 'insurance_provider is required when payment_method is not Self-Pay' };
     }
+    if (!insuranceMemberId) {
+      return { message: 'insurance_member_id is required when payment_method is not Self-Pay' };
+    }
+    if (!policyNumber) {
+      return { message: 'policy_number is required when payment_method is not Self-Pay' };
+    }
 
     return {
       value: {
-        payment_method: paymentMethodRaw,
+        ...billingValue,
         insurance_provider: insuranceProvider,
-        insurance_member_id: insuranceMemberId ?? null,
-        policy_number: policyNumber ?? null,
-        self_pay_card_info: null,
+        insurance_member_id: insuranceMemberId,
+        policy_number: policyNumber,
       },
     };
   }
@@ -292,6 +363,40 @@ export class ClientController {
 
   private static isClientDocumentsTableMissing(error: unknown): boolean {
     return ClientController.isTableMissing(error, 'client_documents');
+  }
+
+  private async hasInsuranceCardDocument(clientId: string): Promise<boolean> {
+    const documents = await this.getClientDocumentRepository().getDocumentsByClientId(clientId);
+    return documents.some(
+      (document) => document.documentType === CLIENT_DOCUMENT_TYPE_INSURANCE_CARD
+    );
+  }
+
+  private async requireInsuranceCardForBilling(clientId: string, res: Response): Promise<boolean> {
+    try {
+      const hasInsuranceCard = await this.hasInsuranceCardDocument(clientId);
+      if (!hasInsuranceCard) {
+        res.status(400).json(
+          ApiResponse.error(
+            'An insurance card upload is required before saving insurance billing',
+            'VALIDATION_ERROR'
+          )
+        );
+        return false;
+      }
+      return true;
+    } catch (error) {
+      if (ClientController.isClientDocumentsTableMissing(error)) {
+        res.status(503).json(
+          ApiResponse.error(
+            'Client documents feature not available until client_documents migration is applied',
+            'SERVICE_UNAVAILABLE'
+          )
+        );
+        return false;
+      }
+      throw error;
+    }
   }
 
   async uploadMyDocument(req: AuthRequest, res: Response): Promise<void> {
@@ -878,7 +983,18 @@ export class ClientController {
     try {
       // ── Step 0: Normalize + validate profile/address field lengths ──
       const normalizedRaw = normalizeClientPatch(updateData);
-      const sanitized = this.sanitizeProfilePatchFields(normalizedRaw);
+      const billingPatch = this.extractBillingPatch(normalizedRaw);
+      const profilePatch = this.stripBillingPatch(normalizedRaw);
+      const billingFieldsPresent = Object.keys(billingPatch).length > 0;
+
+      const profilePatchForValidation = { ...profilePatch };
+      if (billingFieldsPresent && !this.hasProfileAddressFields(profilePatchForValidation)) {
+        delete profilePatchForValidation.zip_code;
+      }
+
+      const sanitized = this.sanitizeProfilePatchFields(profilePatchForValidation, {
+        requireZipCode: this.hasProfileAddressFields(profilePatchForValidation),
+      });
       if (!sanitized.ok) {
         res.status(400).json(ApiResponse.error((sanitized as { ok: false; message: string }).message, 'VALIDATION_ERROR'));
         return;
@@ -914,6 +1030,39 @@ export class ClientController {
         logger.warn({ clientId: id, role: req.user?.role }, '[Client] unauthorized PHI update attempt');
         res.status(403).json(ApiResponse.error('Not authorized to update PHI fields', 'FORBIDDEN'));
         return;
+      }
+
+      // Billing updates are handled independently from profile/PHI writes so
+      // stray profile fields do not block a valid billing-only change.
+      let billingWriteResult: Record<string, any> | null = null;
+      if (billingFieldsPresent) {
+        const validatedBilling = this.validateBillingPayload(billingPatch);
+        if (!validatedBilling.value) {
+          res.status(400).json(ApiResponse.error(validatedBilling.message || 'Invalid request body', 'VALIDATION_ERROR'));
+          return;
+        }
+
+        const billingAccess = await this.ensureBillingAccess(req, targetClientId);
+        if (billingAccess.status) {
+          res.status(billingAccess.status).json(billingAccess.body);
+          return;
+        }
+
+        if (validatedBilling.value.payment_method !== 'Self-Pay') {
+          const hasInsuranceCard = await this.requireInsuranceCardForBilling(targetClientId, res);
+          if (!hasInsuranceCard) {
+            return;
+          }
+        }
+
+        billingWriteResult = await this.clientRepository.updateClientBilling?.(targetClientId, validatedBilling.value)
+          ?? await this.clientRepository.updateClientOperational?.(targetClientId, validatedBilling.value)
+          ?? null;
+
+        if (!billingWriteResult) {
+          res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
+          return;
+        }
       }
 
       // ── Step 3a: Write operational fields (Supabase or Cloud SQL) ──
@@ -967,6 +1116,9 @@ export class ClientController {
 
       // Merge PHI for the response (if authorized / self client view)
       let response: Record<string, any> = { ...dto };
+      if (billingWriteResult) {
+        response = { ...response, ...this.normalizeBillingRow(billingWriteResult) };
+      }
       if (req.user?.role === 'client') {
         try {
           const fullClient = await this.clientRepository.findClientDetailedById(targetClientId);
@@ -1231,10 +1383,37 @@ export class ClientController {
         return;
       }
 
-      const validated = this.validateBillingPayload(req.body);
+      const billingPatch = this.extractBillingPatch(req.body || {});
+      const validated = this.validateBillingPayload(billingPatch);
       if (!validated.value) {
         res.status(400).json(ApiResponse.error(validated.message || 'Invalid request body', 'VALIDATION_ERROR'));
         return;
+      }
+
+      if (validated.value.payment_method !== 'Self-Pay') {
+        try {
+          const hasInsuranceCard = await this.hasInsuranceCardDocument(resolved.clientId);
+          if (!hasInsuranceCard) {
+            res.status(400).json(
+              ApiResponse.error(
+                'An insurance card upload is required before saving insurance billing',
+                'VALIDATION_ERROR'
+              )
+            );
+            return;
+          }
+        } catch (error) {
+          if (ClientController.isClientDocumentsTableMissing(error)) {
+            res.status(503).json(
+              ApiResponse.error(
+                'Client documents feature not available until client_documents migration is applied',
+                'SERVICE_UNAVAILABLE'
+              )
+            );
+            return;
+          }
+          throw error;
+        }
       }
 
       const updated = await this.clientRepository.updateClientBilling?.(resolved.clientId, validated.value)

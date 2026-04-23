@@ -23,6 +23,7 @@ export type ClientOperationalRow = {
   requested_at: string | null;
   updated_at: string | null;
   payment_method?: string | null;
+  insurance?: string | null;
   insurance_provider?: string | null;
   insurance_member_id?: string | null;
   policy_number?: string | null;

@@ -73,6 +73,13 @@ const httpLogger = pinoHttp({
       'req.body.email',
       'req.body.password',
       'req.body.session_token',
+      'req.body.token',
+      'req.body.intuit_token',
+      'req.body.cardToken',
+      'req.body.card.number',
+      'req.body.card.cvc',
+      'req.body.card.expMonth',
+      'req.body.card.expYear',
       'req.body.address',
       'req.body.ssn',
       'req.body.phone',
@@ -124,9 +131,13 @@ if (FEATURE_QUICKBOOKS) {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const quickbookRoutes = require('./routes/quickbooksRoutes').default;
   const customersRoutes = require('./routes/customersRoutes').default;
+  const paymentMethodRoutes = require('./routes/paymentMethodRoutes').default;
   app.use('/quickbooks', asMiddleware(quickbookRoutes));
   app.use('/api/quickbooks', asMiddleware(quickbookRoutes));
   app.use('/quickbooks/customers', asMiddleware(customersRoutes));
+  app.use('/api/payment-methods', asMiddleware(paymentMethodRoutes));
+  app.use('/api/quickbooks/payment-methods', asMiddleware(paymentMethodRoutes));
+  app.use('/quickbooks/payment-methods', asMiddleware(paymentMethodRoutes));
 }
 
 app.use('/users', asMiddleware(userRoutes));

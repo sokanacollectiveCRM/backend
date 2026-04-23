@@ -17,7 +17,11 @@ const OPERATIONAL_COLUMNS = `
   id, client_number, first_name, last_name, email, phone AS phone_number, address_line1, bio, city, state, zip_code, country, status, service_needed,
   portal_status, invited_at, last_invite_sent_at, invite_sent_count,
   requested_at, updated_at,
-  payment_method, insurance_provider, insurance_member_id, policy_number, self_pay_card_info
+  payment_method, insurance, insurance_provider, insurance_member_id, policy_number, self_pay_card_info
+`;
+
+const BILLING_COLUMNS = `
+  payment_method, insurance, insurance_provider, insurance_member_id, policy_number, self_pay_card_info, updated_at
 `;
 
 /** Map Cloud SQL clients row (no users join) to Client entity. */
@@ -45,6 +49,7 @@ function mapRowToClient(row: Record<string, any>): Client {
     preferred_contact_method: row.preferred_contact_method,
     preferred_name: row.preferred_name,
     payment_method: row.payment_method,
+    insurance: row.insurance,
     insurance_provider: row.insurance_provider,
     insurance_member_id: row.insurance_member_id,
     policy_number: row.policy_number,
@@ -69,7 +74,6 @@ function mapRowToClient(row: Record<string, any>): Client {
     race_ethnicity: row.race_ethnicity,
     primary_language: row.primary_language,
     client_age_range: row.client_age_range,
-    insurance: row.insurance,
     relationship_status: row.relationship_status,
     referral_source: row.referral_source,
     referral_name: row.referral_name,
@@ -336,12 +340,17 @@ export class CloudSqlClientRepository implements ClientRepository {
   }
 
   async getClientBilling(clientId: string): Promise<ClientOperationalRow | null> {
-    return this.getClientById(clientId);
+    const { rows } = await queryCloudSql<ClientOperationalRow>(
+      `SELECT ${BILLING_COLUMNS} FROM phi_clients WHERE id = $1`,
+      [clientId]
+    );
+    return rows[0] || null;
   }
 
   async updateClientBilling(clientId: string, fields: Record<string, any>): Promise<ClientOperationalRow | null> {
     const allowed = new Set([
       'payment_method',
+      'insurance',
       'insurance_provider',
       'insurance_member_id',
       'policy_number',
