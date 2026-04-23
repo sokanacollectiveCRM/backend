@@ -28,6 +28,13 @@ jest.mock('@supabase/supabase-js', () => ({
   }),
 }));
 
+const mockQuery = jest.fn();
+jest.mock('../db/cloudSqlPool', () => ({
+  getPool: jest.fn(() => ({
+    query: mockQuery,
+  })),
+}));
+
 describe('Request Endpoint Tests', () => {
   let app: express.Application;
   let requestFormController: RequestFormController;
@@ -73,6 +80,16 @@ describe('Request Endpoint Tests', () => {
     health_notes: 'Gestational diabetes',
 
     // Step 6: Payment Info
+    payment_method: 'Commercial Insurance',
+    insurance_provider: 'Blue Cross Blue Shield',
+    insurance_member_id: 'MEM-12345',
+    policy_number: 'POL-67890',
+    insurance_phone_number: '800-555-1212',
+    has_secondary_insurance: false,
+    secondary_insurance_provider: null,
+    secondary_insurance_member_id: null,
+    secondary_policy_number: null,
+    self_pay_card_info: null,
     annual_income: IncomeLevel.FROM_45000_TO_64999,
     service_needed: ServiceTypes.LABOR_SUPPORT,
     service_specifics: 'Need overnight support',
@@ -206,7 +223,9 @@ describe('Request Endpoint Tests', () => {
         city: 'Anytown',
         state: STATE.CA,
         zip_code: '90210',
-        service_needed: ServiceTypes.LABOR_SUPPORT
+        service_needed: ServiceTypes.LABOR_SUPPORT,
+        payment_method: 'Self-Pay',
+        self_pay_card_info: 'Visa ending 4242',
       };
 
       jest.spyOn(requestFormService, 'newForm').mockResolvedValue(minimalData);
@@ -237,7 +256,7 @@ describe('Request Endpoint Tests', () => {
 
       expect(mockSendMail).toHaveBeenCalledWith(
         expect.objectContaining({
-          to: 'jerrybony5@gmail.com',
+          to: 'hello@sokanacollective.com',
           subject: 'New Lead Submitted via Request Form'
         })
       );
@@ -449,7 +468,102 @@ describe('Request Endpoint Tests', () => {
           firstname: 'Jane',
           lastname: 'Doe',
           email: 'jane.doe@example.com',
-          service_needed: ServiceTypes.LABOR_SUPPORT
+          service_needed: ServiceTypes.LABOR_SUPPORT,
+          payment_method: 'Commercial Insurance',
+          insurance_provider: 'Blue Cross Blue Shield',
+          insurance_member_id: 'MEM-12345',
+          policy_number: 'POL-67890',
+          insurance_phone_number: '800-555-1212',
+          has_secondary_insurance: false,
+          self_pay_card_info: null,
+        })
+      );
+    });
+
+    it.each([
+      ['Commercial Insurance', 'Blue Cross Blue Shield'],
+      ['Private Insurance', 'Aetna'],
+      ['Medicaid', 'State Medicaid Plan'],
+    ])('should accept %s submissions and persist insurance billing fields', async (paymentMethod, provider) => {
+      const payload = {
+        ...mockFormData,
+        payment_method: paymentMethod,
+        insurance_provider: provider,
+        insurance_member_id: 'MEM-12345',
+        policy_number: 'POL-67890',
+        insurance_phone_number: '800-555-1212',
+        insurance: provider,
+        has_secondary_insurance: false,
+        secondary_insurance_provider: null,
+        secondary_insurance_member_id: null,
+        secondary_policy_number: null,
+        self_pay_card_info: null,
+      };
+
+      jest.spyOn(requestFormRepository, 'saveData').mockResolvedValue(payload as any);
+
+      await expect(requestFormService.newForm(payload)).resolves.toBeDefined();
+      expect(requestFormRepository.saveData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payment_method: paymentMethod,
+          insurance_provider: provider,
+          insurance_member_id: 'MEM-12345',
+          policy_number: 'POL-67890',
+        })
+      );
+    });
+
+    it('should accept self-pay submissions and null out insurance fields', async () => {
+      const payload = {
+        ...mockFormData,
+        payment_method: 'Self-Pay',
+        insurance_provider: 'Should be cleared',
+        insurance_member_id: 'Should be cleared',
+        policy_number: 'Should be cleared',
+        insurance_phone_number: '800-555-1212',
+        insurance: 'Should be cleared',
+        self_pay_card_info: 'Visa ending 4242',
+      };
+
+      jest.spyOn(requestFormRepository, 'saveData').mockResolvedValue(payload as any);
+
+      await expect(requestFormService.newForm(payload)).resolves.toBeDefined();
+      expect(requestFormRepository.saveData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payment_method: 'Self-Pay',
+          insurance: null,
+          insurance_provider: null,
+          insurance_member_id: null,
+          policy_number: null,
+          insurance_phone_number: null,
+          has_secondary_insurance: false,
+          secondary_insurance_provider: null,
+          secondary_insurance_member_id: null,
+          secondary_policy_number: null,
+          self_pay_card_info: 'Visa ending 4242',
+        })
+      );
+    });
+
+    it('should require secondary insurance fields when the secondary path is enabled', async () => {
+      const payload = {
+        ...mockFormData,
+        payment_method: 'Commercial Insurance',
+        has_secondary_insurance: true,
+        secondary_insurance_provider: 'Kaiser Secondary',
+        secondary_insurance_member_id: 'SEC-12345',
+        secondary_policy_number: 'SEC-POL-1',
+      };
+
+      jest.spyOn(requestFormRepository, 'saveData').mockResolvedValue(payload as any);
+
+      await expect(requestFormService.newForm(payload)).resolves.toBeDefined();
+      expect(requestFormRepository.saveData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          has_secondary_insurance: true,
+          secondary_insurance_provider: 'Kaiser Secondary',
+          secondary_insurance_member_id: 'SEC-12345',
+          secondary_policy_number: 'SEC-POL-1',
         })
       );
     });
@@ -458,83 +572,120 @@ describe('Request Endpoint Tests', () => {
   // NEW: Repository Layer Tests
   describe('RequestFormRepository Tests', () => {
     it('should save form data to database successfully', async () => {
-      const mockSupabaseClient = {
-        from: jest.fn().mockReturnThis(),
-        insert: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({
-          data: mockFormData,
-          error: null
-        })
-      };
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ client_number: 'CL-00001' }],
+      });
 
-      const repository = new RequestFormRepository(mockSupabaseClient as any);
+      const repository = new RequestFormRepository({} as any);
       const result = await repository.saveData(mockFormData);
 
-      expect(result).toEqual(mockFormData);
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('client_info');
-      expect(mockSupabaseClient.insert).toHaveBeenCalledWith([
-        expect.objectContaining({
-          firstname: 'Jane',
-          lastname: 'Doe',
-          email: 'jane.doe@example.com',
-          status: 'lead'
-        })
-      ]);
+      expect(result).toEqual(expect.objectContaining({
+        firstname: 'Jane',
+        lastname: 'Doe',
+        email: 'jane.doe@example.com',
+        payment_method: 'Commercial Insurance',
+        insurance_provider: 'Blue Cross Blue Shield',
+      }));
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO phi_clients'),
+        expect.arrayContaining([
+          expect.any(String),
+          'Jane',
+          'Doe',
+          'jane.doe@example.com',
+        ])
+      );
     });
 
     it('should handle database errors gracefully', async () => {
-      const mockSupabaseClient = {
-        from: jest.fn().mockReturnThis(),
-        insert: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({
-          data: null,
-          error: { message: 'Database connection failed' }
-        })
-      };
-
-      const repository = new RequestFormRepository(mockSupabaseClient as any);
+      mockQuery.mockRejectedValueOnce(new Error('Database connection failed'));
+      const repository = new RequestFormRepository({} as any);
 
       await expect(repository.saveData(mockFormData)).rejects.toThrow(
-        'Database insertion failed: Database connection failed'
+        'Database connection failed'
       );
     });
 
     it('should include all form fields in database insert', async () => {
-      const mockSupabaseClient = {
-        from: jest.fn().mockReturnThis(),
-        insert: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({
-          data: mockFormData,
-          error: null
-        })
-      };
-
-      const repository = new RequestFormRepository(mockSupabaseClient as any);
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ client_number: 'CL-00001' }],
+      });
+      const repository = new RequestFormRepository({} as any);
       await repository.saveData(mockFormData);
 
-      const insertCall = mockSupabaseClient.insert.mock.calls[0][0][0];
+      const [sql, params] = mockQuery.mock.calls[0];
 
       // Check that all form fields are included
-      expect(insertCall).toHaveProperty('firstname');
-      expect(insertCall).toHaveProperty('lastname');
-      expect(insertCall).toHaveProperty('email');
-      expect(insertCall).toHaveProperty('phone_number');
-      expect(insertCall).toHaveProperty('address');
-      expect(insertCall).toHaveProperty('city');
-      expect(insertCall).toHaveProperty('state');
-      expect(insertCall).toHaveProperty('zip_code');
-      expect(insertCall).toHaveProperty('service_needed');
-      expect(insertCall).toHaveProperty('status', 'lead');
+      expect(sql).toContain('insurance_phone_number');
+      expect(sql).toContain('has_secondary_insurance');
+      expect(sql).toContain('secondary_insurance_provider');
+      expect(sql).toContain('secondary_insurance_member_id');
+      expect(sql).toContain('secondary_policy_number');
+      expect(sql).toContain('self_pay_card_info');
+      expect(params[21]).toBe('Blue Cross Blue Shield');
+      expect(params[22]).toBe('Commercial Insurance');
+      expect(params[23]).toBe('Blue Cross Blue Shield');
+      expect(params[24]).toBe('MEM-12345');
+      expect(params[25]).toBe('POL-67890');
+      expect(params[26]).toBe('800-555-1212');
+      expect(params[27]).toBe(false);
+      expect(params[28]).toBeNull();
+      expect(params[29]).toBeNull();
+      expect(params[30]).toBeNull();
+      expect(params[31]).toBeNull();
+      expect(params[32]).toBe('lead');
+      expect(params[33]).toBe(mockFormData.service_needed);
+      expect(params[34]).toBe('not_invited');
+      expect(params[35]).toEqual(expect.any(String));
+    });
 
-      // Check optional fields
-      expect(insertCall).toHaveProperty('pronouns');
-      expect(insertCall).toHaveProperty('home_phone');
-      expect(insertCall).toHaveProperty('health_history');
-      expect(insertCall).toHaveProperty('services_interested');
-      expect(insertCall).toHaveProperty('demographics_multi');
+    it('should null out insurance fields for Self-Pay submissions before persisting and returning the record', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ client_number: 'CL-00002' }],
+      });
+      const repository = new RequestFormRepository({} as any);
+
+      const result = await repository.saveData({
+        ...mockFormData,
+        payment_method: 'Self-Pay',
+        insurance: 'Should be cleared',
+        insurance_provider: 'Should be cleared',
+        insurance_member_id: 'Should be cleared',
+        policy_number: 'Should be cleared',
+        insurance_phone_number: '800-555-1212',
+        has_secondary_insurance: true,
+        secondary_insurance_provider: 'Should be cleared',
+        secondary_insurance_member_id: 'Should be cleared',
+        secondary_policy_number: 'Should be cleared',
+        self_pay_card_info: 'Visa ending 4242',
+      });
+
+      expect(result).toEqual(expect.objectContaining({
+        payment_method: 'Self-Pay',
+        insurance: null,
+        insurance_provider: null,
+        insurance_member_id: null,
+        policy_number: null,
+        insurance_phone_number: null,
+        has_secondary_insurance: false,
+        secondary_insurance_provider: null,
+        secondary_insurance_member_id: null,
+        secondary_policy_number: null,
+        self_pay_card_info: 'Visa ending 4242',
+      }));
+
+      const [, params] = mockQuery.mock.calls[0];
+      expect(params[21]).toBeNull();
+      expect(params[22]).toBe('Self-Pay');
+      expect(params[23]).toBeNull();
+      expect(params[24]).toBeNull();
+      expect(params[25]).toBeNull();
+      expect(params[26]).toBeNull();
+      expect(params[27]).toBe(false);
+      expect(params[28]).toBeNull();
+      expect(params[29]).toBeNull();
+      expect(params[30]).toBeNull();
+      expect(params[31]).toBe('Visa ending 4242');
     });
   });
 

@@ -10,6 +10,44 @@ export class RequestFormRepository {
         this.supabaseClient = supabaseClient;
     }
 
+    private normalizeBillingFields(formData: RequestFormData): Pick<
+        RequestFormData,
+        | 'insurance'
+        | 'payment_method'
+        | 'insurance_provider'
+        | 'insurance_member_id'
+        | 'policy_number'
+        | 'insurance_phone_number'
+        | 'has_secondary_insurance'
+        | 'secondary_insurance_provider'
+        | 'secondary_insurance_member_id'
+        | 'secondary_policy_number'
+        | 'self_pay_card_info'
+    > {
+        const paymentMethod = typeof formData.payment_method === 'string'
+            ? formData.payment_method.trim()
+            : formData.payment_method ?? null;
+        const isSelfPay = paymentMethod === 'Self-Pay';
+        const hasSecondaryInsurance = !isSelfPay && formData.has_secondary_insurance === true;
+
+        return {
+            payment_method: paymentMethod ?? null,
+            insurance: isSelfPay ? null : formData.insurance ?? null,
+            insurance_provider: isSelfPay ? null : formData.insurance_provider ?? null,
+            insurance_member_id: isSelfPay ? null : formData.insurance_member_id ?? null,
+            policy_number: isSelfPay ? null : formData.policy_number ?? null,
+            insurance_phone_number: isSelfPay ? null : formData.insurance_phone_number ?? null,
+            has_secondary_insurance: isSelfPay ? false : (formData.has_secondary_insurance ?? null),
+            secondary_insurance_provider:
+                isSelfPay || !hasSecondaryInsurance ? null : formData.secondary_insurance_provider ?? null,
+            secondary_insurance_member_id:
+                isSelfPay || !hasSecondaryInsurance ? null : formData.secondary_insurance_member_id ?? null,
+            secondary_policy_number:
+                isSelfPay || !hasSecondaryInsurance ? null : formData.secondary_policy_number ?? null,
+            self_pay_card_info: isSelfPay ? formData.self_pay_card_info ?? null : null,
+        };
+    }
+
     async saveData(formData: RequestFormData): Promise<RequestFormResponse> {
         try {
             const id = randomUUID();
@@ -17,6 +55,7 @@ export class RequestFormRepository {
             const dueDate = formData.due_date
                 ? new Date(formData.due_date).toISOString().slice(0, 10)
                 : null;
+            const billingFields = this.normalizeBillingFields(formData);
 
             const insertSql = `
                 INSERT INTO phi_clients (
@@ -43,6 +82,16 @@ export class RequestFormRepository {
                     race_ethnicity,
                     client_age_range,
                     insurance,
+                    payment_method,
+                    insurance_provider,
+                    insurance_member_id,
+                    policy_number,
+                    insurance_phone_number,
+                    has_secondary_insurance,
+                    secondary_insurance_provider,
+                    secondary_insurance_member_id,
+                    secondary_policy_number,
+                    self_pay_card_info,
                     status,
                     service_needed,
                     portal_status,
@@ -51,7 +100,7 @@ export class RequestFormRepository {
                     $1,
                     'CL-' || LPAD(nextval('phi_clients_client_number_seq')::text, 5, '0'),
                     $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                    $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
+                    $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36
                 )
                 RETURNING client_number
             `;
@@ -78,7 +127,17 @@ export class RequestFormRepository {
                 formData.number_of_babies ?? null,
                 formData.race_ethnicity || null,
                 formData.client_age_range || null,
-                formData.insurance || null,
+                billingFields.insurance,
+                billingFields.payment_method,
+                billingFields.insurance_provider,
+                billingFields.insurance_member_id,
+                billingFields.policy_number,
+                billingFields.insurance_phone_number,
+                billingFields.has_secondary_insurance,
+                billingFields.secondary_insurance_provider,
+                billingFields.secondary_insurance_member_id,
+                billingFields.secondary_policy_number,
+                billingFields.self_pay_card_info,
                 'lead',
                 formData.service_needed,
                 'not_invited',
@@ -142,7 +201,17 @@ export class RequestFormRepository {
                 race_ethnicity: formData.race_ethnicity,
                 primary_language: formData.primary_language,
                 client_age_range: formData.client_age_range,
-                insurance: formData.insurance,
+                insurance: billingFields.insurance,
+                payment_method: billingFields.payment_method,
+                insurance_provider: billingFields.insurance_provider,
+                insurance_member_id: billingFields.insurance_member_id,
+                policy_number: billingFields.policy_number,
+                insurance_phone_number: billingFields.insurance_phone_number,
+                has_secondary_insurance: billingFields.has_secondary_insurance,
+                secondary_insurance_provider: billingFields.secondary_insurance_provider,
+                secondary_insurance_member_id: billingFields.secondary_insurance_member_id,
+                secondary_policy_number: billingFields.secondary_policy_number,
+                self_pay_card_info: billingFields.self_pay_card_info,
                 demographics_multi: formData.demographics_multi,
             };
 

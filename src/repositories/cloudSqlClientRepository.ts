@@ -16,12 +16,13 @@ import { NotFoundError } from '../domains/errors';
 const OPERATIONAL_COLUMNS = `
   id, client_number, first_name, last_name, email, phone AS phone_number, address_line1, bio, city, state, zip_code, country, status, service_needed,
   portal_status, invited_at, last_invite_sent_at, invite_sent_count,
-  requested_at, updated_at,
-  payment_method, insurance, insurance_provider, insurance_member_id, policy_number, self_pay_card_info
+  requested_at, updated_at
 `;
 
 const BILLING_COLUMNS = `
-  payment_method, insurance, insurance_provider, insurance_member_id, policy_number, self_pay_card_info, updated_at
+  payment_method, insurance, insurance_provider, insurance_member_id, policy_number, insurance_phone_number,
+  has_secondary_insurance, secondary_insurance_provider, secondary_insurance_member_id, secondary_policy_number,
+  self_pay_card_info, updated_at
 `;
 
 /** Map Cloud SQL clients row (no users join) to Client entity. */
@@ -53,6 +54,11 @@ function mapRowToClient(row: Record<string, any>): Client {
     insurance_provider: row.insurance_provider,
     insurance_member_id: row.insurance_member_id,
     policy_number: row.policy_number,
+    insurance_phone_number: row.insurance_phone_number,
+    has_secondary_insurance: row.has_secondary_insurance,
+    secondary_insurance_provider: row.secondary_insurance_provider,
+    secondary_insurance_member_id: row.secondary_insurance_member_id,
+    secondary_policy_number: row.secondary_policy_number,
     self_pay_card_info: row.self_pay_card_info,
     pronouns: row.pronouns,
     home_type: row.home_type,
@@ -291,7 +297,9 @@ export class CloudSqlClientRepository implements ClientRepository {
       'client_age_range', 'insurance', 'pregnancy_number', 'had_previous_pregnancies',
       'previous_pregnancies_count', 'living_children_count', 'past_pregnancy_experience',
       'birth_outcomes', 'payment_method', 'insurance_provider', 'insurance_member_id',
-      'policy_number', 'self_pay_card_info',
+      'policy_number', 'insurance_phone_number', 'has_secondary_insurance',
+      'secondary_insurance_provider', 'secondary_insurance_member_id', 'secondary_policy_number',
+      'self_pay_card_info',
     ]);
     const columnValues = new Map<string, any>();
     for (const [k, v] of Object.entries(fields)) {
@@ -354,6 +362,11 @@ export class CloudSqlClientRepository implements ClientRepository {
       'insurance_provider',
       'insurance_member_id',
       'policy_number',
+      'insurance_phone_number',
+      'has_secondary_insurance',
+      'secondary_insurance_provider',
+      'secondary_insurance_member_id',
+      'secondary_policy_number',
       'self_pay_card_info',
     ]);
     const setParts: string[] = [];
