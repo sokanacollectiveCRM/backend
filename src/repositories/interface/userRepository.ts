@@ -2,6 +2,7 @@ import type { File as MulterFile } from 'multer';
 import { Client } from '../../entities/Client';
 import { WORK_ENTRY, WORK_ENTRY_ROW } from '../../entities/Hours';
 import { User } from '../../entities/User';
+import { HourType } from '../../utils/hourTypes';
 
 /**
  * UserRepository defines the interface for user data operations
@@ -86,5 +87,10 @@ export interface UserRepository {
   /**
    * Add a new doula work session entry 
    */
-  addNewHours(doula_id: string, client_id: string, start_time: Date, end_time: Date, note: string): Promise<WORK_ENTRY_ROW>;
+  addNewHours(doula_id: string, client_id: string, start_time: Date, end_time: Date, note: string, type: HourType): Promise<WORK_ENTRY_ROW>;
+
+  /**
+   * Update the type for an existing work entry
+   */
+  updateHourType(hourId: string, type: HourType, doulaId?: string): Promise<WORK_ENTRY_ROW | null>;
 }

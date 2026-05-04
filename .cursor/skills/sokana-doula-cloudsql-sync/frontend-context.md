@@ -338,3 +338,246 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 
 ### Action
 - [x] Context updated
+
+## Preflight Update 2026-04-29 (Start backend + Cloud SQL)
+
+### Gate Result
+- `run_preflight`
+
+### Reason
+- `preflight_required_every_task`
+
+### Task
+- Start backend dev server and Cloud SQL proxy for local development.
+
+### Repos Scanned
+- both
+
+### Files Scanned
+- `frontend-crm/src/api/doulas/doulaService.ts`
+- `frontend-crm/src/features/doula-dashboard/DoulaDashboard.tsx`
+- `frontend-crm/src/features/doula-dashboard/components/HoursTab.tsx`
+- `frontend-crm/src/features/doula-dashboard/components/ClientsTab.tsx`
+- `frontend-crm/src/features/doula-dashboard/components/ActivitiesTab.tsx`
+- `frontend-crm/src/features/doula-dashboard/components/DocumentsTab.tsx`
+- `backend/.cursor/handoffs/open/2026-03-11-backend-doula-documents-id-mismatch.md`
+
+### Contract Findings
+- No contract changes needed for starting services.
+
+### Drift Risk
+- None.
+
+### Required Compatibility
+- None.
+
+### Action
+- [x] Context updated
+- [ ] Implementation started
+
+## Preflight Update 2026-04-29 (Cloud SQL doula languages column)
+
+### Gate Result
+- `run_preflight`
+
+### Reason
+- `preflight_required_every_task`
+
+### Task
+- Add Cloud SQL column `public.doulas.languages_other_than_english` (TEXT[]) to persist doula languages.
+
+### Repos Scanned
+- both
+
+### Files Scanned
+- `backend/src/db/migrations/add_doula_demographics_to_doulas.sql`
+- `frontend-crm/src/api/doulas/doulaService.ts`
+- `frontend-crm/src/features/doula-dashboard/components/ProfileTab.tsx`
+- `frontend-crm/src/features/doula-dashboard/DoulaDashboard.tsx`
+
+### Contract Findings
+- Frontend profile UI reads/writes `languages_other_than_english` as `string[]` (required field in Profile tab).
+- Backend migration already includes `ADD COLUMN IF NOT EXISTS languages_other_than_english TEXT[]`.
+- Frontend `DoulaProfile`/`UpdateProfileData` types in `doulaService.ts` may lag the UI usage (ensure backend accepts/returns the field regardless of frontend typing drift).
+
+### Drift Risk
+- If Cloud SQL schema lacks the column, `PUT /api/doulas/profile` cannot persist languages and `GET /api/doulas/profile` cannot round-trip the field.
+
+### Required Compatibility
+- `GET /api/doulas/profile` must return `languages_other_than_english: string[]` (or `null`/missing tolerated).
+- `PUT /api/doulas/profile` must accept `languages_other_than_english: string[]` and persist to Cloud SQL.
+
+### Action
+- [x] Context updated
+- [ ] Implementation started
+
+## Preflight Update 2026-04-29 (Client birth outcomes structured)
+
+### Gate Result
+- `run_preflight`
+
+### Reason
+- `preflight_required_every_task`
+
+### Task
+- Add structured birth outcomes fields on `public.phi_clients` and expose `PUT /api/clients/:id/birth-outcomes`.
+
+### Repos Scanned
+- both
+
+### Files Scanned
+- `frontend-crm/src/features/doula-dashboard/components/ActivitiesTab.tsx`
+- `frontend-crm/src/features/clients/components/dialog/LeadProfileModal.tsx`
+- `frontend-crm/src/api/services/clients.service.ts`
+- `frontend-crm/src/api/dto/client.dto.ts`
+- `frontend-crm/src/api/mappers/client.mapper.ts`
+
+### Contract Findings
+- Frontend sends `PUT /api/clients/:id/birth-outcomes` with **snake_case** JSON:
+  - `birth_outcomes_induction` (boolean)
+  - `birth_outcomes_delivery_type` (string, one of a fixed allowed set)
+  - `birth_outcomes_medications_used` (string[], non-empty, allowed set)
+- Frontend expects `GET /api/clients/:id` to return the new structured fields when authorized, while keeping legacy `birth_outcomes` (free-text) readable for display/history.
+- `GET /api/doula-assignments` now includes `birthOutcomesInduction`, `birthOutcomesDeliveryType`, `birthOutcomesMedicationsUsed` per row.
+- `GET /api/doulas/clients` list returns birth outcomes fields (via OPERATIONAL_COLUMNS after migration).
+
+### Drift Risk
+- If backend accepts camelCase only (or stores inconsistent values), CRM save flows will fail and reporting fields will be unreliable.
+
+### Required Compatibility
+- Accept **snake_case** payload for the new birth outcomes endpoint.
+- Return new structured fields in client detail responses when authorized; do not remove legacy `birth_outcomes`.
+- Migration `add_phi_clients_birth_outcomes_structured.sql` must be applied to Cloud SQL before backend restart.
+
+### Action
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-05-04 (Birth outcomes 404 debug + full spec implementation)
+
+### Gate Result
+- `run_preflight`
+
+### Reason
+- `preflight_required_every_task`
+
+### Task
+- Fix 404 on `PUT /clients/:id/birth-outcomes`; implement full birth outcomes spec.
+
+### Files Scanned
+- `frontend-crm/src/features/doula-dashboard/components/ActivitiesTab.tsx`
+- `frontend-crm/src/features/clients/components/dialog/LeadProfileModal.tsx`
+- `frontend-crm/src/common/utils/updateClient.ts`
+- `frontend-crm/src/api/services/clients.service.ts`
+- `backend/src/controllers/clientController.ts`
+- `backend/src/repositories/cloudSqlClientRepository.ts`
+- `backend/src/services/doulasService.ts`
+- `backend/src/db/migrations/add_phi_clients_birth_outcomes_structured.sql`
+
+### Contract Findings
+- `PUT /clients/:id/birth-outcomes` route and controller already existed; returning 404 because migration not applied (columns missing).
+- `GET /api/doula-assignments` response now includes `birthOutcomesInduction`, `birthOutcomesDeliveryType`, `birthOutcomesMedicationsUsed` (camelCase in DTO, snake_case in DB).
+- `GET /api/doulas/clients` list now includes birth outcomes via updated OPERATIONAL_COLUMNS (with pre-migration fallback).
+
+### Drift Risk
+- If migration not applied, backend falls back gracefully (lists work, PUT returns 503 with migration message).
+
+### Required Compatibility
+- **MIGRATION REQUIRED**: Run `src/db/migrations/add_phi_clients_birth_outcomes_structured.sql` against Cloud SQL before restarting backend.
+
+### Action
+- [x] Context updated
+- [x] Implementation started
+
+---
+
+## Preflight Update 2026-05-04
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Lead → Customer lifecycle with Leads/Customers tabs, QB customer creation on match
+- **Repos Scanned**: both
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+### Files Scanned
+- `src/features/clients/Clients.tsx`
+- `src/features/clients/data/schema.ts`
+- `src/features/clients/components/data-table-toolbar.tsx`
+- `src/features/clients/components/users-table.tsx`
+- `src/api/quickbooks/auth/customer.ts`
+- `src/controllers/clientController.ts`
+- `src/repositories/cloudSqlClientRepository.ts`
+- `src/repositories/interface/clientRepository.ts`
+- `src/dto/response/ClientDetailDTO.ts`
+- `src/mappers/ClientMapper.ts`
+
+### Contract Findings
+- Frontend `schema.ts` was mapping `customer` status → `'not hired'`. Fixed to map → `'matched'`.
+- Backend `updateClientStatus` now fires `syncMatchedClientToQuickBooks` async (non-blocking) when `status → matched`.
+- `phi_clients` gains `matched_at TIMESTAMPTZ` and `qbo_customer_id TEXT` (migration required).
+- `ClientDetailDTO` and `ClientMapper.toDetailDTO` now expose `matched_at` and `qbo_customer_id`.
+- Frontend `Clients.tsx` renders Leads/Customers tabs; Leads = `status !== 'matched'`, Customers = `status === 'matched'`.
+- `DataTableToolbar` accepts `viewMode` prop; both tabs show Status filter independently.
+
+### Drift Risk
+- If migration not applied, `OPERATIONAL_COLUMNS_BASE` query will fail on restart. Apply migration first.
+- QB sync is non-blocking; if QB is not connected, sync fails silently (warn-level log only).
+
+### Required Compatibility
+- **MIGRATION REQUIRED**: Run `src/db/migrations/add_matched_lifecycle_fields_to_phi_clients.sql` against Cloud SQL (sokana_private).
+
+## Preflight Update 2026-05-04
+
+### Task
+- Prevent duplicate QB customer creation: check by email then by display name before creating
+
+### Files Scanned
+- `src/services/customer/syncMatchedClientToQuickBooks.ts`
+- `src/services/payments/findCustomerInQuickBooks.ts`
+- `src/controllers/clientController.ts`
+
+### Contract Findings
+- `syncMatchedClientToQuickBooks` now runs a 3-tier dedup check before creating:
+  1. CRM record already has `qbo_customer_id` → skip
+  2. QB query by `PrimaryEmailAddr` → found → link existing ID, skip creation
+  3. QB query by `DisplayName` (First Last) → found → link existing ID, skip creation
+  4. Not found by either → create new QB customer
+- `SyncMatchedClientResult` gains `alreadyExisted: boolean` field.
+- Controller log differentiates "linked existing" vs "created new".
+
+### Drift Risk
+- No frontend contract changes; `qbo_customer_id` is stored the same way regardless of path.
+
+### Action
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-05-04 (Test Results Review)
+
+### Task
+- Review successful test run results and backend health status
+
+### Files Scanned
+- Terminal output showing test results (all 118 tests passing)
+- Backend test coverage across request forms, email service, QB sync
+
+### Contract Findings  
+- All test suites passing (17 passed, 17 total)
+- Request form validation working correctly
+- Email service handling both success and failure scenarios
+- QuickBooks sync logic operational with proper deduplication
+
+### Drift Risk
+- None. Backend is in healthy state with full test coverage passing.
+
+### Required Compatibility
+- No changes needed - all systems operational
+
+### Action
+- [x] Context updated
+- No implementation needed - observational preflight only
+
+### Action
+- [x] Context updated
+- [x] Implementation started

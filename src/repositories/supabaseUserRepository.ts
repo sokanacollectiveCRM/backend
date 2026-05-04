@@ -9,6 +9,7 @@ import { User } from '../entities/User';
 import { queryCloudSql } from '../db/cloudSqlPool';
 import { UserRepository } from '../repositories/interface/userRepository';
 import { ROLE } from '../types';
+import { HourType } from '../utils/hourTypes';
 
 export class SupabaseUserRepository implements UserRepository {
   private supabaseClient: SupabaseClient;
@@ -311,6 +312,7 @@ async findClientsById(id: string): Promise<any> {
         id: string;
         start_time: Date | string;
         end_time: Date | string;
+        type: HourType | null;
         doula_id: string;
         doula_full_name: string | null;
         client_id: string;
@@ -322,6 +324,7 @@ async findClientsById(id: string): Promise<any> {
           h.id,
           h.start_time,
           h.end_time,
+          h.type,
           h.doula_id,
           d.full_name AS doula_full_name,
           h.client_id,
@@ -357,6 +360,7 @@ async findClientsById(id: string): Promise<any> {
           end_time: entry.end_time,
           startTime: entry.start_time,
           endTime: entry.end_time,
+          type: entry.type ?? null,
           doula_id: entry.doula_id,
           client_id: entry.client_id,
           doula: {
@@ -379,6 +383,7 @@ async findClientsById(id: string): Promise<any> {
         id: string;
         start_time: Date | string;
         end_time: Date | string;
+        type: HourType | null;
         doula_id: string;
         doula_full_name: string | null;
         client_id: string;
@@ -390,6 +395,7 @@ async findClientsById(id: string): Promise<any> {
           h.id,
           h.start_time,
           h.end_time,
+          h.type,
           h.doula_id,
           d.full_name AS doula_full_name,
           h.client_id,
@@ -423,6 +429,7 @@ async findClientsById(id: string): Promise<any> {
           end_time: entry.end_time,
           startTime: entry.start_time,
           endTime: entry.end_time,
+          type: entry.type ?? null,
           doula_id: entry.doula_id,
           client_id: entry.client_id,
           doula: {
@@ -571,17 +578,38 @@ async findClientsById(id: string): Promise<any> {
     )
   }
 
-  async addNewHours(doula_id: string, client_id: string, start_time: Date, end_time: Date, note: string): Promise<WORK_ENTRY_ROW> {
+  async addNewHours(doula_id: string, client_id: string, start_time: Date, end_time: Date, note: string, type: HourType): Promise<WORK_ENTRY_ROW> {
     const _ignoredNote = note;
     void _ignoredNote;
     const { rows } = await queryCloudSql<WORK_ENTRY_ROW>(
       `
-      INSERT INTO public.hours (doula_id, client_id, start_time, end_time, created_at, updated_at)
-      VALUES ($1::uuid, $2::uuid, $3::timestamptz, $4::timestamptz, NOW(), NOW())
-      RETURNING id, doula_id, client_id, start_time, end_time
+      INSERT INTO public.hours (doula_id, client_id, start_time, end_time, type, created_at, updated_at)
+      VALUES ($1::uuid, $2::uuid, $3::timestamptz, $4::timestamptz, $5::text, NOW(), NOW())
+      RETURNING id, doula_id, client_id, start_time, end_time, type
       `,
-      [doula_id, client_id, start_time, end_time]
+      [doula_id, client_id, start_time, end_time, type]
     );
     return rows[0];
+  }
+
+  async updateHourType(hourId: string, type: HourType, doulaId?: string): Promise<WORK_ENTRY_ROW | null> {
+    const params: Array<string | Date> = [type, hourId];
+    let sql = `
+      UPDATE public.hours
+      SET type = $1::text, updated_at = NOW()
+      WHERE id = $2::uuid
+    `;
+
+    if (doulaId) {
+      params.push(doulaId);
+      sql += ` AND doula_id = $3::uuid`;
+    }
+
+    sql += `
+      RETURNING id, doula_id, client_id, start_time, end_time, type
+    `;
+
+    const { rows } = await queryCloudSql<WORK_ENTRY_ROW>(sql, params);
+    return rows[0] ?? null;
   }
 }

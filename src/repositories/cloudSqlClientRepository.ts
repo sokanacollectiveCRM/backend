@@ -13,11 +13,44 @@ import { ROLE } from '../types';
 import { queryCloudSql } from '../db/cloudSqlPool';
 import { NotFoundError } from '../domains/errors';
 
-const OPERATIONAL_COLUMNS = `
+// Columns available before any optional migrations.
+const OPERATIONAL_COLUMNS_LEGACY = `
   id, client_number, first_name, last_name, email, phone AS phone_number, address_line1, bio, city, state, zip_code, country, status, service_needed,
   portal_status, invited_at, last_invite_sent_at, invite_sent_count,
   requested_at, updated_at
 `;
+
+// Includes lifecycle fields added by add_matched_lifecycle_fields_to_phi_clients.sql
+const OPERATIONAL_COLUMNS_BASE = `${OPERATIONAL_COLUMNS_LEGACY},
+  qbo_customer_id, matched_at
+`;
+
+// Includes structured birth outcomes added by add_phi_clients_birth_outcomes_structured.sql
+const OPERATIONAL_COLUMNS = `${OPERATIONAL_COLUMNS_BASE},
+  birth_outcomes_induction, birth_outcomes_delivery_type, birth_outcomes_medications_used
+`;
+
+function isBirthOutcomesColumnMissing(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = String((error as { code?: string }).code || '');
+  const message = String((error as { message?: string }).message || '').toLowerCase();
+  return (
+    code === '42703' &&
+    (message.includes('birth_outcomes_induction') ||
+      message.includes('birth_outcomes_delivery_type') ||
+      message.includes('birth_outcomes_medications_used'))
+  );
+}
+
+function isLifecycleColumnMissing(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = String((error as { code?: string }).code || '');
+  const message = String((error as { message?: string }).message || '').toLowerCase();
+  return (
+    code === '42703' &&
+    (message.includes('qbo_customer_id') || message.includes('matched_at'))
+  );
+}
 
 const BILLING_COLUMNS = `
   payment_method, insurance, insurance_provider, insurance_member_id, policy_number, insurance_phone_number,
@@ -77,6 +110,9 @@ function mapRowToClient(row: Record<string, any>): Client {
     past_pregnancy_experience: row.past_pregnancy_experience,
     service_support_details: row.service_support_details,
     birth_outcomes: row.birth_outcomes,
+    birth_outcomes_induction: row.birth_outcomes_induction,
+    birth_outcomes_delivery_type: row.birth_outcomes_delivery_type,
+    birth_outcomes_medications_used: row.birth_outcomes_medications_used,
     race_ethnicity: row.race_ethnicity,
     primary_language: row.primary_language,
     client_age_range: row.client_age_range,
@@ -109,10 +145,44 @@ function mapRowToClient(row: Record<string, any>): Client {
   );
 }
 
+/**
+ * Run a SELECT with the richest column set available, automatically falling
+ * back to narrower sets when optional migration columns are missing.
+ *
+ * Use %COLS% as a placeholder in the SQL template; it will be replaced with
+ * the appropriate column list on each attempt.
+ *
+ * Tier 1: OPERATIONAL_COLUMNS      (birth_outcomes + lifecycle + legacy)
+ * Tier 2: OPERATIONAL_COLUMNS_BASE (lifecycle + legacy; no birth_outcomes)
+ * Tier 3: OPERATIONAL_COLUMNS_LEGACY (stable columns only)
+ */
+async function queryWithColumnFallback(
+  sqlTemplate: string,
+  params?: any[]
+): Promise<{ rows: Record<string, any>[] }> {
+  const tiers = [
+    { cols: OPERATIONAL_COLUMNS, check: () => true },
+    { cols: OPERATIONAL_COLUMNS_BASE, check: isBirthOutcomesColumnMissing },
+    { cols: OPERATIONAL_COLUMNS_LEGACY, check: isLifecycleColumnMissing },
+  ];
+
+  let lastError: unknown;
+  for (const tier of tiers) {
+    try {
+      const sql = sqlTemplate.replace('%COLS%', tier.cols);
+      return await queryCloudSql(sql, params);
+    } catch (err) {
+      lastError = err;
+      if (!isBirthOutcomesColumnMissing(err) && !isLifecycleColumnMissing(err)) throw err;
+    }
+  }
+  throw lastError;
+}
+
 export class CloudSqlClientRepository implements ClientRepository {
   async findClientsLiteAll(): Promise<Client[]> {
-    const { rows } = await queryCloudSql(
-      `SELECT ${OPERATIONAL_COLUMNS} FROM phi_clients ORDER BY updated_at DESC NULLS LAST`
+    const { rows } = await queryWithColumnFallback(
+      `SELECT %COLS% FROM phi_clients ORDER BY updated_at DESC NULLS LAST`
     );
     return rows.map((r: Record<string, any>) => mapRowToClient(r));
   }
@@ -135,8 +205,8 @@ export class CloudSqlClientRepository implements ClientRepository {
   async findClientsLiteByDoula(userId: string): Promise<Client[]> {
     const clientIds = await this.getClientIdsAssignedToDoula(userId);
     if (clientIds.length === 0) return [];
-    const { rows } = await queryCloudSql(
-      `SELECT ${OPERATIONAL_COLUMNS} FROM phi_clients WHERE id = ANY($1::uuid[]) ORDER BY updated_at DESC NULLS LAST`,
+    const { rows } = await queryWithColumnFallback(
+      `SELECT %COLS% FROM phi_clients WHERE id = ANY($1::uuid[]) ORDER BY updated_at DESC NULLS LAST`,
       [clientIds]
     );
     return rows.map((r: Record<string, any>) => mapRowToClient(r));
@@ -203,6 +273,9 @@ export class CloudSqlClientRepository implements ClientRepository {
       'pregnancy_number', 'had_previous_pregnancies', 'previous_pregnancies_count',
       'living_children_count', 'past_pregnancy_experience', 'service_support_details',
       'birth_outcomes',
+      'birth_outcomes_induction',
+      'birth_outcomes_delivery_type',
+      'birth_outcomes_medications_used',
       'race_ethnicity', 'primary_language', 'client_age_range', 'insurance', 'annual_income',
       'preferred_contact_method', 'relationship_status', 'referral_source', 'referral_name',
       'referral_email', 'address_line1', 'address_line2', 'city', 'state', 'zip_code',
@@ -265,19 +338,36 @@ export class CloudSqlClientRepository implements ClientRepository {
   // ---- Canonical methods (used by clientController in primary mode) ----
 
   async getClientById(clientId: string): Promise<ClientOperationalRow | null> {
-    const { rows } = await queryCloudSql<ClientOperationalRow>(
-      `SELECT ${OPERATIONAL_COLUMNS} FROM phi_clients WHERE id = $1`,
+    const { rows } = await queryWithColumnFallback(
+      `SELECT %COLS% FROM phi_clients WHERE id = $1`,
       [clientId]
     );
-    return rows[0] || null;
+    return (rows[0] as ClientOperationalRow) || null;
   }
 
   async updateClientStatusCanonical(clientId: string, status: string): Promise<ClientOperationalRow | null> {
-    await queryCloudSql(
-      `UPDATE phi_clients SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
-      [status, clientId]
-    );
+    const isMatchedConversion = status === 'matched' || status === 'customer';
+    if (isMatchedConversion) {
+      await queryCloudSql(
+        `UPDATE phi_clients
+         SET status = $1, matched_at = COALESCE(matched_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2`,
+        [status, clientId]
+      );
+    } else {
+      await queryCloudSql(
+        `UPDATE phi_clients SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+        [status, clientId]
+      );
+    }
     return this.getClientById(clientId);
+  }
+
+  async saveQboCustomerId(clientId: string, qboCustomerId: string): Promise<void> {
+    await queryCloudSql(
+      `UPDATE phi_clients SET qbo_customer_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+      [qboCustomerId, clientId]
+    );
   }
 
   async updateClientOperational(
@@ -300,6 +390,9 @@ export class CloudSqlClientRepository implements ClientRepository {
       'policy_number', 'insurance_phone_number', 'has_secondary_insurance',
       'secondary_insurance_provider', 'secondary_insurance_member_id', 'secondary_policy_number',
       'self_pay_card_info',
+      'birth_outcomes_induction',
+      'birth_outcomes_delivery_type',
+      'birth_outcomes_medications_used',
     ]);
     const columnValues = new Map<string, any>();
     for (const [k, v] of Object.entries(fields)) {

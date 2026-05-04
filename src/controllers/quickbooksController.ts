@@ -125,7 +125,7 @@ export const createInvoice: RequestHandler = async (req, res, next) => {
  */
 export const getInvoiceableCustomersController: RequestHandler = async (_req, res, next) => {
   try {
-    const customers = await getInvoiceableCustomers(supabase);
+    const customers = await getInvoiceableCustomers();
     res.json(customers);
   } catch (err: any) {
     next(err);

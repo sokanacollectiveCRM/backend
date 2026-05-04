@@ -56,6 +56,9 @@ export interface DoulaAssignmentRowDto {
   sourceTimestamp: string | null;
   notes: string | null;
   updatedAt: string;
+  birthOutcomesInduction: boolean | null;
+  birthOutcomesDeliveryType: string | null;
+  birthOutcomesMedicationsUsed: string[];
 }
 
 export interface UpdateDoulaAssignmentInput {
@@ -96,6 +99,9 @@ interface DoulaAssignmentDbRow {
   source_timestamp: Date | string | null;
   notes: string | null;
   updated_at: Date | string;
+  birth_outcomes_induction: boolean | null;
+  birth_outcomes_delivery_type: string | null;
+  birth_outcomes_medications_used: string[] | null;
 }
 
 function isMissingServicesColumnError(error: unknown): boolean {
@@ -106,6 +112,18 @@ function isMissingServicesColumnError(error: unknown): boolean {
     code === '42703' &&
     message.includes('services') &&
     message.includes('doula_assignments')
+  );
+}
+
+function isMissingBirthOutcomesColumnError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = String((error as { code?: string }).code || '');
+  const message = String((error as { message?: string }).message || '').toLowerCase();
+  return (
+    code === '42703' &&
+    (message.includes('birth_outcomes_induction') ||
+      message.includes('birth_outcomes_delivery_type') ||
+      message.includes('birth_outcomes_medications_used'))
   );
 }
 
@@ -146,6 +164,9 @@ function mapAssignmentRow(row: DoulaAssignmentDbRow): DoulaAssignmentRowDto {
     sourceTimestamp: toText(row.source_timestamp),
     notes: row.notes,
     updatedAt: toIso(row.updated_at) ?? new Date(0).toISOString(),
+    birthOutcomesInduction: row.birth_outcomes_induction ?? null,
+    birthOutcomesDeliveryType: row.birth_outcomes_delivery_type ?? null,
+    birthOutcomesMedicationsUsed: row.birth_outcomes_medications_used ?? [],
   };
 }
 
@@ -314,7 +335,35 @@ export class DoulasService {
         da.services,
         da.source_timestamp,
         da.notes,
-        da.updated_at
+        da.updated_at,
+        pc.birth_outcomes_induction,
+        pc.birth_outcomes_delivery_type,
+        pc.birth_outcomes_medications_used
+      ${fromSql}
+      ${sortClause}
+      LIMIT $${limitIdx}
+      OFFSET $${offsetIdx}
+    `;
+    const dataSqlNoServices = `
+      SELECT
+        da.client_id,
+        pc.first_name AS client_first_name,
+        pc.last_name AS client_last_name,
+        pc.email AS client_email,
+        pc.phone AS client_phone,
+        da.doula_id,
+        d.full_name AS doula_full_name,
+        d.email AS doula_email,
+        da.hospital,
+        da.assigned_at,
+        da.role,
+        ARRAY[]::text[] AS services,
+        da.source_timestamp,
+        da.notes,
+        da.updated_at,
+        pc.birth_outcomes_induction,
+        pc.birth_outcomes_delivery_type,
+        pc.birth_outcomes_medications_used
       ${fromSql}
       ${sortClause}
       LIMIT $${limitIdx}
@@ -336,7 +385,10 @@ export class DoulasService {
         ARRAY[]::text[] AS services,
         da.source_timestamp,
         da.notes,
-        da.updated_at
+        da.updated_at,
+        NULL::boolean AS birth_outcomes_induction,
+        NULL::text AS birth_outcomes_delivery_type,
+        ARRAY[]::text[] AS birth_outcomes_medications_used
       ${fromSql}
       ${sortClause}
       LIMIT $${limitIdx}
@@ -347,10 +399,18 @@ export class DoulasService {
     try {
       dataRes = await pool.query<DoulaAssignmentDbRow>(dataSql, [...values, query.limit, query.offset]);
     } catch (error) {
-      if (!isMissingServicesColumnError(error)) {
+      if (isMissingServicesColumnError(error)) {
+        try {
+          dataRes = await pool.query<DoulaAssignmentDbRow>(dataSqlNoServices, [...values, query.limit, query.offset]);
+        } catch (innerError) {
+          if (!isMissingBirthOutcomesColumnError(innerError)) throw innerError;
+          dataRes = await pool.query<DoulaAssignmentDbRow>(legacyDataSql, [...values, query.limit, query.offset]);
+        }
+      } else if (isMissingBirthOutcomesColumnError(error)) {
+        dataRes = await pool.query<DoulaAssignmentDbRow>(legacyDataSql, [...values, query.limit, query.offset]);
+      } else {
         throw error;
       }
-      dataRes = await pool.query<DoulaAssignmentDbRow>(legacyDataSql, [...values, query.limit, query.offset]);
     }
 
     const data: DoulaAssignmentRowDto[] = dataRes.rows.map(mapAssignmentRow);
@@ -360,6 +420,13 @@ export class DoulasService {
 
   async getDoulaAssignment(clientId: string, doulaId: string): Promise<DoulaAssignmentRowDto | null> {
     const pool = getPool();
+    const baseJoin = `
+      FROM public.doula_assignments da
+      JOIN public.doulas d ON d.id = da.doula_id
+      JOIN public.phi_clients pc ON pc.id = da.client_id
+      WHERE da.client_id = $1::uuid AND da.doula_id = $2::uuid
+      LIMIT 1
+    `;
     const sql = `
       SELECT
         da.client_id,
@@ -376,13 +443,34 @@ export class DoulasService {
         da.services,
         da.source_timestamp,
         da.notes,
-        da.updated_at
-      FROM public.doula_assignments da
-      JOIN public.doulas d ON d.id = da.doula_id
-      JOIN public.phi_clients pc ON pc.id = da.client_id
-      WHERE da.client_id = $1::uuid AND da.doula_id = $2::uuid
-      LIMIT 1
-      `;
+        da.updated_at,
+        pc.birth_outcomes_induction,
+        pc.birth_outcomes_delivery_type,
+        pc.birth_outcomes_medications_used
+      ${baseJoin}
+    `;
+    const sqlNoServices = `
+      SELECT
+        da.client_id,
+        pc.first_name AS client_first_name,
+        pc.last_name AS client_last_name,
+        pc.email AS client_email,
+        pc.phone AS client_phone,
+        da.doula_id,
+        d.full_name AS doula_full_name,
+        d.email AS doula_email,
+        da.hospital,
+        da.assigned_at,
+        da.role,
+        ARRAY[]::text[] AS services,
+        da.source_timestamp,
+        da.notes,
+        da.updated_at,
+        pc.birth_outcomes_induction,
+        pc.birth_outcomes_delivery_type,
+        pc.birth_outcomes_medications_used
+      ${baseJoin}
+    `;
     const legacySql = `
       SELECT
         da.client_id,
@@ -399,22 +487,29 @@ export class DoulasService {
         ARRAY[]::text[] AS services,
         da.source_timestamp,
         da.notes,
-        da.updated_at
-      FROM public.doula_assignments da
-      JOIN public.doulas d ON d.id = da.doula_id
-      JOIN public.phi_clients pc ON pc.id = da.client_id
-      WHERE da.client_id = $1::uuid AND da.doula_id = $2::uuid
-      LIMIT 1
-      `;
+        da.updated_at,
+        NULL::boolean AS birth_outcomes_induction,
+        NULL::text AS birth_outcomes_delivery_type,
+        ARRAY[]::text[] AS birth_outcomes_medications_used
+      ${baseJoin}
+    `;
 
     let rows: DoulaAssignmentDbRow[];
     try {
       ({ rows } = await pool.query<DoulaAssignmentDbRow>(sql, [clientId, doulaId]));
     } catch (error) {
-      if (!isMissingServicesColumnError(error)) {
+      if (isMissingServicesColumnError(error)) {
+        try {
+          ({ rows } = await pool.query<DoulaAssignmentDbRow>(sqlNoServices, [clientId, doulaId]));
+        } catch (innerError) {
+          if (!isMissingBirthOutcomesColumnError(innerError)) throw innerError;
+          ({ rows } = await pool.query<DoulaAssignmentDbRow>(legacySql, [clientId, doulaId]));
+        }
+      } else if (isMissingBirthOutcomesColumnError(error)) {
+        ({ rows } = await pool.query<DoulaAssignmentDbRow>(legacySql, [clientId, doulaId]));
+      } else {
         throw error;
       }
-      ({ rows } = await pool.query<DoulaAssignmentDbRow>(legacySql, [clientId, doulaId]));
     }
 
     return rows[0] ? mapAssignmentRow(rows[0]) : null;

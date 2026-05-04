@@ -83,6 +83,13 @@ doulaRoutes.post(
   (req, res) => doulaController.logHours(req, res)
 );
 
+doulaRoutes.patch(
+  '/hours/:hourId',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
+  (req, res) => doulaController.updateHour(req, res)
+);
+
 doulaRoutes.get(
   '/hours',
   authMiddleware,

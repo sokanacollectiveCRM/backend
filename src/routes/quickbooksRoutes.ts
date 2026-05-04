@@ -2,7 +2,9 @@
 import { Router } from 'express'
 import {
   connectQuickBooks,
+  createCustomer,
   createInvoice,
+  getInvoiceableCustomersController,
   getInvoices,
   getQuickBooksCustomers,
   handleQuickBooksCallback,
@@ -27,6 +29,8 @@ router.get('/auth/url', quickBooksAuthUrl)
 router.get('/status', quickBooksStatus)
 router.get('/invoices', getInvoices)
 router.get('/customers', getQuickBooksCustomers)
+router.get('/customers/invoiceable', getInvoiceableCustomersController)
+router.post('/customer', createCustomer)
 router.post('/disconnect', quickBooksDisconnect)
 router.post('/invoice', createInvoice)
 

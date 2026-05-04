@@ -1,27 +1,36 @@
-// src/features/customer/getInvoiceableCustomers.ts
-import { SupabaseClient } from '@supabase/supabase-js';
+// src/services/customer/getInvoiceableCustomers.ts
+//
+// Returns CRM clients that have been converted to customers (status = 'matched')
+// and have a qbo_customer_id stored in phi_clients (Cloud SQL).
+// The old Supabase 'customers' table is no longer used.
+
+import { queryCloudSql } from '../../db/cloudSqlPool';
 
 export interface InvoiceableCustomer {
-  id: string;               // UUID PK
-  name: string;             // full name
+  id: string;
+  name: string;
   email: string;
   qboCustomerId: string | null;
 }
 
-export default async function getInvoiceableCustomers(
-  supabase: SupabaseClient
-): Promise<InvoiceableCustomer[]> {
-  const { data, error } = await supabase
-    .from('customers')
-    .select('id, name, email, qbo_customer_id')
-    .order('name', { ascending: true });
+export default async function getInvoiceableCustomers(): Promise<InvoiceableCustomer[]> {
+  const { rows } = await queryCloudSql<{
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    qbo_customer_id: string | null;
+  }>(
+    `SELECT id, first_name, last_name, email, qbo_customer_id
+     FROM phi_clients
+     WHERE status = 'matched'
+     ORDER BY last_name ASC, first_name ASC`
+  );
 
-  if (error) throw new Error(`Error fetching customers: ${error.message}`);
-
-  return (data || []).map((row: any) => ({
+  return rows.map((row) => ({
     id: row.id,
-    name: row.name,
-    email: row.email,
+    name: `${row.first_name || ''} ${row.last_name || ''}`.trim() || row.email || row.id,
+    email: row.email || '',
     qboCustomerId: row.qbo_customer_id,
   }));
 }

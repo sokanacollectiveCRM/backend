@@ -73,9 +73,15 @@ describe('Client billing endpoints', () => {
     mockClientRepository.updateClientBilling!.mockResolvedValue({
       id: clientId,
       payment_method: 'Self-Pay',
+      insurance: null,
       insurance_provider: null,
       insurance_member_id: null,
       policy_number: null,
+      insurance_phone_number: null,
+      has_secondary_insurance: false,
+      secondary_insurance_provider: null,
+      secondary_insurance_member_id: null,
+      secondary_policy_number: null,
       self_pay_card_info: 'Visa ending 4242',
       updated_at: updatedAt,
     } as any);
@@ -87,6 +93,7 @@ describe('Client billing endpoints', () => {
         insurance_provider: 'Aetna',
         insurance_member_id: 'MID-1',
         policy_number: 'POL-1',
+        insurance_phone_number: '800-555-1212',
         self_pay_card_info: 'Visa ending 4242',
       },
       user: { id: 'admin-user-id', role: ROLE.ADMIN } as any,
@@ -96,18 +103,30 @@ describe('Client billing endpoints', () => {
 
     expect(mockClientRepository.updateClientBilling).toHaveBeenCalledWith(clientId, {
       payment_method: 'Self-Pay',
+      insurance: null,
       insurance_provider: null,
       insurance_member_id: null,
       policy_number: null,
+      insurance_phone_number: null,
+      has_secondary_insurance: false,
+      secondary_insurance_provider: null,
+      secondary_insurance_member_id: null,
+      secondary_policy_number: null,
       self_pay_card_info: 'Visa ending 4242',
     });
     expect(mockResponse.json).toHaveBeenCalledWith({
       success: true,
       data: {
         payment_method: 'Self-Pay',
+        insurance: null,
         insurance_provider: null,
         insurance_member_id: null,
         policy_number: null,
+        insurance_phone_number: null,
+        has_secondary_insurance: false,
+        secondary_insurance_provider: null,
+        secondary_insurance_member_id: null,
+        secondary_policy_number: null,
         self_pay_card_info: 'Visa ending 4242',
         updated_at: updatedAt,
       },
@@ -119,9 +138,15 @@ describe('Client billing endpoints', () => {
     mockClientRepository.updateClientBilling!.mockResolvedValue({
       id: clientId,
       payment_method: 'Commercial Insurance',
+      insurance: 'Blue Cross Card Upload',
       insurance_provider: 'Aetna',
       insurance_member_id: 'MEM-123',
       policy_number: 'POL-456',
+      insurance_phone_number: '800-555-1212',
+      has_secondary_insurance: true,
+      secondary_insurance_provider: 'Blue Shield Secondary',
+      secondary_insurance_member_id: 'SEC-789',
+      secondary_policy_number: 'SEC-POL-456',
       self_pay_card_info: null,
       updated_at: updatedAt,
     } as any);
@@ -130,9 +155,15 @@ describe('Client billing endpoints', () => {
       params: { id: clientId },
       body: {
         payment_method: 'Commercial Insurance',
+        insurance: 'Blue Cross Card Upload',
         insurance_provider: 'Aetna',
         insurance_member_id: 'MEM-123',
         policy_number: 'POL-456',
+        insurance_phone_number: '800-555-1212',
+        has_secondary_insurance: true,
+        secondary_insurance_provider: 'Blue Shield Secondary',
+        secondary_insurance_member_id: 'SEC-789',
+        secondary_policy_number: 'SEC-POL-456',
       },
       user: { id: 'admin-user-id', role: ROLE.ADMIN } as any,
     } as unknown as AuthRequest;
@@ -141,9 +172,15 @@ describe('Client billing endpoints', () => {
 
     expect(mockClientRepository.updateClientBilling).toHaveBeenCalledWith(clientId, {
       payment_method: 'Commercial Insurance',
+      insurance: 'Blue Cross Card Upload',
       insurance_provider: 'Aetna',
       insurance_member_id: 'MEM-123',
       policy_number: 'POL-456',
+      insurance_phone_number: '800-555-1212',
+      has_secondary_insurance: true,
+      secondary_insurance_provider: 'Blue Shield Secondary',
+      secondary_insurance_member_id: 'SEC-789',
+      secondary_policy_number: 'SEC-POL-456',
       self_pay_card_info: null,
     });
     expect(mockResponse.status).not.toHaveBeenCalledWith(400);
@@ -151,9 +188,15 @@ describe('Client billing endpoints', () => {
       success: true,
       data: {
         payment_method: 'Commercial Insurance',
+        insurance: 'Blue Cross Card Upload',
         insurance_provider: 'Aetna',
         insurance_member_id: 'MEM-123',
         policy_number: 'POL-456',
+        insurance_phone_number: '800-555-1212',
+        has_secondary_insurance: true,
+        secondary_insurance_provider: 'Blue Shield Secondary',
+        secondary_insurance_member_id: 'SEC-789',
+        secondary_policy_number: 'SEC-POL-456',
         self_pay_card_info: null,
         updated_at: updatedAt,
       },
@@ -192,9 +235,15 @@ describe('Client billing endpoints', () => {
     mockClientRepository.updateClientBilling!.mockResolvedValue({
       id: clientId,
       payment_method: 'Private Insurance',
+      insurance: 'Blue Cross',
       insurance_provider: 'Blue Cross',
       insurance_member_id: 'MEM-123',
       policy_number: 'POL-456',
+      insurance_phone_number: null,
+      has_secondary_insurance: false,
+      secondary_insurance_provider: null,
+      secondary_insurance_member_id: null,
+      secondary_policy_number: null,
       self_pay_card_info: null,
       updated_at: updatedAt,
     } as any);
@@ -203,6 +252,7 @@ describe('Client billing endpoints', () => {
       params: {},
       body: {
         payment_method: 'Private Insurance',
+        insurance: 'Blue Cross',
         insurance_provider: 'Blue Cross',
         insurance_member_id: 'MEM-123',
         policy_number: 'POL-456',
@@ -214,18 +264,30 @@ describe('Client billing endpoints', () => {
 
     expect(mockClientRepository.updateClientBilling).toHaveBeenCalledWith(clientId, {
       payment_method: 'Private Insurance',
+      insurance: 'Blue Cross',
       insurance_provider: 'Blue Cross',
       insurance_member_id: 'MEM-123',
       policy_number: 'POL-456',
+      insurance_phone_number: null,
+      has_secondary_insurance: false,
+      secondary_insurance_provider: null,
+      secondary_insurance_member_id: null,
+      secondary_policy_number: null,
       self_pay_card_info: null,
     });
     expect(mockResponse.json).toHaveBeenCalledWith({
       success: true,
       data: {
         payment_method: 'Private Insurance',
+        insurance: 'Blue Cross',
         insurance_provider: 'Blue Cross',
         insurance_member_id: 'MEM-123',
         policy_number: 'POL-456',
+        insurance_phone_number: null,
+        has_secondary_insurance: false,
+        secondary_insurance_provider: null,
+        secondary_insurance_member_id: null,
+        secondary_policy_number: null,
         self_pay_card_info: null,
         updated_at: updatedAt,
       },
@@ -237,9 +299,15 @@ describe('Client billing endpoints', () => {
     mockClientRepository.getClientBilling!.mockResolvedValue({
       id: clientId,
       payment_method: 'Medicaid',
+      insurance: 'State Plan',
       insurance_provider: 'State Plan',
       insurance_member_id: 'ABC123',
       policy_number: 'POLICY9',
+      insurance_phone_number: '800-555-1212',
+      has_secondary_insurance: false,
+      secondary_insurance_provider: null,
+      secondary_insurance_member_id: null,
+      secondary_policy_number: null,
       self_pay_card_info: null,
       updated_at: updatedAt,
     } as any);
@@ -255,11 +323,51 @@ describe('Client billing endpoints', () => {
       success: true,
       data: {
         payment_method: 'Medicaid',
+        insurance: 'State Plan',
         insurance_provider: 'State Plan',
         insurance_member_id: 'ABC123',
         policy_number: 'POLICY9',
+        insurance_phone_number: '800-555-1212',
+        has_secondary_insurance: false,
+        secondary_insurance_provider: null,
+        secondary_insurance_member_id: null,
+        secondary_policy_number: null,
         self_pay_card_info: null,
         updated_at: updatedAt,
+      },
+    });
+  });
+
+  it('returns null-safe billing data for older records missing new fields', async () => {
+    mockClientRepository.getClientBilling!.mockResolvedValue({
+      id: clientId,
+      payment_method: 'Self-Pay',
+      self_pay_card_info: 'Cash note',
+      updated_at: '2026-03-24T14:30:00.000Z',
+    } as any);
+
+    const req = {
+      params: { id: clientId },
+      user: { id: 'doula-id', role: ROLE.DOULA } as any,
+    } as unknown as AuthRequest;
+
+    await clientController.getClientBilling(req, mockResponse as Response);
+
+    expect(mockResponse.json).toHaveBeenCalledWith({
+      success: true,
+      data: {
+        payment_method: 'Self-Pay',
+        insurance: null,
+        insurance_provider: null,
+        insurance_member_id: null,
+        policy_number: null,
+        insurance_phone_number: null,
+        has_secondary_insurance: null,
+        secondary_insurance_provider: null,
+        secondary_insurance_member_id: null,
+        secondary_policy_number: null,
+        self_pay_card_info: 'Cash note',
+        updated_at: '2026-03-24T14:30:00.000Z',
       },
     });
   });
@@ -292,9 +400,15 @@ describe('Client billing endpoints', () => {
     mockClientRepository.updateClientBilling!.mockResolvedValue({
       id: clientId,
       payment_method: 'Self-Pay',
+      insurance: null,
       insurance_provider: null,
       insurance_member_id: null,
       policy_number: null,
+      insurance_phone_number: null,
+      has_secondary_insurance: false,
+      secondary_insurance_provider: null,
+      secondary_insurance_member_id: null,
+      secondary_policy_number: null,
       self_pay_card_info: null,
       updated_at: updatedAt,
     } as any);
@@ -311,9 +425,15 @@ describe('Client billing endpoints', () => {
 
     expect(mockClientRepository.updateClientBilling).toHaveBeenCalledWith(clientId, {
       payment_method: 'Self-Pay',
+      insurance: null,
       insurance_provider: null,
       insurance_member_id: null,
       policy_number: null,
+      insurance_phone_number: null,
+      has_secondary_insurance: false,
+      secondary_insurance_provider: null,
+      secondary_insurance_member_id: null,
+      secondary_policy_number: null,
       self_pay_card_info: null,
     });
     expect(mockResponse.status).not.toHaveBeenCalledWith(400);
@@ -321,9 +441,15 @@ describe('Client billing endpoints', () => {
       success: true,
       data: {
         payment_method: 'Self-Pay',
+        insurance: null,
         insurance_provider: null,
         insurance_member_id: null,
         policy_number: null,
+        insurance_phone_number: null,
+        has_secondary_insurance: false,
+        secondary_insurance_provider: null,
+        secondary_insurance_member_id: null,
+        secondary_policy_number: null,
         self_pay_card_info: null,
         updated_at: updatedAt,
       },
@@ -377,9 +503,15 @@ describe('Client billing endpoints', () => {
     mockClientRepository.updateClientBilling!.mockResolvedValue({
       id: clientId,
       payment_method: 'Self-Pay',
+      insurance: null,
       insurance_provider: null,
       insurance_member_id: null,
       policy_number: null,
+      insurance_phone_number: null,
+      has_secondary_insurance: false,
+      secondary_insurance_provider: null,
+      secondary_insurance_member_id: null,
+      secondary_policy_number: null,
       self_pay_card_info: 'Visa ending 4242',
       updated_at: updatedAt,
     } as any);
@@ -398,9 +530,15 @@ describe('Client billing endpoints', () => {
 
     expect(mockClientRepository.updateClientBilling).toHaveBeenCalledWith(clientId, {
       payment_method: 'Self-Pay',
+      insurance: null,
       insurance_provider: null,
       insurance_member_id: null,
       policy_number: null,
+      insurance_phone_number: null,
+      has_secondary_insurance: false,
+      secondary_insurance_provider: null,
+      secondary_insurance_member_id: null,
+      secondary_policy_number: null,
       self_pay_card_info: 'Visa ending 4242',
     });
     expect(mockResponse.status).not.toHaveBeenCalledWith(400);
@@ -408,9 +546,15 @@ describe('Client billing endpoints', () => {
       success: true,
       data: {
         payment_method: 'Self-Pay',
+        insurance: null,
         insurance_provider: null,
         insurance_member_id: null,
         policy_number: null,
+        insurance_phone_number: null,
+        has_secondary_insurance: false,
+        secondary_insurance_provider: null,
+        secondary_insurance_member_id: null,
+        secondary_policy_number: null,
         self_pay_card_info: 'Visa ending 4242',
         updated_at: updatedAt,
       },

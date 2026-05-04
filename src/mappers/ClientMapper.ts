@@ -92,10 +92,18 @@ export class ClientMapper {
       requested_at: string | null;
       updated_at: string | null;
       payment_method?: string | null;
+      insurance?: string | null;
       insurance_provider?: string | null;
       insurance_member_id?: string | null;
       policy_number?: string | null;
+      insurance_phone_number?: string | null;
+      has_secondary_insurance?: boolean | null;
+      secondary_insurance_provider?: string | null;
+      secondary_insurance_member_id?: string | null;
+      secondary_policy_number?: string | null;
       self_pay_card_info?: string | null;
+      matched_at?: string | null;
+      qbo_customer_id?: string | null;
     },
     isEligible?: boolean
   ): ClientDetailDTO {
@@ -125,11 +133,19 @@ export class ClientMapper {
       requested_at: row.requested_at ?? undefined,
       updated_at: row.updated_at ?? undefined,
       payment_method: row.payment_method ?? undefined,
+      insurance: row.insurance ?? undefined,
       insurance_provider: row.insurance_provider ?? undefined,
       insurance_member_id: row.insurance_member_id ?? undefined,
       policy_number: row.policy_number ?? undefined,
+      insurance_phone_number: row.insurance_phone_number ?? undefined,
+      has_secondary_insurance: row.has_secondary_insurance ?? undefined,
+      secondary_insurance_provider: row.secondary_insurance_provider ?? undefined,
+      secondary_insurance_member_id: row.secondary_insurance_member_id ?? undefined,
+      secondary_policy_number: row.secondary_policy_number ?? undefined,
       self_pay_card_info: row.self_pay_card_info ?? undefined,
       is_eligible: isEligible,
+      matched_at: row.matched_at ?? undefined,
+      qbo_customer_id: row.qbo_customer_id ?? undefined,
     };
   }
 }

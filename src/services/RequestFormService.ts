@@ -14,6 +14,26 @@ export class RequestFormService {
     this.repository = requestFormRepository;
   }
 
+  private trimNullableString(value: unknown): string | null | undefined {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  private normalizeOptionalBoolean(value: unknown): boolean | null | undefined {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
+      if (['false', '0', 'no', 'off'].includes(normalized)) return false;
+    }
+    return undefined;
+  }
+
   async createRequest(formData: RequestFormData): Promise<RequestFormResponse> {
     // Validate required fields
     if (!formData.firstname || !formData.lastname) {
@@ -126,6 +146,54 @@ export class RequestFormService {
         throw new ValidationError("Invalid zip code format");
       }
 
+      const paymentMethod = this.trimNullableString(formData.payment_method);
+      if (!paymentMethod) {
+        throw new ValidationError("payment_method is required");
+      }
+
+      const allowedPaymentMethods = new Set([
+        'Commercial Insurance',
+        'Private Insurance',
+        'Medicaid',
+        'Self-Pay',
+      ]);
+      if (!allowedPaymentMethods.has(paymentMethod)) {
+        throw new ValidationError("payment_method must be one of: Commercial Insurance, Private Insurance, Medicaid, Self-Pay");
+      }
+
+      const insuranceProvider = this.trimNullableString(formData.insurance_provider);
+      const insuranceMemberId = this.trimNullableString(formData.insurance_member_id);
+      const policyNumber = this.trimNullableString(formData.policy_number);
+      const insurancePhoneNumber = this.trimNullableString(formData.insurance_phone_number);
+      const hasSecondaryInsurance = this.normalizeOptionalBoolean(formData.has_secondary_insurance);
+      const secondaryInsuranceProvider = this.trimNullableString(formData.secondary_insurance_provider);
+      const secondaryInsuranceMemberId = this.trimNullableString(formData.secondary_insurance_member_id);
+      const secondaryPolicyNumber = this.trimNullableString(formData.secondary_policy_number);
+      const selfPayCardInfo = this.trimNullableString(formData.self_pay_card_info);
+
+      if (paymentMethod !== 'Self-Pay') {
+        if (!insuranceProvider) {
+          throw new ValidationError("insurance_provider is required when payment_method is not Self-Pay");
+        }
+        if (!insuranceMemberId) {
+          throw new ValidationError("insurance_member_id is required when payment_method is not Self-Pay");
+        }
+        if (!policyNumber) {
+          throw new ValidationError("policy_number is required when payment_method is not Self-Pay");
+        }
+        if (hasSecondaryInsurance === true) {
+          if (!secondaryInsuranceProvider) {
+            throw new ValidationError("secondary_insurance_provider is required when has_secondary_insurance is true");
+          }
+          if (!secondaryInsuranceMemberId) {
+            throw new ValidationError("secondary_insurance_member_id is required when has_secondary_insurance is true");
+          }
+          if (!secondaryPolicyNumber) {
+            throw new ValidationError("secondary_policy_number is required when has_secondary_insurance is true");
+          }
+        }
+      }
+
       // Convert to RequestFormData format
       const newFormData: RequestFormData = {
         // Step 1: Client Details
@@ -167,7 +235,19 @@ export class RequestFormService {
         health_notes: formData.health_notes,
 
         // Step 6: Payment Info
-        payment_method: formData.payment_method,  // Add this field
+        payment_method: paymentMethod,
+        insurance_provider: paymentMethod === 'Self-Pay' ? null : insuranceProvider ?? null,
+        insurance_member_id: paymentMethod === 'Self-Pay' ? null : insuranceMemberId ?? null,
+        policy_number: paymentMethod === 'Self-Pay' ? null : policyNumber ?? null,
+        insurance_phone_number: paymentMethod === 'Self-Pay' ? null : insurancePhoneNumber ?? null,
+        has_secondary_insurance: paymentMethod === 'Self-Pay' ? false : (hasSecondaryInsurance ?? null),
+        secondary_insurance_provider:
+          paymentMethod === 'Self-Pay' || hasSecondaryInsurance !== true ? null : secondaryInsuranceProvider ?? null,
+        secondary_insurance_member_id:
+          paymentMethod === 'Self-Pay' || hasSecondaryInsurance !== true ? null : secondaryInsuranceMemberId ?? null,
+        secondary_policy_number:
+          paymentMethod === 'Self-Pay' || hasSecondaryInsurance !== true ? null : secondaryPolicyNumber ?? null,
+        self_pay_card_info: paymentMethod === 'Self-Pay' ? selfPayCardInfo ?? null : null,
         annual_income: formData.annual_income,
         service_needed: formData.service_needed,
         service_specifics: formData.service_specifics,
@@ -195,7 +275,7 @@ export class RequestFormService {
         race_ethnicity: formData.race_ethnicity,
         primary_language: formData.primary_language,
         client_age_range: formData.client_age_range,
-        insurance: formData.insurance,
+        insurance: paymentMethod === 'Self-Pay' ? null : formData.insurance ?? null,
         demographics_multi: formData.demographics_multi
       };
 
@@ -253,6 +333,16 @@ export class RequestFormService {
         response.primary_language,
         response.client_age_range,
         response.insurance,
+        response.payment_method,
+        response.insurance_provider,
+        response.insurance_member_id,
+        response.policy_number,
+        response.insurance_phone_number,
+        response.has_secondary_insurance,
+        response.secondary_insurance_provider,
+        response.secondary_insurance_member_id,
+        response.secondary_policy_number,
+        response.self_pay_card_info,
         response.demographics_multi
       );
 

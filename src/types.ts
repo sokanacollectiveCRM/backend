@@ -168,7 +168,16 @@ export interface RequestFormData {
   health_notes?: string;
 
   // Step 6: Payment Info
-  payment_method?: string;  // Add this field
+  payment_method?: string;
+  insurance_provider?: string | null;
+  insurance_member_id?: string | null;
+  policy_number?: string | null;
+  insurance_phone_number?: string | null;
+  has_secondary_insurance?: boolean | null;
+  secondary_insurance_provider?: string | null;
+  secondary_insurance_member_id?: string | null;
+  secondary_policy_number?: string | null;
+  self_pay_card_info?: string | null;
   annual_income?: IncomeLevel;
   service_needed: ServiceTypes;
   service_specifics?: string;
@@ -260,6 +269,16 @@ export interface RequestFormResponse {
   primary_language?: string;
   client_age_range?: ClientAgeRange;
   insurance?: string;
+  payment_method?: string | null;
+  insurance_provider?: string | null;
+  insurance_member_id?: string | null;
+  policy_number?: string | null;
+  insurance_phone_number?: string | null;
+  has_secondary_insurance?: boolean | null;
+  secondary_insurance_provider?: string | null;
+  secondary_insurance_member_id?: string | null;
+  secondary_policy_number?: string | null;
+  self_pay_card_info?: string | null;
   demographics_multi?: string[];
 }
 

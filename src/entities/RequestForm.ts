@@ -91,6 +91,16 @@ export class RequestForm {
     public primary_language?: string,
     public client_age_range?: ClientAgeRange,
     public insurance?: string,
+    public payment_method?: string,
+    public insurance_provider?: string,
+    public insurance_member_id?: string,
+    public policy_number?: string,
+    public insurance_phone_number?: string,
+    public has_secondary_insurance?: boolean,
+    public secondary_insurance_provider?: string,
+    public secondary_insurance_member_id?: string,
+    public secondary_policy_number?: string,
+    public self_pay_card_info?: string,
     public demographics_multi?: string[]
   ) {}
 }

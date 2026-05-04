@@ -12,6 +12,8 @@ userRoutes.get('/:id/hours', authMiddleware, (req, res) => userController.getHou
 
 userRoutes.post('/:id/addhours', authMiddleware, (req, res) => userController.addNewHours(req, res));
 
+userRoutes.patch('/:id/hours/:hourId', authMiddleware, (req, res) => userController.updateHour(req, res));
+
 // uploading a profile picture requires multer
 const upload = multer({ 
   storage: multer.memoryStorage(),

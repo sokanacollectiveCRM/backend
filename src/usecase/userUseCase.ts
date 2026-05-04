@@ -3,6 +3,7 @@ import { NotFoundError } from '../domains/errors';
 import { WORK_ENTRY } from '../entities/Hours';
 import { User } from '../entities/User';
 import { UserRepository } from '../repositories/interface/userRepository';
+import { HourType } from '../utils/hourTypes';
 
 export class UserUseCase {
   private userRepository: UserRepository;
@@ -41,10 +42,20 @@ export class UserUseCase {
     return hours;
   }
 
-  async addNewHours(doula_id: string, client_id: string, start_time: Date, end_time: Date, note: string) {
-    const newWorkEntry = await this.userRepository.addNewHours(doula_id, client_id, start_time, end_time, note);
+  async addNewHours(doula_id: string, client_id: string, start_time: Date, end_time: Date, note: string, type: HourType) {
+    const newWorkEntry = await this.userRepository.addNewHours(doula_id, client_id, start_time, end_time, note, type);
 
     return newWorkEntry;
+  }
+
+  async updateHourType(hourId: string, type: HourType, doulaId?: string) {
+    const updatedHour = await this.userRepository.updateHourType(hourId, type, doulaId);
+
+    if (!updatedHour) {
+      throw new NotFoundError('Work entry not found');
+    }
+
+    return updatedHour;
   }
 
   async uploadProfilePicture(user: User, profilePicture: MulterFile) {

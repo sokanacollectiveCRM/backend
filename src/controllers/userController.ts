@@ -4,6 +4,7 @@ import { AuthRequest, UpdateRequest } from '../types';
 import { UserUseCase } from "../usecase/userUseCase";
 import { CloudSqlTeamService } from '../services/cloudSqlTeamService';
 import { DoulaDocumentCompletenessService } from '../services/doulaDocumentCompletenessService';
+import { buildHourSummary, parseHourFilter, parseHourType } from '../utils/hourTypes';
 
 
 export class UserController {
@@ -101,12 +102,30 @@ export class UserController {
   async getHours(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { id, role } = req.user;
+      const hourTypeFilter = parseHourFilter(req.query.type);
+      if (req.query.type && !hourTypeFilter) {
+        res.status(400).json({
+          error: 'Invalid hour type filter. Must be prenatal, postpartum, or unknown'
+        });
+        return;
+      }
+
       if(role === "admin") {
         const allHoursData = await this.userUseCase.getAllHours();
-        res.status(200).json(allHoursData);
+        const hours = hourTypeFilter ? allHoursData.filter((entry: any) => (entry.type ?? 'unknown') === hourTypeFilter) : allHoursData;
+        res.status(200).json({
+          success: true,
+          hours,
+          summary: buildHourSummary(hours),
+        });
       } else {
         const specificHoursData = await this.userUseCase.getHoursById(id);
-        res.status(200).json(specificHoursData);
+        const hours = hourTypeFilter ? specificHoursData.filter((entry: any) => (entry.type ?? 'unknown') === hourTypeFilter) : specificHoursData;
+        res.status(200).json({
+          success: true,
+          hours,
+          summary: buildHourSummary(hours),
+        });
       }
     } catch (error) {
       console.log("Error when retrieving user's work data");
@@ -116,17 +135,64 @@ export class UserController {
 
   async addNewHours(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { doula_id, client_id, start_time, end_time, note } = req.body;
+      const { doula_id, client_id, start_time, end_time, note, type } = req.body;
+
+      const normalizedType = parseHourType(type);
+      if (!normalizedType) {
+        res.status(400).json({
+          error: 'type is required and must be either prenatal or postpartum'
+        });
+        return;
+      }
 
       if(!doula_id || !client_id || !start_time|| !end_time) {
         console.log(`${doula_id}, ${client_id}, ${start_time}, ${end_time}`);
         throw new Error(`Error: missing doula_id, client_id, start_time, or end_time`);
       }
 
-      const newWorkEntry = await this.userUseCase.addNewHours(doula_id, client_id, new Date(start_time), new Date(end_time), note);
+      const newWorkEntry = await this.userUseCase.addNewHours(doula_id, client_id, new Date(start_time), new Date(end_time), note, normalizedType);
       res.status(200).json(newWorkEntry);
     } catch (error) {
       console.log("Error trying to add new work entry");
+      this.handleError(error, res);
+    }
+  }
+
+  async updateHour(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const hourId = req.params.hourId;
+      const { role, id: userId } = req.user ?? {};
+      const normalizedType = parseHourType(req.body?.type);
+
+      if (!hourId) {
+        res.status(400).json({ error: 'Missing hourId' });
+        return;
+      }
+
+      if (!normalizedType) {
+        res.status(400).json({
+          error: 'type is required and must be either prenatal or postpartum'
+        });
+        return;
+      }
+
+      if (role !== 'admin' && role !== 'doula') {
+        res.status(403).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      const updatedHour = await this.userUseCase.updateHourType(
+        hourId,
+        normalizedType,
+        role === 'doula' ? userId : undefined
+      );
+
+      res.status(200).json({
+        success: true,
+        workEntry: updatedHour
+      });
+    } catch (error) {
+      console.log('Error trying to update work entry');
       this.handleError(error, res);
     }
   }

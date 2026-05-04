@@ -21,6 +21,7 @@ export interface TeamMemberDto {
   gender?: string | null;
   pronouns?: string | null;
   race_ethnicity?: string[] | null;
+  languages_other_than_english?: string[] | null;
   race_ethnicity_other?: string | null;
   other_demographic_details?: string | null;
   created_at: string;
@@ -45,6 +46,7 @@ interface DoulaRow {
   gender?: string | null;
   pronouns?: string | null;
   race_ethnicity?: string[] | null;
+  languages_other_than_english?: string[] | null;
   race_ethnicity_other?: string | null;
   other_demographic_details?: string | null;
   created_at: Date | string;
@@ -83,6 +85,15 @@ function mapRow(row: DoulaRow): TeamMemberDto {
       : Array.isArray(row.race_ethnicity)
         ? [...row.race_ethnicity]
         : null;
+  const languages =
+    row.languages_other_than_english == null
+      ? null
+      : Array.isArray(row.languages_other_than_english)
+        ? row.languages_other_than_english
+            .filter((l): l is string => typeof l === 'string')
+            .map((l) => l.trim())
+            .filter(Boolean)
+        : null;
   return {
     id: row.id,
     firstname,
@@ -102,6 +113,7 @@ function mapRow(row: DoulaRow): TeamMemberDto {
     gender: row.gender ?? null,
     pronouns: row.pronouns ?? null,
     race_ethnicity: race,
+    languages_other_than_english: languages,
     race_ethnicity_other: row.race_ethnicity_other ?? null,
     other_demographic_details: row.other_demographic_details ?? null,
     created_at: toIso(row.created_at),
@@ -136,7 +148,7 @@ export class CloudSqlTeamService {
     try {
       const { rows } = await pool.query<DoulaRow & { role: 'admin' | 'doula' }>(
         `
-        SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, 'doula'::text AS role, created_at, updated_at
+        SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, 'doula'::text AS role, created_at, updated_at
         FROM public.doulas
         UNION ALL
         SELECT id, full_name, email, phone, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'admin'::text AS role, created_at, updated_at
@@ -151,7 +163,7 @@ export class CloudSqlTeamService {
       if (msg.includes('public.admins') && msg.includes('does not exist')) {
         const { rows } = await pool.query<DoulaRow>(
           `
-          SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, created_at, updated_at
+          SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, created_at, updated_at
           FROM public.doulas
           ORDER BY full_name ASC
           `
@@ -171,7 +183,7 @@ export class CloudSqlTeamService {
     const { rows } = await pool.query<DoulaRow>(
       `
       SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture,
-             gender, pronouns, race_ethnicity, race_ethnicity_other, other_demographic_details,
+             gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details,
              created_at, updated_at
       FROM public.doulas
       WHERE id = $1::uuid
@@ -334,6 +346,7 @@ export class CloudSqlTeamService {
       gender?: string | null;
       pronouns?: string | null;
       race_ethnicity?: string[] | null;
+      languages_other_than_english?: string[] | null;
       race_ethnicity_other?: string | null;
       other_demographic_details?: string | null;
     }
@@ -356,6 +369,10 @@ export class CloudSqlTeamService {
     const pronouns = input.pronouns !== undefined ? input.pronouns : (existing.pronouns ?? null);
     const raceEthnicity =
       input.race_ethnicity !== undefined ? input.race_ethnicity : (existing.race_ethnicity ?? null);
+    const languagesOtherThanEnglish =
+      input.languages_other_than_english !== undefined
+        ? input.languages_other_than_english
+        : (existing.languages_other_than_english ?? null);
     const raceEthnicityOther =
       input.race_ethnicity_other !== undefined
         ? input.race_ethnicity_other
@@ -397,12 +414,13 @@ export class CloudSqlTeamService {
           gender = $11,
           pronouns = $12,
           race_ethnicity = $13,
-          race_ethnicity_other = $14,
-          other_demographic_details = $15,
+          languages_other_than_english = $14,
+          race_ethnicity_other = $15,
+          other_demographic_details = $16,
           updated_at = NOW()
-      WHERE id = $16::uuid
+      WHERE id = $17::uuid
       RETURNING id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture,
-                gender, pronouns, race_ethnicity, race_ethnicity_other, other_demographic_details,
+               gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details,
                 created_at, updated_at
       `,
       [
@@ -419,6 +437,7 @@ export class CloudSqlTeamService {
         gender,
         pronouns,
         raceEthnicity,
+        languagesOtherThanEnglish,
         raceEthnicityOther,
         otherDemographicDetails,
         id,

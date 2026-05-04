@@ -51,12 +51,22 @@ export interface ClientDetailDTO {
   requested_at?: string;
   updated_at?: string;
   payment_method?: string;
+  insurance?: string;
   insurance_provider?: string;
   insurance_member_id?: string;
   policy_number?: string;
+  insurance_phone_number?: string;
+  has_secondary_insurance?: boolean;
+  secondary_insurance_provider?: string;
+  secondary_insurance_member_id?: string;
+  secondary_policy_number?: string;
   self_pay_card_info?: string;
 
   is_eligible?: boolean;
+
+  // ========== LIFECYCLE / QB SYNC FIELDS ==========
+  matched_at?: string;
+  qbo_customer_id?: string;
 
   // ========== PHI FIELDS (only when authorized; omitted otherwise) ==========
   // These fields come from PHI Broker (Cloud SQL) and are gated by authorization.
@@ -80,6 +90,12 @@ export interface ClientDetailDTO {
   health_notes?: string;
   /** Doula-entered narrative birth summary (not structured / not checkboxes). */
   birth_outcomes?: string;
+  /** Structured birth outcomes: was labor induced? */
+  birth_outcomes_induction?: boolean;
+  /** Structured birth outcomes: delivery type (reportable option). */
+  birth_outcomes_delivery_type?: string;
+  /** Structured birth outcomes: medications used during birth (multi-select). */
+  birth_outcomes_medications_used?: string[];
   allergies?: string;
   medications?: string;
 
@@ -91,5 +107,4 @@ export interface ClientDetailDTO {
   race_ethnicity?: string;
   client_age_range?: string;
   annual_income?: string;
-  insurance?: string;
 }

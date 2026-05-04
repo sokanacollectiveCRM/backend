@@ -5,8 +5,10 @@ ALTER TABLE public.doulas
   ADD COLUMN IF NOT EXISTS gender VARCHAR(100),
   ADD COLUMN IF NOT EXISTS pronouns VARCHAR(100),
   ADD COLUMN IF NOT EXISTS race_ethnicity TEXT[],
+  ADD COLUMN IF NOT EXISTS languages_other_than_english TEXT[],
   ADD COLUMN IF NOT EXISTS race_ethnicity_other TEXT,
   ADD COLUMN IF NOT EXISTS other_demographic_details TEXT;
 
 COMMENT ON COLUMN public.doulas.race_ethnicity IS 'Multi-select race/ethnicity option keys (aligned with CRM doula profile UI).';
+COMMENT ON COLUMN public.doulas.languages_other_than_english IS 'Languages spoken other than English (free-form strings).';
 COMMENT ON COLUMN public.doulas.race_ethnicity_other IS 'Free text when "another_race_ethnicity" is selected.';

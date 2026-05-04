@@ -28,6 +28,7 @@ import { sanitizeDoulaRaceEthnicity } from '../constants/doulaDemographics';
 import type { TeamMemberDto } from '../services/cloudSqlTeamService';
 import { getSupabaseAdmin } from '../supabase';
 import { ActivityDTO } from '../dto/response/ActivityDTO';
+import { buildHourSummary, parseHourFilter, parseHourType } from '../utils/hourTypes';
 
 export class DoulaController {
   private documentRepository: DoulaDocumentRepository;
@@ -796,9 +797,17 @@ export class DoulaController {
       const startTime = req.body?.start_time ?? req.body?.startTime;
       const endTime = req.body?.end_time ?? req.body?.endTime;
       const note = req.body?.note ?? req.body?.notes ?? req.body?.description;
+      const normalizedType = parseHourType(req.body?.type);
 
       if (!doulaId) {
         res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      if (!normalizedType) {
+        res.status(400).json({
+          error: 'type is required and must be either prenatal or postpartum'
+        });
         return;
       }
 
@@ -825,7 +834,8 @@ export class DoulaController {
         clientId,
         new Date(startTime),
         new Date(endTime),
-        note || ''
+        note || '',
+        normalizedType
       );
 
       res.status(201).json({
@@ -847,8 +857,16 @@ export class DoulaController {
   async getMyHours(req: AuthRequest, res: Response): Promise<void> {
     try {
       const doulaId = req.user?.id;
+      const hourTypeFilter = parseHourFilter(req.query.type);
       if (!doulaId) {
         res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      if (req.query.type && !hourTypeFilter) {
+        res.status(400).json({
+          error: 'Invalid hour type filter. Must be prenatal, postpartum, or unknown'
+        });
         return;
       }
 
@@ -861,7 +879,8 @@ export class DoulaController {
       const filteredHours = allHours.filter((entry: any) => {
         // Handle both possible client structures: entry.client?.id or entry.client?.user?.id
         const clientId = entry.client?.id || entry.client?.user?.id;
-        return clientId && assignedClientIds.has(clientId);
+        const matchesType = !hourTypeFilter || (entry.type ?? 'unknown') === hourTypeFilter;
+        return clientId && assignedClientIds.has(clientId) && matchesType;
       });
 
       // Avoid 304/no-body caching behavior for frequently changing dashboard data.
@@ -871,7 +890,8 @@ export class DoulaController {
 
       res.json({
         success: true,
-        hours: filteredHours
+        hours: filteredHours,
+        summary: buildHourSummary(filteredHours)
       });
     } catch (error: any) {
       console.error('Error fetching hours:', error);
@@ -887,6 +907,47 @@ export class DoulaController {
       }
       res.status(500).json({
         error: error.message || 'Failed to fetch hours'
+      });
+    }
+  }
+
+  /**
+   * Update the type for a logged hour
+   * PATCH /api/doulas/hours/:hourId
+   */
+  async updateHour(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const doulaId = req.user?.id;
+      const hourId = req.params.hourId;
+      const normalizedType = parseHourType(req.body?.type);
+
+      if (!doulaId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      if (!hourId) {
+        res.status(400).json({ error: 'Missing hourId' });
+        return;
+      }
+
+      if (!normalizedType) {
+        res.status(400).json({
+          error: 'type is required and must be either prenatal or postpartum'
+        });
+        return;
+      }
+
+      const workEntry = await this.userUseCase.updateHourType(hourId, normalizedType, doulaId);
+
+      res.json({
+        success: true,
+        workEntry
+      });
+    } catch (error: any) {
+      console.error('Error updating hour:', error);
+      res.status(500).json({
+        error: error.message || 'Failed to update hour'
       });
     }
   }
@@ -1239,9 +1300,26 @@ export class DoulaController {
         gender?: string | null;
         pronouns?: string | null;
         race_ethnicity?: string[] | null;
+        languages_other_than_english?: string[] | null;
         race_ethnicity_other?: string | null;
         other_demographic_details?: string | null;
       } = {};
+
+      const sanitizeStringArray = (input: unknown): string[] => {
+        if (!Array.isArray(input)) return [];
+        const seen = new Set<string>();
+        const out: string[] = [];
+        for (const item of input) {
+          if (typeof item !== 'string') continue;
+          const v = item.trim();
+          if (!v) continue;
+          const key = v.toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          out.push(v);
+        }
+        return out;
+      };
 
       if (fieldsToUpdate.firstname !== undefined) cloudSqlUpdateData.firstname = String(fieldsToUpdate.firstname);
       if (fieldsToUpdate.lastname !== undefined) cloudSqlUpdateData.lastname = String(fieldsToUpdate.lastname);
@@ -1266,6 +1344,15 @@ export class DoulaController {
       }
       if (fieldsToUpdate.race_ethnicity !== undefined) {
         cloudSqlUpdateData.race_ethnicity = sanitizeDoulaRaceEthnicity(fieldsToUpdate.race_ethnicity);
+      }
+      const languagesRaw =
+        fieldsToUpdate.languages_other_than_english ??
+        fieldsToUpdate.languagesOtherThanEnglish ??
+        fieldsToUpdate.languages_spoken ??
+        fieldsToUpdate.languages_spoken_other_than_english;
+      if (languagesRaw !== undefined) {
+        const langs = sanitizeStringArray(languagesRaw);
+        cloudSqlUpdateData.languages_other_than_english = langs.length ? langs : [];
       }
       if (fieldsToUpdate.race_ethnicity_other !== undefined) {
         const t = String(fieldsToUpdate.race_ethnicity_other).trim();
@@ -1303,6 +1390,9 @@ export class DoulaController {
   ) {
     const reqUserJson = opts.reqUserJson;
     const race = Array.isArray(member.race_ethnicity) ? member.race_ethnicity : [];
+    const languages = Array.isArray(member.languages_other_than_english)
+      ? member.languages_other_than_english
+      : [];
     return {
       id: member.id,
       email: member.email,
@@ -1320,6 +1410,7 @@ export class DoulaController {
       gender: member.gender ?? '',
       pronouns: member.pronouns ?? '',
       race_ethnicity: race,
+      languages_other_than_english: languages,
       race_ethnicity_other: member.race_ethnicity_other ?? '',
       other_demographic_details: member.other_demographic_details ?? '',
       account_status: member.account_status,

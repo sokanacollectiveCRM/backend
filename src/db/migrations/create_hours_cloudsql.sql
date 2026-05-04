@@ -7,8 +7,10 @@ CREATE TABLE IF NOT EXISTS public.hours (
   client_id uuid NOT NULL REFERENCES public.phi_clients(id) ON DELETE CASCADE,
   start_time timestamptz NOT NULL,
   end_time timestamptz NOT NULL,
+  type text,
   created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT hours_type_check CHECK (type IS NULL OR type IN ('prenatal', 'postpartum'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_hours_doula_id ON public.hours(doula_id);

@@ -34,6 +34,11 @@ export class User {
   insurance_provider?: string;
   insurance_member_id?: string;
   policy_number?: string;
+  insurance_phone_number?: string;
+  has_secondary_insurance?: boolean;
+  secondary_insurance_provider?: string;
+  secondary_insurance_member_id?: string;
+  secondary_policy_number?: string;
   self_pay_card_info?: string;
   home_type?: string;
   services_interested?: string[];
@@ -41,6 +46,12 @@ export class User {
   health_notes?: string;
   /** Doula narrative: delivery type, complications, interventions, birth weight, etc. */
   birth_outcomes?: string;
+  /** Structured birth outcomes: was labor induced? */
+  birth_outcomes_induction?: boolean;
+  /** Structured birth outcomes: delivery type (reportable option). */
+  birth_outcomes_delivery_type?: string;
+  /** Structured birth outcomes: medications used (multi-select). */
+  birth_outcomes_medications_used?: string[];
   service_specifics?: string;
   baby_sex?: string;
   baby_name?: string;
@@ -107,12 +118,20 @@ export class User {
     insurance_provider?: string;
     insurance_member_id?: string;
     policy_number?: string;
+    insurance_phone_number?: string;
+    has_secondary_insurance?: boolean;
+    secondary_insurance_provider?: string;
+    secondary_insurance_member_id?: string;
+    secondary_policy_number?: string;
     self_pay_card_info?: string;
     home_type?: string;
     services_interested?: string[];
     phone_number?: string;
     health_notes?: string;
     birth_outcomes?: string;
+    birth_outcomes_induction?: boolean;
+    birth_outcomes_delivery_type?: string;
+    birth_outcomes_medications_used?: string[];
     service_specifics?: string;
     baby_sex?: string;
     baby_name?: string;
@@ -178,12 +197,20 @@ export class User {
       this.insurance_provider = data.insurance_provider;
       this.insurance_member_id = data.insurance_member_id;
       this.policy_number = data.policy_number;
+      this.insurance_phone_number = data.insurance_phone_number;
+      this.has_secondary_insurance = data.has_secondary_insurance;
+      this.secondary_insurance_provider = data.secondary_insurance_provider;
+      this.secondary_insurance_member_id = data.secondary_insurance_member_id;
+      this.secondary_policy_number = data.secondary_policy_number;
       this.self_pay_card_info = data.self_pay_card_info;
       this.home_type = data.home_type;
       this.services_interested = data.services_interested;
       this.phone_number = data.phone_number;
       this.health_notes = data.health_notes;
       this.birth_outcomes = data.birth_outcomes;
+      this.birth_outcomes_induction = data.birth_outcomes_induction;
+      this.birth_outcomes_delivery_type = data.birth_outcomes_delivery_type;
+      this.birth_outcomes_medications_used = data.birth_outcomes_medications_used;
       this.service_specifics = data.service_specifics;
       this.baby_sex = data.baby_sex;
       this.baby_name = data.baby_name;
@@ -262,6 +289,9 @@ export class User {
       phone_number: this.phone_number,
       health_notes: this.health_notes,
       birth_outcomes: this.birth_outcomes,
+      birth_outcomes_induction: this.birth_outcomes_induction,
+      birth_outcomes_delivery_type: this.birth_outcomes_delivery_type,
+      birth_outcomes_medications_used: this.birth_outcomes_medications_used,
       service_specifics: this.service_specifics,
       baby_sex: this.baby_sex,
       baby_name: this.baby_name,

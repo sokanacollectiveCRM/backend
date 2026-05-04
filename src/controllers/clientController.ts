@@ -19,6 +19,7 @@ import { ActivityMapper } from '../mappers/ActivityMapper';
 import { ApiResponse } from '../utils/responseBuilder';
 import { canAccessSensitive } from '../utils/sensitiveAccess';
 import { updateClientPhi, fetchClientPhi } from '../services/phiBrokerService';
+import { syncMatchedClientToQuickBooks } from '../services/customer/syncMatchedClientToQuickBooks';
 import { normalizeClientPatch, splitClientPatch } from '../constants/phiFields';
 import {
   CloudSqlDoulaAssignmentService,
@@ -40,12 +41,26 @@ import {
 } from '../constants/clientDocuments';
 
 export class ClientController {
+  private static readonly BIRTH_OUTCOMES_DELIVERY_TYPES = new Set([
+    'Vaginal (unmedicated)',
+    'Vaginal with pain medication/epidural',
+    'Assisted vaginal (vacuum/forceps)',
+    'Emergency Cesarean',
+    'Scheduled Cesarean',
+  ]);
+
+  private static readonly BIRTH_OUTCOMES_MEDICATIONS = new Set([
+    'Pitocin',
+    'Narcotic IV',
+    'Epidural',
+    'Nitrous Oxide',
+    'Cytotec',
+  ]);
   private static readonly BILLING_PAYMENT_METHODS = new Set([
     'Self-Pay',
     'Commercial Insurance',
     'Private Insurance',
     'Medicaid',
-    'Other',
   ]);
 
   private static readonly BILLING_FIELDS = new Set([
@@ -54,6 +69,11 @@ export class ClientController {
     'insurance_provider',
     'insurance_member_id',
     'policy_number',
+    'insurance_phone_number',
+    'has_secondary_insurance',
+    'secondary_insurance_provider',
+    'secondary_insurance_member_id',
+    'secondary_policy_number',
     'self_pay_card_info',
   ]);
 
@@ -169,19 +189,34 @@ export class ClientController {
     return trimmed.length > 0 ? trimmed : null;
   }
 
+  private normalizeOptionalBoolean(value: unknown): boolean | null | undefined {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
+      if (['false', '0', 'no', 'off'].includes(normalized)) return false;
+    }
+    return undefined;
+  }
+
   private normalizeBillingRow(row: Record<string, any> | null | undefined): Record<string, any> | null {
     if (!row) return null;
     const normalized: Record<string, any> = {
       payment_method: row.payment_method ?? null,
+      insurance: row.insurance ?? null,
       insurance_provider: row.insurance_provider ?? null,
       insurance_member_id: row.insurance_member_id ?? null,
       policy_number: row.policy_number ?? null,
+      insurance_phone_number: row.insurance_phone_number ?? null,
+      has_secondary_insurance: row.has_secondary_insurance ?? null,
+      secondary_insurance_provider: row.secondary_insurance_provider ?? null,
+      secondary_insurance_member_id: row.secondary_insurance_member_id ?? null,
+      secondary_policy_number: row.secondary_policy_number ?? null,
       self_pay_card_info: row.self_pay_card_info ?? null,
       updated_at: row.updated_at ?? null,
     };
-    if (row.insurance != null) {
-      normalized.insurance = row.insurance;
-    }
     return normalized;
   }
 
@@ -195,30 +230,47 @@ export class ClientController {
       return { message: 'payment_method is required' };
     }
     if (!ClientController.BILLING_PAYMENT_METHODS.has(paymentMethodRaw)) {
-      return { message: 'payment_method must be one of: Self-Pay, Commercial Insurance, Private Insurance, Medicaid, Other' };
+      return { message: 'payment_method must be one of: Self-Pay, Commercial Insurance, Private Insurance, Medicaid' };
     }
 
     const insuranceProvider = this.trimNullableString(input.insurance_provider);
     const insuranceMemberId = this.trimNullableString(input.insurance_member_id);
     const policyNumber = this.trimNullableString(input.policy_number);
+    const insurancePhoneNumber = this.trimNullableString(input.insurance_phone_number);
+    const hasSecondaryInsurance = this.normalizeOptionalBoolean(input.has_secondary_insurance);
+    if (input.has_secondary_insurance !== undefined && hasSecondaryInsurance === undefined) {
+      return { message: 'has_secondary_insurance must be a boolean' };
+    }
+    const secondaryInsuranceProvider = this.trimNullableString(input.secondary_insurance_provider);
+    const secondaryInsuranceMemberId = this.trimNullableString(input.secondary_insurance_member_id);
+    const secondaryPolicyNumber = this.trimNullableString(input.secondary_policy_number);
     const selfPayCardInfo = this.trimNullableString(input.self_pay_card_info);
     const insurance = this.trimNullableString(input.insurance);
 
     const billingValue: Record<string, any> = {
       payment_method: paymentMethodRaw,
+      insurance: null,
       insurance_provider: null,
       insurance_member_id: null,
       policy_number: null,
+      insurance_phone_number: insurancePhoneNumber ?? null,
+      has_secondary_insurance: false,
+      secondary_insurance_provider: null,
+      secondary_insurance_member_id: null,
+      secondary_policy_number: null,
       self_pay_card_info: null,
     };
-    if (insurance != null) {
-      billingValue.insurance = insurance;
-    }
 
     if (paymentMethodRaw === 'Self-Pay') {
       return {
         value: {
           ...billingValue,
+          insurance: null,
+          insurance_phone_number: null,
+          has_secondary_insurance: false,
+          secondary_insurance_provider: null,
+          secondary_insurance_member_id: null,
+          secondary_policy_number: null,
           self_pay_card_info: selfPayCardInfo ?? null,
         },
       };
@@ -234,12 +286,29 @@ export class ClientController {
       return { message: 'policy_number is required when payment_method is not Self-Pay' };
     }
 
+    if (hasSecondaryInsurance === true) {
+      if (!secondaryInsuranceProvider) {
+        return { message: 'secondary_insurance_provider is required when has_secondary_insurance is true' };
+      }
+      if (!secondaryInsuranceMemberId) {
+        return { message: 'secondary_insurance_member_id is required when has_secondary_insurance is true' };
+      }
+      if (!secondaryPolicyNumber) {
+        return { message: 'secondary_policy_number is required when has_secondary_insurance is true' };
+      }
+    }
+
     return {
       value: {
         ...billingValue,
+        insurance: insurance ?? null,
         insurance_provider: insuranceProvider,
         insurance_member_id: insuranceMemberId,
         policy_number: policyNumber,
+        has_secondary_insurance: hasSecondaryInsurance ?? false,
+        secondary_insurance_provider: hasSecondaryInsurance === true ? secondaryInsuranceProvider : null,
+        secondary_insurance_member_id: hasSecondaryInsurance === true ? secondaryInsuranceMemberId : null,
+        secondary_policy_number: hasSecondaryInsurance === true ? secondaryPolicyNumber : null,
       },
     };
   }
@@ -363,6 +432,18 @@ export class ClientController {
 
   private static isClientDocumentsTableMissing(error: unknown): boolean {
     return ClientController.isTableMissing(error, 'client_documents');
+  }
+
+  private static isBirthOutcomesColumnMissing(error: unknown): boolean {
+    if (!error || typeof error !== 'object') return false;
+    const code = String((error as { code?: string }).code || '');
+    const message = String((error as { message?: string }).message || '').toLowerCase();
+    return (
+      code === '42703' &&
+      (message.includes('birth_outcomes_induction') ||
+        message.includes('birth_outcomes_delivery_type') ||
+        message.includes('birth_outcomes_medications_used'))
+    );
   }
 
   private async hasInsuranceCardDocument(clientId: string): Promise<boolean> {
@@ -807,11 +888,24 @@ export class ClientController {
       if (fullClient.baby_sex != null) merged.baby_sex = fullClient.baby_sex;
       if (u?.health_notes != null) merged.health_notes = u.health_notes;
       if ((u as any)?.birth_outcomes != null) merged.birth_outcomes = (u as any).birth_outcomes;
+      if ((u as any)?.birth_outcomes_induction != null) merged.birth_outcomes_induction = (u as any).birth_outcomes_induction;
+      if ((u as any)?.birth_outcomes_delivery_type != null) merged.birth_outcomes_delivery_type = (u as any).birth_outcomes_delivery_type;
+      if ((u as any)?.birth_outcomes_medications_used != null) merged.birth_outcomes_medications_used = (u as any).birth_outcomes_medications_used;
       if (u?.baby_name != null) merged.baby_name = u.baby_name;
       if (u?.number_of_babies != null) merged.number_of_babies = u.number_of_babies;
       if (u?.race_ethnicity != null) merged.race_ethnicity = u.race_ethnicity;
       if (u?.client_age_range != null) merged.client_age_range = u.client_age_range;
-      if (u?.insurance != null) merged.insurance = u.insurance;
+      merged.insurance = u?.insurance ?? null;
+      merged.payment_method = u?.payment_method ?? null;
+      merged.insurance_provider = u?.insurance_provider ?? null;
+      merged.insurance_member_id = u?.insurance_member_id ?? null;
+      merged.policy_number = u?.policy_number ?? null;
+      merged.insurance_phone_number = u?.insurance_phone_number ?? null;
+      merged.has_secondary_insurance = u?.has_secondary_insurance ?? null;
+      merged.secondary_insurance_provider = u?.secondary_insurance_provider ?? null;
+      merged.secondary_insurance_member_id = u?.secondary_insurance_member_id ?? null;
+      merged.secondary_policy_number = u?.secondary_policy_number ?? null;
+      merged.self_pay_card_info = u?.self_pay_card_info ?? null;
       if (u?.pregnancy_number != null) merged.pregnancy_number = u.pregnancy_number;
       if (u?.had_previous_pregnancies != null) merged.had_previous_pregnancies = u.had_previous_pregnancies;
       if (u?.previous_pregnancies_count != null) merged.previous_pregnancies_count = u.previous_pregnancies_count;
@@ -907,6 +1001,30 @@ export class ClientController {
       } catch {
         // HIPAA: Do not log client identifiers
         console.error('Error checking eligibility');
+      }
+
+      // When transitioning to 'matched', fire QB customer sync (non-blocking).
+      // QB may not be connected in all environments; failures are logged only.
+      const isMatchedConversion = status.trim() === 'matched' || status.trim() === 'customer';
+      if (isMatchedConversion && !updatedRow.qbo_customer_id) {
+        syncMatchedClientToQuickBooks({
+          clientId,
+          firstName: updatedRow.first_name || '',
+          lastName: updatedRow.last_name || '',
+          email: updatedRow.email || '',
+          existingQboCustomerId: updatedRow.qbo_customer_id,
+        })
+          .then((result) => {
+            logger.info(
+              { clientId, qboCustomerId: result.qboCustomerId, alreadyExisted: result.alreadyExisted },
+              result.alreadyExisted
+                ? '[Client] QB customer already existed; linked to CRM record'
+                : '[Client] QB customer created and linked to CRM record'
+            );
+          })
+          .catch((err) => {
+            logger.warn({ clientId, error: (err as Error)?.message }, '[Client] QB customer sync failed (non-blocking)');
+          });
       }
 
       // Map to DTO and return canonical response
@@ -1130,11 +1248,24 @@ export class ClientController {
           if (fullClient.baby_sex != null) response.baby_sex = fullClient.baby_sex;
           if (u?.health_notes != null) response.health_notes = u.health_notes;
           if ((u as any)?.birth_outcomes != null) response.birth_outcomes = (u as any).birth_outcomes;
+          if ((u as any)?.birth_outcomes_induction != null) response.birth_outcomes_induction = (u as any).birth_outcomes_induction;
+          if ((u as any)?.birth_outcomes_delivery_type != null) response.birth_outcomes_delivery_type = (u as any).birth_outcomes_delivery_type;
+          if ((u as any)?.birth_outcomes_medications_used != null) response.birth_outcomes_medications_used = (u as any).birth_outcomes_medications_used;
           if (u?.baby_name != null) response.baby_name = u.baby_name;
           if (u?.number_of_babies != null) response.number_of_babies = u.number_of_babies;
           if (u?.race_ethnicity != null) response.race_ethnicity = u.race_ethnicity;
           if (u?.client_age_range != null) response.client_age_range = u.client_age_range;
-          if (u?.insurance != null) response.insurance = u.insurance;
+          response.insurance = u?.insurance ?? null;
+          response.payment_method = u?.payment_method ?? null;
+          response.insurance_provider = u?.insurance_provider ?? null;
+          response.insurance_member_id = u?.insurance_member_id ?? null;
+          response.policy_number = u?.policy_number ?? null;
+          response.insurance_phone_number = u?.insurance_phone_number ?? null;
+          response.has_secondary_insurance = u?.has_secondary_insurance ?? null;
+          response.secondary_insurance_provider = u?.secondary_insurance_provider ?? null;
+          response.secondary_insurance_member_id = u?.secondary_insurance_member_id ?? null;
+          response.secondary_policy_number = u?.secondary_policy_number ?? null;
+          response.self_pay_card_info = u?.self_pay_card_info ?? null;
           if (u?.pregnancy_number != null) response.pregnancy_number = u.pregnancy_number;
           if (u?.had_previous_pregnancies != null) response.had_previous_pregnancies = u.had_previous_pregnancies;
           if (u?.previous_pregnancies_count != null) response.previous_pregnancies_count = u.previous_pregnancies_count;
@@ -1180,6 +1311,116 @@ export class ClientController {
       res.json(ApiResponse.success(response));
     } catch (error) {
       logger.error({ errorMessage: (error as Error)?.message }, '[Client] update error');
+      const err = this.handleError(error as Error, res);
+      if (!res.headersSent) {
+        res.status(err.status).json(ApiResponse.error(err.message));
+      }
+    }
+  }
+
+  /**
+   * Update structured Birth Outcomes fields on phi_clients (Cloud SQL).
+   * These fields are reportable and intentionally NOT free-text.
+   *
+   * Required:
+   * - birth_outcomes_induction: boolean
+   * - birth_outcomes_delivery_type: one of allowed options
+   * - birth_outcomes_medications_used: string[] with allowed options (min 1)
+   *
+   * Authorization: admin or assigned doula (enforced by route + middleware).
+   */
+  async updateClientBirthOutcomes(req: AuthRequest, res: Response): Promise<void> {
+    const { id } = req.params;
+    const readMode = process.env.SPLIT_DB_READ_MODE;
+
+    if (readMode !== 'primary') {
+      res.status(501).json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
+      return;
+    }
+
+    if (!id) {
+      res.status(400).json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
+      return;
+    }
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      res.status(400).json(ApiResponse.error(`Invalid client ID format: ${id}`, 'VALIDATION_ERROR'));
+      return;
+    }
+
+    const body = req.body as Record<string, unknown>;
+    const induction = body.birth_outcomes_induction;
+    const deliveryTypeRaw = body.birth_outcomes_delivery_type;
+    const medsRaw = body.birth_outcomes_medications_used;
+
+    if (typeof induction !== 'boolean') {
+      res.status(400).json(ApiResponse.error('birth_outcomes_induction is required and must be a boolean', 'VALIDATION_ERROR'));
+      return;
+    }
+
+    const deliveryType = typeof deliveryTypeRaw === 'string' ? deliveryTypeRaw.trim() : '';
+    if (!deliveryType) {
+      res.status(400).json(ApiResponse.error('birth_outcomes_delivery_type is required', 'VALIDATION_ERROR'));
+      return;
+    }
+    if (!ClientController.BIRTH_OUTCOMES_DELIVERY_TYPES.has(deliveryType)) {
+      res.status(400).json(ApiResponse.error('birth_outcomes_delivery_type must be one of the allowed options', 'VALIDATION_ERROR'));
+      return;
+    }
+
+    if (!Array.isArray(medsRaw)) {
+      res.status(400).json(ApiResponse.error('birth_outcomes_medications_used is required and must be an array', 'VALIDATION_ERROR'));
+      return;
+    }
+    const meds = medsRaw
+      .map((v) => (typeof v === 'string' ? v.trim() : ''))
+      .filter((v) => v.length > 0);
+    if (meds.length === 0) {
+      res.status(400).json(ApiResponse.error('birth_outcomes_medications_used must include at least one item', 'VALIDATION_ERROR'));
+      return;
+    }
+    const invalidMeds = meds.filter((m) => !ClientController.BIRTH_OUTCOMES_MEDICATIONS.has(m));
+    if (invalidMeds.length > 0) {
+      res.status(400).json(ApiResponse.error('birth_outcomes_medications_used contains invalid option(s)', 'VALIDATION_ERROR'));
+      return;
+    }
+
+    try {
+      const clientExists = await this.clientRepository.getClientById?.(id) ?? null;
+      if (!clientExists) {
+        res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
+        return;
+      }
+
+      const updated = await this.clientRepository.updateClientOperational?.(id, {
+        birth_outcomes_induction: induction,
+        birth_outcomes_delivery_type: deliveryType,
+        birth_outcomes_medications_used: meds,
+      }) ?? null;
+
+      if (!updated) {
+        res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
+        return;
+      }
+
+      res.json(
+        ApiResponse.success({
+          birth_outcomes_induction: induction,
+          birth_outcomes_delivery_type: deliveryType,
+          birth_outcomes_medications_used: meds,
+        })
+      );
+    } catch (error) {
+      if (ClientController.isBirthOutcomesColumnMissing(error)) {
+        if (!res.headersSent) {
+          res.status(503).json(ApiResponse.error(
+            'Birth outcomes columns are missing. Run migration: src/db/migrations/add_phi_clients_birth_outcomes_structured.sql',
+            'SERVICE_UNAVAILABLE'
+          ));
+        }
+        return;
+      }
       const err = this.handleError(error as Error, res);
       if (!res.headersSent) {
         res.status(err.status).json(ApiResponse.error(err.message));

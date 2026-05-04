@@ -1,7 +1,10 @@
+import { HourType } from '../utils/hourTypes';
+
 export class WORK_ENTRY {
   id: string;
   start_time: Date;
   end_time: Date;
+  type: HourType | null;
   doula: {
       id: string;
       firstname: string;
@@ -20,4 +23,5 @@ export class WORK_ENTRY_ROW {
   client_id: string;
   start_time: Date;
   end_time: Date;
+  type: HourType | null;
 }

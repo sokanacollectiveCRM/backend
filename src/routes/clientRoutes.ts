@@ -118,6 +118,13 @@ clientRoutes.put('/:id/phi',
   (req, res) => clientController.updateClientPhi(req, res)
 );
 
+// Structured Birth Outcomes (must come before generic /:id)
+clientRoutes.put('/:id/birth-outcomes',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
+  (req, res) => clientController.updateClientBirthOutcomes(req, res)
+);
+
 clientRoutes.get('/me/billing',
   authMiddleware,
   (req, res, next) => authorizeRoles(req, res, next, ['client']),
