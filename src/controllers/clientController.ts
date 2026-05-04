@@ -520,7 +520,10 @@ export class ClientController {
       const hasAllowedExtension = CLIENT_DOCUMENT_ALLOWED_EXTENSIONS.includes(fileExtension as typeof CLIENT_DOCUMENT_ALLOWED_EXTENSIONS[number]);
       const hasAllowedMimeType = CLIENT_DOCUMENT_ALLOWED_MIME_TYPES.includes(file.mimetype as typeof CLIENT_DOCUMENT_ALLOWED_MIME_TYPES[number]);
       if (!hasAllowedExtension || !hasAllowedMimeType) {
-        res.status(400).json({ error: 'Unsupported file type. Only .jpg, .jpeg, .png, and .pdf are allowed' });
+        res.status(400).json({
+          error:
+            'Unsupported file type. Allowed: JPEG/PNG/WebP/HEIC/PDF (.jpg, .jpeg, .png, .webp, .heic, .heif, .pdf)',
+        });
         return;
       }
 

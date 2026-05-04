@@ -43,7 +43,7 @@ const authService = new SupabaseAuthService(supabase, userRepository);
 const requestService = new RequestFormService(requestRepository);
 const contractService = new SupabaseContractService(supabase);
 const doulaDocumentUploadService = new DoulaDocumentUploadService(supabase);
-const clientDocumentUploadService = new ClientDocumentUploadService(supabase);
+const clientDocumentUploadService = new ClientDocumentUploadService();
 //-----------------------------------------------
 // Use Cases (Business Logic)
 //-----------------------------------------------

@@ -47,7 +47,15 @@ VALUES (
   'client-documents',
   false,
   10485760,
-  ARRAY['image/jpeg', 'image/png', 'application/pdf']
+  ARRAY[
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+    'image/heic',
+    'image/heif',
+    'application/pdf'
+  ]
 )
 ON CONFLICT (id) DO NOTHING;
 

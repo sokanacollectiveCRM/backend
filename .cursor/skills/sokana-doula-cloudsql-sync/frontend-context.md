@@ -578,6 +578,63 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 - [x] Context updated
 - No implementation needed - observational preflight only
 
+## Preflight Update 2026-05-04 (Client documents storage bucket RLS)
+
+### Gate Result
+- `run_preflight`
+
+### Task Intent
+- Fix lazy bucket creation for client-documents: must use Supabase service role, not user JWT / anon.
+
+### Repos Scanned
+- backend
+
+### Files Scanned
+- `src/services/clientDocumentUploadService.ts`
+- `src/supabase.ts`
+- `src/index.ts` (wiring)
+- `frontend-crm` (per handoff): `clientDocuments.ts` / `formatClientDocumentErrorMessage` (UX only; no code change this pass)
+
+### Contract Findings
+- `ensureBucketExists` now calls `getSupabaseAdmin()` for `getBucket` / `createBucket` so `storage.buckets` inserts are not subject to end-user RLS.
+- Follow-up: upload/delete also use the service admin client (see next preflight entry); the `ClientDocumentUploadService` no longer takes an injected client.
+
+### Drift Risk
+- If `SUPABASE_SERVICE_ROLE_KEY` is wrong or missing in an environment, bucket ensure still fails; error text now nudges Dashboard pre-creation when RLS is detected.
+
 ### Action
 - [x] Context updated
 - [x] Implementation started
+
+## Preflight Update 2026-05-04 (Client insurance / Medicaid card uploads)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Make client portal insurance and Medicaid ID photo uploads reliable (same `POST /api/clients/me/documents` with `documentType` / `document_type` = `insurance_card`).
+
+- **Repos Scanned**: both
+
+- **Files Scanned**:
+  - `sokana-crm-frontend/frontend-crm/src/api/clients/clientDocuments.ts` (`uploadInsuranceCard`, `formatClientDocumentErrorMessage`)
+  - `src/services/clientDocumentUploadService.ts`
+  - `src/constants/clientDocuments.ts`
+  - `src/controllers/clientController.ts` (`uploadMyDocument`)
+  - `src/index.ts`
+  - `src/db/migrations/create_client_documents_table.sql`
+
+- **Contract Findings**:
+  - Frontend sends `file`, `documentType` and `document_type` = `insurance_card`, and `category` = `billing`.
+  - All Storage API calls for this feature use `getSupabaseAdmin()` (service role), including upload and delete, so Storage RLS on `INSERT` does not apply to the server path.
+  - Bucket `allowed_mime_types` is widened to include `image/jpg` and common phone formats; an `updateBucket` sync patches existing buckets that were created with a narrow list (a frequent cause of “RLS”/upload failures that are really MIME mismatch).
+
+- **Drift Risk**: Tightening allowed MIME types in the API without updating `CLIENT_DOCUMENT_BUCKET_MIME_TYPES` and the Supabase bucket can reintroduce storage rejections.
+
+- **Required Compatibility**: Only `insurance_card` remains the supported `documentType` for this route; list/URL/delete contracts unchanged.
+
+- **Context Updated**: yes
+
+- **Implementation Started After Gate**: yes
+
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation
