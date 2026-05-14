@@ -16,6 +16,20 @@ describe('Client billing/profile validation split', () => {
   let mockClientRepository: jest.Mocked<ClientRepository>;
   const clientId = '123e4567-e89b-12d3-a456-426614174000';
 
+  const nullPrimaryInsuranceHolderFields = {
+    insurance_policy_holder_name: null,
+    insurance_policy_holder_dob: null,
+    insurance_policy_holder_relationship: null,
+    insurance_plan_type: null,
+  };
+
+  const primaryInsuranceDetails = {
+    insurance_policy_holder_name: 'Jane Q Client',
+    insurance_policy_holder_dob: '1990-04-12',
+    insurance_policy_holder_relationship: 'Self',
+    insurance_plan_type: 'PPO',
+  };
+
   beforeEach(() => {
     process.env.SPLIT_DB_READ_MODE = 'primary';
 
@@ -82,6 +96,7 @@ describe('Client billing/profile validation split', () => {
       insurance: null,
       insurance_provider: null,
       insurance_member_id: null,
+      ...nullPrimaryInsuranceHolderFields,
       policy_number: null,
       insurance_phone_number: null,
       has_secondary_insurance: false,
@@ -137,6 +152,7 @@ describe('Client billing/profile validation split', () => {
       insurance: null,
       insurance_provider: null,
       insurance_member_id: null,
+      ...nullPrimaryInsuranceHolderFields,
       policy_number: null,
       insurance_phone_number: null,
       has_secondary_insurance: false,
@@ -192,6 +208,7 @@ describe('Client billing/profile validation split', () => {
         payment_method: 'Commercial Insurance',
         insurance_provider: 'Aetna',
         insurance_member_id: 'MEM-123',
+        ...primaryInsuranceDetails,
         policy_number: 'POL-456',
       },
       user: { id: 'client-auth-id', role: ROLE.CLIENT } as any,
@@ -315,6 +332,10 @@ describe('Client billing/profile validation split', () => {
       insurance: 'Blue Cross Blue Shield',
       insurance_provider: 'Blue Cross Blue Shield',
       insurance_member_id: 'MEM-12345',
+      insurance_policy_holder_name: 'Jane Q Client',
+      insurance_policy_holder_dob: '1990-04-12',
+      insurance_policy_holder_relationship: 'Self',
+      insurance_plan_type: 'PPO',
       policy_number: 'POL-67890',
       insurance_phone_number: '800-555-1212',
       has_secondary_insurance: true,
@@ -330,6 +351,10 @@ describe('Client billing/profile validation split', () => {
         payment_method: 'Commercial Insurance',
         insurance_provider: 'Blue Cross Blue Shield',
         insurance_member_id: 'MEM-12345',
+        insurance_policy_holder_name: 'Jane Q Client',
+        insurance_policy_holder_dob: '1990-04-12',
+        insurance_policy_holder_relationship: 'Self',
+        insurance_plan_type: 'PPO',
         policy_number: 'POL-67890',
         insurance_phone_number: '800-555-1212',
         has_secondary_insurance: true,
@@ -354,6 +379,10 @@ describe('Client billing/profile validation split', () => {
         insurance: 'Blue Cross Blue Shield',
         insurance_provider: 'Blue Cross Blue Shield',
         insurance_member_id: 'MEM-12345',
+        insurance_policy_holder_name: 'Jane Q Client',
+        insurance_policy_holder_dob: '1990-04-12',
+        insurance_policy_holder_relationship: 'Self',
+        insurance_plan_type: 'PPO',
         policy_number: 'POL-67890',
         insurance_phone_number: '800-555-1212',
         has_secondary_insurance: true,

@@ -85,8 +85,33 @@ Target database: **sokana_private** (PostgreSQL, accessed via Cloud SQL Proxy).
 | number_of_babies | integer | YES | — |
 | race_ethnicity | text | YES | — |
 | client_age_range | text | YES | — |
+| referral_source | text | YES | — |
+| referral_name | text | YES | — |
+| referral_email | text | YES | — |
+| referral_source_other | text | YES | — |
 | annual_income | text | YES | — |
 | insurance | text | YES | — |
+| payment_method | text | YES | — |
+| insurance_provider | text | YES | — |
+| insurance_member_id | text | YES | — |
+| insurance_policy_holder_name | text | YES | — |
+| insurance_policy_holder_dob | date | YES | — |
+| insurance_policy_holder_relationship | text | YES | — |
+| insurance_plan_type | text | YES | — |
+| policy_number | text | YES | — |
+| insurance_phone_number | text | YES | — |
+| has_secondary_insurance | boolean | YES | — |
+| secondary_insurance_provider | text | YES | — |
+| secondary_insurance_member_id | text | YES | — |
+| secondary_policy_number | text | YES | — |
+| self_pay_card_info | text | YES | — |
+
+**Billing / insurance semantics**
+
+- `insurance` — optional legacy/display field; CRM may mirror `insurance_provider`.
+- `payment_method` — Self-Pay, Commercial Insurance, Private Insurance, Medicaid.
+- `insurance_policy_holder_*`, `insurance_plan_type` — added in `src/db/migrations/add_phi_clients_expanded_primary_insurance.sql` (policy holder PHI; plan type: HMO, PPO, EPO, POS, HDHP, Medicaid, Medicare, Other; relationship: Self, Spouse, Partner, Parent, Child, Sibling, Other).
+- `policy_number` — group number; **optional** for Commercial, Private, and Medicaid (see `add_client_billing_fields.sql` for initial billing columns; secondary billing in `add_phi_clients_secondary_billing_fields.sql`).
 
 **Indexes:** phi_clients_pkey (id), idx_phi_clients_email (email). Migration: upsert on `id` (ON CONFLICT DO UPDATE).
 
@@ -120,6 +145,8 @@ Non-PHI; payments has optional `client_id` → phi_clients(id).
 - **Backend-required columns on phi_clients:** For list/detail and role scoping, the backend expects these columns on `phi_clients`. If missing, add them with `migrations/alter_phi_clients_backend_columns.sql`:
   - `status`, `service_needed`, `portal_status`, `user_id`, `requested_at`
   - `invited_at`, `last_invite_sent_at`, `invite_sent_count` (for portal flows)
+  - **Expanded primary insurance (Medicaid parity):** `insurance_policy_holder_name`, `insurance_policy_holder_dob`, `insurance_policy_holder_relationship`, `insurance_plan_type` — see `src/db/migrations/add_phi_clients_expanded_primary_insurance.sql`
+  - **Intake referral (CRM):** `referral_source`, `referral_name`, `referral_email`, `referral_source_other` — see `src/db/migrations/add_phi_clients_referral_intake_fields.sql` (`referral_source_other` required in app when source is `Other`).
 - **Doula scoping:** Use `public.assignments` (FK to `phi_clients(id)`). Create it with `migrations/create_phi_assignments_if_not_exists.sql` so the backend can filter clients by doula.
 - **Creating clients:** A client profile will usually need to be created in **Google Cloud SQL** when creating new clients from the app (e.g. insert into `phi_clients`). Ensure the backend or a sync job inserts into `phi_clients` when a new client is added so list/detail stay in sync. If using a separate Cloud SQL instance, ensure a **database/user (client) profile** exists there for the app to connect (e.g. Cloud SQL Proxy and DB user for `sokana_private`).
 

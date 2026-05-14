@@ -28,6 +28,10 @@ export type ClientOperationalRow = {
   insurance?: string | null;
   insurance_provider?: string | null;
   insurance_member_id?: string | null;
+  insurance_policy_holder_name?: string | null;
+  insurance_policy_holder_dob?: string | null;
+  insurance_policy_holder_relationship?: string | null;
+  insurance_plan_type?: string | null;
   policy_number?: string | null;
   insurance_phone_number?: string | null;
   has_secondary_insurance?: boolean | null;

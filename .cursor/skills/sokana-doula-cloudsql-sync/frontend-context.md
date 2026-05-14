@@ -638,3 +638,125 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 - **Action**:
   - [x] Context updated
   - [x] Implementation
+
+## Preflight Update 2026-05-11 (Request form — referral name field)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Confirm referral free-text exists end-to-end; align public form label and ensure staff client detail API returns saved referral fields when PHI-authorized.
+
+- **Repos Scanned**: both
+
+- **Files Scanned**:
+  - `sokana-crm-frontend/frontend-crm/src/features/request/Step3Home.tsx` (`Step4Referral`, `referral_name` input + `useRequestForm` schema)
+  - `sokana-crm-frontend/frontend-crm/src/features/clients/components/dialog/LeadProfileModal.tsx` (Referral Information section)
+  - `src/controllers/clientController.ts` (`getClientById` PHI merge)
+  - `src/services/RequestFormService.ts` / `src/repositories/requestFormRepository.ts` (persistence)
+  - `src/dto/response/ClientDetailDTO.ts`
+
+- **Contract Findings**:
+  - Intake payload uses snake_case `referral_source`, `referral_name`, `referral_email`; `referral_name` is optional in zod.
+  - Canonical `GET /clients/:id` merges extra fields from `findClientDetailedById().user` for authorized callers; referral fields must be included in that merge for CRM to display saved intake values.
+
+- **Drift Risk**: CRM assumes API returns `referral_*` on client detail for authorized staff.
+
+- **Required Compatibility**: Optional `referral_name` on submit; authorized client detail must include `referral_source`, `referral_name`, `referral_email` when present on the Cloud SQL row.
+
+- **Context Updated**: yes
+
+- **Implementation Started After Gate**: yes
+
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started
+
+## Preflight Update 2026-05-11 (Expanded primary insurance / Medicaid parity)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Align backend billing + intake with CRM expanded insurance fields (policy holder, plan type; optional group `policy_number` for all insurance payment methods including Medicaid).
+
+- **Repos Scanned**: both
+
+- **Files Scanned**:
+  - `sokana-crm-frontend/frontend-crm/src/features/client-dashboard/components/ClientProfileTab.tsx` (billing GET/PUT, `primaryInsuranceDetails`-style fields, `needsInsuranceDetails`)
+  - `sokana-crm-frontend/frontend-crm/src/features/request/__tests__/useRequestForm.test.tsx` (intake field names)
+  - Backend (this task): `clientController`, `RequestFormService`, `requestFormRepository`, `cloudSqlClientRepository`, migrations
+
+- **Contract Findings**:
+  - Portal billing PUT sends snake_case: `insurance_policy_holder_*`, `insurance_plan_type`, optional `policy_number`, plus legacy `insurance` mirroring provider.
+  - Billing GET merge tolerates snake_case and camelCase for display (`insurancePolicyHolderName`, etc.).
+  - Intake uses `RequestFormService.newForm` → Cloud SQL `phi_clients` INSERT.
+
+- **Drift Risk**: CRM validates required insurance fields client-side; backend must enforce the same when payment is Commercial, Private, or Medicaid or saves will diverge.
+
+- **Required Compatibility**: Support four new columns on read/write; do not require `policy_number` for Medicaid; return new fields on billing and merged client detail.
+
+- **Context Updated**: yes
+
+- **Implementation Started After Gate**: yes
+
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started
+
+## Preflight Update 2026-05-11 (Handoff: `referral_source_other` intake + CRM)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Open backend handoff ticket for `referral_source_other` validation, persistence on `phi_clients`, and staff client APIs; no implementation in this step.
+
+- **Repos Scanned**: both
+
+- **Files Scanned**:
+  - `sokana-crm-frontend/frontend-crm/src/features/request/Step3Home.tsx` (referral fields, clear `referral_source_other` when leaving `Other`)
+  - `sokana-crm-frontend/frontend-crm/src/features/request/__tests__/useRequestForm.test.tsx` (zod: `Other` requires non-empty `referral_source_other`)
+  - `sokana-crm-frontend/frontend-crm/src/api/dto/client.dto.ts` (`referral_source_other`)
+  - Backend: `src/routes/requestRoute.ts`, `src/services/RequestFormService.ts`, `src/repositories/requestFormRepository.ts`, `src/repositories/cloudSqlClientRepository.ts`, `src/controllers/clientController.ts`, `src/dto/response/ClientDetailDTO.ts`
+
+- **Contract Findings**:
+  - Intake and CRM expect **snake_case** `referral_source_other` alongside `referral_source`, `referral_name`, `referral_email`.
+  - Frontend requires trimmed non-empty `referral_source_other` when `referral_source === "Other"`; allowed sources include `Google`, `Doula Match`, `Former client`, `Sokana Member`, `Social Media`, `Email Blast`, `Other`.
+
+- **Drift Risk**: Backend omitting the column, INSERT list, allowlist, or DTO merge will drop the field silently after frontend ships.
+
+- **Required Compatibility**: Validate `Other` + required other-text on `POST /requestService/requestSubmission`; persist and return on Cloud SQL client row; staff update can set/clear; clearing when source ≠ `Other` should match ticket (server-side clear recommended).
+
+- **Context Updated**: yes
+
+- **Implementation Started After Gate**: yes (completed 2026-05-11)
+
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation (see `.cursor/handoffs/closed/2026-05-11-backend-request-intake-referral-source-other.md`)
+
+## Preflight Update 2026-05-12 (request submission tests + intake DTO)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Align backend tests with CRM `POST /requestService/requestSubmission` contract (age, provider_type, secondary insurance, payment label, `number_of_babies` / `service_needed`).
+
+- **Repos Scanned**: both
+
+- **Files Scanned**:
+  - `sokana-crm-frontend/frontend-crm/docs/BACKEND_REQUEST_SUBMISSION_TEST_PROMPT.md`
+  - `sokana-crm-frontend/frontend-crm/src/features/request/dummyTestLead.ts` (`DUMMY_TEST_LEAD`)
+  - `sokana-crm-frontend/frontend-crm/src/features/request/useRequestForm.ts` (age 1–120; `Private/Commercial Insurance`; provider options include `Family Doctor`)
+  - Backend: `src/services/RequestFormService.ts`, `src/repositories/requestFormRepository.ts`, `src/routes/requestRoute.ts`
+
+- **Contract Findings**:
+  - Submit sets `number_of_babies` as a number and `service_needed` to `services_interested.join(', ')` or trimmed support text.
+  - CRM payment option `Private/Commercial Insurance` must map to backend commercial path (`Commercial Insurance`) for validation/persistence.
+  - `provider_type` options include `Family Doctor` (backend enum uses `Family Physician`).
+
+- **Drift Risk**: Tests that omit `age` / `provider_type` no longer reflect the CRM full submit path; payment string mismatch would 400 on intake.
+
+- **Required Compatibility**: Normalize `Private/Commercial Insurance` → `Commercial Insurance`; validate age 1–120 and provider_type (with `Family Doctor` alias); enforce secondary fields when `has_secondary_insurance` is true (shared with `expandedInsuranceBilling`).
+
+- **Context Updated**: yes
+
+- **Implementation Started After Gate**: yes
+
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started

@@ -1,4 +1,16 @@
 import { ValidationError } from "../domains/errors";
+import {
+  parseIntakeReferral,
+} from '../constants/referralSource';
+import {
+  normalizeIntakePaymentMethod,
+  parseIntakeClientAgeYears,
+  parseIntakeProviderType,
+} from '../intake/requestSubmissionDto';
+import {
+  parseInsurancePolicyHolderDob,
+  validatePrimaryInsuranceWhenRequired,
+} from "../billing/expandedInsuranceBilling";
 import { RequestForm } from '../entities/RequestForm';
 import { RequestFormRepository } from "../repositories/requestFormRepository";
 import {
@@ -74,6 +86,17 @@ export class RequestFormService {
       throw new ValidationError("Invalid zip code format");
     }
 
+    const referralTouched = ['referral_source', 'referral_name', 'referral_email', 'referral_source_other'].some(
+      (k) => (formData as unknown as Record<string, unknown>)[k] !== undefined
+    );
+    if (referralTouched) {
+      const r = parseIntakeReferral(formData as unknown as Record<string, unknown>);
+      (formData as RequestFormData).referral_source = r.referral_source;
+      (formData as RequestFormData).referral_name = r.referral_name ?? undefined;
+      (formData as RequestFormData).referral_email = r.referral_email ?? undefined;
+      (formData as RequestFormData).referral_source_other = r.referral_source_other ?? undefined;
+    }
+
     // Save to repository (no userId)
     return await this.repository.saveData(formData);
   }
@@ -146,10 +169,24 @@ export class RequestFormService {
         throw new ValidationError("Invalid zip code format");
       }
 
-      const paymentMethod = this.trimNullableString(formData.payment_method);
-      if (!paymentMethod) {
+      const referral = parseIntakeReferral(formData as unknown as Record<string, unknown>);
+
+      const ageResult = parseIntakeClientAgeYears(formData.age);
+      if (ageResult.ok === false) {
+        throw new ValidationError(ageResult.message);
+      }
+
+      const providerResult = parseIntakeProviderType(formData.provider_type);
+      if (providerResult.ok === false) {
+        throw new ValidationError(providerResult.message);
+      }
+
+      const paymentRaw =
+        typeof formData.payment_method === 'string' ? formData.payment_method.trim() : '';
+      if (!paymentRaw) {
         throw new ValidationError("payment_method is required");
       }
+      const paymentMethod = normalizeIntakePaymentMethod(paymentRaw);
 
       const allowedPaymentMethods = new Set([
         'Commercial Insurance',
@@ -170,27 +207,32 @@ export class RequestFormService {
       const secondaryInsuranceMemberId = this.trimNullableString(formData.secondary_insurance_member_id);
       const secondaryPolicyNumber = this.trimNullableString(formData.secondary_policy_number);
       const selfPayCardInfo = this.trimNullableString(formData.self_pay_card_info);
+      const insurancePolicyHolderName = this.trimNullableString(formData.insurance_policy_holder_name);
+      const parsedHolderDob = parseInsurancePolicyHolderDob(formData.insurance_policy_holder_dob);
+      if (parsedHolderDob.ok === false) {
+        throw new ValidationError(parsedHolderDob.message);
+      }
+      const insurancePolicyHolderDob = parsedHolderDob.value;
+      const insurancePolicyHolderRelationship = this.trimNullableString(
+        formData.insurance_policy_holder_relationship
+      );
+      const insurancePlanType = this.trimNullableString(formData.insurance_plan_type);
 
       if (paymentMethod !== 'Self-Pay') {
-        if (!insuranceProvider) {
-          throw new ValidationError("insurance_provider is required when payment_method is not Self-Pay");
-        }
-        if (!insuranceMemberId) {
-          throw new ValidationError("insurance_member_id is required when payment_method is not Self-Pay");
-        }
-        if (!policyNumber) {
-          throw new ValidationError("policy_number is required when payment_method is not Self-Pay");
-        }
-        if (hasSecondaryInsurance === true) {
-          if (!secondaryInsuranceProvider) {
-            throw new ValidationError("secondary_insurance_provider is required when has_secondary_insurance is true");
-          }
-          if (!secondaryInsuranceMemberId) {
-            throw new ValidationError("secondary_insurance_member_id is required when has_secondary_insurance is true");
-          }
-          if (!secondaryPolicyNumber) {
-            throw new ValidationError("secondary_policy_number is required when has_secondary_insurance is true");
-          }
+        const primaryCheck = validatePrimaryInsuranceWhenRequired({
+          insuranceProvider,
+          insuranceMemberId,
+          insurancePolicyHolderName,
+          insurancePolicyHolderDob,
+          insurancePolicyHolderRelationship,
+          insurancePlanType,
+          hasSecondaryInsurance,
+          secondaryInsuranceProvider,
+          secondaryInsuranceMemberId,
+          secondaryPolicyNumber,
+        });
+        if (primaryCheck.ok === false) {
+          throw new ValidationError(primaryCheck.message);
         }
       }
 
@@ -205,6 +247,7 @@ export class RequestFormService {
         preferred_name: formData.preferred_name,                       // Add this field
         pronouns: formData.pronouns,
         pronouns_other: formData.pronouns_other,
+        intake_age_years: ageResult.value,
 
         // Step 2: Home Details
         address: formData.address,
@@ -225,9 +268,10 @@ export class RequestFormService {
         work_phone: formData.work_phone,
 
         // Step 4: Referral
-        referral_source: formData.referral_source,
-        referral_name: formData.referral_name,
-        referral_email: formData.referral_email,
+        referral_source: referral.referral_source,
+        referral_name: referral.referral_name ?? undefined,
+        referral_email: referral.referral_email ?? undefined,
+        referral_source_other: referral.referral_source_other ?? undefined,
 
         // Step 5: Health History
         health_history: formData.health_history,
@@ -238,6 +282,11 @@ export class RequestFormService {
         payment_method: paymentMethod,
         insurance_provider: paymentMethod === 'Self-Pay' ? null : insuranceProvider ?? null,
         insurance_member_id: paymentMethod === 'Self-Pay' ? null : insuranceMemberId ?? null,
+        insurance_policy_holder_name: paymentMethod === 'Self-Pay' ? null : insurancePolicyHolderName ?? null,
+        insurance_policy_holder_dob: paymentMethod === 'Self-Pay' ? null : insurancePolicyHolderDob ?? null,
+        insurance_policy_holder_relationship:
+          paymentMethod === 'Self-Pay' ? null : insurancePolicyHolderRelationship ?? null,
+        insurance_plan_type: paymentMethod === 'Self-Pay' ? null : insurancePlanType ?? null,
         policy_number: paymentMethod === 'Self-Pay' ? null : policyNumber ?? null,
         insurance_phone_number: paymentMethod === 'Self-Pay' ? null : insurancePhoneNumber ?? null,
         has_secondary_insurance: paymentMethod === 'Self-Pay' ? false : (hasSecondaryInsurance ?? null),
@@ -258,7 +307,7 @@ export class RequestFormService {
         birth_hospital: formData.birth_hospital,
         number_of_babies: formData.number_of_babies,
         baby_name: formData.baby_name,
-        provider_type: formData.provider_type,
+        provider_type: providerResult.value,
         pregnancy_number: formData.pregnancy_number,
 
         // Step 8: Past Pregnancies
@@ -309,6 +358,7 @@ export class RequestFormService {
         response.referral_source,
         response.referral_name,
         response.referral_email,
+        response.referral_source_other,
         response.health_history,
         response.allergies,
         response.health_notes,

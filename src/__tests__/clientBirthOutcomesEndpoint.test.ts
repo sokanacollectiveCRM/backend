@@ -205,6 +205,9 @@ describe('GET /clients/:id includes structured birth outcomes (authorized)', () 
           birth_outcomes_induction: false,
           birth_outcomes_delivery_type: 'Vaginal (unmedicated)',
           birth_outcomes_medications_used: ['Nitrous Oxide'],
+          referral_source: 'Midwife',
+          referral_name: 'Eastside Birth Collective',
+          referral_email: 'referrals@example.com',
         },
         // The controller also reads some top-level fields; keep them null/undefined-safe.
         health_history: null,
@@ -254,6 +257,9 @@ describe('GET /clients/:id includes structured birth outcomes (authorized)', () 
           birth_outcomes_induction: false,
           birth_outcomes_delivery_type: 'Vaginal (unmedicated)',
           birth_outcomes_medications_used: ['Nitrous Oxide'],
+          referral_source: 'Midwife',
+          referral_name: 'Eastside Birth Collective',
+          referral_email: 'referrals@example.com',
         }),
       })
     );

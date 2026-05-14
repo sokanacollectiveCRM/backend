@@ -43,6 +43,19 @@ export const PHI_FIELDS = new Set([
   'zip_code',
   'country',
 
+  // Intake (CRM request form) — persisted on phi_clients
+  'birth_location',
+  'birth_hospital',
+  'provider_type',
+  'pronouns',
+  'pronouns_other',
+  'preferred_contact_method',
+  'preferred_name',
+  'pets',
+  'service_support_details',
+  'services_interested',
+  'intake_age_years',
+
   // Clinical / health
   'health_history',
   'health_notes',
@@ -98,6 +111,7 @@ export const OPERATIONAL_UPDATE_COLUMNS = new Set([
   'referral_source',
   'referral_name',
   'referral_email',
+  'referral_source_other',
   'profile_picture',
   'account_status',
   'business',
@@ -154,6 +168,7 @@ const FIELD_ALIAS_MAP: Record<string, string> = {
   childrenexpected: 'children_expected',
   portalStatus: 'portal_status',
   portalstatus: 'portal_status',
+  referralSourceOther: 'referral_source_other',
 };
 
 /**

@@ -95,6 +95,10 @@ export class ClientMapper {
       insurance?: string | null;
       insurance_provider?: string | null;
       insurance_member_id?: string | null;
+      insurance_policy_holder_name?: string | null;
+      insurance_policy_holder_dob?: string | Date | null;
+      insurance_policy_holder_relationship?: string | null;
+      insurance_plan_type?: string | null;
       policy_number?: string | null;
       insurance_phone_number?: string | null;
       has_secondary_insurance?: boolean | null;
@@ -136,6 +140,13 @@ export class ClientMapper {
       insurance: row.insurance ?? undefined,
       insurance_provider: row.insurance_provider ?? undefined,
       insurance_member_id: row.insurance_member_id ?? undefined,
+      insurance_policy_holder_name: row.insurance_policy_holder_name ?? undefined,
+      insurance_policy_holder_dob:
+        row.insurance_policy_holder_dob instanceof Date
+          ? row.insurance_policy_holder_dob.toISOString().slice(0, 10)
+          : (row.insurance_policy_holder_dob ?? undefined),
+      insurance_policy_holder_relationship: row.insurance_policy_holder_relationship ?? undefined,
+      insurance_plan_type: row.insurance_plan_type ?? undefined,
       policy_number: row.policy_number ?? undefined,
       insurance_phone_number: row.insurance_phone_number ?? undefined,
       has_secondary_insurance: row.has_secondary_insurance ?? undefined,

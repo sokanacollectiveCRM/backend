@@ -48,6 +48,7 @@ describe('Request Endpoint Tests', () => {
     lastname: 'Doe',
     email: 'jane.doe@example.com',
     phone_number: '555-123-4567',
+    age: 30,
     pronouns: Pronouns.SHE_HER,
     pronouns_other: '',
 
@@ -70,9 +71,10 @@ describe('Request Endpoint Tests', () => {
     work_phone: '555-789-0123',
 
     // Step 4: Referral
-    referral_source: 'Friend',
+    referral_source: 'Google',
     referral_name: 'Sarah Smith',
     referral_email: 'sarah@example.com',
+    referral_source_other: '',
 
     // Step 5: Health History
     health_history: 'Previous C-section',
@@ -83,6 +85,10 @@ describe('Request Endpoint Tests', () => {
     payment_method: 'Commercial Insurance',
     insurance_provider: 'Blue Cross Blue Shield',
     insurance_member_id: 'MEM-12345',
+    insurance_policy_holder_name: 'Jane Q Client',
+    insurance_policy_holder_dob: '1990-04-12',
+    insurance_policy_holder_relationship: 'Self',
+    insurance_plan_type: 'PPO',
     policy_number: 'POL-67890',
     insurance_phone_number: '800-555-1212',
     has_secondary_insurance: false,
@@ -219,6 +225,7 @@ describe('Request Endpoint Tests', () => {
         lastname: 'Doe',
         email: 'jane@example.com',
         phone_number: '555-123-4567',
+        age: 28,
         address: '123 Main St',
         city: 'Anytown',
         state: STATE.CA,
@@ -226,6 +233,10 @@ describe('Request Endpoint Tests', () => {
         service_needed: ServiceTypes.LABOR_SUPPORT,
         payment_method: 'Self-Pay',
         self_pay_card_info: 'Visa ending 4242',
+        referral_source: 'Google',
+        referral_source_other: '',
+        provider_type: ProviderType.OB,
+        due_date: new Date('2026-06-01'),
       };
 
       jest.spyOn(requestFormService, 'newForm').mockResolvedValue(minimalData);
@@ -456,6 +467,45 @@ describe('Request Endpoint Tests', () => {
       );
     });
 
+    it('should require referral_source on intake', async () => {
+      const { referral_source: _rs, referral_source_other: _ro, ...rest } = mockFormData as any;
+      await expect(requestFormService.newForm(rest)).rejects.toThrow('referral_source is required');
+    });
+
+    it('should require referral_source_other when referral_source is Other', async () => {
+      const bad = {
+        ...mockFormData,
+        referral_source: 'Other',
+        referral_source_other: '   ',
+      };
+      await expect(requestFormService.newForm(bad)).rejects.toThrow('Please describe how you heard about Sokana.');
+    });
+
+    it('should reject invalid referral_source', async () => {
+      const bad = { ...mockFormData, referral_source: 'Friend' };
+      await expect(requestFormService.newForm(bad)).rejects.toThrow('referral_source must be one of:');
+    });
+
+    it('should accept Other with referral_source_other', async () => {
+      jest.spyOn(requestFormRepository, 'saveData').mockResolvedValue({
+        ...mockFormData,
+        referral_source: 'Other',
+        referral_source_other: 'Neighborhood group',
+      } as any);
+      const payload = {
+        ...mockFormData,
+        referral_source: 'Other',
+        referral_source_other: 'Neighborhood group',
+      };
+      await expect(requestFormService.newForm(payload)).resolves.toBeDefined();
+      expect(requestFormRepository.saveData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          referral_source: 'Other',
+          referral_source_other: 'Neighborhood group',
+        })
+      );
+    });
+
     it('should successfully process valid form data', async () => {
       // Mock the repository to return success
       jest.spyOn(requestFormRepository, 'saveData').mockResolvedValue(mockFormData as any);
@@ -472,6 +522,10 @@ describe('Request Endpoint Tests', () => {
           payment_method: 'Commercial Insurance',
           insurance_provider: 'Blue Cross Blue Shield',
           insurance_member_id: 'MEM-12345',
+          insurance_policy_holder_name: 'Jane Q Client',
+          insurance_policy_holder_dob: '1990-04-12',
+          insurance_policy_holder_relationship: 'Self',
+          insurance_plan_type: 'PPO',
           policy_number: 'POL-67890',
           insurance_phone_number: '800-555-1212',
           has_secondary_insurance: false,
@@ -490,6 +544,7 @@ describe('Request Endpoint Tests', () => {
         payment_method: paymentMethod,
         insurance_provider: provider,
         insurance_member_id: 'MEM-12345',
+        insurance_plan_type: paymentMethod === 'Medicaid' ? 'Medicaid' : 'PPO',
         policy_number: 'POL-67890',
         insurance_phone_number: '800-555-1212',
         insurance: provider,
@@ -508,7 +563,27 @@ describe('Request Endpoint Tests', () => {
           payment_method: paymentMethod,
           insurance_provider: provider,
           insurance_member_id: 'MEM-12345',
+          insurance_plan_type: paymentMethod === 'Medicaid' ? 'Medicaid' : 'PPO',
           policy_number: 'POL-67890',
+        })
+      );
+    });
+
+    it('should accept Medicaid intake without policy_number when other primary insurance fields are present', async () => {
+      jest.spyOn(requestFormRepository, 'saveData').mockResolvedValue(mockFormData as any);
+      const payload = {
+        ...mockFormData,
+        payment_method: 'Medicaid',
+        insurance_provider: 'State Medicaid',
+        insurance_member_id: 'MCD-99',
+        insurance_plan_type: 'Medicaid',
+        policy_number: '',
+      };
+      await expect(requestFormService.newForm(payload)).resolves.toBeDefined();
+      expect(requestFormRepository.saveData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payment_method: 'Medicaid',
+          policy_number: null,
         })
       );
     });
@@ -545,6 +620,43 @@ describe('Request Endpoint Tests', () => {
       );
     });
 
+    it('should map CRM Private/Commercial Insurance to Commercial Insurance before save', async () => {
+      jest.spyOn(requestFormRepository, 'saveData').mockResolvedValue(mockFormData as any);
+      const payload = {
+        ...mockFormData,
+        payment_method: 'Private/Commercial Insurance',
+      };
+      await expect(requestFormService.newForm(payload)).resolves.toBeDefined();
+      expect(requestFormRepository.saveData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payment_method: 'Commercial Insurance',
+        })
+      );
+    });
+
+    it('should map CRM Family Doctor provider label to Family Physician', async () => {
+      jest.spyOn(requestFormRepository, 'saveData').mockResolvedValue({
+        ...mockFormData,
+        provider_type: ProviderType.FAMILY_PHYSICIAN,
+      } as any);
+      const payload = {
+        ...mockFormData,
+        provider_type: 'Family Doctor',
+      };
+      await expect(requestFormService.newForm(payload)).resolves.toBeDefined();
+      expect(requestFormRepository.saveData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider_type: ProviderType.FAMILY_PHYSICIAN,
+        })
+      );
+    });
+
+    it('should reject invalid client age', async () => {
+      await expect(
+        requestFormService.newForm({ ...mockFormData, age: 0 })
+      ).rejects.toThrow('age must be between 1 and 120');
+    });
+
     it('should require secondary insurance fields when the secondary path is enabled', async () => {
       const payload = {
         ...mockFormData,
@@ -553,6 +665,7 @@ describe('Request Endpoint Tests', () => {
         secondary_insurance_provider: 'Kaiser Secondary',
         secondary_insurance_member_id: 'SEC-12345',
         secondary_policy_number: 'SEC-POL-1',
+        insurance_plan_type: 'PPO',
       };
 
       jest.spyOn(requestFormRepository, 'saveData').mockResolvedValue(payload as any);
@@ -622,21 +735,36 @@ describe('Request Endpoint Tests', () => {
       expect(sql).toContain('secondary_insurance_member_id');
       expect(sql).toContain('secondary_policy_number');
       expect(sql).toContain('self_pay_card_info');
-      expect(params[21]).toBe('Blue Cross Blue Shield');
-      expect(params[22]).toBe('Commercial Insurance');
-      expect(params[23]).toBe('Blue Cross Blue Shield');
-      expect(params[24]).toBe('MEM-12345');
-      expect(params[25]).toBe('POL-67890');
-      expect(params[26]).toBe('800-555-1212');
-      expect(params[27]).toBe(false);
-      expect(params[28]).toBeNull();
-      expect(params[29]).toBeNull();
-      expect(params[30]).toBeNull();
-      expect(params[31]).toBeNull();
-      expect(params[32]).toBe('lead');
-      expect(params[33]).toBe(mockFormData.service_needed);
-      expect(params[34]).toBe('not_invited');
-      expect(params[35]).toEqual(expect.any(String));
+      expect(sql).toContain('insurance_policy_holder_name');
+      expect(sql).toContain('insurance_plan_type');
+      expect(sql).toContain('referral_source');
+      expect(sql).toContain('referral_source_other');
+      expect(sql).toContain('city');
+      expect(sql).toContain('intake_age_years');
+      expect(sql).toContain('services_interested');
+      expect(params[37]).toBe('Google');
+      expect(params[38]).toBe('Sarah Smith');
+      expect(params[39]).toBe('sarah@example.com');
+      expect(params[40]).toBeNull();
+      expect(params[41]).toBe('Blue Cross Blue Shield');
+      expect(params[42]).toBe('Commercial Insurance');
+      expect(params[43]).toBe('Blue Cross Blue Shield');
+      expect(params[44]).toBe('MEM-12345');
+      expect(params[45]).toBe('Jane Q Client');
+      expect(params[46]).toBe('1990-04-12');
+      expect(params[47]).toBe('Self');
+      expect(params[48]).toBe('PPO');
+      expect(params[49]).toBe('POL-67890');
+      expect(params[50]).toBe('800-555-1212');
+      expect(params[51]).toBe(false);
+      expect(params[52]).toBeNull();
+      expect(params[53]).toBeNull();
+      expect(params[54]).toBeNull();
+      expect(params[55]).toBeNull();
+      expect(params[56]).toBe('lead');
+      expect(params[57]).toBe(mockFormData.service_needed);
+      expect(params[58]).toBe('not_invited');
+      expect(params[59]).toEqual(expect.any(String));
     });
 
     it('should null out insurance fields for Self-Pay submissions before persisting and returning the record', async () => {
@@ -665,6 +793,10 @@ describe('Request Endpoint Tests', () => {
         insurance: null,
         insurance_provider: null,
         insurance_member_id: null,
+        insurance_policy_holder_name: null,
+        insurance_policy_holder_dob: null,
+        insurance_policy_holder_relationship: null,
+        insurance_plan_type: null,
         policy_number: null,
         insurance_phone_number: null,
         has_secondary_insurance: false,
@@ -675,17 +807,29 @@ describe('Request Endpoint Tests', () => {
       }));
 
       const [, params] = mockQuery.mock.calls[0];
-      expect(params[21]).toBeNull();
-      expect(params[22]).toBe('Self-Pay');
-      expect(params[23]).toBeNull();
-      expect(params[24]).toBeNull();
-      expect(params[25]).toBeNull();
-      expect(params[26]).toBeNull();
-      expect(params[27]).toBe(false);
-      expect(params[28]).toBeNull();
-      expect(params[29]).toBeNull();
-      expect(params[30]).toBeNull();
-      expect(params[31]).toBe('Visa ending 4242');
+      expect(params[37]).toBe('Google');
+      expect(params[38]).toBe('Sarah Smith');
+      expect(params[39]).toBe('sarah@example.com');
+      expect(params[40]).toBeNull();
+      expect(params[41]).toBeNull();
+      expect(params[42]).toBe('Self-Pay');
+      expect(params[43]).toBeNull();
+      expect(params[44]).toBeNull();
+      expect(params[45]).toBeNull();
+      expect(params[46]).toBeNull();
+      expect(params[47]).toBeNull();
+      expect(params[48]).toBeNull();
+      expect(params[49]).toBeNull();
+      expect(params[50]).toBeNull();
+      expect(params[51]).toBe(false);
+      expect(params[52]).toBeNull();
+      expect(params[53]).toBeNull();
+      expect(params[54]).toBeNull();
+      expect(params[55]).toBe('Visa ending 4242');
+      expect(params[56]).toBe('lead');
+      expect(params[57]).toBe(mockFormData.service_needed);
+      expect(params[58]).toBe('not_invited');
+      expect(params[59]).toEqual(expect.any(String));
     });
   });
 

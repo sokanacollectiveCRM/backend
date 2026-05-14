@@ -22,7 +22,7 @@ const ALLOWED_CLIENT_INFO_UPDATE_COLUMNS = new Set([
   'race_ethnicity', 'primary_language', 'client_age_range', 'insurance', 'demographics_multi',
   'pronouns_other', 'home_phone', 'home_access', 'pets', 'relationship_status',
   'middle_name', 'mobile_phone', 'work_phone', 'referral_source', 'referral_name',
-  'referral_email', 'address', 'city', 'state', 'country', 'zip_code', 'profile_picture',
+  'referral_email', 'referral_source_other', 'address', 'city', 'state', 'country', 'zip_code', 'profile_picture',
   'account_status', 'business', 'bio',
 ]);
 
@@ -518,6 +518,7 @@ export class SupabaseClientRepository  {
     if (fieldsToUpdate.referral_source !== undefined) updateData.referral_source = fieldsToUpdate.referral_source;
     if (fieldsToUpdate.referral_name !== undefined) updateData.referral_name = fieldsToUpdate.referral_name;
     if (fieldsToUpdate.referral_email !== undefined) updateData.referral_email = fieldsToUpdate.referral_email;
+    if (fieldsToUpdate.referral_source_other !== undefined) updateData.referral_source_other = fieldsToUpdate.referral_source_other;
     if (fieldsToUpdate.address !== undefined) updateData.address = fieldsToUpdate.address;
     if (fieldsToUpdate.city !== undefined) updateData.city = fieldsToUpdate.city;
     if (fieldsToUpdate.state !== undefined) updateData.state = fieldsToUpdate.state;
@@ -693,7 +694,8 @@ export class SupabaseClientRepository  {
       work_phone: data.work_phone,
       referral_source: data.referral_source,
       referral_name: data.referral_name,
-      referral_email: data.referral_email
+      referral_email: data.referral_email,
+      referral_source_other: data.referral_source_other,
     });
   }
 
@@ -771,7 +773,8 @@ export class SupabaseClientRepository  {
       work_phone: userRecord.work_phone || data.work_phone,
       referral_source: userRecord.referral_source || data.referral_source,
       referral_name: userRecord.referral_name || data.referral_name,
-      referral_email: userRecord.referral_email || data.referral_email
+      referral_email: userRecord.referral_email || data.referral_email,
+      referral_source_other: userRecord.referral_source_other || data.referral_source_other,
     });
 
     // Handle both legacy (requested) and new (requested_at) column naming

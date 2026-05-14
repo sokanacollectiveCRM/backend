@@ -54,6 +54,10 @@ export interface ClientDetailDTO {
   insurance?: string;
   insurance_provider?: string;
   insurance_member_id?: string;
+  insurance_policy_holder_name?: string;
+  insurance_policy_holder_dob?: string;
+  insurance_policy_holder_relationship?: string;
+  insurance_plan_type?: string;
   policy_number?: string;
   insurance_phone_number?: string;
   has_secondary_insurance?: boolean;
@@ -107,4 +111,10 @@ export interface ClientDetailDTO {
   race_ethnicity?: string;
   client_age_range?: string;
   annual_income?: string;
+
+  /** Intake referral (merged on GET /clients/:id when caller is authorized for PHI). */
+  referral_source?: string;
+  referral_name?: string;
+  referral_email?: string;
+  referral_source_other?: string | null;
 }

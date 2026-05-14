@@ -138,6 +138,8 @@ export interface RequestFormData {
   pronouns?: Pronouns;
   pronouns_other?: string;
   children_expected?: string;
+  /** Set on server from parsed intake `age` (1–120); persisted as phi_clients.intake_age_years. */
+  intake_age_years?: number;
 
   // Step 2: Home Details
   address: string;
@@ -161,6 +163,8 @@ export interface RequestFormData {
   referral_source?: string;
   referral_name?: string;
   referral_email?: string;
+  /** Required (non-empty) when referral_source is Other; otherwise null/cleared. */
+  referral_source_other?: string | null;
 
   // Step 5: Health History
   health_history?: string;
@@ -171,6 +175,10 @@ export interface RequestFormData {
   payment_method?: string;
   insurance_provider?: string | null;
   insurance_member_id?: string | null;
+  insurance_policy_holder_name?: string | null;
+  insurance_policy_holder_dob?: string | null;
+  insurance_policy_holder_relationship?: string | null;
+  insurance_plan_type?: string | null;
   policy_number?: string | null;
   insurance_phone_number?: string | null;
   has_secondary_insurance?: boolean | null;
@@ -226,7 +234,10 @@ export interface RequestFormResponse {
   phone_number: string;
   pronouns?: Pronouns;
   pronouns_other?: string;
+  preferred_contact_method?: string;
+  preferred_name?: string;
   children_expected?: string;
+  intake_age_years?: number;
   address: string;
   city: string;
   state: STATE;
@@ -244,6 +255,7 @@ export interface RequestFormResponse {
   referral_source?: string;
   referral_name?: string;
   referral_email?: string;
+  referral_source_other?: string | null;
   health_history?: string;
   allergies?: string;
   health_notes?: string;
@@ -272,6 +284,10 @@ export interface RequestFormResponse {
   payment_method?: string | null;
   insurance_provider?: string | null;
   insurance_member_id?: string | null;
+  insurance_policy_holder_name?: string | null;
+  insurance_policy_holder_dob?: string | null;
+  insurance_policy_holder_relationship?: string | null;
+  insurance_plan_type?: string | null;
   policy_number?: string | null;
   insurance_phone_number?: string | null;
   has_secondary_insurance?: boolean | null;

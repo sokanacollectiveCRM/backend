@@ -27,6 +27,11 @@ import {
 } from '../services/cloudSqlDoulaAssignmentService';
 import { ASSIGNMENT_SERVICE_CATALOG, normalizeAssignmentServices } from '../constants/assignmentServices';
 import { logger } from '../common/utils/logger';
+import { normalizeStaffReferralOperationalPatch } from '../constants/referralSource';
+import {
+  parseInsurancePolicyHolderDob,
+  validatePrimaryInsuranceWhenRequired,
+} from '../billing/expandedInsuranceBilling';
 import { getSupabaseAdmin } from '../supabase';
 import { ActivityDTO } from '../dto/response/ActivityDTO';
 import { ClientDocumentRepository, ClientDocument } from '../repositories/clientDocumentRepository';
@@ -68,6 +73,10 @@ export class ClientController {
     'insurance',
     'insurance_provider',
     'insurance_member_id',
+    'insurance_policy_holder_name',
+    'insurance_policy_holder_dob',
+    'insurance_policy_holder_relationship',
+    'insurance_plan_type',
     'policy_number',
     'insurance_phone_number',
     'has_secondary_insurance',
@@ -76,6 +85,14 @@ export class ClientController {
     'secondary_policy_number',
     'self_pay_card_info',
   ]);
+
+  /** Accept camelCase billing keys from older clients; normalized before validation. */
+  private static readonly BILLING_CAMEL_TO_SNAKE: Record<string, string> = {
+    insurancePolicyHolderName: 'insurance_policy_holder_name',
+    insurancePolicyHolderDob: 'insurance_policy_holder_dob',
+    insurancePolicyHolderRelationship: 'insurance_policy_holder_relationship',
+    insurancePlanType: 'insurance_plan_type',
+  };
 
   private static readonly ZIP_CODE_REGEX = /^(?:\d{5})(?:-\d{4})?$/;
 
@@ -155,9 +172,23 @@ export class ClientController {
     return { ok: true, value: normalized };
   }
 
+  private expandBillingInputKeys(input: Record<string, any>): Record<string, any> {
+    const out: Record<string, any> = { ...input };
+    for (const [camel, snake] of Object.entries(ClientController.BILLING_CAMEL_TO_SNAKE)) {
+      if (
+        Object.prototype.hasOwnProperty.call(input, camel) &&
+        !Object.prototype.hasOwnProperty.call(input, snake)
+      ) {
+        out[snake] = input[camel];
+      }
+    }
+    return out;
+  }
+
   private extractBillingPatch(input: Record<string, any>): Record<string, any> {
+    const normalizedInput = this.expandBillingInputKeys(input || {});
     const billing: Record<string, any> = {};
-    for (const [key, value] of Object.entries(input)) {
+    for (const [key, value] of Object.entries(normalizedInput)) {
       if (ClientController.BILLING_FIELDS.has(key)) {
         billing[key] = value;
       }
@@ -203,11 +234,20 @@ export class ClientController {
 
   private normalizeBillingRow(row: Record<string, any> | null | undefined): Record<string, any> | null {
     if (!row) return null;
+    const holderDobRaw = row.insurance_policy_holder_dob;
+    const holderDob =
+      holderDobRaw instanceof Date
+        ? holderDobRaw.toISOString().slice(0, 10)
+        : holderDobRaw ?? null;
     const normalized: Record<string, any> = {
       payment_method: row.payment_method ?? null,
       insurance: row.insurance ?? null,
       insurance_provider: row.insurance_provider ?? null,
       insurance_member_id: row.insurance_member_id ?? null,
+      insurance_policy_holder_name: row.insurance_policy_holder_name ?? null,
+      insurance_policy_holder_dob: holderDob,
+      insurance_policy_holder_relationship: row.insurance_policy_holder_relationship ?? null,
+      insurance_plan_type: row.insurance_plan_type ?? null,
       policy_number: row.policy_number ?? null,
       insurance_phone_number: row.insurance_phone_number ?? null,
       has_secondary_insurance: row.has_secondary_insurance ?? null,
@@ -217,6 +257,10 @@ export class ClientController {
       self_pay_card_info: row.self_pay_card_info ?? null,
       updated_at: row.updated_at ?? null,
     };
+    normalized.insurancePolicyHolderName = normalized.insurance_policy_holder_name;
+    normalized.insurancePolicyHolderDob = normalized.insurance_policy_holder_dob;
+    normalized.insurancePolicyHolderRelationship = normalized.insurance_policy_holder_relationship;
+    normalized.insurancePlanType = normalized.insurance_plan_type;
     return normalized;
   }
 
@@ -246,12 +290,24 @@ export class ClientController {
     const secondaryPolicyNumber = this.trimNullableString(input.secondary_policy_number);
     const selfPayCardInfo = this.trimNullableString(input.self_pay_card_info);
     const insurance = this.trimNullableString(input.insurance);
+    const insurancePolicyHolderName = this.trimNullableString(input.insurance_policy_holder_name);
+    const parsedHolderDob = parseInsurancePolicyHolderDob(input.insurance_policy_holder_dob);
+    if (parsedHolderDob.ok === false) {
+      return { message: parsedHolderDob.message };
+    }
+    const insurancePolicyHolderDob = parsedHolderDob.value;
+    const insurancePolicyHolderRelationship = this.trimNullableString(input.insurance_policy_holder_relationship);
+    const insurancePlanType = this.trimNullableString(input.insurance_plan_type);
 
     const billingValue: Record<string, any> = {
       payment_method: paymentMethodRaw,
       insurance: null,
       insurance_provider: null,
       insurance_member_id: null,
+      insurance_policy_holder_name: null,
+      insurance_policy_holder_dob: null,
+      insurance_policy_holder_relationship: null,
+      insurance_plan_type: null,
       policy_number: null,
       insurance_phone_number: insurancePhoneNumber ?? null,
       has_secondary_insurance: false,
@@ -276,26 +332,20 @@ export class ClientController {
       };
     }
 
-    if (!insuranceProvider) {
-      return { message: 'insurance_provider is required when payment_method is not Self-Pay' };
-    }
-    if (!insuranceMemberId) {
-      return { message: 'insurance_member_id is required when payment_method is not Self-Pay' };
-    }
-    if (!policyNumber) {
-      return { message: 'policy_number is required when payment_method is not Self-Pay' };
-    }
-
-    if (hasSecondaryInsurance === true) {
-      if (!secondaryInsuranceProvider) {
-        return { message: 'secondary_insurance_provider is required when has_secondary_insurance is true' };
-      }
-      if (!secondaryInsuranceMemberId) {
-        return { message: 'secondary_insurance_member_id is required when has_secondary_insurance is true' };
-      }
-      if (!secondaryPolicyNumber) {
-        return { message: 'secondary_policy_number is required when has_secondary_insurance is true' };
-      }
+    const primaryCheck = validatePrimaryInsuranceWhenRequired({
+      insuranceProvider,
+      insuranceMemberId,
+      insurancePolicyHolderName,
+      insurancePolicyHolderDob,
+      insurancePolicyHolderRelationship,
+      insurancePlanType,
+      hasSecondaryInsurance,
+      secondaryInsuranceProvider,
+      secondaryInsuranceMemberId,
+      secondaryPolicyNumber,
+    });
+    if (primaryCheck.ok === false) {
+      return { message: primaryCheck.message };
     }
 
     return {
@@ -304,7 +354,11 @@ export class ClientController {
         insurance: insurance ?? null,
         insurance_provider: insuranceProvider,
         insurance_member_id: insuranceMemberId,
-        policy_number: policyNumber,
+        insurance_policy_holder_name: insurancePolicyHolderName,
+        insurance_policy_holder_dob: insurancePolicyHolderDob,
+        insurance_policy_holder_relationship: insurancePolicyHolderRelationship,
+        insurance_plan_type: insurancePlanType,
+        policy_number: policyNumber ?? null,
         has_secondary_insurance: hasSecondaryInsurance ?? false,
         secondary_insurance_provider: hasSecondaryInsurance === true ? secondaryInsuranceProvider : null,
         secondary_insurance_member_id: hasSecondaryInsurance === true ? secondaryInsuranceMemberId : null,
@@ -902,6 +956,12 @@ export class ClientController {
       merged.payment_method = u?.payment_method ?? null;
       merged.insurance_provider = u?.insurance_provider ?? null;
       merged.insurance_member_id = u?.insurance_member_id ?? null;
+      merged.insurance_policy_holder_name = u?.insurance_policy_holder_name ?? null;
+      const uDob = (u as any)?.insurance_policy_holder_dob;
+      merged.insurance_policy_holder_dob =
+        uDob instanceof Date ? uDob.toISOString().slice(0, 10) : uDob ?? null;
+      merged.insurance_policy_holder_relationship = u?.insurance_policy_holder_relationship ?? null;
+      merged.insurance_plan_type = u?.insurance_plan_type ?? null;
       merged.policy_number = u?.policy_number ?? null;
       merged.insurance_phone_number = u?.insurance_phone_number ?? null;
       merged.has_secondary_insurance = u?.has_secondary_insurance ?? null;
@@ -909,6 +969,10 @@ export class ClientController {
       merged.secondary_insurance_member_id = u?.secondary_insurance_member_id ?? null;
       merged.secondary_policy_number = u?.secondary_policy_number ?? null;
       merged.self_pay_card_info = u?.self_pay_card_info ?? null;
+      merged.referral_source = u?.referral_source ?? null;
+      merged.referral_name = u?.referral_name ?? null;
+      merged.referral_email = u?.referral_email ?? null;
+      merged.referral_source_other = u?.referral_source_other ?? null;
       if (u?.pregnancy_number != null) merged.pregnancy_number = u.pregnancy_number;
       if (u?.had_previous_pregnancies != null) merged.had_previous_pregnancies = u.had_previous_pregnancies;
       if (u?.previous_pregnancies_count != null) merged.previous_pregnancies_count = u.previous_pregnancies_count;
@@ -1138,6 +1202,24 @@ export class ClientController {
         phiKeyCount: Object.keys(phi).length, // don't log PHI field names in prod
       }, '[Client] update payload split');
 
+      const referralPatchKeys = ['referral_source', 'referral_source_other', 'referral_name', 'referral_email'];
+      if (referralPatchKeys.some((k) => Object.prototype.hasOwnProperty.call(operational, k))) {
+        const fullClient = await this.clientRepository.findClientDetailedById(targetClientId);
+        const u = fullClient.user;
+        const current = {
+          referral_source: u?.referral_source ?? null,
+          referral_name: u?.referral_name ?? null,
+          referral_email: u?.referral_email ?? null,
+          referral_source_other: u?.referral_source_other ?? null,
+        };
+        const ref = normalizeStaffReferralOperationalPatch(operational as Record<string, unknown>, current);
+        if (ref.ok === false) {
+          res.status(400).json(ApiResponse.error(ref.message, 'VALIDATION_ERROR'));
+          return;
+        }
+        Object.assign(operational as Record<string, unknown>, ref.operational);
+      }
+
       // ── Step 2: Authorization check (one call, reuse result) ──
       const { canAccess, assignedClientIds } = await canAccessSensitive(req.user, targetClientId);
       const requester = {
@@ -1262,6 +1344,12 @@ export class ClientController {
           response.payment_method = u?.payment_method ?? null;
           response.insurance_provider = u?.insurance_provider ?? null;
           response.insurance_member_id = u?.insurance_member_id ?? null;
+          response.insurance_policy_holder_name = u?.insurance_policy_holder_name ?? null;
+          const respHolderDob = u?.insurance_policy_holder_dob;
+          response.insurance_policy_holder_dob =
+            respHolderDob instanceof Date ? respHolderDob.toISOString().slice(0, 10) : respHolderDob ?? null;
+          response.insurance_policy_holder_relationship = u?.insurance_policy_holder_relationship ?? null;
+          response.insurance_plan_type = u?.insurance_plan_type ?? null;
           response.policy_number = u?.policy_number ?? null;
           response.insurance_phone_number = u?.insurance_phone_number ?? null;
           response.has_secondary_insurance = u?.has_secondary_insurance ?? null;
@@ -1269,6 +1357,10 @@ export class ClientController {
           response.secondary_insurance_member_id = u?.secondary_insurance_member_id ?? null;
           response.secondary_policy_number = u?.secondary_policy_number ?? null;
           response.self_pay_card_info = u?.self_pay_card_info ?? null;
+          response.referral_source = u?.referral_source ?? null;
+          response.referral_name = u?.referral_name ?? null;
+          response.referral_email = u?.referral_email ?? null;
+          response.referral_source_other = u?.referral_source_other ?? null;
           if (u?.pregnancy_number != null) response.pregnancy_number = u.pregnancy_number;
           if (u?.had_previous_pregnancies != null) response.had_previous_pregnancies = u.had_previous_pregnancies;
           if (u?.previous_pregnancies_count != null) response.previous_pregnancies_count = u.previous_pregnancies_count;

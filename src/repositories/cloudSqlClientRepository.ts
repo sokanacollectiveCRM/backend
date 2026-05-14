@@ -53,7 +53,9 @@ function isLifecycleColumnMissing(error: unknown): boolean {
 }
 
 const BILLING_COLUMNS = `
-  payment_method, insurance, insurance_provider, insurance_member_id, policy_number, insurance_phone_number,
+  payment_method, insurance, insurance_provider, insurance_member_id,
+  insurance_policy_holder_name, insurance_policy_holder_dob, insurance_policy_holder_relationship, insurance_plan_type,
+  policy_number, insurance_phone_number,
   has_secondary_insurance, secondary_insurance_provider, secondary_insurance_member_id, secondary_policy_number,
   self_pay_card_info, updated_at
 `;
@@ -86,6 +88,10 @@ function mapRowToClient(row: Record<string, any>): Client {
     insurance: row.insurance,
     insurance_provider: row.insurance_provider,
     insurance_member_id: row.insurance_member_id,
+    insurance_policy_holder_name: row.insurance_policy_holder_name,
+    insurance_policy_holder_dob: row.insurance_policy_holder_dob,
+    insurance_policy_holder_relationship: row.insurance_policy_holder_relationship,
+    insurance_plan_type: row.insurance_plan_type,
     policy_number: row.policy_number,
     insurance_phone_number: row.insurance_phone_number,
     has_secondary_insurance: row.has_secondary_insurance,
@@ -120,6 +126,7 @@ function mapRowToClient(row: Record<string, any>): Client {
     referral_source: row.referral_source,
     referral_name: row.referral_name,
     referral_email: row.referral_email,
+    referral_source_other: row.referral_source_other,
     bio: row.bio,
   });
 
@@ -267,7 +274,10 @@ export class CloudSqlClientRepository implements ClientRepository {
     const allowed = new Set([
       'first_name', 'last_name', 'email', 'phone_number', 'status', 'service_needed',
       'portal_status', 'pronouns', 'preferred_name', 'payment_method', 'home_type',
-      'insurance_provider', 'insurance_member_id', 'policy_number', 'self_pay_card_info',
+      'insurance_provider', 'insurance_member_id',
+      'insurance_policy_holder_name', 'insurance_policy_holder_dob', 'insurance_policy_holder_relationship',
+      'insurance_plan_type',
+      'policy_number', 'self_pay_card_info',
       'services_interested', 'health_notes', 'health_history', 'allergies', 'medications',
       'baby_name', 'baby_sex', 'number_of_babies', 'birth_hospital', 'provider_type',
       'pregnancy_number', 'had_previous_pregnancies', 'previous_pregnancies_count',
@@ -278,7 +288,7 @@ export class CloudSqlClientRepository implements ClientRepository {
       'birth_outcomes_medications_used',
       'race_ethnicity', 'primary_language', 'client_age_range', 'insurance', 'annual_income',
       'preferred_contact_method', 'relationship_status', 'referral_source', 'referral_name',
-      'referral_email', 'address_line1', 'address_line2', 'city', 'state', 'zip_code',
+      'referral_email', 'referral_source_other', 'address_line1', 'address_line2', 'city', 'state', 'zip_code',
       'country', 'bio', 'date_of_birth', 'due_date', 'profile_picture',
     ]);
     const raw = fieldsToUpdate as Record<string, any>;
@@ -387,12 +397,19 @@ export class CloudSqlClientRepository implements ClientRepository {
       'client_age_range', 'insurance', 'pregnancy_number', 'had_previous_pregnancies',
       'previous_pregnancies_count', 'living_children_count', 'past_pregnancy_experience',
       'birth_outcomes', 'payment_method', 'insurance_provider', 'insurance_member_id',
+      'insurance_policy_holder_name', 'insurance_policy_holder_dob', 'insurance_policy_holder_relationship',
+      'insurance_plan_type',
       'policy_number', 'insurance_phone_number', 'has_secondary_insurance',
       'secondary_insurance_provider', 'secondary_insurance_member_id', 'secondary_policy_number',
       'self_pay_card_info',
       'birth_outcomes_induction',
       'birth_outcomes_delivery_type',
       'birth_outcomes_medications_used',
+      'relationship_status',
+      'referral_source',
+      'referral_name',
+      'referral_email',
+      'referral_source_other',
     ]);
     const columnValues = new Map<string, any>();
     for (const [k, v] of Object.entries(fields)) {
@@ -454,6 +471,10 @@ export class CloudSqlClientRepository implements ClientRepository {
       'insurance',
       'insurance_provider',
       'insurance_member_id',
+      'insurance_policy_holder_name',
+      'insurance_policy_holder_dob',
+      'insurance_policy_holder_relationship',
+      'insurance_plan_type',
       'policy_number',
       'insurance_phone_number',
       'has_secondary_insurance',

@@ -33,6 +33,10 @@ export class User {
   payment_method?: string;  // Add this field
   insurance_provider?: string;
   insurance_member_id?: string;
+  insurance_policy_holder_name?: string;
+  insurance_policy_holder_dob?: string | Date;
+  insurance_policy_holder_relationship?: string;
+  insurance_plan_type?: string;
   policy_number?: string;
   insurance_phone_number?: string;
   has_secondary_insurance?: boolean;
@@ -83,6 +87,7 @@ export class User {
   referral_source?: string;
   referral_name?: string;
   referral_email?: string;
+  referral_source_other?: string;
 
   constructor(data: {
     id?: string;
@@ -117,6 +122,10 @@ export class User {
     payment_method?: string;  // Add this field
     insurance_provider?: string;
     insurance_member_id?: string;
+    insurance_policy_holder_name?: string;
+    insurance_policy_holder_dob?: string | Date;
+    insurance_policy_holder_relationship?: string;
+    insurance_plan_type?: string;
     policy_number?: string;
     insurance_phone_number?: string;
     has_secondary_insurance?: boolean;
@@ -163,6 +172,7 @@ export class User {
     referral_source?: string;
     referral_name?: string;
     referral_email?: string;
+    referral_source_other?: string;
     }) {
       this.id = data.id;
       this.email = data.email || "";
@@ -196,6 +206,10 @@ export class User {
       this.payment_method = data.payment_method;  // Add this field
       this.insurance_provider = data.insurance_provider;
       this.insurance_member_id = data.insurance_member_id;
+      this.insurance_policy_holder_name = data.insurance_policy_holder_name;
+      this.insurance_policy_holder_dob = data.insurance_policy_holder_dob;
+      this.insurance_policy_holder_relationship = data.insurance_policy_holder_relationship;
+      this.insurance_plan_type = data.insurance_plan_type;
       this.policy_number = data.policy_number;
       this.insurance_phone_number = data.insurance_phone_number;
       this.has_secondary_insurance = data.has_secondary_insurance;
@@ -242,6 +256,7 @@ export class User {
       this.referral_source = data.referral_source;
       this.referral_name = data.referral_name;
       this.referral_email = data.referral_email;
+      this.referral_source_other = data.referral_source_other;
   }
 
   getFullName(): string {
@@ -282,6 +297,13 @@ export class User {
       payment_method: this.payment_method,  // Add this field
       insurance_provider: this.insurance_provider,
       insurance_member_id: this.insurance_member_id,
+      insurance_policy_holder_name: this.insurance_policy_holder_name,
+      insurance_policy_holder_dob:
+        this.insurance_policy_holder_dob instanceof Date
+          ? this.insurance_policy_holder_dob.toISOString().slice(0, 10)
+          : this.insurance_policy_holder_dob,
+      insurance_policy_holder_relationship: this.insurance_policy_holder_relationship,
+      insurance_plan_type: this.insurance_plan_type,
       policy_number: this.policy_number,
       self_pay_card_info: this.self_pay_card_info,
       home_type: this.home_type,
@@ -322,7 +344,8 @@ export class User {
       work_phone: this.work_phone,
       referral_source: this.referral_source,
       referral_name: this.referral_name,
-      referral_email: this.referral_email
+      referral_email: this.referral_email,
+      referral_source_other: this.referral_source_other,
     };
   }
 }

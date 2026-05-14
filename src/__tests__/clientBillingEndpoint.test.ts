@@ -16,6 +16,27 @@ describe('Client billing endpoints', () => {
   let mockClientRepository: jest.Mocked<ClientRepository>;
   const clientId = '123e4567-e89b-12d3-a456-426614174000';
 
+  const primaryInsuranceDetails = {
+    insurance_policy_holder_name: 'Jane Q Client',
+    insurance_policy_holder_dob: '1990-04-12',
+    insurance_policy_holder_relationship: 'Self',
+    insurance_plan_type: 'PPO',
+  };
+
+  const nullPrimaryInsuranceHolderFields = {
+    insurance_policy_holder_name: null,
+    insurance_policy_holder_dob: null,
+    insurance_policy_holder_relationship: null,
+    insurance_plan_type: null,
+  };
+
+  const camelNullPrimaryInsuranceHolderFields = {
+    insurancePolicyHolderName: null,
+    insurancePolicyHolderDob: null,
+    insurancePolicyHolderRelationship: null,
+    insurancePlanType: null,
+  };
+
   beforeEach(() => {
     process.env.SPLIT_DB_READ_MODE = 'primary';
 
@@ -76,6 +97,7 @@ describe('Client billing endpoints', () => {
       insurance: null,
       insurance_provider: null,
       insurance_member_id: null,
+      ...nullPrimaryInsuranceHolderFields,
       policy_number: null,
       insurance_phone_number: null,
       has_secondary_insurance: false,
@@ -106,6 +128,7 @@ describe('Client billing endpoints', () => {
       insurance: null,
       insurance_provider: null,
       insurance_member_id: null,
+      ...nullPrimaryInsuranceHolderFields,
       policy_number: null,
       insurance_phone_number: null,
       has_secondary_insurance: false,
@@ -121,6 +144,8 @@ describe('Client billing endpoints', () => {
         insurance: null,
         insurance_provider: null,
         insurance_member_id: null,
+        ...nullPrimaryInsuranceHolderFields,
+        ...camelNullPrimaryInsuranceHolderFields,
         policy_number: null,
         insurance_phone_number: null,
         has_secondary_insurance: false,
@@ -141,6 +166,7 @@ describe('Client billing endpoints', () => {
       insurance: 'Blue Cross Card Upload',
       insurance_provider: 'Aetna',
       insurance_member_id: 'MEM-123',
+      ...primaryInsuranceDetails,
       policy_number: 'POL-456',
       insurance_phone_number: '800-555-1212',
       has_secondary_insurance: true,
@@ -158,6 +184,7 @@ describe('Client billing endpoints', () => {
         insurance: 'Blue Cross Card Upload',
         insurance_provider: 'Aetna',
         insurance_member_id: 'MEM-123',
+        ...primaryInsuranceDetails,
         policy_number: 'POL-456',
         insurance_phone_number: '800-555-1212',
         has_secondary_insurance: true,
@@ -175,6 +202,7 @@ describe('Client billing endpoints', () => {
       insurance: 'Blue Cross Card Upload',
       insurance_provider: 'Aetna',
       insurance_member_id: 'MEM-123',
+      ...primaryInsuranceDetails,
       policy_number: 'POL-456',
       insurance_phone_number: '800-555-1212',
       has_secondary_insurance: true,
@@ -191,6 +219,11 @@ describe('Client billing endpoints', () => {
         insurance: 'Blue Cross Card Upload',
         insurance_provider: 'Aetna',
         insurance_member_id: 'MEM-123',
+        ...primaryInsuranceDetails,
+        insurancePolicyHolderName: primaryInsuranceDetails.insurance_policy_holder_name,
+        insurancePolicyHolderDob: primaryInsuranceDetails.insurance_policy_holder_dob,
+        insurancePolicyHolderRelationship: primaryInsuranceDetails.insurance_policy_holder_relationship,
+        insurancePlanType: primaryInsuranceDetails.insurance_plan_type,
         policy_number: 'POL-456',
         insurance_phone_number: '800-555-1212',
         has_secondary_insurance: true,
@@ -214,6 +247,7 @@ describe('Client billing endpoints', () => {
         payment_method: 'Commercial Insurance',
         insurance_provider: 'Aetna',
         insurance_member_id: 'MEM-123',
+        ...primaryInsuranceDetails,
         policy_number: 'POL-456',
       },
       user: { id: 'admin-user-id', role: ROLE.ADMIN } as any,
@@ -238,6 +272,7 @@ describe('Client billing endpoints', () => {
       insurance: 'Blue Cross',
       insurance_provider: 'Blue Cross',
       insurance_member_id: 'MEM-123',
+      ...primaryInsuranceDetails,
       policy_number: 'POL-456',
       insurance_phone_number: null,
       has_secondary_insurance: false,
@@ -255,6 +290,7 @@ describe('Client billing endpoints', () => {
         insurance: 'Blue Cross',
         insurance_provider: 'Blue Cross',
         insurance_member_id: 'MEM-123',
+        ...primaryInsuranceDetails,
         policy_number: 'POL-456',
       },
       user: { id: 'client-auth-id', role: ROLE.CLIENT } as any,
@@ -267,6 +303,7 @@ describe('Client billing endpoints', () => {
       insurance: 'Blue Cross',
       insurance_provider: 'Blue Cross',
       insurance_member_id: 'MEM-123',
+      ...primaryInsuranceDetails,
       policy_number: 'POL-456',
       insurance_phone_number: null,
       has_secondary_insurance: false,
@@ -282,6 +319,11 @@ describe('Client billing endpoints', () => {
         insurance: 'Blue Cross',
         insurance_provider: 'Blue Cross',
         insurance_member_id: 'MEM-123',
+        ...primaryInsuranceDetails,
+        insurancePolicyHolderName: primaryInsuranceDetails.insurance_policy_holder_name,
+        insurancePolicyHolderDob: primaryInsuranceDetails.insurance_policy_holder_dob,
+        insurancePolicyHolderRelationship: primaryInsuranceDetails.insurance_policy_holder_relationship,
+        insurancePlanType: primaryInsuranceDetails.insurance_plan_type,
         policy_number: 'POL-456',
         insurance_phone_number: null,
         has_secondary_insurance: false,
@@ -302,6 +344,10 @@ describe('Client billing endpoints', () => {
       insurance: 'State Plan',
       insurance_provider: 'State Plan',
       insurance_member_id: 'ABC123',
+      insurance_policy_holder_name: 'Holder Name',
+      insurance_policy_holder_dob: '1985-06-01',
+      insurance_policy_holder_relationship: 'Self',
+      insurance_plan_type: 'Medicaid',
       policy_number: 'POLICY9',
       insurance_phone_number: '800-555-1212',
       has_secondary_insurance: false,
@@ -326,6 +372,14 @@ describe('Client billing endpoints', () => {
         insurance: 'State Plan',
         insurance_provider: 'State Plan',
         insurance_member_id: 'ABC123',
+        insurance_policy_holder_name: 'Holder Name',
+        insurance_policy_holder_dob: '1985-06-01',
+        insurance_policy_holder_relationship: 'Self',
+        insurance_plan_type: 'Medicaid',
+        insurancePolicyHolderName: 'Holder Name',
+        insurancePolicyHolderDob: '1985-06-01',
+        insurancePolicyHolderRelationship: 'Self',
+        insurancePlanType: 'Medicaid',
         policy_number: 'POLICY9',
         insurance_phone_number: '800-555-1212',
         has_secondary_insurance: false,
@@ -360,6 +414,8 @@ describe('Client billing endpoints', () => {
         insurance: null,
         insurance_provider: null,
         insurance_member_id: null,
+        ...nullPrimaryInsuranceHolderFields,
+        ...camelNullPrimaryInsuranceHolderFields,
         policy_number: null,
         insurance_phone_number: null,
         has_secondary_insurance: null,
@@ -403,6 +459,7 @@ describe('Client billing endpoints', () => {
       insurance: null,
       insurance_provider: null,
       insurance_member_id: null,
+      ...nullPrimaryInsuranceHolderFields,
       policy_number: null,
       insurance_phone_number: null,
       has_secondary_insurance: false,
@@ -428,6 +485,7 @@ describe('Client billing endpoints', () => {
       insurance: null,
       insurance_provider: null,
       insurance_member_id: null,
+      ...nullPrimaryInsuranceHolderFields,
       policy_number: null,
       insurance_phone_number: null,
       has_secondary_insurance: false,
@@ -444,6 +502,8 @@ describe('Client billing endpoints', () => {
         insurance: null,
         insurance_provider: null,
         insurance_member_id: null,
+        ...nullPrimaryInsuranceHolderFields,
+        ...camelNullPrimaryInsuranceHolderFields,
         policy_number: null,
         insurance_phone_number: null,
         has_secondary_insurance: false,
@@ -477,13 +537,17 @@ describe('Client billing endpoints', () => {
     });
   });
 
-  it('rejects insurance billing without a policy number', async () => {
+  it('rejects insurance billing without insurance_plan_type', async () => {
     const req = {
       params: { id: clientId },
       body: {
         payment_method: 'Private Insurance',
         insurance_provider: 'Blue Cross',
         insurance_member_id: 'MEM-123',
+        insurance_policy_holder_name: 'Jane Q Client',
+        insurance_policy_holder_dob: '1990-04-12',
+        insurance_policy_holder_relationship: 'Self',
+        insurance_plan_type: '',
       },
       user: { id: 'admin-user-id', role: ROLE.ADMIN } as any,
     } as unknown as AuthRequest;
@@ -493,9 +557,57 @@ describe('Client billing endpoints', () => {
     expect(mockResponse.status).toHaveBeenCalledWith(400);
     expect(mockResponse.json).toHaveBeenCalledWith({
       success: false,
-      error: 'policy_number is required when payment_method is not Self-Pay',
+      error: 'insurance_plan_type is required when payment_method is not Self-Pay',
       code: 'VALIDATION_ERROR',
     });
+  });
+
+  it('accepts Medicaid billing without policy_number when other primary fields are present', async () => {
+    const updatedAt = '2026-03-24T17:00:00.000Z';
+    mockClientRepository.updateClientBilling!.mockResolvedValue({
+      id: clientId,
+      payment_method: 'Medicaid',
+      insurance: 'State Medicaid',
+      insurance_provider: 'State Medicaid',
+      insurance_member_id: 'MCD-1',
+      ...primaryInsuranceDetails,
+      insurance_plan_type: 'Medicaid',
+      policy_number: null,
+      insurance_phone_number: null,
+      has_secondary_insurance: false,
+      secondary_insurance_provider: null,
+      secondary_insurance_member_id: null,
+      secondary_policy_number: null,
+      self_pay_card_info: null,
+      updated_at: updatedAt,
+    } as any);
+
+    const req = {
+      params: { id: clientId },
+      body: {
+        payment_method: 'Medicaid',
+        insurance: 'State Medicaid',
+        insurance_provider: 'State Medicaid',
+        insurance_member_id: 'MCD-1',
+        insurance_policy_holder_name: primaryInsuranceDetails.insurance_policy_holder_name,
+        insurance_policy_holder_dob: primaryInsuranceDetails.insurance_policy_holder_dob,
+        insurance_policy_holder_relationship: primaryInsuranceDetails.insurance_policy_holder_relationship,
+        insurance_plan_type: 'Medicaid',
+      },
+      user: { id: 'admin-user-id', role: ROLE.ADMIN } as any,
+    } as unknown as AuthRequest;
+
+    await clientController.updateClientBilling(req, mockResponse as Response);
+
+    expect(mockClientRepository.updateClientBilling).toHaveBeenCalledWith(
+      clientId,
+      expect.objectContaining({
+        payment_method: 'Medicaid',
+        policy_number: null,
+        insurance_plan_type: 'Medicaid',
+      })
+    );
+    expect(mockResponse.status).not.toHaveBeenCalledWith(400);
   });
 
   it('ignores unrelated profile fields when updating billing', async () => {
@@ -506,6 +618,7 @@ describe('Client billing endpoints', () => {
       insurance: null,
       insurance_provider: null,
       insurance_member_id: null,
+      ...nullPrimaryInsuranceHolderFields,
       policy_number: null,
       insurance_phone_number: null,
       has_secondary_insurance: false,
@@ -533,6 +646,7 @@ describe('Client billing endpoints', () => {
       insurance: null,
       insurance_provider: null,
       insurance_member_id: null,
+      ...nullPrimaryInsuranceHolderFields,
       policy_number: null,
       insurance_phone_number: null,
       has_secondary_insurance: false,
@@ -549,6 +663,8 @@ describe('Client billing endpoints', () => {
         insurance: null,
         insurance_provider: null,
         insurance_member_id: null,
+        ...nullPrimaryInsuranceHolderFields,
+        ...camelNullPrimaryInsuranceHolderFields,
         policy_number: null,
         insurance_phone_number: null,
         has_secondary_insurance: false,
