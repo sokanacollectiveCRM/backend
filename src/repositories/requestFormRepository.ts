@@ -56,28 +56,34 @@ export class RequestFormRepository {
         const paymentMethod = typeof formData.payment_method === 'string'
             ? formData.payment_method.trim()
             : formData.payment_method ?? null;
-        const isSelfPay = paymentMethod === 'Self-Pay';
-        const hasSecondaryInsurance = !isSelfPay && formData.has_secondary_insurance === true;
+        const isSelfPay =
+            paymentMethod === 'Self-Pay' ||
+            paymentMethod === 'Self-Pay, Sliding Scale Available';
+        const skipsInsurance =
+            isSelfPay ||
+            paymentMethod === 'I am unable to pay / Full Support Option' ||
+            paymentMethod === 'Not sure / Need help figuring this out';
+        const hasSecondaryInsurance = !skipsInsurance && formData.has_secondary_insurance === true;
 
         return {
             payment_method: paymentMethod ?? null,
-            insurance: isSelfPay ? null : formData.insurance ?? null,
-            insurance_provider: isSelfPay ? null : formData.insurance_provider ?? null,
-            insurance_member_id: isSelfPay ? null : formData.insurance_member_id ?? null,
-            insurance_policy_holder_name: isSelfPay ? null : formData.insurance_policy_holder_name ?? null,
-            insurance_policy_holder_dob: isSelfPay ? null : formData.insurance_policy_holder_dob ?? null,
+            insurance: skipsInsurance ? null : formData.insurance ?? null,
+            insurance_provider: skipsInsurance ? null : formData.insurance_provider ?? null,
+            insurance_member_id: skipsInsurance ? null : formData.insurance_member_id ?? null,
+            insurance_policy_holder_name: skipsInsurance ? null : formData.insurance_policy_holder_name ?? null,
+            insurance_policy_holder_dob: skipsInsurance ? null : formData.insurance_policy_holder_dob ?? null,
             insurance_policy_holder_relationship:
-                isSelfPay ? null : formData.insurance_policy_holder_relationship ?? null,
-            insurance_plan_type: isSelfPay ? null : formData.insurance_plan_type ?? null,
-            policy_number: isSelfPay ? null : formData.policy_number ?? null,
-            insurance_phone_number: isSelfPay ? null : formData.insurance_phone_number ?? null,
-            has_secondary_insurance: isSelfPay ? false : (formData.has_secondary_insurance ?? null),
+                skipsInsurance ? null : formData.insurance_policy_holder_relationship ?? null,
+            insurance_plan_type: skipsInsurance ? null : formData.insurance_plan_type ?? null,
+            policy_number: skipsInsurance ? null : formData.policy_number ?? null,
+            insurance_phone_number: skipsInsurance ? null : formData.insurance_phone_number ?? null,
+            has_secondary_insurance: skipsInsurance ? false : (formData.has_secondary_insurance ?? null),
             secondary_insurance_provider:
-                isSelfPay || !hasSecondaryInsurance ? null : formData.secondary_insurance_provider ?? null,
+                skipsInsurance || !hasSecondaryInsurance ? null : formData.secondary_insurance_provider ?? null,
             secondary_insurance_member_id:
-                isSelfPay || !hasSecondaryInsurance ? null : formData.secondary_insurance_member_id ?? null,
+                skipsInsurance || !hasSecondaryInsurance ? null : formData.secondary_insurance_member_id ?? null,
             secondary_policy_number:
-                isSelfPay || !hasSecondaryInsurance ? null : formData.secondary_policy_number ?? null,
+                skipsInsurance || !hasSecondaryInsurance ? null : formData.secondary_policy_number ?? null,
             self_pay_card_info: isSelfPay ? formData.self_pay_card_info ?? null : null,
         };
     }

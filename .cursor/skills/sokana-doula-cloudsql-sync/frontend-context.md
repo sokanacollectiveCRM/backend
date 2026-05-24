@@ -730,6 +730,54 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
   - [x] Context updated
   - [x] Implementation (see `.cursor/handoffs/closed/2026-05-11-backend-request-intake-referral-source-other.md`)
 
+## Preflight Update 2026-05-19 (birth place + intake payment)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: `POST /requestService/requestSubmission` — validate/persist `birth_location` + `birth_hospital`; intake payment four CRM labels; reject Medicaid.
+
+- **Repos Scanned**: both
+
+- **Files Scanned**:
+  - `frontend-crm/docs/BACKEND_REQUEST_FORM_BIRTH_LOCATION_AND_PAYMENT_VERIFY_PROMPT.md`
+  - `frontend-crm/src/features/request/useRequestForm.ts`, `src/lib/paymentRules.ts`, `dummyTestLead.ts`
+  - Backend: `src/intake/requestSubmissionDto.ts`, `RequestFormService.ts`, `requestFormRepository.ts`
+
+- **Contract Findings**: `birth_hospital` required with `birth_location`; four intake payment labels; Medicaid 400 on public path; `Private/Commercial Insurance` → `Commercial Insurance` in DB.
+
+- **Drift Risk**: Legacy Medicaid/self-pay labels accepted on intake; birth fields not validated or inserted.
+
+- **Required Compatibility**: Location-specific 400 messages; both birth columns on INSERT; staff Medicaid via client APIs unchanged.
+
+- **Context Updated**: yes | **Implementation**: yes
+
+## Preflight Update 2026-05-24 (request submission — full CRM POST → phi_clients)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Handoff prompt — tests + persistence for CRM `/request` submit (`DUMMY_TEST_LEAD` shape): age, provider_type, address parts, birth place, pronouns/contact, pets, `services_interested` / `service_support_details`, `service_needed`, insurance paths.
+
+- **Repos Scanned**: both
+
+- **Files Scanned**:
+  - `frontend-crm/src/features/request/dummyTestLead.ts`, `RequestForm.tsx` (submit transforms), `useRequestForm.ts`
+  - Backend: `src/intake/requestSubmissionDto.ts`, `RequestFormService.ts`, `requestFormRepository.ts`, `src/db/migrations/add_phi_clients_intake_crm_fields.sql`
+  - Tests: `requestSubmissionDto.test.ts`, `requestSubmissionFlow.test.ts`, `requestEndpoint.test.ts`
+
+- **Contract Findings**:
+  - POST body = spread `RequestFormValues` + numeric `number_of_babies` + `service_needed` from services join or support text.
+  - `age` → `intake_age_years`; `provider_type` includes `Family Doctor` → `Family Physician`; `Private/Commercial Insurance` → `Commercial Insurance` + expanded primary/secondary billing validation.
+
+- **Drift Risk**: INSERT omitting CRM keys leaves Cloud SQL null while DevTools shows data; intake payment labels outside four-option set 400.
+
+- **Required Compatibility**: Persist `city`, `state`, `zip_code`, `birth_location`, `birth_hospital`, `provider_type`, `pronouns`, `preferred_contact_method`, `intake_age_years`, `pets`, `services_interested[]`, `service_support_details`, `service_needed`; run migration on PHI DB before manual QA.
+
+- **Context Updated**: yes | **Implementation**: yes (uncommitted)
+
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started
+
 ## Preflight Update 2026-05-12 (request submission tests + intake DTO)
 
 - **Gate Result**: `run_preflight`

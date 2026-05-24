@@ -162,6 +162,33 @@ describe('POST /requestService/requestSubmission flow', () => {
   });
 
   describe('validation → 400 (real service)', () => {
+    it('returns 400 when birth_location is set but birth_hospital is empty', async () => {
+      const body = {
+        ...buildCrmLikeSubmitBody(),
+        birth_hospital: '',
+      };
+
+      const res = await request(app).post('/requestService/requestSubmission').send(body).expect(400);
+
+      expect(res.body.error).toContain('hospital name');
+      expect(mockQuery).not.toHaveBeenCalled();
+    });
+
+    it('returns 400 when payment_method is Medicaid', async () => {
+      const body = {
+        ...buildCrmLikeSubmitBody(),
+        payment_method: 'Medicaid',
+        insurance_provider: 'State Medicaid',
+        insurance_member_id: 'MCD-1',
+        insurance_plan_type: 'Medicaid',
+      };
+
+      const res = await request(app).post('/requestService/requestSubmission').send(body).expect(400);
+
+      expect(res.body.error).toMatch(/Medicaid/i);
+      expect(mockQuery).not.toHaveBeenCalled();
+    });
+
     it('returns 400 when has_secondary_insurance is true but secondary_policy_number is missing', async () => {
       const body = {
         ...buildCrmLikeSubmitBody(),
@@ -187,7 +214,13 @@ describe('POST /requestService/requestSubmission flow', () => {
       expect(params[7]).toBe('IL');
       expect(params[8]).toBe('62704');
       expect(params[9]).toBe('Hospital');
+      expect(params[10]).toBe('Springfield General Hospital');
       expect(params[11]).toBe('Midwife');
+      expect(params[12]).toBe('She/Her');
+      expect(params[14]).toBe('Email');
+      expect(params[16]).toBe('None');
+      expect(params[17]).toContain('labor and postpartum support');
+      expect(params[18]).toEqual(['Labor Support', 'Postpartum Support']);
       expect(params[19]).toBe(30);
       expect(params[34]).toBe(1);
       expect(params[42]).toBe('Commercial Insurance');

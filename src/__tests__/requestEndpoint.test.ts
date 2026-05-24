@@ -82,7 +82,7 @@ describe('Request Endpoint Tests', () => {
     health_notes: 'Gestational diabetes',
 
     // Step 6: Payment Info
-    payment_method: 'Commercial Insurance',
+    payment_method: 'Private/Commercial Insurance',
     insurance_provider: 'Blue Cross Blue Shield',
     insurance_member_id: 'MEM-12345',
     insurance_policy_holder_name: 'Jane Q Client',
@@ -534,20 +534,16 @@ describe('Request Endpoint Tests', () => {
       );
     });
 
-    it.each([
-      ['Commercial Insurance', 'Blue Cross Blue Shield'],
-      ['Private Insurance', 'Aetna'],
-      ['Medicaid', 'State Medicaid Plan'],
-    ])('should accept %s submissions and persist insurance billing fields', async (paymentMethod, provider) => {
+    it('should accept commercial insurance intake and persist billing fields', async () => {
       const payload = {
         ...mockFormData,
-        payment_method: paymentMethod,
-        insurance_provider: provider,
+        payment_method: 'Private/Commercial Insurance',
+        insurance_provider: 'Blue Cross Blue Shield',
         insurance_member_id: 'MEM-12345',
-        insurance_plan_type: paymentMethod === 'Medicaid' ? 'Medicaid' : 'PPO',
+        insurance_plan_type: 'PPO',
         policy_number: 'POL-67890',
         insurance_phone_number: '800-555-1212',
-        insurance: provider,
+        insurance: 'Blue Cross Blue Shield',
         has_secondary_insurance: false,
         secondary_insurance_provider: null,
         secondary_insurance_member_id: null,
@@ -560,17 +556,16 @@ describe('Request Endpoint Tests', () => {
       await expect(requestFormService.newForm(payload)).resolves.toBeDefined();
       expect(requestFormRepository.saveData).toHaveBeenCalledWith(
         expect.objectContaining({
-          payment_method: paymentMethod,
-          insurance_provider: provider,
+          payment_method: 'Commercial Insurance',
+          insurance_provider: 'Blue Cross Blue Shield',
           insurance_member_id: 'MEM-12345',
-          insurance_plan_type: paymentMethod === 'Medicaid' ? 'Medicaid' : 'PPO',
+          insurance_plan_type: 'PPO',
           policy_number: 'POL-67890',
         })
       );
     });
 
-    it('should accept Medicaid intake without policy_number when other primary insurance fields are present', async () => {
-      jest.spyOn(requestFormRepository, 'saveData').mockResolvedValue(mockFormData as any);
+    it('should reject Medicaid on public intake', async () => {
       const payload = {
         ...mockFormData,
         payment_method: 'Medicaid',
@@ -579,19 +574,13 @@ describe('Request Endpoint Tests', () => {
         insurance_plan_type: 'Medicaid',
         policy_number: '',
       };
-      await expect(requestFormService.newForm(payload)).resolves.toBeDefined();
-      expect(requestFormRepository.saveData).toHaveBeenCalledWith(
-        expect.objectContaining({
-          payment_method: 'Medicaid',
-          policy_number: null,
-        })
-      );
+      await expect(requestFormService.newForm(payload)).rejects.toThrow(/Medicaid/i);
     });
 
-    it('should accept self-pay submissions and null out insurance fields', async () => {
+    it('should accept self-pay sliding scale submissions and null out insurance fields', async () => {
       const payload = {
         ...mockFormData,
-        payment_method: 'Self-Pay',
+        payment_method: 'Self-Pay, Sliding Scale Available',
         insurance_provider: 'Should be cleared',
         insurance_member_id: 'Should be cleared',
         policy_number: 'Should be cleared',
@@ -605,7 +594,7 @@ describe('Request Endpoint Tests', () => {
       await expect(requestFormService.newForm(payload)).resolves.toBeDefined();
       expect(requestFormRepository.saveData).toHaveBeenCalledWith(
         expect.objectContaining({
-          payment_method: 'Self-Pay',
+          payment_method: 'Self-Pay, Sliding Scale Available',
           insurance: null,
           insurance_provider: null,
           insurance_member_id: null,
@@ -631,6 +620,26 @@ describe('Request Endpoint Tests', () => {
         expect.objectContaining({
           payment_method: 'Commercial Insurance',
         })
+      );
+    });
+
+    it('should reject missing birth_hospital when birth_location is Hospital', async () => {
+      await expect(
+        requestFormService.newForm({ ...mockFormData, birth_hospital: '  ' })
+      ).rejects.toThrow('Please enter the hospital name.');
+    });
+
+    it.each([
+      ['Home', '123 Oak St, Springfield, IL 62704'],
+      ['Birth Center', 'Sunrise Birth Center'],
+      ['Other', 'Community birth suite'],
+    ])('should accept birth_location %s with place name', async (birth_location, birth_hospital) => {
+      jest.spyOn(requestFormRepository, 'saveData').mockResolvedValue(mockFormData as any);
+      await expect(
+        requestFormService.newForm({ ...mockFormData, birth_location, birth_hospital })
+      ).resolves.toBeDefined();
+      expect(requestFormRepository.saveData).toHaveBeenCalledWith(
+        expect.objectContaining({ birth_location, birth_hospital })
       );
     });
 
@@ -660,7 +669,7 @@ describe('Request Endpoint Tests', () => {
     it('should require secondary insurance fields when the secondary path is enabled', async () => {
       const payload = {
         ...mockFormData,
-        payment_method: 'Commercial Insurance',
+        payment_method: 'Private/Commercial Insurance',
         has_secondary_insurance: true,
         secondary_insurance_provider: 'Kaiser Secondary',
         secondary_insurance_member_id: 'SEC-12345',
@@ -696,7 +705,7 @@ describe('Request Endpoint Tests', () => {
         firstname: 'Jane',
         lastname: 'Doe',
         email: 'jane.doe@example.com',
-        payment_method: 'Commercial Insurance',
+        payment_method: 'Private/Commercial Insurance',
         insurance_provider: 'Blue Cross Blue Shield',
       }));
       expect(mockQuery).toHaveBeenCalledWith(
@@ -747,7 +756,9 @@ describe('Request Endpoint Tests', () => {
       expect(params[39]).toBe('sarah@example.com');
       expect(params[40]).toBeNull();
       expect(params[41]).toBe('Blue Cross Blue Shield');
-      expect(params[42]).toBe('Commercial Insurance');
+      expect(params[9]).toBe('Hospital');
+      expect(params[10]).toBe('City General Hospital');
+      expect(params[42]).toBe('Private/Commercial Insurance');
       expect(params[43]).toBe('Blue Cross Blue Shield');
       expect(params[44]).toBe('MEM-12345');
       expect(params[45]).toBe('Jane Q Client');

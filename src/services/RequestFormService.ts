@@ -3,9 +3,10 @@ import {
   parseIntakeReferral,
 } from '../constants/referralSource';
 import {
-  normalizeIntakePaymentMethod,
   parseIntakeClientAgeYears,
+  parseIntakePaymentMethod,
   parseIntakeProviderType,
+  validateIntakeBirthPlace,
 } from '../intake/requestSubmissionDto';
 import {
   parseInsurancePolicyHolderDob,
@@ -181,22 +182,17 @@ export class RequestFormService {
         throw new ValidationError(providerResult.message);
       }
 
-      const paymentRaw =
-        typeof formData.payment_method === 'string' ? formData.payment_method.trim() : '';
-      if (!paymentRaw) {
-        throw new ValidationError("payment_method is required");
+      const birthPlace = validateIntakeBirthPlace(formData.birth_location, formData.birth_hospital);
+      if (birthPlace.ok === false) {
+        throw new ValidationError(birthPlace.message);
       }
-      const paymentMethod = normalizeIntakePaymentMethod(paymentRaw);
 
-      const allowedPaymentMethods = new Set([
-        'Commercial Insurance',
-        'Private Insurance',
-        'Medicaid',
-        'Self-Pay',
-      ]);
-      if (!allowedPaymentMethods.has(paymentMethod)) {
-        throw new ValidationError("payment_method must be one of: Commercial Insurance, Private Insurance, Medicaid, Self-Pay");
+      const paymentResult = parseIntakePaymentMethod(formData.payment_method);
+      if (paymentResult.ok === false) {
+        throw new ValidationError(paymentResult.message);
       }
+      const paymentMethod = paymentResult.value;
+      const requiresInsurance = paymentResult.requiresInsurance;
 
       const insuranceProvider = this.trimNullableString(formData.insurance_provider);
       const insuranceMemberId = this.trimNullableString(formData.insurance_member_id);
@@ -218,7 +214,7 @@ export class RequestFormService {
       );
       const insurancePlanType = this.trimNullableString(formData.insurance_plan_type);
 
-      if (paymentMethod !== 'Self-Pay') {
+      if (requiresInsurance) {
         const primaryCheck = validatePrimaryInsuranceWhenRequired({
           insuranceProvider,
           insuranceMemberId,
@@ -280,31 +276,32 @@ export class RequestFormService {
 
         // Step 6: Payment Info
         payment_method: paymentMethod,
-        insurance_provider: paymentMethod === 'Self-Pay' ? null : insuranceProvider ?? null,
-        insurance_member_id: paymentMethod === 'Self-Pay' ? null : insuranceMemberId ?? null,
-        insurance_policy_holder_name: paymentMethod === 'Self-Pay' ? null : insurancePolicyHolderName ?? null,
-        insurance_policy_holder_dob: paymentMethod === 'Self-Pay' ? null : insurancePolicyHolderDob ?? null,
-        insurance_policy_holder_relationship:
-          paymentMethod === 'Self-Pay' ? null : insurancePolicyHolderRelationship ?? null,
-        insurance_plan_type: paymentMethod === 'Self-Pay' ? null : insurancePlanType ?? null,
-        policy_number: paymentMethod === 'Self-Pay' ? null : policyNumber ?? null,
-        insurance_phone_number: paymentMethod === 'Self-Pay' ? null : insurancePhoneNumber ?? null,
-        has_secondary_insurance: paymentMethod === 'Self-Pay' ? false : (hasSecondaryInsurance ?? null),
+        insurance_provider: requiresInsurance ? insuranceProvider ?? null : null,
+        insurance_member_id: requiresInsurance ? insuranceMemberId ?? null : null,
+        insurance_policy_holder_name: requiresInsurance ? insurancePolicyHolderName ?? null : null,
+        insurance_policy_holder_dob: requiresInsurance ? insurancePolicyHolderDob ?? null : null,
+        insurance_policy_holder_relationship: requiresInsurance
+          ? insurancePolicyHolderRelationship ?? null
+          : null,
+        insurance_plan_type: requiresInsurance ? insurancePlanType ?? null : null,
+        policy_number: requiresInsurance ? policyNumber ?? null : null,
+        insurance_phone_number: requiresInsurance ? insurancePhoneNumber ?? null : null,
+        has_secondary_insurance: requiresInsurance ? (hasSecondaryInsurance ?? null) : false,
         secondary_insurance_provider:
-          paymentMethod === 'Self-Pay' || hasSecondaryInsurance !== true ? null : secondaryInsuranceProvider ?? null,
+          requiresInsurance && hasSecondaryInsurance === true ? secondaryInsuranceProvider ?? null : null,
         secondary_insurance_member_id:
-          paymentMethod === 'Self-Pay' || hasSecondaryInsurance !== true ? null : secondaryInsuranceMemberId ?? null,
+          requiresInsurance && hasSecondaryInsurance === true ? secondaryInsuranceMemberId ?? null : null,
         secondary_policy_number:
-          paymentMethod === 'Self-Pay' || hasSecondaryInsurance !== true ? null : secondaryPolicyNumber ?? null,
-        self_pay_card_info: paymentMethod === 'Self-Pay' ? selfPayCardInfo ?? null : null,
+          requiresInsurance && hasSecondaryInsurance === true ? secondaryPolicyNumber ?? null : null,
+        self_pay_card_info: !requiresInsurance ? selfPayCardInfo ?? null : null,
         annual_income: formData.annual_income,
         service_needed: formData.service_needed,
         service_specifics: formData.service_specifics,
 
         // Step 7: Pregnancy/Baby
         due_date: formData.due_date,
-        birth_location: formData.birth_location,
-        birth_hospital: formData.birth_hospital,
+        birth_location: birthPlace.birth_location,
+        birth_hospital: birthPlace.birth_hospital,
         number_of_babies: formData.number_of_babies,
         baby_name: formData.baby_name,
         provider_type: providerResult.value,
@@ -324,7 +321,7 @@ export class RequestFormService {
         race_ethnicity: formData.race_ethnicity,
         primary_language: formData.primary_language,
         client_age_range: formData.client_age_range,
-        insurance: paymentMethod === 'Self-Pay' ? null : formData.insurance ?? null,
+        insurance: requiresInsurance ? formData.insurance ?? null : null,
         demographics_multi: formData.demographics_multi
       };
 
