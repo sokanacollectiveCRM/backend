@@ -174,3 +174,62 @@ export function parseIntakeProviderType(
   }
   return { ok: true, value: normalized as ProviderType };
 }
+
+/** CRM home type step — array of checkbox labels; legacy single string accepted. */
+export function normalizeIntakeHomeTypes(raw: unknown): string[] | null {
+  if (raw === undefined || raw === null) {
+    return null;
+  }
+  if (Array.isArray(raw)) {
+    const items = raw
+      .map((item) => (typeof item === 'string' ? item.trim() : String(item).trim()))
+      .filter((item) => item.length > 0);
+    return items.length > 0 ? items : null;
+  }
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      return null;
+    }
+    if (trimmed.startsWith('[')) {
+      try {
+        return normalizeIntakeHomeTypes(JSON.parse(trimmed) as unknown);
+      } catch {
+        return [trimmed];
+      }
+    }
+    return [trimmed];
+  }
+  return null;
+}
+
+/** Legacy `home_type` VARCHAR — first selection or joined labels (max 100 chars). */
+export function legacyHomeTypeVarchar(homeTypes: string[] | null): string | null {
+  if (!homeTypes?.length) {
+    return null;
+  }
+  const joined = homeTypes.join('; ');
+  return joined.length > 100 ? joined.slice(0, 100) : joined;
+}
+
+export const INTAKE_HOME_PEOPLE_COUNT_OPTIONS = ['0', '1', '2', '3', '4', '5+'] as const;
+
+export function parseIntakeHomePeopleCount(
+  raw: unknown,
+  fieldLabel: 'home_adults_count' | 'home_youth_count'
+): { ok: true; value: string } | { ok: false; message: string } {
+  if (raw === undefined || raw === null) {
+    return { ok: false, message: `${fieldLabel} is required` };
+  }
+  const s = typeof raw === 'number' ? String(raw) : typeof raw === 'string' ? raw.trim() : '';
+  if (!s) {
+    return { ok: false, message: `${fieldLabel} is required` };
+  }
+  if (!(INTAKE_HOME_PEOPLE_COUNT_OPTIONS as readonly string[]).includes(s)) {
+    return {
+      ok: false,
+      message: `${fieldLabel} must be one of: ${INTAKE_HOME_PEOPLE_COUNT_OPTIONS.join(', ')}`,
+    };
+  }
+  return { ok: true, value: s };
+}

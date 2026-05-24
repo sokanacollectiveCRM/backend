@@ -51,9 +51,12 @@ function buildCrmLikeSubmitBody(): Record<string, unknown> {
     city: 'Springfield',
     state: 'IL',
     zip_code: '62704',
-    home_type: HomeType.HOUSE,
+    home_type: ['Rent, apartment or house'],
+    home_type_other: '',
     home_access: 'Front door, no stairs',
     pets: 'None',
+    home_adults_count: '1',
+    home_youth_count: '0',
     relationship_status: RelationshipStatus.PARTNERED,
     first_name: 'Alex',
     last_name: 'Lead',
@@ -189,6 +192,13 @@ describe('POST /requestService/requestSubmission flow', () => {
       expect(mockQuery).not.toHaveBeenCalled();
     });
 
+    it('returns 400 when home_adults_count is missing', async () => {
+      const { home_adults_count: _a, ...body } = buildCrmLikeSubmitBody();
+      const res = await request(app).post('/requestService/requestSubmission').send(body).expect(400);
+      expect(res.body.error).toContain('home_adults_count');
+      expect(mockQuery).not.toHaveBeenCalled();
+    });
+
     it('returns 400 when has_secondary_insurance is true but secondary_policy_number is missing', async () => {
       const body = {
         ...buildCrmLikeSubmitBody(),
@@ -219,17 +229,22 @@ describe('POST /requestService/requestSubmission flow', () => {
       expect(params[12]).toBe('She/Her');
       expect(params[14]).toBe('Email');
       expect(params[16]).toBe('None');
-      expect(params[17]).toContain('labor and postpartum support');
-      expect(params[18]).toEqual(['Labor Support', 'Postpartum Support']);
-      expect(params[19]).toBe(30);
-      expect(params[34]).toBe(1);
-      expect(params[42]).toBe('Commercial Insurance');
-      expect(params[43]).toBe('Blue Cross Blue Shield');
-      expect(params[51]).toBe(true);
-      expect(params[52]).toBe('Secondary Health Plan');
-      expect(params[53]).toBe('SEC-MEMBER-789');
-      expect(params[54]).toBe('SEC-POL-456');
-      expect(params[57]).toBe('Labor Support, Postpartum Support');
+      expect(params[17]).toBe('Front door, no stairs');
+      expect(params[18]).toEqual(['Rent, apartment or house']);
+      expect(params[19]).toBeNull();
+      expect(params[20]).toBe('1');
+      expect(params[21]).toBe('0');
+      expect(params[22]).toContain('labor and postpartum support');
+      expect(params[23]).toEqual(['Labor Support', 'Postpartum Support']);
+      expect(params[24]).toBe(30);
+      expect(params[39]).toBe(1);
+      expect(params[47]).toBe('Commercial Insurance');
+      expect(params[48]).toBe('Blue Cross Blue Shield');
+      expect(params[56]).toBe(true);
+      expect(params[57]).toBe('Secondary Health Plan');
+      expect(params[58]).toBe('SEC-MEMBER-789');
+      expect(params[59]).toBe('SEC-POL-456');
+      expect(params[62]).toBe('Labor Support, Postpartum Support');
     });
   });
 });

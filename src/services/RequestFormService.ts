@@ -3,7 +3,9 @@ import {
   parseIntakeReferral,
 } from '../constants/referralSource';
 import {
+  normalizeIntakeHomeTypes,
   parseIntakeClientAgeYears,
+  parseIntakeHomePeopleCount,
   parseIntakePaymentMethod,
   parseIntakeProviderType,
   validateIntakeBirthPlace,
@@ -15,6 +17,7 @@ import {
 import { RequestForm } from '../entities/RequestForm';
 import { RequestFormRepository } from "../repositories/requestFormRepository";
 import {
+    HomeType,
     RequestFormData,
     RequestFormResponse,
     RequestStatus
@@ -182,6 +185,17 @@ export class RequestFormService {
         throw new ValidationError(providerResult.message);
       }
 
+      const homeAdults = parseIntakeHomePeopleCount(formData.home_adults_count, 'home_adults_count');
+      if (homeAdults.ok === false) {
+        throw new ValidationError(homeAdults.message);
+      }
+      const homeYouth = parseIntakeHomePeopleCount(formData.home_youth_count, 'home_youth_count');
+      if (homeYouth.ok === false) {
+        throw new ValidationError(homeYouth.message);
+      }
+      const homeTypes = normalizeIntakeHomeTypes(formData.home_types ?? formData.home_type);
+      const homeTypeOther = this.trimNullableString(formData.home_type_other);
+
       const birthPlace = validateIntakeBirthPlace(formData.birth_location, formData.birth_hospital);
       if (birthPlace.ok === false) {
         throw new ValidationError(birthPlace.message);
@@ -251,8 +265,11 @@ export class RequestFormService {
         state: formData.state,
         zip_code: formData.zip_code,
         home_phone: formData.home_phone,
-        home_type: formData.home_type,
-        home_access: formData.home_access,
+        home_types: homeTypes ?? undefined,
+        home_type_other: homeTypeOther ?? undefined,
+        home_access: this.trimNullableString(formData.home_access) ?? undefined,
+        home_adults_count: homeAdults.value,
+        home_youth_count: homeYouth.value,
         pets: formData.pets,
 
         // Step 3: Family Members
@@ -343,7 +360,9 @@ export class RequestFormService {
         response.pronouns_other,
         response.children_expected,
         response.home_phone,
-        response.home_type,
+        (Array.isArray(response.home_type) ? response.home_type[0] : response.home_type) as
+          | HomeType
+          | undefined,
         response.home_access,
         response.pets,
         response.relationship_status,

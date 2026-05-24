@@ -772,11 +772,19 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 
 - **Required Compatibility**: Persist `city`, `state`, `zip_code`, `birth_location`, `birth_hospital`, `provider_type`, `pronouns`, `preferred_contact_method`, `intake_age_years`, `pets`, `services_interested[]`, `service_support_details`, `service_needed`; run migration on PHI DB before manual QA.
 
-- **Context Updated**: yes | **Implementation**: yes (uncommitted)
+- **Context Updated**: yes | **Implementation**: yes
 
 - **Action**:
   - [x] Context updated
   - [x] Implementation started
+
+## Preflight Update 2026-05-24 (home step persistence)
+
+- **Gate Result**: `run_preflight` | **Handoffs**: `no_open_handoff_tasks`
+- **Task Intent**: Persist CRM home step on `phi_clients`: `home_access`, `home_types[]`, `home_type_other`, `home_adults_count`, `home_youth_count` (+ legacy `home_type` VARCHAR).
+- **Files Scanned**: `dummyTestLead.ts`, `useRequestForm.ts`, `homeTypeOptions.ts`, `homePeopleCountOptions.ts`; backend `requestFormRepository.ts`, `RequestFormService.ts`, `requestSubmissionDto.ts`.
+- **Required Compatibility**: CRM sends `home_type` as string array; counts `0`–`5+`; validate counts on intake; migration `add_phi_clients_home_intake_fields.sql` before manual QA.
+- **Context Updated**: yes | **Implementation**: yes
 
 ## Preflight Update 2026-05-12 (request submission tests + intake DTO)
 

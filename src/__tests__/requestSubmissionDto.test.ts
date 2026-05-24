@@ -1,7 +1,10 @@
 import { validatePrimaryInsuranceWhenRequired } from '../billing/expandedInsuranceBilling';
 import {
   INTAKE_PAYMENT_METHOD_OPTIONS,
+  legacyHomeTypeVarchar,
+  normalizeIntakeHomeTypes,
   parseIntakeClientAgeYears,
+  parseIntakeHomePeopleCount,
   parseIntakePaymentMethod,
   parseIntakeProviderType,
   validateIntakeBirthPlace,
@@ -157,6 +160,47 @@ describe('requestSubmissionDto', () => {
       expect(parseIntakeProviderType(raw)).toEqual({
         ok: false,
         message: 'provider_type is required',
+      });
+    });
+  });
+
+  describe('normalizeIntakeHomeTypes', () => {
+    it('accepts CRM checkbox array', () => {
+      expect(normalizeIntakeHomeTypes(['Rent, apartment or house'])).toEqual([
+        'Rent, apartment or house',
+      ]);
+    });
+
+    it('accepts legacy single string', () => {
+      expect(normalizeIntakeHomeTypes('House')).toEqual(['House']);
+    });
+
+    it('returns null for empty input', () => {
+      expect(normalizeIntakeHomeTypes([])).toBeNull();
+      expect(normalizeIntakeHomeTypes(null)).toBeNull();
+    });
+  });
+
+  describe('legacyHomeTypeVarchar', () => {
+    it('joins selections for legacy column', () => {
+      expect(
+        legacyHomeTypeVarchar(['Rent, apartment or house', 'Own, apartment, condo, or house'])
+      ).toBe('Rent, apartment or house; Own, apartment, condo, or house');
+    });
+  });
+
+  describe('parseIntakeHomePeopleCount', () => {
+    it.each(['0', '1', '5+'] as const)('accepts %p', (value) => {
+      expect(parseIntakeHomePeopleCount(value, 'home_adults_count')).toEqual({
+        ok: true,
+        value,
+      });
+    });
+
+    it('rejects invalid counts', () => {
+      expect(parseIntakeHomePeopleCount('six', 'home_youth_count')).toEqual({
+        ok: false,
+        message: 'home_youth_count must be one of: 0, 1, 2, 3, 4, 5+',
       });
     });
   });

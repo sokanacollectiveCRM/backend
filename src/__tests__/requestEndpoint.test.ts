@@ -59,6 +59,8 @@ describe('Request Endpoint Tests', () => {
     zip_code: '90210',
     home_phone: '555-987-6543',
     home_type: HomeType.HOUSE,
+    home_adults_count: '2',
+    home_youth_count: '1',
     home_access: 'Front door accessible',
     pets: '2 dogs, 1 cat',
 
@@ -230,6 +232,8 @@ describe('Request Endpoint Tests', () => {
         city: 'Anytown',
         state: STATE.CA,
         zip_code: '90210',
+        home_adults_count: '1',
+        home_youth_count: '0',
         service_needed: ServiceTypes.LABOR_SUPPORT,
         payment_method: 'Self-Pay',
         self_pay_card_info: 'Visa ending 4242',
@@ -518,6 +522,9 @@ describe('Request Endpoint Tests', () => {
           firstname: 'Jane',
           lastname: 'Doe',
           email: 'jane.doe@example.com',
+          home_adults_count: '2',
+          home_youth_count: '1',
+          home_types: ['House'],
           service_needed: ServiceTypes.LABOR_SUPPORT,
           payment_method: 'Commercial Insurance',
           insurance_provider: 'Blue Cross Blue Shield',
@@ -751,31 +758,37 @@ describe('Request Endpoint Tests', () => {
       expect(sql).toContain('city');
       expect(sql).toContain('intake_age_years');
       expect(sql).toContain('services_interested');
-      expect(params[37]).toBe('Google');
-      expect(params[38]).toBe('Sarah Smith');
-      expect(params[39]).toBe('sarah@example.com');
-      expect(params[40]).toBeNull();
-      expect(params[41]).toBe('Blue Cross Blue Shield');
+      expect(sql).toContain('home_adults_count');
+      expect(sql).toContain('home_types');
+      expect(params[17]).toBe('Front door accessible');
+      expect(params[18]).toEqual(['House']);
+      expect(params[20]).toBe('2');
+      expect(params[21]).toBe('1');
+      expect(params[42]).toBe('Google');
+      expect(params[43]).toBe('Sarah Smith');
+      expect(params[44]).toBe('sarah@example.com');
+      expect(params[45]).toBeNull();
+      expect(params[46]).toBe('Blue Cross Blue Shield');
       expect(params[9]).toBe('Hospital');
       expect(params[10]).toBe('City General Hospital');
-      expect(params[42]).toBe('Private/Commercial Insurance');
-      expect(params[43]).toBe('Blue Cross Blue Shield');
-      expect(params[44]).toBe('MEM-12345');
-      expect(params[45]).toBe('Jane Q Client');
-      expect(params[46]).toBe('1990-04-12');
-      expect(params[47]).toBe('Self');
-      expect(params[48]).toBe('PPO');
-      expect(params[49]).toBe('POL-67890');
-      expect(params[50]).toBe('800-555-1212');
-      expect(params[51]).toBe(false);
-      expect(params[52]).toBeNull();
-      expect(params[53]).toBeNull();
-      expect(params[54]).toBeNull();
-      expect(params[55]).toBeNull();
-      expect(params[56]).toBe('lead');
-      expect(params[57]).toBe(mockFormData.service_needed);
-      expect(params[58]).toBe('not_invited');
-      expect(params[59]).toEqual(expect.any(String));
+      expect(params[47]).toBe('Private/Commercial Insurance');
+      expect(params[48]).toBe('Blue Cross Blue Shield');
+      expect(params[49]).toBe('MEM-12345');
+      expect(params[50]).toBe('Jane Q Client');
+      expect(params[51]).toBe('1990-04-12');
+      expect(params[52]).toBe('Self');
+      expect(params[53]).toBe('PPO');
+      expect(params[54]).toBe('POL-67890');
+      expect(params[55]).toBe('800-555-1212');
+      expect(params[56]).toBe(false);
+      expect(params[57]).toBeNull();
+      expect(params[58]).toBeNull();
+      expect(params[59]).toBeNull();
+      expect(params[60]).toBeNull();
+      expect(params[61]).toBe('lead');
+      expect(params[62]).toBe(mockFormData.service_needed);
+      expect(params[63]).toBe('not_invited');
+      expect(params[64]).toEqual(expect.any(String));
     });
 
     it('should null out insurance fields for Self-Pay submissions before persisting and returning the record', async () => {
@@ -818,29 +831,29 @@ describe('Request Endpoint Tests', () => {
       }));
 
       const [, params] = mockQuery.mock.calls[0];
-      expect(params[37]).toBe('Google');
-      expect(params[38]).toBe('Sarah Smith');
-      expect(params[39]).toBe('sarah@example.com');
-      expect(params[40]).toBeNull();
-      expect(params[41]).toBeNull();
-      expect(params[42]).toBe('Self-Pay');
-      expect(params[43]).toBeNull();
-      expect(params[44]).toBeNull();
+      expect(params[42]).toBe('Google');
+      expect(params[43]).toBe('Sarah Smith');
+      expect(params[44]).toBe('sarah@example.com');
       expect(params[45]).toBeNull();
       expect(params[46]).toBeNull();
-      expect(params[47]).toBeNull();
+      expect(params[47]).toBe('Self-Pay');
       expect(params[48]).toBeNull();
       expect(params[49]).toBeNull();
       expect(params[50]).toBeNull();
-      expect(params[51]).toBe(false);
+      expect(params[51]).toBeNull();
       expect(params[52]).toBeNull();
       expect(params[53]).toBeNull();
       expect(params[54]).toBeNull();
-      expect(params[55]).toBe('Visa ending 4242');
-      expect(params[56]).toBe('lead');
-      expect(params[57]).toBe(mockFormData.service_needed);
-      expect(params[58]).toBe('not_invited');
-      expect(params[59]).toEqual(expect.any(String));
+      expect(params[55]).toBeNull();
+      expect(params[56]).toBe(false);
+      expect(params[57]).toBeNull();
+      expect(params[58]).toBeNull();
+      expect(params[59]).toBeNull();
+      expect(params[60]).toBe('Visa ending 4242');
+      expect(params[61]).toBe('lead');
+      expect(params[62]).toBe(mockFormData.service_needed);
+      expect(params[63]).toBe('not_invited');
+      expect(params[64]).toEqual(expect.any(String));
     });
   });
 

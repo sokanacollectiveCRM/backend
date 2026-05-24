@@ -147,8 +147,13 @@ export interface RequestFormData {
   state: STATE;
   zip_code: string;
   home_phone?: string;
-  home_type?: HomeType;
+  /** Legacy single value; CRM sends `home_types` array on intake. */
+  home_type?: HomeType | string | string[];
+  home_types?: string[];
+  home_type_other?: string;
   home_access?: string;
+  home_adults_count?: string;
+  home_youth_count?: string;
   pets?: string;
 
   // Step 3: Family Members
@@ -243,8 +248,12 @@ export interface RequestFormResponse {
   state: STATE;
   zip_code: string;
   home_phone?: string;
-  home_type?: HomeType;
+  home_type?: HomeType | string | string[];
+  home_types?: string[];
+  home_type_other?: string;
   home_access?: string;
+  home_adults_count?: string;
+  home_youth_count?: string;
   pets?: string;
   relationship_status?: RelationshipStatus;
   first_name?: string;
