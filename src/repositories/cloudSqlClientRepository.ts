@@ -20,13 +20,27 @@ const OPERATIONAL_COLUMNS_LEGACY = `
   requested_at, updated_at
 `;
 
+const OPERATIONAL_COLUMNS_LEGACY_ALT_PHONE = `
+  id, client_number, first_name, last_name, email, phone_number, address_line1, bio, city, state, zip_code, country, status, service_needed,
+  portal_status, invited_at, last_invite_sent_at, invite_sent_count,
+  requested_at, updated_at
+`;
+
 // Includes lifecycle fields added by add_matched_lifecycle_fields_to_phi_clients.sql
 const OPERATIONAL_COLUMNS_BASE = `${OPERATIONAL_COLUMNS_LEGACY},
   qbo_customer_id, matched_at
 `;
 
+const OPERATIONAL_COLUMNS_BASE_ALT_PHONE = `${OPERATIONAL_COLUMNS_LEGACY_ALT_PHONE},
+  qbo_customer_id, matched_at
+`;
+
 // Includes structured birth outcomes added by add_phi_clients_birth_outcomes_structured.sql
 const OPERATIONAL_COLUMNS = `${OPERATIONAL_COLUMNS_BASE},
+  birth_outcomes_induction, birth_outcomes_delivery_type, birth_outcomes_medications_used
+`;
+
+const OPERATIONAL_COLUMNS_ALT_PHONE = `${OPERATIONAL_COLUMNS_BASE_ALT_PHONE},
   birth_outcomes_induction, birth_outcomes_delivery_type, birth_outcomes_medications_used
 `;
 
@@ -50,6 +64,20 @@ function isLifecycleColumnMissing(error: unknown): boolean {
     code === '42703' &&
     (message.includes('qbo_customer_id') || message.includes('matched_at'))
   );
+}
+
+function isPhoneColumnMissing(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = String((error as { code?: string }).code || '');
+  const message = String((error as { message?: string }).message || '').toLowerCase();
+  return code === '42703' && message.includes('column "phone" does not exist');
+}
+
+function isPhoneNumberColumnMissing(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = String((error as { code?: string }).code || '');
+  const message = String((error as { message?: string }).message || '').toLowerCase();
+  return code === '42703' && message.includes('column "phone_number" does not exist');
 }
 
 const BILLING_COLUMNS = `
@@ -174,8 +202,11 @@ async function queryWithColumnFallback(
 ): Promise<{ rows: Record<string, any>[] }> {
   const tiers = [
     { cols: OPERATIONAL_COLUMNS, check: () => true },
-    { cols: OPERATIONAL_COLUMNS_BASE, check: isBirthOutcomesColumnMissing },
-    { cols: OPERATIONAL_COLUMNS_LEGACY, check: isLifecycleColumnMissing },
+    { cols: OPERATIONAL_COLUMNS_ALT_PHONE, check: isPhoneColumnMissing },
+    { cols: OPERATIONAL_COLUMNS_BASE, check: (err: unknown) => isBirthOutcomesColumnMissing(err) || isPhoneNumberColumnMissing(err) },
+    { cols: OPERATIONAL_COLUMNS_BASE_ALT_PHONE, check: (err: unknown) => isBirthOutcomesColumnMissing(err) || isPhoneColumnMissing(err) },
+    { cols: OPERATIONAL_COLUMNS_LEGACY, check: (err: unknown) => isLifecycleColumnMissing(err) || isPhoneNumberColumnMissing(err) },
+    { cols: OPERATIONAL_COLUMNS_LEGACY_ALT_PHONE, check: (err: unknown) => isLifecycleColumnMissing(err) || isPhoneColumnMissing(err) },
   ];
 
   let lastError: unknown;
@@ -185,7 +216,7 @@ async function queryWithColumnFallback(
       return await queryCloudSql(sql, params);
     } catch (err) {
       lastError = err;
-      if (!isBirthOutcomesColumnMissing(err) && !isLifecycleColumnMissing(err)) throw err;
+      if (!tier.check(err)) throw err;
     }
   }
   throw lastError;

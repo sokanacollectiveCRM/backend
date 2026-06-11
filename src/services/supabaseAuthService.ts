@@ -13,7 +13,7 @@ function userFromAuthUser(authUser: { id: string; email?: string; user_metadata?
   const meta = authUser.user_metadata || {};
   const appMeta = authUser.app_metadata || {};
   const role = (meta.role as string) || (appMeta.role as string) || 'client';
-  const validRole = ['admin', 'doula', 'client'].includes(role) ? (role as ROLE) : ROLE.CLIENT;
+  const validRole = ['admin', 'doula', 'client', 'billing'].includes(role) ? (role as ROLE) : ROLE.CLIENT;
   return new User({
     id: authUser.id,
     email: authUser.email || '',

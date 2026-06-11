@@ -177,6 +177,19 @@ describe('POST /requestService/requestSubmission flow', () => {
       expect(mockQuery).not.toHaveBeenCalled();
     });
 
+    it('returns Home-specific error when birth_hospital is empty for Home birth', async () => {
+      const body = {
+        ...buildCrmLikeSubmitBody(),
+        birth_location: 'Home',
+        birth_hospital: '   ',
+      };
+
+      const res = await request(app).post('/requestService/requestSubmission').send(body).expect(400);
+
+      expect(res.body.error).toContain('home birth location');
+      expect(mockQuery).not.toHaveBeenCalled();
+    });
+
     it('returns 400 when payment_method is Medicaid', async () => {
       const body = {
         ...buildCrmLikeSubmitBody(),
@@ -246,5 +259,24 @@ describe('POST /requestService/requestSubmission flow', () => {
       expect(params[59]).toBe('SEC-POL-456');
       expect(params[62]).toBe('Labor Support, Postpartum Support');
     });
+
+    it.each([
+      ['Home', '123 Oak St, Springfield, IL 62704'],
+      ['Birth Center', 'Sunrise Birth Center'],
+    ] as const)(
+      'persists birth_location %s and place name in INSERT params',
+      async (birth_location, birth_hospital) => {
+        mockQuery.mockResolvedValueOnce({ rows: [{ client_number: 'CL-00099' }] });
+
+        const res = await request(app)
+          .post('/requestService/requestSubmission')
+          .send({ ...buildCrmLikeSubmitBody(), birth_location, birth_hospital });
+
+        expect(res.status).toBe(200);
+        const [, params] = mockQuery.mock.calls[0];
+        expect(params[9]).toBe(birth_location);
+        expect(params[10]).toBe(birth_hospital);
+      }
+    );
   });
 });

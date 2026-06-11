@@ -1,5 +1,16 @@
 import nodemailer from 'nodemailer';
+import { contractNotifications } from '../config/env';
+import { getLimitedBillingViewUrl } from '../utils/billingViewUrl';
 import { EmailService } from './interface/emailServiceInterface';
+
+export interface ContractInitiatedBillingEmailInput {
+  clientName: string;
+  contractType: string;
+  contractTotal: string;
+  contractId: string;
+  depositAmount?: string | null;
+  installmentCount?: number | null;
+}
 
 export class NodemailerService implements EmailService {
   private transporter: nodemailer.Transporter;
@@ -33,7 +44,13 @@ export class NodemailerService implements EmailService {
     });
   }
 
-  async sendEmail(to: string, subject: string, text: string, html?: string): Promise<void> {
+  async sendEmail(
+    to: string,
+    subject: string,
+    text: string,
+    html?: string,
+    options?: { from?: string }
+  ): Promise<void> {
     // Check if we're in test mode
     if (process.env.USE_TEST_EMAIL === 'true') {
       console.log('Test email mode enabled - email not sent');
@@ -48,7 +65,10 @@ export class NodemailerService implements EmailService {
 
     try {
       const mailOptions = {
-        from: process.env.EMAIL_FROM || 'Sokana CRM <hello@sokanacollective.com>',
+        from:
+          options?.from ||
+          process.env.EMAIL_FROM ||
+          'Sokana CRM <hello@sokanacollective.com>',
         to,
         subject,
         text,
@@ -66,6 +86,78 @@ export class NodemailerService implements EmailService {
       console.error('Failed to send email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
     }
+  }
+
+  async sendContractInitiatedBillingEmail(
+    input: ContractInitiatedBillingEmailInput
+  ): Promise<void> {
+    const paymentScheduleLink = getLimitedBillingViewUrl(input.contractId);
+    const subject = 'New contract initiated';
+    const depositLine = input.depositAmount
+      ? `Deposit Amount: ${input.depositAmount}`
+      : 'Deposit Amount: N/A';
+    const installmentsLine =
+      typeof input.installmentCount === 'number'
+        ? `Installments: ${input.installmentCount}`
+        : 'Installments: N/A';
+
+    const text = `A new contract has been initiated.
+
+Please review the contract details and payment schedule in the billing view.
+
+Client: ${input.clientName}
+Contract Type: ${input.contractType}
+Contract Total: ${input.contractTotal}
+${depositLine}
+${installmentsLine}
+Payment Schedule Link: ${paymentScheduleLink}`;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #333;">New contract initiated</h2>
+        <p>A new contract has been initiated.</p>
+        <p>Please review the contract details and payment schedule in the billing view.</p>
+
+        <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #333;">Contract Details</h3>
+          <ul style="list-style: none; padding: 0; margin: 0;">
+            <li style="margin: 10px 0;"><strong>Client:</strong> ${input.clientName}</li>
+            <li style="margin: 10px 0;"><strong>Contract Type:</strong> ${input.contractType}</li>
+            <li style="margin: 10px 0;"><strong>Contract Total:</strong> ${input.contractTotal}</li>
+            <li style="margin: 10px 0;"><strong>Deposit Amount:</strong> ${input.depositAmount ?? 'N/A'}</li>
+            <li style="margin: 10px 0;"><strong>Installments:</strong> ${
+              typeof input.installmentCount === 'number' ? input.installmentCount : 'N/A'
+            }</li>
+          </ul>
+        </div>
+
+        <div style="text-align: center; margin: 30px 0;">
+          <a
+            href="${paymentScheduleLink}"
+            style="background-color: #4CAF50; color: white; padding: 14px 28px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;"
+          >
+            Open Billing View
+          </a>
+        </div>
+
+        <p style="color: #666; font-size: 14px;">
+          Payment Schedule Link:
+          <a href="${paymentScheduleLink}">${paymentScheduleLink}</a>
+        </p>
+
+        <p style="margin-top: 30px;">Best regards,<br>The Sokana Team</p>
+      </div>
+    `;
+
+    await this.sendEmail(
+      contractNotifications.billingEmail,
+      subject,
+      text,
+      html,
+      {
+        from: `Sokana Billing <${contractNotifications.fromEmail}>`,
+      }
+    );
   }
 
   async sendInvoiceEmail(

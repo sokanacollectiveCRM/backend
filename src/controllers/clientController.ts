@@ -96,6 +96,12 @@ export class ClientController {
 
   private static readonly ZIP_CODE_REGEX = /^(?:\d{5})(?:-\d{4})?$/;
 
+  private setNoStore(res: Response): void {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  }
+
   private clientUseCase: ClientUseCase;
   private assignmentRepository: SupabaseAssignmentRepository;
   private clientRepository: ClientRepository;
@@ -614,6 +620,7 @@ export class ClientController {
 
   async getMyDocuments(req: AuthRequest, res: Response): Promise<void> {
     try {
+      this.setNoStore(res);
       if (!req.user?.id) {
         res.status(401).json({ error: 'Unauthenticated client' });
         return;
@@ -643,6 +650,7 @@ export class ClientController {
 
   async getMyDocumentUrl(req: AuthRequest, res: Response): Promise<void> {
     try {
+      this.setNoStore(res);
       if (!req.user?.id) {
         res.status(401).json({ error: 'Unauthenticated client' });
         return;
@@ -708,6 +716,7 @@ export class ClientController {
 
   async getClientDocuments(req: AuthRequest, res: Response): Promise<void> {
     try {
+      this.setNoStore(res);
       const { clientId } = req.params;
       if (!clientId) {
         res.status(400).json({ error: 'Missing clientId' });
@@ -737,6 +746,7 @@ export class ClientController {
 
   async getClientDocumentUrl(req: AuthRequest, res: Response): Promise<void> {
     try {
+      this.setNoStore(res);
       const { clientId, documentId } = req.params;
       if (!clientId || !documentId) {
         res.status(400).json({ error: 'Missing clientId or documentId' });
@@ -817,6 +827,7 @@ export class ClientController {
   //
   async getClients(req: AuthRequest, res: Response): Promise<void> {
     try {
+      this.setNoStore(res);
       const { id, role } = req.user;
       const { detailed, limit: limitParam } = req.query;
       const clients = detailed === 'true'
@@ -896,6 +907,7 @@ export class ClientController {
   //
   async getClientById(req: AuthRequest, res: Response): Promise<void> {
   try {
+    this.setNoStore(res);
     const { id } = req.params;
     let targetClientId = id;
     if (!targetClientId) {
@@ -1879,6 +1891,7 @@ export class ClientController {
   async getClientActivities(req: AuthRequest, res: Response): Promise<void> {
     const { id } = req.params;
     const readMode = process.env.SPLIT_DB_READ_MODE;
+    this.setNoStore(res);
 
     // Require PRIMARY mode - shadow mode disabled
     if (readMode !== 'primary') {

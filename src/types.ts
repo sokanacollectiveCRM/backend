@@ -340,7 +340,8 @@ export enum ACCOUNT_STATUS {
 export enum ROLE {
   ADMIN = "admin",
   DOULA = "doula",
-  CLIENT = "client"
+  CLIENT = "client",
+  BILLING = "billing"
 };
 
 export type PortalStatus = 'not_invited' | 'invited' | 'active' | 'disabled';

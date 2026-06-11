@@ -2,6 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import { getPool } from '../db/cloudSqlPool';
 import { createPaymentScheduleInCloudSql } from '../services/cloudSqlPaymentScheduleService';
+import { NodemailerService } from '../services/emailService';
 import { signNowService } from '../services/signNowService';
 import { convertDocxToPdf, generateContractDocx } from './contractProcessor';
 
@@ -198,11 +199,13 @@ export async function processContractWithSignNow(
 
     // Step 7: Payment schedule (Labor Support only) — Cloud SQL
     const isLaborSupport = contractData.serviceType?.toLowerCase().includes('labor support');
+    let installmentCount: number | null = null;
     if (isLaborSupport) {
       const totalAmount = parseCurrency(contractData.totalInvestment);
       const depositAmount = parseCurrency(contractData.depositAmount);
       if (totalAmount > 0) {
         try {
+          installmentCount = depositAmount > 0 && totalAmount > depositAmount ? 3 : 0;
           const startDate = contractData.startDate
             ? new Date(contractData.startDate)
             : new Date();
@@ -211,7 +214,7 @@ export async function processContractWithSignNow(
             scheduleName: 'Labor Support Payment Plan',
             totalAmount,
             depositAmount,
-            numberOfInstallments: depositAmount > 0 && totalAmount > depositAmount ? 3 : 0,
+            numberOfInstallments: installmentCount,
             paymentFrequency: 'monthly',
             startDate,
           });
@@ -224,6 +227,22 @@ export async function processContractWithSignNow(
       }
     } else {
       console.log('💰 Step 7: Skipping payment schedule (Postpartum)');
+    }
+
+    // Step 7b: Notify billing/accounting with billing-safe contract summary only.
+    try {
+      const emailService = new NodemailerService();
+      await emailService.sendContractInitiatedBillingEmail({
+        clientName,
+        contractType: contractData.serviceType || 'Contract',
+        contractTotal: contractData.totalInvestment || '$0.00',
+        contractId,
+        depositAmount: contractData.depositAmount || null,
+        installmentCount,
+      });
+      console.log('✅ Step 7b: Billing notification sent');
+    } catch (err) {
+      console.error('⚠️ Step 7b: Billing notification failed (non-blocking):', err);
     }
 
     // Step 8: Send SignNow invitation with conditional redirect URLs

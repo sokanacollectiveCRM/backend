@@ -8,10 +8,10 @@ import {
 } from '../services/auth/quickbooksAuthService';
 import createCustomerService, { CreateCustomerParams } from '../services/customer/createCustomer';
 import createInvoiceService from '../services/invoice/createInvoice';
-import supabase from '../supabase';
 // ← 1) Import your invoiceable-customers logic
 import getInvoiceableCustomers from '../services/customer/getInvoiceableCustomers';
 import getCustomersFromQuickBooks from '../services/customer/getCustomersFromQuickBooks';
+import { listInvoicesFromCloudSql } from '../repositories/cloudSqlInvoiceRepository';
 // Ensure you have SUPABASE_JWT_SECRET in your env
 const JWT_SECRET = process.env.SUPABASE_JWT_SECRET!
 
@@ -174,17 +174,12 @@ export const quickBooksDisconnect: RequestHandler = async (req, res, next) => {
 
 /**
  * GET /quickbooks/invoices
- * Returns all invoices you've saved in Supabase
+ * Legacy endpoint: return invoices from Cloud SQL `phi_invoices`.
  */
 export const getInvoices: RequestHandler = async (_req, res, next) => {
   try {
-    const { data, error } = await supabase
-      .from('invoices')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (error) throw error
-    res.json(data)
+    const data = await listInvoicesFromCloudSql(500);
+    res.json(data);
   } catch (err) {
     next(err)
   }

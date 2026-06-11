@@ -31,6 +31,7 @@ export async function listInvoicesFromCloudSql(limit = 500): Promise<InvoiceRow[
       i.status,
       i.paid_total_amount,
       i.total_amount,
+      i.invoice_number,
       i.created_at,
       i.due_date,
       c.first_name,
@@ -60,6 +61,7 @@ export async function listInvoicesFromCloudSql(limit = 500): Promise<InvoiceRow[
     status: string | null;
     paid_total_amount: string | number | null;
     total_amount?: string | number | null;
+    invoice_number?: string | null;
     first_name: string | null;
     last_name: string | null;
     created_at?: Date | string | null;
@@ -102,6 +104,7 @@ function mapInvoiceRow(r: {
   status: string | null;
   paid_total_amount: string | number | null;
   total_amount?: string | number | null;
+  invoice_number?: string | null;
   first_name: string | null;
   last_name: string | null;
   created_at?: Date | string | null;
@@ -120,7 +123,7 @@ function mapInvoiceRow(r: {
     status: r.status ?? null,
     total_amount: r.total_amount != null ? String(r.total_amount) : null,
     paid_total_amount: r.paid_total_amount != null ? String(r.paid_total_amount) : null,
-    invoice_number: null,
+    invoice_number: r.invoice_number ?? null,
     due_date,
     created_at,
     updated_at: null,

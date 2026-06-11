@@ -89,6 +89,21 @@ export const stripe = {
   },
 };
 
+export const contractNotifications = {
+  get fromEmail(): string {
+    return optionalEnv('CONTRACT_NOTIFICATION_FROM_EMAIL') ?? 'hello@sokanacollective.com';
+  },
+  get billingEmail(): string {
+    return optionalEnv('BILLING_NOTIFICATION_EMAIL') ?? 'billing@sokanacollective.com';
+  },
+  get billingViewPathTemplate(): string {
+    return optionalEnv('BILLING_CONTRACT_VIEW_PATH_TEMPLATE') ?? '/billing/contracts/:contractId';
+  },
+  get frontendUrl(): string {
+    return optionalEnv('FRONTEND_URL') ?? 'http://localhost:3001';
+  },
+};
+
 // CORS: comma-separated FRONTEND_ORIGIN or legacy vars
 export function getAllowedOrigins(): string[] {
   const fromOrigin = (optionalEnv('FRONTEND_ORIGIN') ?? '')

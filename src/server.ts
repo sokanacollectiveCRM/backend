@@ -24,6 +24,7 @@ import contractSigningRoutes from './routes/contractSigningRoutes';
 import paymentRoutes from './routes/paymentRoutes';
 import invoiceRoutes from './routes/invoiceRoutes';
 import financialRoutes from './routes/financialRoutes';
+import billingRoutes from './routes/billingRoutes';
 import pdfContractRoutes from './routes/pdfContractRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
 import requestRouter from './routes/requestRoute';
@@ -148,6 +149,7 @@ app.use('/api/pdf-contract', asMiddleware(pdfContractRoutes));
 app.use('/api/payments', asMiddleware(paymentRoutes));
 app.use('/api/invoices', asMiddleware(invoiceRoutes));
 app.use('/api/financial', asMiddleware(financialRoutes));
+app.use('/api/billing', asMiddleware(billingRoutes));
 app.use('/api/signnow', asMiddleware(signNowRoutes));
 
 // DEV-only debug routes — NEVER in production (no token/cookie endpoints)

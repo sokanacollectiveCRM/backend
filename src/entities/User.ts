@@ -45,6 +45,10 @@ export class User {
   secondary_policy_number?: string;
   self_pay_card_info?: string;
   home_type?: string;
+  home_types?: string[];
+  home_type_other?: string;
+  home_adults_count?: string;
+  home_youth_count?: string;
   services_interested?: string[];
   phone_number?: string;
   health_notes?: string;
@@ -134,6 +138,10 @@ export class User {
     secondary_policy_number?: string;
     self_pay_card_info?: string;
     home_type?: string;
+    home_types?: string[];
+    home_type_other?: string;
+    home_adults_count?: string;
+    home_youth_count?: string;
     services_interested?: string[];
     phone_number?: string;
     health_notes?: string;
@@ -218,6 +226,10 @@ export class User {
       this.secondary_policy_number = data.secondary_policy_number;
       this.self_pay_card_info = data.self_pay_card_info;
       this.home_type = data.home_type;
+      this.home_types = data.home_types;
+      this.home_type_other = data.home_type_other;
+      this.home_adults_count = data.home_adults_count;
+      this.home_youth_count = data.home_youth_count;
       this.services_interested = data.services_interested;
       this.phone_number = data.phone_number;
       this.health_notes = data.health_notes;
