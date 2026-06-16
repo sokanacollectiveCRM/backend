@@ -201,6 +201,12 @@ clientRoutes.get('/:id/assigned-doulas',
   (req, res) => clientController.getAssignedDoulas(req, res)
 );
 
+clientRoutes.post('/:id/assigned-doulas/:doulaId/booking-requests',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'client']),
+  (req, res) => clientController.createDoulaBookingRequest(req, res)
+);
+
 // Portal status endpoint for authenticated clients
 clientRoutes.get('/me/portal-status',
   authMiddleware,

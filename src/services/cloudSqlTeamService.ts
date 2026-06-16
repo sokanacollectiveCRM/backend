@@ -1,6 +1,7 @@
 import { getPool } from '../db/cloudSqlPool';
 import { getSupabaseAdmin } from '../supabase';
 import crypto from 'crypto';
+import { DoulaAvailabilityService } from './doulaAvailabilityService';
 
 export interface TeamMemberDto {
   id: string;
@@ -24,6 +25,11 @@ export interface TeamMemberDto {
   languages_other_than_english?: string[] | null;
   race_ethnicity_other?: string | null;
   other_demographic_details?: string | null;
+  scheduling_url?: string | null;
+  availability_status?: 'available' | 'unavailable' | null;
+  availability_note?: string | null;
+  unavailable_from?: string | null;
+  unavailable_until?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -49,6 +55,7 @@ interface DoulaRow {
   languages_other_than_english?: string[] | null;
   race_ethnicity_other?: string | null;
   other_demographic_details?: string | null;
+  scheduling_url?: string | null;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -116,6 +123,11 @@ function mapRow(row: DoulaRow): TeamMemberDto {
     languages_other_than_english: languages,
     race_ethnicity_other: row.race_ethnicity_other ?? null,
     other_demographic_details: row.other_demographic_details ?? null,
+    scheduling_url: row.scheduling_url ?? null,
+    availability_status: null,
+    availability_note: null,
+    unavailable_from: null,
+    unavailable_until: null,
     created_at: toIso(row.created_at),
     updated_at: toIso(row.updated_at),
   };
@@ -137,38 +149,46 @@ function mapAdminRow(row: AdminRow): TeamMemberDto {
     state: null,
     country: null,
     zip_code: null,
+    availability_status: null,
+    availability_note: null,
+    unavailable_from: null,
+    unavailable_until: null,
     created_at: toIso(row.created_at),
     updated_at: toIso(row.updated_at),
   };
 }
 
 export class CloudSqlTeamService {
+  private readonly doulaAvailabilityService = new DoulaAvailabilityService();
+
   async listTeamMembers(): Promise<TeamMemberDto[]> {
     const pool = getPool();
     try {
       const { rows } = await pool.query<DoulaRow & { role: 'admin' | 'doula' }>(
         `
-        SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, 'doula'::text AS role, created_at, updated_at
+        SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, 'doula'::text AS role, created_at, updated_at
         FROM public.doulas
         UNION ALL
-        SELECT id, full_name, email, phone, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'admin'::text AS role, created_at, updated_at
+        SELECT id, full_name, email, phone, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'admin'::text AS role, created_at, updated_at
         FROM public.admins
         ORDER BY full_name ASC
         `
       );
-      return rows.map((r) => r.role === 'admin' ? mapAdminRow(r as unknown as AdminRow) : mapRow(r));
+      return this.withAvailabilitySummary(
+        rows.map((r) => r.role === 'admin' ? mapAdminRow(r as unknown as AdminRow) : mapRow(r))
+      );
     } catch (error) {
       // Backward compatibility: if admins table doesn't exist yet, return doulas only.
       const msg = (error as Error)?.message || '';
       if (msg.includes('public.admins') && msg.includes('does not exist')) {
         const { rows } = await pool.query<DoulaRow>(
           `
-          SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, created_at, updated_at
+          SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, created_at, updated_at
           FROM public.doulas
           ORDER BY full_name ASC
           `
         );
-        return rows.map(mapRow);
+        return this.withAvailabilitySummary(rows.map(mapRow));
       }
       throw error;
     }
@@ -182,7 +202,7 @@ export class CloudSqlTeamService {
     const pool = getPool();
     const { rows } = await pool.query<DoulaRow>(
       `
-      SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture,
+      SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, scheduling_url,
              gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details,
              created_at, updated_at
       FROM public.doulas
@@ -224,12 +244,12 @@ export class CloudSqlTeamService {
     const { rows } = await getPool().query<DoulaRow>(
       `
       INSERT INTO public.doulas (
-        id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, created_at, updated_at
+        id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, scheduling_url, created_at, updated_at
       )
       VALUES (
-        COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, 'approved', NULL, NULL, NULL, NULL, NULL, NULL, NOW(), NOW()
+        COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, 'approved', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NOW(), NOW()
       )
-      RETURNING id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, created_at, updated_at
+      RETURNING id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, scheduling_url, created_at, updated_at
       `,
       [input.id ?? null, fullName, input.email.toLowerCase().trim(), input.phone_number ?? null]
     );
@@ -349,6 +369,7 @@ export class CloudSqlTeamService {
       languages_other_than_english?: string[] | null;
       race_ethnicity_other?: string | null;
       other_demographic_details?: string | null;
+      scheduling_url?: string | null;
     }
   ): Promise<TeamMemberDto | null> {
     const existing = await this.getTeamMemberById(id);
@@ -381,6 +402,10 @@ export class CloudSqlTeamService {
       input.other_demographic_details !== undefined
         ? input.other_demographic_details
         : (existing.other_demographic_details ?? null);
+    const schedulingUrl =
+      input.scheduling_url !== undefined
+        ? input.scheduling_url
+        : (existing.scheduling_url ?? null);
 
     if (existing.role === 'admin') {
       const { rows } = await getPool().query<AdminRow>(
@@ -417,10 +442,11 @@ export class CloudSqlTeamService {
           languages_other_than_english = $14,
           race_ethnicity_other = $15,
           other_demographic_details = $16,
+          scheduling_url = $17,
           updated_at = NOW()
-      WHERE id = $17::uuid
+      WHERE id = $18::uuid
       RETURNING id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture,
-               gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details,
+               gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details, scheduling_url,
                 created_at, updated_at
       `,
       [
@@ -440,10 +466,36 @@ export class CloudSqlTeamService {
         languagesOtherThanEnglish,
         raceEthnicityOther,
         otherDemographicDetails,
+        schedulingUrl,
         id,
       ]
     );
     return rows[0] ? mapRow(rows[0]) : null;
+  }
+
+  private async withAvailabilitySummary(members: TeamMemberDto[]): Promise<TeamMemberDto[]> {
+    const doulaIds = members.filter((member) => member.role === 'doula').map((member) => member.id);
+    if (!doulaIds.length) return members;
+
+    const availabilityMap = await this.doulaAvailabilityService.getAvailabilityStatusForDoulas(doulaIds);
+
+    return members.map((member) => {
+      if (member.role !== 'doula') return member;
+      const availability = availabilityMap.get(member.id) ?? {
+        status: 'available' as const,
+        reason: null,
+        startAt: null,
+        endAt: null,
+      };
+
+      return {
+        ...member,
+        availability_status: availability.status,
+        availability_note: availability.reason,
+        unavailable_from: availability.startAt,
+        unavailable_until: availability.endAt,
+      };
+    });
   }
 
   async updateDoulaProfilePicture(doulaId: string, profilePictureUrl: string): Promise<boolean> {
@@ -488,4 +540,3 @@ export class CloudSqlTeamService {
     }
   }
 }
-

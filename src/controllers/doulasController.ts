@@ -7,6 +7,7 @@ import {
   UpdateDoulaAssignmentInput,
 } from '../services/doulasService';
 import { ASSIGNMENT_SERVICE_CATALOG, normalizeAssignmentServices } from '../constants/assignmentServices';
+import { DoulaAvailabilityService } from '../services/doulaAvailabilityService';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
@@ -72,15 +73,28 @@ function validateUuid(value: string | undefined, fieldName: string): string | nu
 }
 
 export class DoulasController {
-  constructor(private readonly doulasService: DoulasService) {}
+  private readonly doulaAvailabilityService: DoulaAvailabilityService;
+
+  constructor(private readonly doulasService: DoulasService) {
+    this.doulaAvailabilityService = new DoulaAvailabilityService();
+  }
 
   async listDoulas(req: Request, res: Response): Promise<void> {
     try {
+      const availableFrom = optionalString(req.query.availableFrom);
+      const availableTo = optionalString(req.query.availableTo);
+      if ((availableFrom && !availableTo) || (!availableFrom && availableTo)) {
+        res.status(400).json({ error: 'availableFrom and availableTo must be provided together' });
+        return;
+      }
+
       const query: DoulaListQuery = {
         q: optionalString(req.query.q),
         includeCounts: parseIncludeCounts(req.query.includeCounts),
         limit: parseLimit(req.query.limit),
         offset: parseOffset(req.query.offset),
+        availableFrom,
+        availableTo,
       };
 
       const result = await this.doulasService.listDoulas(query);
@@ -292,5 +306,27 @@ export class DoulasController {
       res.status(500).json({ error: 'Failed to update doula assignment' });
     }
   }
-}
 
+  async getDoulaAvailability(req: Request, res: Response): Promise<void> {
+    const doulaId = optionalString(req.params.doulaId);
+    const doulaIdError = validateUuid(doulaId, 'doulaId');
+    if (doulaIdError || !doulaId) {
+      res.status(400).json({ error: doulaIdError ?? 'doulaId is required' });
+      return;
+    }
+
+    try {
+      const records = await this.doulaAvailabilityService.listAvailabilityByDoulaId(doulaId);
+      const availabilityStatus = await this.doulaAvailabilityService.getCurrentAvailabilityStatus(doulaId);
+      res.status(200).json({
+        data: {
+          doulaId,
+          availabilityStatus,
+          records,
+        },
+      });
+    } catch {
+      res.status(500).json({ error: 'Failed to fetch doula availability' });
+    }
+  }
+}

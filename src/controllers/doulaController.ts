@@ -29,6 +29,7 @@ import type { TeamMemberDto } from '../services/cloudSqlTeamService';
 import { getSupabaseAdmin } from '../supabase';
 import { ActivityDTO } from '../dto/response/ActivityDTO';
 import { buildHourSummary, parseHourFilter, parseHourType } from '../utils/hourTypes';
+import { DoulaAvailabilityService } from '../services/doulaAvailabilityService';
 
 export class DoulaController {
   private documentRepository: DoulaDocumentRepository;
@@ -41,6 +42,7 @@ export class DoulaController {
   private clientUseCase: ClientUseCase;
   private cloudSqlTeamService: CloudSqlTeamService;
   private documentIdResolver: DoulaDocumentIdResolver;
+  private doulaAvailabilityService: DoulaAvailabilityService;
 
   constructor(
     documentRepository: DoulaDocumentRepository,
@@ -61,6 +63,7 @@ export class DoulaController {
     this.clientUseCase = clientUseCase;
     this.cloudSqlTeamService = new CloudSqlTeamService();
     this.documentIdResolver = new DoulaDocumentIdResolver(this.cloudSqlTeamService);
+    this.doulaAvailabilityService = new DoulaAvailabilityService();
   }
 
   private getFileExtension(fileName: string): string {
@@ -1219,6 +1222,113 @@ export class DoulaController {
     }
   }
 
+  async getMyAvailability(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const doulaId = req.user?.id;
+      if (!doulaId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      const records = await this.doulaAvailabilityService.listAvailabilityByDoulaId(doulaId);
+      const currentStatus = await this.doulaAvailabilityService.getCurrentAvailabilityStatus(doulaId);
+
+      res.json({
+        success: true,
+        availabilityStatus: currentStatus,
+        records,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || 'Failed to fetch availability' });
+    }
+  }
+
+  async createMyAvailability(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const doulaId = req.user?.id;
+      if (!doulaId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      const record = await this.doulaAvailabilityService.createAvailability({
+        doulaId,
+        startAt: req.body?.startAt ?? req.body?.start_at,
+        endAt: req.body?.endAt ?? req.body?.end_at,
+        availabilityStatus: req.body?.availabilityStatus ?? req.body?.availability_status,
+        reason: req.body?.reason,
+      });
+
+      res.status(201).json({
+        success: true,
+        record,
+      });
+    } catch (error: any) {
+      const status = error?.status ?? 400;
+      res.status(status).json({ error: error.message || 'Failed to create availability record' });
+    }
+  }
+
+  async updateMyAvailability(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const doulaId = req.user?.id;
+      const availabilityId = req.params.availabilityId;
+      if (!doulaId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+      if (!availabilityId) {
+        res.status(400).json({ error: 'availabilityId is required' });
+        return;
+      }
+
+      const record = await this.doulaAvailabilityService.updateAvailability({
+        availabilityId,
+        doulaId,
+        startAt: req.body?.startAt ?? req.body?.start_at,
+        endAt: req.body?.endAt ?? req.body?.end_at,
+        availabilityStatus: req.body?.availabilityStatus ?? req.body?.availability_status,
+        reason: Object.prototype.hasOwnProperty.call(req.body || {}, 'reason') ? req.body?.reason : undefined,
+      });
+
+      res.json({
+        success: true,
+        record,
+      });
+    } catch (error: any) {
+      const status = error?.status ?? 400;
+      res.status(status).json({ error: error.message || 'Failed to update availability record' });
+    }
+  }
+
+  async deleteMyAvailability(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const doulaId = req.user?.id;
+      const availabilityId = req.params.availabilityId;
+      if (!doulaId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+      if (!availabilityId) {
+        res.status(400).json({ error: 'availabilityId is required' });
+        return;
+      }
+
+      const removed = await this.doulaAvailabilityService.deleteAvailability(availabilityId, doulaId);
+      if (!removed) {
+        res.status(404).json({ error: 'Availability record not found' });
+        return;
+      }
+
+      res.json({
+        success: true,
+        message: 'Availability record deleted',
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || 'Failed to delete availability record' });
+    }
+  }
+
   /**
    * Get doula's own profile
    * GET /api/doulas/profile
@@ -1233,7 +1343,8 @@ export class DoulaController {
       const cloudSqlMember = await this.cloudSqlTeamService.getTeamMemberById(doulaId);
       if (cloudSqlMember && cloudSqlMember.role === 'doula') {
         const reqUserJson = req.user?.toJSON?.() as any;
-        const profile = this.buildDoulaProfilePayload(cloudSqlMember, { reqUserJson });
+        const currentAvailability = await this.doulaAvailabilityService.getCurrentAvailabilityStatus(doulaId);
+        const profile = this.buildDoulaProfilePayload(cloudSqlMember, { reqUserJson, currentAvailability });
         res.json({
           success: true,
           profile,
@@ -1303,6 +1414,7 @@ export class DoulaController {
         languages_other_than_english?: string[] | null;
         race_ethnicity_other?: string | null;
         other_demographic_details?: string | null;
+        scheduling_url?: string | null;
       } = {};
 
       const sanitizeStringArray = (input: unknown): string[] => {
@@ -1362,6 +1474,10 @@ export class DoulaController {
         const t = String(fieldsToUpdate.other_demographic_details).trim();
         cloudSqlUpdateData.other_demographic_details = t.length ? t : null;
       }
+      if (fieldsToUpdate.scheduling_url !== undefined || fieldsToUpdate.schedulingUrl !== undefined) {
+        const t = String(fieldsToUpdate.scheduling_url ?? fieldsToUpdate.schedulingUrl ?? '').trim();
+        cloudSqlUpdateData.scheduling_url = t.length ? t : null;
+      }
 
       const updatedMember = await this.cloudSqlTeamService.updateTeamMember(doulaId, cloudSqlUpdateData);
       if (!updatedMember || updatedMember.role !== 'doula') {
@@ -1370,7 +1486,8 @@ export class DoulaController {
       }
 
       const reqUserJson = req.user?.toJSON?.() as any;
-      const profile = this.buildDoulaProfilePayload(updatedMember, { reqUserJson });
+      const currentAvailability = await this.doulaAvailabilityService.getCurrentAvailabilityStatus(doulaId);
+      const profile = this.buildDoulaProfilePayload(updatedMember, { reqUserJson, currentAvailability });
 
       res.json({
         success: true,
@@ -1386,9 +1503,19 @@ export class DoulaController {
 
   private buildDoulaProfilePayload(
     member: TeamMemberDto,
-    opts: { reqUserJson?: Record<string, unknown>; profilePictureFallback?: string | null } = {}
+    opts: {
+      reqUserJson?: Record<string, unknown>;
+      profilePictureFallback?: string | null;
+      currentAvailability?: { status: 'available' | 'unavailable'; reason: string | null; startAt: string | null; endAt: string | null };
+    } = {}
   ) {
     const reqUserJson = opts.reqUserJson;
+    const currentAvailability = opts.currentAvailability ?? {
+      status: 'available' as const,
+      reason: null,
+      startAt: null,
+      endAt: null,
+    };
     const race = Array.isArray(member.race_ethnicity) ? member.race_ethnicity : [];
     const languages = Array.isArray(member.languages_other_than_english)
       ? member.languages_other_than_english
@@ -1413,6 +1540,11 @@ export class DoulaController {
       languages_other_than_english: languages,
       race_ethnicity_other: member.race_ethnicity_other ?? '',
       other_demographic_details: member.other_demographic_details ?? '',
+      scheduling_url: member.scheduling_url ?? '',
+      availability_status: currentAvailability.status,
+      availability_note: currentAvailability.reason,
+      unavailable_from: currentAvailability.startAt,
+      unavailable_until: currentAvailability.endAt,
       account_status: member.account_status,
       profile_picture:
         opts.profilePictureFallback ??

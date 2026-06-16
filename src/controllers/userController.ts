@@ -61,7 +61,8 @@ export class UserController {
           email: d.email,
           profile_picture: null,
           bio: null,
-          phone_number: d.phone_number
+          phone_number: d.phone_number,
+          scheduling_url: d.scheduling_url ?? null,
         }))
       });
     } catch (error) {

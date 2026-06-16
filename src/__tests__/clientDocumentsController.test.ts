@@ -14,6 +14,7 @@ describe('Client document endpoints', () => {
     const res: Partial<Response> = {};
     res.status = jest.fn().mockReturnValue(res);
     res.json = jest.fn().mockReturnValue(res);
+    res.set = jest.fn().mockReturnValue(res);
     return res as Response;
   }
 

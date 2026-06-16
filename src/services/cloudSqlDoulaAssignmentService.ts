@@ -44,6 +44,7 @@ export interface CloudSqlAssignedDoula {
     lastname: string;
     email: string;
     phone_number?: string;
+    scheduling_url?: string | null;
   };
 }
 
@@ -165,6 +166,7 @@ export class CloudSqlDoulaAssignmentService {
       doula_email: string | null;
       doula_phone: string | null;
       full_name: string | null;
+      scheduling_url: string | null;
     }>(
       `
       SELECT
@@ -175,7 +177,8 @@ export class CloudSqlDoulaAssignmentService {
         da.role,
         d.email AS doula_email,
         d.phone AS doula_phone,
-        d.full_name
+        d.full_name,
+        d.scheduling_url
       FROM public.doula_assignments da
       LEFT JOIN public.doulas d ON d.id = da.doula_id
       WHERE da.client_id = $1::uuid
@@ -202,9 +205,9 @@ export class CloudSqlDoulaAssignmentService {
           lastname: last,
           email: row.doula_email || '',
           phone_number: row.doula_phone || undefined,
+          scheduling_url: row.scheduling_url ?? null,
         },
       };
     });
   }
 }
-

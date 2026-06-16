@@ -34,6 +34,10 @@ router.get('/clients/:clientId/doula-assignments',
   (req, res, next) => authorizeRoles(req, res, next, ['admin']),
   (req, res) => controller.listClientDoulaAssignments(req, res)
 );
+router.get('/doulas/:doulaId/availability',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
+  (req, res) => controller.getDoulaAvailability(req, res)
+);
 
 export default router;
-

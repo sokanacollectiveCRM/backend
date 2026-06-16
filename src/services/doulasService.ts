@@ -16,6 +16,8 @@ export interface DoulaListQuery {
   includeCounts: boolean;
   limit: number;
   offset: number;
+  availableFrom?: string;
+  availableTo?: string;
 }
 
 export interface DoulaAssignmentsQuery {
@@ -36,6 +38,11 @@ export interface DoulaRowDto {
   email: string | null;
   phone: string | null;
   assignmentsCount: number | null;
+  schedulingUrl: string | null;
+  availabilityStatus: 'available' | 'unavailable';
+  currentAvailabilityReason: string | null;
+  currentAvailabilityStart: string | null;
+  currentAvailabilityEnd: string | null;
   updatedAt: string;
 }
 
@@ -80,7 +87,18 @@ interface DoulaDbRow {
   email: string | null;
   phone: string | null;
   assignments_count: number | string | null;
+  scheduling_url: string | null;
+  availability_status: 'available' | 'unavailable' | null;
+  availability_reason: string | null;
+  availability_start_at: Date | string | null;
+  availability_end_at: Date | string | null;
   updated_at: Date | string;
+}
+
+function isMissingAvailabilityTableError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const message = String((error as { message?: string }).message || '').toLowerCase();
+  return message.includes('doula_availability') && (message.includes('does not exist') || message.includes('relation'));
 }
 
 interface DoulaAssignmentDbRow {
@@ -170,14 +188,33 @@ function mapAssignmentRow(row: DoulaAssignmentDbRow): DoulaAssignmentRowDto {
   };
 }
 
-function buildDoulasWhere(q?: string): { whereClause: string; values: string[] } {
+function buildDoulasWhere(query: Pick<DoulaListQuery, 'q' | 'availableFrom' | 'availableTo'>): {
+  whereClause: string;
+  values: string[];
+} {
   const where: string[] = [];
   const values: string[] = [];
 
-  if (q) {
-    values.push(q);
+  if (query.q) {
+    values.push(query.q);
     const idx = values.length;
     where.push(`(d.full_name ILIKE '%' || $${idx} || '%' OR d.email ILIKE '%' || $${idx} || '%')`);
+  }
+
+  if (query.availableFrom && query.availableTo) {
+    values.push(query.availableFrom, query.availableTo);
+    const startIdx = values.length - 1;
+    const endIdx = values.length;
+    where.push(`
+      NOT EXISTS (
+        SELECT 1
+        FROM public.doula_availability av
+        WHERE av.doula_id = d.id
+          AND av.availability_status = 'unavailable'
+          AND av.start_at < $${endIdx}::timestamptz
+          AND av.end_at > $${startIdx}::timestamptz
+      )
+    `);
   }
 
   return {
@@ -239,16 +276,13 @@ function buildAssignmentsWhere(filters: DoulaAssignmentsQuery): { whereClause: s
 export class DoulasService {
   async listDoulas(query: DoulaListQuery): Promise<{ data: DoulaRowDto[]; count: number }> {
     const pool = getPool();
-    const { whereClause, values } = buildDoulasWhere(query.q);
+    const { whereClause, values } = buildDoulasWhere(query);
 
     const countSql = `
       SELECT COUNT(*)::int AS count
       FROM public.doulas d
       ${whereClause}
     `;
-    const countRes = await pool.query<CountRow>(countSql, values);
-    const count = toNumber(countRes.rows[0]?.count);
-
     const paginationValues = [...values, query.limit, query.offset];
     const limitIdx = values.length + 1;
     const offsetIdx = values.length + 2;
@@ -261,11 +295,29 @@ export class DoulasService {
           d.email,
           d.phone,
           COUNT(da.*)::int AS assignments_count,
+          d.scheduling_url,
+          CASE
+            WHEN av.doula_id IS NOT NULL THEN 'unavailable'
+            ELSE 'available'
+          END AS availability_status,
+          av.reason AS availability_reason,
+          av.start_at AS availability_start_at,
+          av.end_at AS availability_end_at,
           d.updated_at
         FROM public.doulas d
         LEFT JOIN public.doula_assignments da ON da.doula_id = d.id
+        LEFT JOIN LATERAL (
+          SELECT doula_id, reason, start_at, end_at
+          FROM public.doula_availability av
+          WHERE av.doula_id = d.id
+            AND av.availability_status = 'unavailable'
+            AND av.start_at <= NOW()
+            AND av.end_at > NOW()
+          ORDER BY av.start_at ASC
+          LIMIT 1
+        ) av ON TRUE
         ${whereClause}
-        GROUP BY d.id, d.full_name, d.email, d.phone, d.updated_at
+        GROUP BY d.id, d.full_name, d.email, d.phone, d.scheduling_url, av.doula_id, av.reason, av.start_at, av.end_at, d.updated_at
         ORDER BY d.full_name ASC
         LIMIT $${limitIdx}
         OFFSET $${offsetIdx}
@@ -277,25 +329,121 @@ export class DoulasService {
           d.email,
           d.phone,
           NULL::int AS assignments_count,
+          d.scheduling_url,
+          CASE
+            WHEN av.doula_id IS NOT NULL THEN 'unavailable'
+            ELSE 'available'
+          END AS availability_status,
+          av.reason AS availability_reason,
+          av.start_at AS availability_start_at,
+          av.end_at AS availability_end_at,
           d.updated_at
         FROM public.doulas d
+        LEFT JOIN LATERAL (
+          SELECT doula_id, reason, start_at, end_at
+          FROM public.doula_availability av
+          WHERE av.doula_id = d.id
+            AND av.availability_status = 'unavailable'
+            AND av.start_at <= NOW()
+            AND av.end_at > NOW()
+          ORDER BY av.start_at ASC
+          LIMIT 1
+        ) av ON TRUE
         ${whereClause}
         ORDER BY d.full_name ASC
         LIMIT $${limitIdx}
         OFFSET $${offsetIdx}
       `;
 
-    const dataRes = await pool.query<DoulaDbRow>(dataSql, paginationValues);
-    const data: DoulaRowDto[] = dataRes.rows.map((row) => ({
-      id: row.id,
-      fullName: row.full_name,
-      email: row.email,
-      phone: row.phone,
-      assignmentsCount: query.includeCounts ? toNumber(row.assignments_count) : null,
-      updatedAt: toIso(row.updated_at) ?? new Date(0).toISOString(),
-    }));
+    try {
+      const countRes = await pool.query<CountRow>(countSql, values);
+      const dataRes = await pool.query<DoulaDbRow>(dataSql, paginationValues);
+      const count = toNumber(countRes.rows[0]?.count);
+      const data: DoulaRowDto[] = dataRes.rows.map((row) => ({
+        id: row.id,
+        fullName: row.full_name,
+        email: row.email,
+        phone: row.phone,
+        assignmentsCount: query.includeCounts ? toNumber(row.assignments_count) : null,
+        schedulingUrl: row.scheduling_url ?? null,
+        availabilityStatus: row.availability_status === 'unavailable' ? 'unavailable' : 'available',
+        currentAvailabilityReason: row.availability_reason ?? null,
+        currentAvailabilityStart: toIso(row.availability_start_at),
+        currentAvailabilityEnd: toIso(row.availability_end_at),
+        updatedAt: toIso(row.updated_at) ?? new Date(0).toISOString(),
+      }));
 
-    return { data, count };
+      return { data, count };
+    } catch (error) {
+      if (!isMissingAvailabilityTableError(error)) throw error;
+
+      const legacyWhere = query.availableFrom || query.availableTo
+        ? buildDoulasWhere({ q: query.q, availableFrom: undefined, availableTo: undefined })
+        : { whereClause, values };
+      const legacyCountSql = `
+        SELECT COUNT(*)::int AS count
+        FROM public.doulas d
+        ${legacyWhere.whereClause}
+      `;
+      const legacyCountRes = await pool.query<CountRow>(legacyCountSql, legacyWhere.values);
+      const legacyDataSql = query.includeCounts
+        ? `
+          SELECT
+            d.id,
+            d.full_name,
+            d.email,
+            d.phone,
+            COUNT(da.*)::int AS assignments_count,
+            d.scheduling_url,
+            'available'::text AS availability_status,
+            NULL::text AS availability_reason,
+            NULL::timestamptz AS availability_start_at,
+            NULL::timestamptz AS availability_end_at,
+            d.updated_at
+          FROM public.doulas d
+          LEFT JOIN public.doula_assignments da ON da.doula_id = d.id
+          ${legacyWhere.whereClause}
+          GROUP BY d.id, d.full_name, d.email, d.phone, d.scheduling_url, d.updated_at
+          ORDER BY d.full_name ASC
+          LIMIT $${legacyWhere.values.length + 1}
+          OFFSET $${legacyWhere.values.length + 2}
+        `
+        : `
+          SELECT
+            d.id,
+            d.full_name,
+            d.email,
+            d.phone,
+            NULL::int AS assignments_count,
+            d.scheduling_url,
+            'available'::text AS availability_status,
+            NULL::text AS availability_reason,
+            NULL::timestamptz AS availability_start_at,
+            NULL::timestamptz AS availability_end_at,
+            d.updated_at
+          FROM public.doulas d
+          ${legacyWhere.whereClause}
+          ORDER BY d.full_name ASC
+          LIMIT $${legacyWhere.values.length + 1}
+          OFFSET $${legacyWhere.values.length + 2}
+        `;
+      const legacyValues = [...legacyWhere.values, query.limit, query.offset];
+      const dataRes = await pool.query<DoulaDbRow>(legacyDataSql, legacyValues);
+      const data: DoulaRowDto[] = dataRes.rows.map((row) => ({
+        id: row.id,
+        fullName: row.full_name,
+        email: row.email,
+        phone: row.phone,
+        assignmentsCount: query.includeCounts ? toNumber(row.assignments_count) : null,
+        schedulingUrl: row.scheduling_url ?? null,
+        availabilityStatus: 'available',
+        currentAvailabilityReason: null,
+        currentAvailabilityStart: null,
+        currentAvailabilityEnd: null,
+        updatedAt: toIso(row.updated_at) ?? new Date(0).toISOString(),
+      }));
+      return { data, count: toNumber(legacyCountRes.rows[0]?.count) };
+    }
   }
 
   async listDoulaAssignments(query: DoulaAssignmentsQuery): Promise<{ data: DoulaAssignmentRowDto[]; count: number }> {
@@ -661,4 +809,3 @@ export class DoulasService {
     return rows[0] ? mapAssignmentRow(rows[0]) : null;
   }
 }
-

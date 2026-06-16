@@ -42,6 +42,7 @@ describe('PUT /clients/:id/birth-outcomes', () => {
     mockResponse = {
       json: jest.fn().mockReturnThis(),
       status: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
       headersSent: false,
     };
 
@@ -227,6 +228,7 @@ describe('GET /clients/:id includes structured birth outcomes (authorized)', () 
     mockResponse = {
       json: jest.fn().mockReturnThis(),
       status: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
       headersSent: false,
     };
 
@@ -265,4 +267,3 @@ describe('GET /clients/:id includes structured birth outcomes (authorized)', () 
     );
   });
 });
-

@@ -44,6 +44,7 @@ import {
   CLIENT_DOCUMENT_TYPE_INSURANCE_CARD,
   MAX_CLIENT_DOCUMENT_SIZE_BYTES,
 } from '../constants/clientDocuments';
+import { DoulaAvailabilityService } from '../services/doulaAvailabilityService';
 
 export class ClientController {
   private static readonly BIRTH_OUTCOMES_DELIVERY_TYPES = new Set([
@@ -107,6 +108,7 @@ export class ClientController {
   private clientRepository: ClientRepository;
   private eligibilityService: PortalEligibilityService;
   private cloudSqlAssignmentService: CloudSqlDoulaAssignmentService;
+  private doulaAvailabilityService: DoulaAvailabilityService;
   private clientDocumentRepository?: ClientDocumentRepository;
   private clientDocumentUploadService?: ClientDocumentUploadService;
 
@@ -122,6 +124,7 @@ export class ClientController {
     this.clientRepository = clientRepository;
     this.eligibilityService = new PortalEligibilityService(supabase);
     this.cloudSqlAssignmentService = new CloudSqlDoulaAssignmentService();
+    this.doulaAvailabilityService = new DoulaAvailabilityService();
     this.clientDocumentRepository = clientDocumentRepository;
     this.clientDocumentUploadService = clientDocumentUploadService;
   }
@@ -1971,6 +1974,8 @@ export class ClientController {
     try {
       const { id: clientId } = req.params;
       const { doulaId, role, services } = req.body;
+      const assignmentStart = req.body?.assignmentStart ?? req.body?.assignment_start ?? req.body?.requestedStart ?? req.body?.requested_start;
+      const assignmentEnd = req.body?.assignmentEnd ?? req.body?.assignment_end ?? req.body?.requestedEnd ?? req.body?.requested_end;
 
       // #region agent log
       fetch('http://127.0.0.1:7707/ingest/a673d138-3b5f-48fc-88e2-e0e1aadca9bb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0cc71c'},body:JSON.stringify({sessionId:'0cc71c',location:'clientController.ts:assignDoula',message:'assignDoula request body',data:{clientId,doulaId,role,servicesReceived:services,servicesType:typeof services,servicesIsArray:Array.isArray(services)},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
@@ -2004,6 +2009,28 @@ export class ClientController {
         return;
       }
 
+      const currentAvailability = await this.doulaAvailabilityService.getCurrentAvailabilityStatus(doulaId);
+      if (currentAvailability.status === 'unavailable') {
+        const reason = currentAvailability.reason ? ` (${currentAvailability.reason})` : '';
+        res.status(409).json({
+          error: `Doula is currently unavailable${reason}. Unavailable from ${currentAvailability.startAt} to ${currentAvailability.endAt}.`,
+        });
+        return;
+      }
+
+      if ((assignmentStart && !assignmentEnd) || (!assignmentStart && assignmentEnd)) {
+        res.status(400).json({ error: 'assignmentStart and assignmentEnd must be provided together' });
+        return;
+      }
+
+      if (assignmentStart && assignmentEnd) {
+        await this.doulaAvailabilityService.assertDoulaAvailableForPeriod(
+          doulaId,
+          new Date(assignmentStart),
+          new Date(assignmentEnd)
+        );
+      }
+
       const assignment = await this.cloudSqlAssignmentService.assignDoula(
         clientId,
         doulaId,
@@ -2033,6 +2060,11 @@ export class ClientController {
             'Doula assignment services are not available yet. Run migration src/db/migrations/add_services_to_doula_assignments.sql',
           code: 'CLOUD_SQL_SCHEMA',
         });
+        return;
+      }
+      if (error instanceof ConflictError || error instanceof ValidationError) {
+        const status = error instanceof ConflictError ? 409 : 400;
+        res.status(status).json({ error: error.message });
         return;
       }
       if (ClientController.isTableMissing(error, 'assignments')) {
@@ -2111,14 +2143,96 @@ export class ClientController {
       }
 
       const doulas = await this.cloudSqlAssignmentService.getAssignedDoulas(targetClientId);
+      const availabilityByDoulaId = await this.doulaAvailabilityService.getAvailabilityStatusForDoulas(
+        doulas.map((doula) => doula.doulaId)
+      );
+      const includeSchedulingLink =
+        req.user?.role === 'admin' ||
+        (req.user?.role === 'client' && await this.doulaAvailabilityService.isClientInContractStage(targetClientId));
+      const enrichedDoulas = doulas.map((assignment) => {
+        const availability = availabilityByDoulaId.get(assignment.doulaId) ?? {
+          status: 'available' as const,
+          reason: null,
+          startAt: null,
+          endAt: null,
+        };
+        return {
+          ...assignment,
+          availabilityStatus: availability,
+          doula: {
+            ...assignment.doula,
+            scheduling_url: includeSchedulingLink ? (assignment.doula.scheduling_url ?? null) : null,
+          },
+        };
+      });
 
       res.json({
         success: true,
-        doulas: doulas
+        doulas: enrichedDoulas
       });
     } catch (error) {
       if (ClientController.isTableMissing(error, 'assignments')) {
         res.json({ success: true, doulas: [] });
+        return;
+      }
+      const err = this.handleError(error as Error, res);
+      res.status(err.status).json({ error: err.message });
+    }
+  }
+
+  async createDoulaBookingRequest(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id, doulaId } = req.params;
+      let targetClientId = id;
+
+      if (!targetClientId || !doulaId) {
+        res.status(400).json({ error: 'Missing clientId or doulaId' });
+        return;
+      }
+
+      if (req.user?.role === 'client') {
+        const ownClientId = await this.cloudSqlAssignmentService.getClientIdByAuthUserId(req.user.id);
+        if (!ownClientId) {
+          res.status(404).json({ error: 'Client profile not found' });
+          return;
+        }
+        const sentAuthUserId = targetClientId === req.user.id;
+        if (!sentAuthUserId && ownClientId !== targetClientId) {
+          res.status(403).json({ error: 'Forbidden: cannot create booking requests for another client' });
+          return;
+        }
+        targetClientId = ownClientId;
+      }
+
+      const isAssigned = await this.cloudSqlAssignmentService.assignmentExists(targetClientId, doulaId);
+      if (!isAssigned) {
+        res.status(404).json({ error: 'Assigned doula not found for this client' });
+        return;
+      }
+
+      const isInContractStage = await this.doulaAvailabilityService.isClientInContractStage(targetClientId);
+      if (!isInContractStage) {
+        res.status(403).json({ error: 'Booking is only available once the client is in the contract stage' });
+        return;
+      }
+
+      const bookingRequest = await this.doulaAvailabilityService.createBookingRequest({
+        clientId: targetClientId,
+        doulaId,
+        requestedBy: req.user?.id ?? null,
+        startAt: req.body?.startAt ?? req.body?.start_at,
+        endAt: req.body?.endAt ?? req.body?.end_at,
+        notes: req.body?.notes ?? req.body?.note,
+      });
+
+      res.status(201).json({
+        success: true,
+        bookingRequest,
+      });
+    } catch (error) {
+      if (error instanceof ConflictError || error instanceof ValidationError) {
+        const status = error instanceof ConflictError ? 409 : 400;
+        res.status(status).json({ error: error.message });
         return;
       }
       const err = this.handleError(error as Error, res);

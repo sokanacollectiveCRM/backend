@@ -97,6 +97,34 @@ doulaRoutes.get(
   (req, res) => doulaController.getMyHours(req, res)
 );
 
+doulaRoutes.get(
+  '/availability',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['doula']),
+  (req, res) => doulaController.getMyAvailability(req, res)
+);
+
+doulaRoutes.post(
+  '/availability',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['doula']),
+  (req, res) => doulaController.createMyAvailability(req, res)
+);
+
+doulaRoutes.patch(
+  '/availability/:availabilityId',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['doula']),
+  (req, res) => doulaController.updateMyAvailability(req, res)
+);
+
+doulaRoutes.delete(
+  '/availability/:availabilityId',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['doula']),
+  (req, res) => doulaController.deleteMyAvailability(req, res)
+);
+
 // Activity/Notes routes
 doulaRoutes.post(
   '/clients/:clientId/activities',

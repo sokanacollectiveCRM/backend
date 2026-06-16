@@ -74,6 +74,7 @@ describe('Client billing/profile validation split', () => {
     mockResponse = {
       json: jest.fn().mockReturnThis(),
       status: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
       headersSent: false,
     };
 
