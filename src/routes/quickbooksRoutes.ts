@@ -13,6 +13,7 @@ import {
   quickBooksStatus
 } from '../controllers/quickbooksController'
 import authMiddleware from '../middleware/authMiddleware'
+import { quickBooksInvoicePaidWebhook } from '../controllers/quickbooksWebhookController'
 import { simulatePaymentController } from '../services/payments/paymentsController'
 
 const router = Router()
@@ -33,6 +34,7 @@ router.get('/customers/invoiceable', getInvoiceableCustomersController)
 router.post('/customer', createCustomer)
 router.post('/disconnect', quickBooksDisconnect)
 router.post('/invoice', createInvoice)
+router.post('/webhooks/invoice-paid', quickBooksInvoicePaidWebhook)
 
 // Simulate payment endpoint
 router.post('/simulate-payment', simulatePaymentController)

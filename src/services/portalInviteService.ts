@@ -4,6 +4,7 @@ import { PortalInviteResult, PortalStatus } from '../types';
 import { NodemailerService } from './emailService';
 import { CloudSqlPortalRepository, PortalClientRecord } from '../repositories/cloudSqlPortalRepository';
 import { ValidationError } from '../domains/errors';
+import { portalEligibilityService } from './portalEligibilityService';
 
 const RATE_LIMIT_MINUTES = 2;
 const RATE_LIMIT_MS = RATE_LIMIT_MINUTES * 60 * 1000;
@@ -40,13 +41,12 @@ export class PortalInviteService {
   }
 
   private async ensureEligible(clientId: string): Promise<void> {
-    const hasSignedContract = await this.portalRepository.hasSignedContract(clientId);
-    if (!hasSignedContract) {
-      throw new Error('Invite available after contract is signed and first payment is completed.');
-    }
-    const hasCompletedFirstPayment = await this.portalRepository.hasCompletedFirstPayment(clientId);
-    if (!hasCompletedFirstPayment) {
-      throw new Error('Invite available after contract is signed and first payment is completed.');
+    const eligibility = await portalEligibilityService.getInviteEligibility(clientId);
+    if (!eligibility.eligible) {
+      throw new Error(
+        eligibility.reason ||
+          'Invite available after contract is signed, deposit is paid, and billing readiness is satisfied.'
+      );
     }
   }
 

@@ -1,4 +1,5 @@
 import express, { Router } from 'express';
+import { sendVerificationInvoice } from '../controllers/clientBillingController';
 import multer from 'multer';
 import { clientController, userController } from '../index';
 import { PortalController } from '../controllers/portalController';
@@ -123,6 +124,12 @@ clientRoutes.put('/:id/birth-outcomes',
   authMiddleware,
   (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
   (req, res) => clientController.updateClientBirthOutcomes(req, res)
+);
+
+clientRoutes.post('/:clientId/billing/send-verification-invoice',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'billing']),
+  (req, res) => sendVerificationInvoice(req, res)
 );
 
 clientRoutes.get('/me/billing',

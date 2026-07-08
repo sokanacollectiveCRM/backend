@@ -12,8 +12,12 @@ import { AuthRequest } from '../types';
 import { ClientUseCase } from '../usecase/clientUseCase';
 import { ClientRepository } from '../repositories/interface/clientRepository';
 import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
-import { PortalEligibilityService } from '../services/portalEligibilityService';
-import supabase from '../supabase';
+import {
+  PortalEligibilityService,
+  portalEligibilityService,
+} from '../services/portalEligibilityService';
+import { mergePortalEligibilityFields } from '../utils/portalEligibilityResponse';
+import { PortalEligibilitySnapshot } from '../constants/portalEligibility';
 import { ClientMapper } from '../mappers/ClientMapper';
 import { ActivityMapper } from '../mappers/ActivityMapper';
 import { ApiResponse } from '../utils/responseBuilder';
@@ -103,6 +107,22 @@ export class ClientController {
     res.set('Expires', '0');
   }
 
+  private async getPortalEligibilitySnapshot(clientId: string): Promise<PortalEligibilitySnapshot | null> {
+    try {
+      return await this.eligibilityService.getPortalEligibility(clientId);
+    } catch {
+      return null;
+    }
+  }
+
+  private mergeEligibility<T extends object>(
+    payload: T,
+    snapshot: PortalEligibilitySnapshot | null | undefined
+  ): T & Partial<PortalEligibilitySnapshot> {
+    return mergePortalEligibilityFields(payload as Record<string, unknown>, snapshot ?? undefined) as T &
+      Partial<PortalEligibilitySnapshot>;
+  }
+
   private clientUseCase: ClientUseCase;
   private assignmentRepository: SupabaseAssignmentRepository;
   private clientRepository: ClientRepository;
@@ -122,7 +142,7 @@ export class ClientController {
     this.clientUseCase = clientUseCase;
     this.assignmentRepository = assignmentRepository;
     this.clientRepository = clientRepository;
-    this.eligibilityService = new PortalEligibilityService(supabase);
+    this.eligibilityService = portalEligibilityService;
     this.cloudSqlAssignmentService = new CloudSqlDoulaAssignmentService();
     this.doulaAvailabilityService = new DoulaAvailabilityService();
     this.clientDocumentRepository = clientDocumentRepository;
@@ -840,7 +860,19 @@ export class ClientController {
       const limit = limitParam != null ? Math.min(Math.max(0, parseInt(String(limitParam), 10) || 0), 1000) : undefined;
       const sliced = limit != null && limit > 0 ? clients.slice(0, limit) : clients;
 
-      const dtos = sliced.map((client) => ClientMapper.toListItemDTO(client, false));
+      const eligibilityByClientId = await this.eligibilityService.getPortalEligibilityBatch(
+        sliced.map((client) => client.id)
+      );
+
+      const dtos = sliced.map((client) =>
+        this.mergeEligibility(
+          ClientMapper.toListItemDTO(
+            client,
+            eligibilityByClientId.get(client.id)?.is_eligible
+          ),
+          eligibilityByClientId.get(client.id)
+        )
+      );
       logger.info({ source: 'cloud_sql', count: dtos.length }, '[Client] list response');
       res.json(ApiResponse.list(dtos, dtos.length));
     } catch (getError) {
@@ -939,7 +971,11 @@ export class ClientController {
       return;
     }
 
-    const dto = ClientMapper.toDetailDTO(clientRow, false);
+    const eligibility = await this.getPortalEligibilitySnapshot(targetClientId);
+    const dto = this.mergeEligibility(
+      ClientMapper.toDetailDTO(clientRow, eligibility?.is_eligible),
+      eligibility
+    );
 
     const { canAccess } = await canAccessSensitive(req.user, targetClientId);
     const canAccessForResponse = canAccess || req.user?.role === 'client';
@@ -1076,14 +1112,8 @@ export class ClientController {
       }
 
       // Compute eligibility (optional, swallow errors)
-      let isEligible = false;
-      try {
-        const eligibility = await this.eligibilityService.getInviteEligibility(clientId);
-        isEligible = eligibility.eligible;
-      } catch {
-        // HIPAA: Do not log client identifiers
-        console.error('Error checking eligibility');
-      }
+      const eligibility = await this.getPortalEligibilitySnapshot(clientId);
+      const isEligible = eligibility?.is_eligible ?? false;
 
       // When transitioning to 'matched', fire QB customer sync (non-blocking).
       // QB may not be connected in all environments; failures are logged only.
@@ -1110,7 +1140,7 @@ export class ClientController {
       }
 
       // Map to DTO and return canonical response
-      const dto = ClientMapper.toDetailDTO(updatedRow, isEligible);
+      const dto = this.mergeEligibility(ClientMapper.toDetailDTO(updatedRow, isEligible), eligibility);
       res.json(ApiResponse.success(dto));
     }
     catch (statusError) {
@@ -1323,14 +1353,14 @@ export class ClientController {
       }
 
       // Compute eligibility
-      let isEligible = false;
-      try {
-        const eligibility = await this.eligibilityService.getInviteEligibility(targetClientId);
-        isEligible = eligibility.eligible;
-      } catch { /* swallow */ }
+      const eligibility = await this.getPortalEligibilitySnapshot(targetClientId);
+      const isEligible = eligibility?.is_eligible ?? false;
 
       // Map operational to canonical DTO
-      const dto = ClientMapper.toDetailDTO(freshOperational, isEligible);
+      const dto = this.mergeEligibility(
+        ClientMapper.toDetailDTO(freshOperational, isEligible),
+        eligibility
+      );
 
       // Merge PHI for the response (if authorized / self client view)
       let response: Record<string, any> = { ...dto };

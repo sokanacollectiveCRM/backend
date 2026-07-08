@@ -37,4 +37,21 @@ export interface ClientListItemDTO {
   invited_at?: string;
   updated_at?: string;
   is_eligible?: boolean;
+  portal_blockers?: string[];
+  primary_portal_blocker?: string | null;
+  billing_path?: string;
+  payment_authorization_required?: boolean;
+  payment_authorization_satisfied?: boolean;
+  card_on_file?: boolean;
+  qb_customer_id?: string | null;
+  qb_stored_payment_method_id?: string | null;
+  verification_invoice_id?: string | null;
+  verification_invoice_sent_at?: string | null;
+  verification_invoice_paid_at?: string | null;
+  allowed_actions?: {
+    can_invite_to_portal: boolean;
+    can_send_verification_invoice: boolean;
+    can_mark_contract_signed: boolean;
+    can_mark_deposit_paid: boolean;
+  };
 }
