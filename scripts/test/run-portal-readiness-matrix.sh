@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Run all 5 portal readiness matrix scenarios: SQL fixture + GET /api/clients/:id oracle.
+# Run the 5 core portal readiness matrix scenarios plus insurance parity coverage:
+# SQL fixture + GET /api/clients/:id oracle.
 #
 # Usage:
 #   ./scripts/test/run-portal-readiness-matrix.sh
@@ -152,9 +153,14 @@ run_case \
   "billing-path-unknown" \
   '{"billing_path":"unknown","is_eligible":false,"primary_portal_blocker":"billing_path_unknown","card_on_file":true,"allowed_actions":{"can_invite_to_portal":false,"can_send_verification_invoice":false,"can_mark_contract_signed":false,"can_mark_deposit_paid":false}}'
 
+run_case \
+  "Insurance parity Insurance + signed + paid deposit + no card" \
+  "insurance-missing-card" \
+  '{"billing_path":"insurance","is_eligible":false,"portal_blockers":["missing_card_on_file"],"primary_portal_blocker":"missing_card_on_file","payment_authorization_required":true,"payment_authorization_satisfied":false,"card_on_file":false,"allowed_actions":{"can_invite_to_portal":false,"can_send_verification_invoice":true,"can_mark_contract_signed":false,"can_mark_deposit_paid":false}}'
+
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Matrix summary: $PASS passed, $FAIL failed (of 5)"
+echo "Matrix summary: $PASS passed, $FAIL failed (5 core scenarios + insurance parity)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 if [[ "$FAIL" -gt 0 ]]; then

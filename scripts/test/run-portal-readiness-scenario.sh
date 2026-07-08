@@ -4,13 +4,14 @@
 # Usage:
 #   export CLIENT_ID="1d981375-beeb-46e7-bf22-5d7a750eb391"   # jbony@icstars.org (default fixture)
 #   ./scripts/test/run-portal-readiness-scenario.sh medicaid-eligible-no-card
+#   ./scripts/test/run-portal-readiness-scenario.sh insurance-missing-card
 #   ./scripts/test/run-portal-readiness-scenario.sh selfpay-missing-card
 #   ./scripts/test/run-portal-readiness-scenario.sh selfpay-eligible-with-card
 #   ./scripts/test/run-portal-readiness-scenario.sh unsigned-contract
 #   ./scripts/test/run-portal-readiness-scenario.sh billing-path-unknown
 #   ./scripts/test/run-portal-readiness-scenario.sh reset
 #   ./scripts/test/run-portal-readiness-scenario.sh add-card
-#   ./scripts/test/run-portal-readiness-matrix.sh   # all 5 matrix scenarios + API oracle
+#   ./scripts/test/run-portal-readiness-matrix.sh   # 5 core matrix scenarios + insurance parity + API oracle
 #
 # Loads CLOUD_SQL_PASSWORD from backend .env when DB_PASSWORD is unset.
 
@@ -34,12 +35,13 @@ DB_USER="${CLOUD_SQL_USER:-app_user}"
 
 SCENARIO="${1:-}"
 if [[ -z "$SCENARIO" ]]; then
-  echo "Usage: $0 <reset|medicaid-eligible-no-card|selfpay-missing-card|selfpay-eligible-with-card|unsigned-contract|billing-path-unknown|add-card>" >&2
+  echo "Usage: $0 <reset|medicaid-eligible-no-card|insurance-missing-card|selfpay-missing-card|selfpay-eligible-with-card|unsigned-contract|billing-path-unknown|add-card>" >&2
   exit 1
 fi
 
 case "$SCENARIO" in
   reset) SQL_FILE="scripts/test/reset-portal-readiness-fixture.sql" ;;
+  insurance-missing-card) SQL_FILE="scripts/test/scenario-insurance-missing-card.sql" ;;
   selfpay-missing-card) SQL_FILE="scripts/test/scenario-selfpay-missing-card.sql" ;;
   selfpay-eligible-with-card) SQL_FILE="scripts/test/scenario-selfpay-eligible-with-card.sql" ;;
   medicaid-eligible-no-card) SQL_FILE="scripts/test/scenario-medicaid-eligible-no-card.sql" ;;
@@ -48,7 +50,7 @@ case "$SCENARIO" in
   add-card) SQL_FILE="scripts/test/scenario-add-card-on-file.sql" ;;
   *)
     echo "Unknown scenario: $SCENARIO" >&2
-    echo "Usage: $0 <reset|medicaid-eligible-no-card|selfpay-missing-card|selfpay-eligible-with-card|unsigned-contract|billing-path-unknown|add-card>" >&2
+    echo "Usage: $0 <reset|medicaid-eligible-no-card|insurance-missing-card|selfpay-missing-card|selfpay-eligible-with-card|unsigned-contract|billing-path-unknown|add-card>" >&2
     exit 1
     ;;
 esac

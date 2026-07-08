@@ -334,7 +334,7 @@ Confirm the network tab shows backend fields — not client-side reconstruction 
 
 ---
 
-## Start with only these 5 scenarios
+## Start with these 5 core scenarios
 
 Do not test everything on day one. These prove the architecture:
 
@@ -346,14 +346,21 @@ Do not test everything on day one. These prove the architecture:
 | Self-Pay + unsigned + unpaid + no card | Blocked: `contract_unsigned` (deposit may add `deposit_unpaid`) |
 | Unknown payment method + signed + paid + card | Blocked: `billing_path_unknown` |
 
+Insurance parity scenario to keep explicit:
+
+| Scenario | Expected |
+|----------|----------|
+| Insurance + signed + paid deposit + no card | Blocked: `missing_card_on_file`; verification invoice allowed |
+
 Additional scenario scripts (add as needed under `scripts/test/`):
 
+- `scenario-insurance-missing-card.sql` ✅
 - `scenario-selfpay-eligible-with-card.sql` ✅
 - `scenario-medicaid-eligible-no-card.sql` ✅
 - `scenario-unsigned-contract.sql` ✅
 - `scenario-billing-path-unknown.sql` ✅
 
-### Run all 5 matrix scenarios (SQL + API oracle)
+### Run the 5 core matrix scenarios plus insurance parity (SQL + API oracle)
 
 ```bash
 ./scripts/test/run-portal-readiness-matrix.sh
@@ -393,7 +400,7 @@ LIMIT 10;
 
 ## Exit criteria (frontend alignment PR)
 
-- [x] All 5 matrix scenarios match API oracle via `GET /api/clients/:id` (run `./scripts/test/run-portal-readiness-matrix.sh`)
+- [x] All 5 core matrix scenarios plus Insurance parity match API oracle via `GET /api/clients/:id` (run `./scripts/test/run-portal-readiness-matrix.sh`)
 - [ ] UI buttons follow `allowed_actions` only
 - [ ] No duplicate eligibility logic in `portalStatus.ts` when `is_eligible` is present
 - [ ] Missing-card and eligible states visually distinct on client detail

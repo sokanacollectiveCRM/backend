@@ -4,6 +4,7 @@ import { getPool } from '../db/cloudSqlPool';
 import { createPaymentScheduleInCloudSql } from '../services/cloudSqlPaymentScheduleService';
 import { NodemailerService } from '../services/emailService';
 import { signNowService } from '../services/signNowService';
+import { contractSignatureCompletionService } from '../services/contractSignatureCompletionService';
 import { convertDocxToPdf, generateContractDocx } from './contractProcessor';
 
 function parseCurrency(val: string | undefined): number {
@@ -176,8 +177,8 @@ export async function processContractWithSignNow(
     try {
       await getPool().query(
         `INSERT INTO phi_contracts (id, client_id, status, signnow_document_id)
-         VALUES ($1, $2, 'signed', $3)
-         ON CONFLICT (id) DO UPDATE SET status = 'signed', signnow_document_id = EXCLUDED.signnow_document_id`,
+         VALUES ($1, $2, 'pending_signature', $3)
+         ON CONFLICT (id) DO UPDATE SET status = 'pending_signature', signnow_document_id = EXCLUDED.signnow_document_id`,
         [contractId, clientId, documentId]
       );
       console.log('✅ Contract record created successfully');
@@ -186,8 +187,8 @@ export async function processContractWithSignNow(
       console.warn('Contract insert (with signnow_document_id) failed, trying minimal insert:', contractErr);
       try {
         await getPool().query(
-          `INSERT INTO phi_contracts (id, client_id, status) VALUES ($1, $2, 'signed')
-           ON CONFLICT (id) DO UPDATE SET status = 'signed', client_id = EXCLUDED.client_id`,
+          `INSERT INTO phi_contracts (id, client_id, status) VALUES ($1, $2, 'pending_signature')
+           ON CONFLICT (id) DO UPDATE SET status = 'pending_signature', client_id = EXCLUDED.client_id`,
           [contractId, clientId]
         );
         console.log('✅ Contract record created (minimal)');
@@ -362,6 +363,10 @@ export async function checkSignNowDocumentStatus(documentId: string) {
     const document = await response.json();
     const signatures = document.signatures || [];
     const isComplete = signatures.every((sig: any) => sig.data && sig.data.length > 0);
+    const postSigningWorkflow =
+      isComplete
+        ? await contractSignatureCompletionService.finalizeSignedDocument(documentId)
+        : null;
 
     return {
       success: true,
@@ -369,6 +374,7 @@ export async function checkSignNowDocumentStatus(documentId: string) {
       status: isComplete ? 'completed' : 'pending',
       document_name: document.document_name,
       created: document.created,
+      post_signing_workflow: postSigningWorkflow,
       signatures: signatures.map((sig: any) => ({
         role: sig.role,
         email: sig.email,

@@ -1,4 +1,5 @@
 import { Request, Response, Router } from 'express';
+import { signNowCallback } from '../controllers/signNowWebhookController';
 import { signNowService } from '../services/signNowService';
 
 const router = Router();
@@ -33,6 +34,9 @@ router.post('/test-auth', async (_req: Request, res: Response): Promise<void> =>
     });
   }
 });
+
+// SignNow webhook callback for document completion
+router.post('/callback', signNowCallback);
 
 // Test template access
 router.post('/test-template', async (_req: Request, res: Response): Promise<void> => {
