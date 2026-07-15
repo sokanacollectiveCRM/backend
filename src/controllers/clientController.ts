@@ -1118,7 +1118,7 @@ export class ClientController {
       // When transitioning to 'matched', fire QB customer sync (non-blocking).
       // QB may not be connected in all environments; failures are logged only.
       const isMatchedConversion = status.trim() === 'matched' || status.trim() === 'customer';
-      if (isMatchedConversion && !updatedRow.qbo_customer_id) {
+      if (isMatchedConversion) {
         syncMatchedClientToQuickBooks({
           clientId,
           firstName: updatedRow.first_name || '',

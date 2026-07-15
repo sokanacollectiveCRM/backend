@@ -1,5 +1,34 @@
 import { qboRequest } from '../../utils/qboClient';
 
+export async function findCustomerInQuickBooksById(
+  customerId: string
+): Promise<string | null> {
+  if (!customerId || !customerId.trim()) {
+    return null;
+  }
+
+  try {
+    const escaped = customerId.replace(/'/g, "''");
+    const query = `SELECT Id, DisplayName FROM Customer WHERE Id='${escaped}'`;
+    const encodedQuery = encodeURIComponent(query);
+
+    const response = await qboRequest<{
+      QueryResponse?: { Customer?: Array<{ Id: string; DisplayName: string }> };
+    }>(`/query?query=${encodedQuery}&minorversion=65`);
+
+    const customers = response.QueryResponse?.Customer;
+    if (customers && customers.length > 0) {
+      console.log(`✅ Found existing QuickBooks customer by Id: ${customers[0].Id}`);
+      return customers[0].Id;
+    }
+
+    return null;
+  } catch (error: any) {
+    console.error('❌ Error searching for customer by Id:', error);
+    return null;
+  }
+}
+
 /**
  * Find an existing customer in QuickBooks by email address
  * @param email Customer email address

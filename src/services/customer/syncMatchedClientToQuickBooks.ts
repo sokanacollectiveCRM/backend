@@ -9,7 +9,10 @@
 import buildCustomerPayload from './buildCustomerPayload';
 import createCustomerInQuickBooks from './createCustomerInQuickBooks';
 import saveQboCustomerIdToPhiClient from './saveQboCustomerIdToPhiClient';
-import findCustomerInQuickBooks, { findCustomerInQuickBooksByDisplayName } from '../payments/findCustomerInQuickBooks';
+import findCustomerInQuickBooks, {
+  findCustomerInQuickBooksByDisplayName,
+  findCustomerInQuickBooksById,
+} from '../payments/findCustomerInQuickBooks';
 import { logger } from '../../common/utils/logger';
 
 export interface SyncMatchedClientParams {
@@ -30,10 +33,18 @@ export async function syncMatchedClientToQuickBooks(
 ): Promise<SyncMatchedClientResult> {
   const { clientId, firstName, lastName, email, existingQboCustomerId } = params;
 
-  // 1. CRM record already linked to a QB customer — nothing to do
+  // 1. Trust an existing QB link only if the customer still exists in the connected company.
   if (existingQboCustomerId) {
-    logger.info({ clientId, existingQboCustomerId }, '[QB Sync] Client already has a QB customer ID; skipping');
-    return { qboCustomerId: existingQboCustomerId, alreadyExisted: true };
+    const existingById = await findCustomerInQuickBooksById(existingQboCustomerId);
+    if (existingById) {
+      logger.info({ clientId, existingQboCustomerId }, '[QB Sync] Client already has a valid QB customer ID; skipping');
+      return { qboCustomerId: existingById, alreadyExisted: true };
+    }
+
+    logger.warn(
+      { clientId, existingQboCustomerId },
+      '[QB Sync] Stored QB customer ID was not found in connected company; attempting relink/create'
+    );
   }
 
   if (!firstName && !lastName && !email) {
