@@ -22,5 +22,8 @@ export default async function createInvoiceInQuickBooks(
     }
   );
 
-  return InvoiceWithLink;
+  return {
+    ...InvoiceWithLink,
+    invoiceLink: InvoiceWithLink?.invoiceLink || InvoiceWithLink?.InvoiceLink || null,
+  };
 }

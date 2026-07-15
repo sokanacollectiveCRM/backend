@@ -6,6 +6,7 @@ import createInvoiceInQuickBooks from './invoice/createInvoiceInQuickBooks';
 import buildInvoicePayload from './invoice/buildInvoicePayload';
 import { upsertInvoiceToCloudSql } from '../repositories/cloudSqlInvoiceWriteRepository';
 import { portalEligibilityService } from './portalEligibilityService';
+import { sendInvoiceEmailToCustomer } from './invoice/sendInvoiceEmail';
 
 const VERIFICATION_MEMO = 'Payment method verification invoice';
 const DEFAULT_SERVICE_ITEM_ID = process.env.QBO_VERIFICATION_ITEM_ID || '1';
@@ -24,8 +25,10 @@ export class VerificationInvoiceService {
       qbo_customer_id: string | null;
       email: string | null;
       payment_method: string | null;
+      first_name: string | null;
+      last_name: string | null;
     }>(
-      `SELECT id, qbo_customer_id, email, payment_method
+      `SELECT id, qbo_customer_id, email, payment_method, first_name, last_name
        FROM public.phi_clients
        WHERE id = $1::uuid
        LIMIT 1`,
@@ -49,22 +52,24 @@ export class VerificationInvoiceService {
     }
 
     const dueDate = new Date().toISOString().slice(0, 10);
+    const lineItems = [
+      {
+        DetailType: 'SalesItemLineDetail',
+        Amount: 1,
+        Description: VERIFICATION_MEMO,
+        SalesItemLineDetail: {
+          ItemRef: { value: DEFAULT_SERVICE_ITEM_ID },
+          UnitPrice: 1,
+          Qty: 1,
+        },
+      },
+    ];
+
     const payload = buildInvoicePayload(client.qbo_customer_id, {
       dueDate,
       memo: VERIFICATION_MEMO,
       customerEmail: client.email || '',
-      lineItems: [
-        {
-          DetailType: 'SalesItemLineDetail',
-          Amount: 1,
-          Description: VERIFICATION_MEMO,
-          SalesItemLineDetail: {
-            ItemRef: { value: DEFAULT_SERVICE_ITEM_ID },
-            UnitPrice: 1,
-            Qty: 1,
-          },
-        },
-      ],
+      lineItems,
     });
 
     const invoice = await createInvoiceInQuickBooks(payload);
@@ -77,6 +82,18 @@ export class VerificationInvoiceService {
       internalCustomerId: clientId,
       invoice,
     });
+
+    if (client.email) {
+      const customerName = [client.first_name, client.last_name].filter(Boolean).join(' ').trim() || 'Customer';
+      await sendInvoiceEmailToCustomer({
+        invoice,
+        customerName,
+        customerEmail: client.email,
+        lineItems,
+        dueDate,
+        memo: VERIFICATION_MEMO,
+      });
+    }
 
     const sentAt = new Date();
     await portalEligibilityService.computeAndPersist(clientId, {

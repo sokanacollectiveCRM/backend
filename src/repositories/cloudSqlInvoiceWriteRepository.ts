@@ -1,4 +1,5 @@
 import { queryCloudSql } from '../db/cloudSqlPool';
+import crypto from 'crypto';
 
 type QuickBooksInvoice = {
   Id?: string;
@@ -51,8 +52,8 @@ export async function upsertInvoiceToCloudSql(opts: {
   const cols = await getPhiInvoicesColumns();
 
   // Always-required base fields for UI ledger.
-  const columns: string[] = ['client_id'];
-  const values: any[] = [internalCustomerId];
+  const columns: string[] = [];
+  const values: any[] = [];
 
   const add = (col: string, value: any) => {
     if (!cols.has(col)) return;
@@ -60,6 +61,8 @@ export async function upsertInvoiceToCloudSql(opts: {
     values.push(value);
   };
 
+  add('id', crypto.randomUUID());
+  add('client_id', internalCustomerId);
   add('status', status);
   add('total_amount', totalAmt);
   add('paid_total_amount', paidTotal);
@@ -91,7 +94,8 @@ export async function upsertInvoiceToCloudSql(opts: {
     const updateAssignments = columns
       .filter((c) => c !== 'created_at')
       .filter((c) => c !== 'client_id') // keep original linkage unless you intentionally re-link
-      .map((c) => `${c} = COALESCE(EXCLUDED.${c}, ${c})`)
+      .filter((c) => c !== 'id') // preserve the existing ledger row identity on QBO upsert
+      .map((c) => `${c} = COALESCE(EXCLUDED.${c}, public.phi_invoices.${c})`)
       .join(', ');
 
     const upsertSql = `
@@ -117,4 +121,3 @@ export async function upsertInvoiceToCloudSql(opts: {
   // Insert-only fallback (may create duplicates if called repeatedly without QB linkage constraints).
   await queryCloudSql(insertSql, values);
 }
-
