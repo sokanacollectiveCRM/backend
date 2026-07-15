@@ -67,8 +67,6 @@ async function refreshQuickBooksToken() {
   });
   console.log('📤 [QB] Making refresh request to:', url);
   try {
-    // Use dynamic import for node-fetch (ES Module compatible)
-    const { default: fetch } = await import('node-fetch');
     const resp = await fetch(url, {
       method: 'POST',
       headers: {
