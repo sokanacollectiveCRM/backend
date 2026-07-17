@@ -1,4 +1,5 @@
 import supabase from '../supabase';
+import { createPaymentScheduleInCloudSql } from './cloudSqlPaymentScheduleService';
 
 export interface PaymentSchedule {
   id: string;
@@ -98,25 +99,14 @@ export class PaymentScheduleService {
    * Create a payment schedule for a contract
    */
   async createPaymentSchedule(request: CreatePaymentScheduleRequest): Promise<string> {
-    console.log('📅 Creating payment schedule for contract:', request.contract_id);
-
-    const { data, error } = await supabase.rpc('create_payment_schedule', {
-      p_contract_id: request.contract_id,
-      p_schedule_name: request.schedule_name,
-      p_total_amount: request.total_amount,
-      p_deposit_amount: request.deposit_amount || 0,
-      p_number_of_installments: request.number_of_installments || 0,
-      p_payment_frequency: request.payment_frequency || 'one-time',
-      p_start_date: request.start_date || new Date().toISOString().split('T')[0]
+    if (!request.number_of_installments) throw new Error('A positive number_of_installments is required');
+    return createPaymentScheduleInCloudSql({
+      contractId: request.contract_id, scheduleName: request.schedule_name,
+      totalAmount: request.total_amount, depositAmount: request.deposit_amount ?? 0,
+      numberOfInstallments: request.number_of_installments,
+      paymentFrequency: request.payment_frequency === 'bi-weekly' ? 'biweekly' : request.payment_frequency as any,
+      startDate: request.start_date || new Date().toISOString().slice(0, 10),
     });
-
-    if (error) {
-      console.error('❌ Error creating payment schedule:', error);
-      throw new Error(`Failed to create payment schedule: ${error.message}`);
-    }
-
-    console.log('✅ Payment schedule created successfully:', data);
-    return data;
   }
 
   /**

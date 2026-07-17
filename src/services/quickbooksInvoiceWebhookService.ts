@@ -1,10 +1,10 @@
+import { isPaymentAuthorizationRequired } from '../constants/portalEligibility';
 import { getPool } from '../db/cloudSqlPool';
 import { clientOnboardingReadinessRepository } from '../repositories/cloudSqlClientOnboardingReadinessRepository';
 import { upsertInvoiceToCloudSql } from '../repositories/cloudSqlInvoiceWriteRepository';
-import { portalEligibilityService } from './portalEligibilityService';
-import { getPrimaryQuickBooksStoredPaymentMethod } from './payments/listQuickBooksStoredPaymentMethods';
-import { isPaymentAuthorizationRequired } from '../constants/portalEligibility';
 import { qboRequest } from '../utils/qboClient';
+import { getPrimaryQuickBooksStoredPaymentMethod } from './payments/listQuickBooksStoredPaymentMethods';
+import { portalEligibilityService } from './portalEligibilityService';
 
 export interface QuickBooksInvoicePaidEvent {
   qbo_invoice_id: string;
@@ -13,7 +13,35 @@ export interface QuickBooksInvoicePaidEvent {
   client_id?: string | null;
 }
 
-async function resolveClientIdForInvoice(qboInvoiceId: string): Promise<string | null> {
+async function markInstallmentPaid(
+  qboInvoiceId: string,
+  claimedClientId?: string | null
+): Promise<string | null> {
+  const { rows } = await getPool().query<{ id: string; client_id: string }>(
+    `SELECT pi.id, pc.client_id
+     FROM public.payment_installments pi
+     JOIN public.payment_schedules ps ON ps.id=pi.schedule_id
+     JOIN public.phi_contracts pc ON pc.id=ps.contract_id
+     WHERE pi.qbo_invoice_id=$1
+       AND ($2::uuid IS NULL OR pc.client_id=$2::uuid)
+     LIMIT 1`,
+    [qboInvoiceId, claimedClientId ?? null]
+  );
+  const installment = rows[0];
+  if (!installment) return null;
+  await getPool().query(
+    `UPDATE public.payment_installments
+     SET status='paid', paid_at=COALESCE(paid_at,CURRENT_TIMESTAMP),
+         is_overdue=FALSE, updated_at=CURRENT_TIMESTAMP
+     WHERE id=$1 AND status NOT IN ('paid','cancelled')`,
+    [installment.id]
+  );
+  return installment.client_id;
+}
+
+async function resolveClientIdForInvoice(
+  qboInvoiceId: string
+): Promise<string | null> {
   const { rows } = await getPool().query<{ client_id: string }>(
     `SELECT client_id
      FROM public.phi_invoices
@@ -24,7 +52,10 @@ async function resolveClientIdForInvoice(qboInvoiceId: string): Promise<string |
   return rows[0]?.client_id ?? null;
 }
 
-async function isDepositInvoice(qboInvoiceId: string, clientId: string): Promise<boolean> {
+async function isDepositInvoice(
+  qboInvoiceId: string,
+  clientId: string
+): Promise<boolean> {
   const { rows } = await getPool().query<{ is_deposit: boolean }>(
     `
     SELECT EXISTS (
@@ -45,7 +76,9 @@ async function isDepositInvoice(qboInvoiceId: string, clientId: string): Promise
   return Boolean(rows[0]?.is_deposit);
 }
 
-async function fetchQuickBooksInvoice(qboInvoiceId: string): Promise<Record<string, unknown> | null> {
+async function fetchQuickBooksInvoice(
+  qboInvoiceId: string
+): Promise<Record<string, unknown> | null> {
   try {
     const response = await qboRequest<{ Invoice?: Record<string, unknown> }>(
       `/invoice/${encodeURIComponent(qboInvoiceId)}?minorversion=65`
@@ -63,7 +96,8 @@ export class QuickBooksInvoiceWebhookService {
       return;
     }
 
-    let clientId = event.client_id ?? (await resolveClientIdForInvoice(qboInvoiceId));
+    let clientId =
+      event.client_id ?? (await resolveClientIdForInvoice(qboInvoiceId));
     if (!clientId) {
       return;
     }
@@ -80,34 +114,57 @@ export class QuickBooksInvoiceWebhookService {
     if (invoice) {
       await upsertInvoiceToCloudSql({
         internalCustomerId: clientId,
-        invoice: invoice as { Id?: string; TotalAmt?: number; Balance?: number },
+        invoice: invoice as {
+          Id?: string;
+          TotalAmt?: number;
+          Balance?: number;
+        },
       });
     }
 
-    const balance = event.balance ?? (typeof invoice?.Balance === 'number' ? invoice.Balance : null);
+    const balance =
+      event.balance ??
+      (typeof invoice?.Balance === 'number' ? invoice.Balance : null);
     if (balance != null && balance > 0) {
       return;
     }
 
-    const readiness = await clientOnboardingReadinessRepository.getByClientId(clientId);
+    // Correlation is constrained through invoice -> schedule -> contract -> client.
+    // A mismatched client supplied by a webhook payload cannot update another client.
+    const installmentClientId = await markInstallmentPaid(
+      qboInvoiceId,
+      event.client_id
+    );
+    if (event.client_id && !installmentClientId) {
+      const belongsToClaimedClient = await isDepositInvoice(qboInvoiceId, event.client_id);
+      if (!belongsToClaimedClient) return;
+    }
+    if (installmentClientId) clientId = installmentClientId;
+
+    const readiness =
+      await clientOnboardingReadinessRepository.getByClientId(clientId);
     const isVerificationInvoice =
       readiness?.verification_invoice_id === qboInvoiceId ||
-      (await clientOnboardingReadinessRepository.getByVerificationInvoiceId(qboInvoiceId)) != null;
+      (await clientOnboardingReadinessRepository.getByVerificationInvoiceId(
+        qboInvoiceId
+      )) != null;
 
     if (isVerificationInvoice) {
-      await this.handleVerificationInvoicePaid(clientId);
+      // Historical verification invoices are retained for reconciliation only.
+      // Their payment must never change card-on-file or portal eligibility state.
       return;
     }
 
     const depositInvoice = await isDepositInvoice(qboInvoiceId, clientId);
-    if (depositInvoice || !(readiness?.deposit_paid)) {
+    if (depositInvoice || !readiness?.deposit_paid) {
       await this.handleDepositInvoicePaid(clientId);
     }
   }
 
   private async handleDepositInvoicePaid(clientId: string): Promise<void> {
     const gates = await portalEligibilityService.getOnboardingGates(clientId);
-    const previous = await clientOnboardingReadinessRepository.getByClientId(clientId);
+    const previous =
+      await clientOnboardingReadinessRepository.getByClientId(clientId);
 
     await clientOnboardingReadinessRepository.recordEvent({
       client_id: clientId,
@@ -115,7 +172,9 @@ export class QuickBooksInvoiceWebhookService {
       event_source: 'quickbooks_webhook',
     });
 
-    const requiresAuthorization = isPaymentAuthorizationRequired(gates.billing_path);
+    const requiresAuthorization = isPaymentAuthorizationRequired(
+      gates.billing_path
+    );
     const storedMethod = gates.qb_customer_id
       ? await getPrimaryQuickBooksStoredPaymentMethod(gates.qb_customer_id)
       : null;
@@ -142,59 +201,13 @@ export class QuickBooksInvoiceWebhookService {
       });
     }
 
-    const snapshot = await portalEligibilityService.computeAndPersist(clientId, {
-      force_deposit_paid: true,
-      event_source: 'quickbooks_webhook',
-    });
-
-    if (!previous?.is_eligible && snapshot.is_eligible) {
-      await clientOnboardingReadinessRepository.recordEvent({
-        client_id: clientId,
-        event_type: 'portal_unlocked',
+    const snapshot = await portalEligibilityService.computeAndPersist(
+      clientId,
+      {
+        force_deposit_paid: true,
         event_source: 'quickbooks_webhook',
-      });
-    }
-  }
-
-  private async handleVerificationInvoicePaid(clientId: string): Promise<void> {
-    const gates = await portalEligibilityService.getOnboardingGates(clientId);
-    const previous = await clientOnboardingReadinessRepository.getByClientId(clientId);
-    const storedMethod = gates.qb_customer_id
-      ? await getPrimaryQuickBooksStoredPaymentMethod(gates.qb_customer_id)
-      : null;
-
-    const paidAt = new Date().toISOString();
-
-    await clientOnboardingReadinessRepository.recordEvent({
-      client_id: clientId,
-      event_type: 'verification_invoice_paid',
-      event_source: 'quickbooks_webhook',
-    });
-
-    if (!storedMethod?.id) {
-      await portalEligibilityService.computeAndPersist(clientId, {
-        verification_invoice_paid_at: paidAt,
-        event_source: 'quickbooks_webhook',
-      });
-      await clientOnboardingReadinessRepository.recordEvent({
-        client_id: clientId,
-        event_type: 'verification_invoice_paid_no_stored_method',
-        event_source: 'quickbooks_webhook',
-      });
-      return;
-    }
-
-    await clientOnboardingReadinessRepository.recordEvent({
-      client_id: clientId,
-      event_type: 'card_on_file_confirmed',
-      event_source: 'quickbooks_webhook',
-      payload: { qb_stored_payment_method_id: storedMethod.id },
-    });
-
-    const snapshot = await portalEligibilityService.computeAndPersist(clientId, {
-      verification_invoice_paid_at: paidAt,
-      event_source: 'quickbooks_webhook',
-    });
+      }
+    );
 
     if (!previous?.is_eligible && snapshot.is_eligible) {
       await clientOnboardingReadinessRepository.recordEvent({
@@ -206,4 +219,5 @@ export class QuickBooksInvoiceWebhookService {
   }
 }
 
-export const quickbooksInvoiceWebhookService = new QuickBooksInvoiceWebhookService();
+export const quickbooksInvoiceWebhookService =
+  new QuickBooksInvoiceWebhookService();

@@ -1,5 +1,5 @@
-import supabase from '../supabase';
 import { getPool } from '../db/cloudSqlPool';
+import { createPaymentScheduleInCloudSql } from './cloudSqlPaymentScheduleService';
 
 export interface PaymentSchedule {
   id: string;
@@ -74,25 +74,18 @@ export class SimplePaymentService {
    * Create a payment schedule for a contract (called when admin creates contract)
    */
   async createPaymentSchedule(request: CreatePaymentScheduleRequest): Promise<string> {
-    console.log('📅 Creating payment schedule for contract:', request.contract_id);
-
-    const { data, error } = await supabase.rpc('create_payment_schedule', {
-      p_contract_id: request.contract_id,
-      p_schedule_name: request.schedule_name,
-      p_total_amount: request.total_amount,
-      p_deposit_amount: request.deposit_amount || 0,
-      p_number_of_installments: request.number_of_installments || 0,
-      p_payment_frequency: request.payment_frequency || 'one-time',
-      p_start_date: request.start_date || new Date().toISOString().split('T')[0]
-    });
-
-    if (error) {
-      console.error('❌ Error creating payment schedule:', error);
-      throw new Error(`Failed to create payment schedule: ${error.message}`);
+    if (!request.number_of_installments) {
+      throw new Error('A positive number_of_installments is required');
     }
-
-    console.log('✅ Payment schedule created successfully:', data);
-    return data;
+    return createPaymentScheduleInCloudSql({
+      contractId: request.contract_id,
+      scheduleName: request.schedule_name,
+      totalAmount: request.total_amount,
+      depositAmount: request.deposit_amount ?? 0,
+      numberOfInstallments: request.number_of_installments,
+      paymentFrequency: request.payment_frequency === 'bi-weekly' ? 'biweekly' : request.payment_frequency as any,
+      startDate: request.start_date || new Date().toISOString().slice(0, 10),
+    });
   }
 
   /**
@@ -164,35 +157,30 @@ export class SimplePaymentService {
    * Get all overdue payments
    */
   async getOverduePayments(): Promise<OverduePayment[]> {
-    console.log('⚠️ Getting overdue payments');
-
-    const { data, error } = await supabase.rpc('get_overdue_payments');
-
-    if (error) {
-      console.error('❌ Error getting overdue payments:', error);
-      throw new Error(`Failed to get overdue payments: ${error.message}`);
-    }
-
-    return data as OverduePayment[];
+    const { rows } = await getPool().query<OverduePayment>(
+      `SELECT pi.id AS payment_id, ps.contract_id, c.first_name||' '||c.last_name AS client_name,
+       c.email AS client_email, pi.payment_type, pi.amount, pi.due_date::text,
+       (CURRENT_DATE-pi.due_date) AS days_overdue, ps.schedule_name AS payment_schedule_name
+       FROM public.payment_installments pi JOIN public.payment_schedules ps ON ps.id=pi.schedule_id
+       JOIN public.phi_contracts pc ON pc.id=ps.contract_id JOIN public.phi_clients c ON c.id=pc.client_id
+       WHERE pi.due_date < (CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York')::date
+       AND pi.status NOT IN ('paid','completed','succeeded','cancelled','canceled')
+       ORDER BY pi.due_date,pi.payment_number,pi.created_at`
+    );
+    return rows;
   }
 
   /**
    * Get payment dashboard data
    */
   async getPaymentDashboard(): Promise<any[]> {
-    console.log('📊 Getting payment dashboard data');
-
-    const { data, error } = await supabase
-      .from('payment_dashboard')
-      .select('*')
-      .order('next_payment_due', { ascending: true });
-
-    if (error) {
-      console.error('❌ Error getting payment dashboard:', error);
-      throw new Error(`Failed to get payment dashboard: ${error.message}`);
-    }
-
-    return data;
+    const { rows } = await getPool().query(
+      `SELECT ps.*, min(pi.due_date) FILTER (WHERE pi.status NOT IN ('paid','cancelled')) AS next_payment_due,
+       COALESCE(sum(pi.amount) FILTER (WHERE pi.status='paid'),0) AS total_paid
+       FROM public.payment_schedules ps LEFT JOIN public.payment_installments pi ON pi.schedule_id=ps.id
+       GROUP BY ps.id ORDER BY next_payment_due ASC NULLS LAST`
+    );
+    return rows;
   }
 
   /**
@@ -201,18 +189,11 @@ export class SimplePaymentService {
   async getPaymentSchedule(contractId: string): Promise<PaymentSchedule[]> {
     console.log('📅 Getting payment schedule for contract:', contractId);
 
-    const { data, error } = await supabase
-      .from('payment_schedules')
-      .select('*')
-      .eq('contract_id', contractId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('❌ Error getting payment schedule:', error);
-      throw new Error(`Failed to get payment schedule: ${error.message}`);
-    }
-
-    return data as PaymentSchedule[];
+    const { rows } = await getPool().query<PaymentSchedule>(
+      'SELECT * FROM public.payment_schedules WHERE contract_id=$1 ORDER BY created_at DESC',
+      [contractId]
+    );
+    return rows;
   }
 
   /**
@@ -275,7 +256,7 @@ export class SimplePaymentService {
   }
 
   /**
-   * Update payment status (Cloud SQL payment_installments or Supabase contract_payments)
+   * Update authoritative Cloud SQL installment status.
    */
   async updatePaymentStatus(
     paymentId: string,
@@ -285,71 +266,34 @@ export class SimplePaymentService {
   ): Promise<PaymentRecord> {
     console.log('🔄 Updating payment status:', paymentId, 'to', status);
 
-    // Try Cloud SQL payment_installments first (Labor Support)
-    try {
-      const pool = getPool();
-      const { rowCount } = await pool.query(
-        `UPDATE payment_installments
-         SET status = $1, stripe_payment_intent_id = COALESCE($2, stripe_payment_intent_id), notes = COALESCE($3, notes), updated_at = CURRENT_TIMESTAMP
-         WHERE id = $4`,
-        [status, stripePaymentIntentId ?? null, notes ?? null, paymentId]
-      );
-      if (rowCount && rowCount > 0) {
-        console.log('✅ Payment installment status updated (Cloud SQL)');
-        const { rows } = await pool.query<PaymentRecord>('SELECT * FROM payment_installments WHERE id = $1', [paymentId]);
-        return rows[0] as PaymentRecord;
-      }
-    } catch (err) {
-      console.warn('Cloud SQL payment_installments update failed, trying Supabase:', err);
-    }
-
-    // Fall back to Supabase contract_payments
-    const updateData: any = { status };
-    if (stripePaymentIntentId) updateData.stripe_payment_intent_id = stripePaymentIntentId;
-    if (notes) updateData.notes = notes;
-    switch (status) {
-      case 'succeeded':
-        updateData.completed_at = new Date().toISOString();
-        updateData.is_overdue = false;
-        break;
-      case 'failed':
-        updateData.failed_at = new Date().toISOString();
-        break;
-      case 'refunded':
-        updateData.refunded_at = new Date().toISOString();
-        break;
-    }
-
-    const { data, error } = await supabase
-      .from('contract_payments')
-      .update(updateData)
-      .eq('id', paymentId)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('❌ Error updating payment status:', error);
-      throw new Error(`Failed to update payment status: ${error.message}`);
-    }
-
-    console.log('✅ Payment status updated successfully');
-    return data as PaymentRecord;
+    const normalized = status === 'succeeded' ? 'paid' : status === 'canceled' ? 'cancelled' : status;
+    const pool = getPool();
+    const { rows } = await pool.query<PaymentRecord>(
+      `UPDATE public.payment_installments SET status=$1,
+       stripe_payment_intent_id=COALESCE($2,stripe_payment_intent_id), notes=COALESCE($3,notes),
+       paid_at=CASE WHEN $1='paid' THEN COALESCE(paid_at,CURRENT_TIMESTAMP) ELSE paid_at END,
+       failed_at=CASE WHEN $1='failed' THEN COALESCE(failed_at,CURRENT_TIMESTAMP) ELSE failed_at END,
+       cancelled_at=CASE WHEN $1='cancelled' THEN COALESCE(cancelled_at,CURRENT_TIMESTAMP) ELSE cancelled_at END,
+       is_overdue=CASE WHEN $1 IN ('paid','cancelled') THEN FALSE ELSE is_overdue END,
+       updated_at=CURRENT_TIMESTAMP WHERE id=$4 RETURNING *`,
+      [normalized, stripePaymentIntentId ?? null, notes ?? null, paymentId]
+    );
+    if (!rows[0]) throw new Error(`Payment installment not found: ${paymentId}`);
+    return rows[0];
   }
 
   /**
    * Update overdue flags (can be called daily via cron job)
    */
   async updateOverdueFlags(): Promise<void> {
-    console.log('🔄 Updating overdue payment flags');
-
-    const { error } = await supabase.rpc('update_overdue_flags');
-
-    if (error) {
-      console.error('❌ Error updating overdue flags:', error);
-      throw new Error(`Failed to update overdue flags: ${error.message}`);
-    }
-
-    console.log('✅ Overdue flags updated successfully');
+    await getPool().query(
+      `UPDATE public.payment_installments SET
+       is_overdue=(due_date < (CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York')::date
+         AND status NOT IN ('paid','completed','succeeded','cancelled','canceled')),
+       status=CASE WHEN due_date < (CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York')::date
+         AND status IN ('upcoming','pending') THEN 'overdue' ELSE status END,
+       updated_at=CURRENT_TIMESTAMP`
+    );
   }
 
   /**
@@ -358,14 +302,12 @@ export class SimplePaymentService {
   async runDailyMaintenance(): Promise<void> {
     console.log('🔧 Running daily payment maintenance');
 
-    const { error } = await supabase.rpc('daily_payment_maintenance');
-
-    if (error) {
-      console.error('❌ Error running daily maintenance:', error);
-      throw new Error(`Failed to run daily maintenance: ${error.message}`);
-    }
-
-    console.log('✅ Daily payment maintenance completed');
+    await this.updateOverdueFlags();
+    await getPool().query(
+      `UPDATE public.payment_schedules ps SET status='completed',updated_at=CURRENT_TIMESTAMP
+       WHERE status='active' AND EXISTS (SELECT 1 FROM public.payment_installments pi WHERE pi.schedule_id=ps.id)
+       AND NOT EXISTS (SELECT 1 FROM public.payment_installments pi WHERE pi.schedule_id=ps.id AND pi.status NOT IN ('paid','completed','succeeded','cancelled','canceled'))`
+    );
   }
 
   /**
@@ -374,28 +316,13 @@ export class SimplePaymentService {
   async getPaymentsByStatus(status: PaymentRecord['status']): Promise<PaymentRecord[]> {
     console.log('💳 Getting payments by status:', status);
 
-    const { data, error } = await supabase
-      .from('contract_payments')
-      .select(`
-        *,
-        contracts!inner (
-          client_id,
-          client_info!inner (
-            first_name,
-            last_name,
-            email
-          )
-        )
-      `)
-      .eq('status', status)
-      .order('due_date', { ascending: true });
-
-    if (error) {
-      console.error('❌ Error getting payments by status:', error);
-      throw new Error(`Failed to get payments by status: ${error.message}`);
-    }
-
-    return data as PaymentRecord[];
+    const normalized = status === 'succeeded' ? 'paid' : status === 'canceled' ? 'cancelled' : status;
+    const { rows } = await getPool().query<PaymentRecord>(
+      `SELECT pi.*,ps.contract_id FROM public.payment_installments pi
+       JOIN public.payment_schedules ps ON ps.id=pi.schedule_id WHERE pi.status=$1
+       ORDER BY pi.due_date,pi.payment_number,pi.created_at`, [normalized]
+    );
+    return rows;
   }
 
   /**
@@ -404,29 +331,12 @@ export class SimplePaymentService {
   async getPaymentsDueBetween(startDate: string, endDate: string): Promise<PaymentRecord[]> {
     console.log('📅 Getting payments due between:', startDate, 'and', endDate);
 
-    const { data, error } = await supabase
-      .from('contract_payments')
-      .select(`
-        *,
-        contracts!inner (
-          client_id,
-          client_info!inner (
-            first_name,
-            last_name,
-            email
-          )
-        )
-      `)
-      .gte('due_date', startDate)
-      .lte('due_date', endDate)
-      .in('status', ['pending', 'failed'])
-      .order('due_date', { ascending: true });
-
-    if (error) {
-      console.error('❌ Error getting payments due between dates:', error);
-      throw new Error(`Failed to get payments due between dates: ${error.message}`);
-    }
-
-    return data as PaymentRecord[];
+    const { rows } = await getPool().query<PaymentRecord>(
+      `SELECT pi.*,ps.contract_id FROM public.payment_installments pi
+       JOIN public.payment_schedules ps ON ps.id=pi.schedule_id
+       WHERE pi.due_date BETWEEN $1::date AND $2::date AND pi.status IN ('upcoming','pending','overdue','failed')
+       ORDER BY pi.due_date,pi.payment_number,pi.created_at`, [startDate,endDate]
+    );
+    return rows;
   }
 }
