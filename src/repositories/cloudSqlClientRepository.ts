@@ -27,12 +27,20 @@ const OPERATIONAL_COLUMNS_LEGACY_ALT_PHONE = `
 `;
 
 // Includes lifecycle fields added by add_matched_lifecycle_fields_to_phi_clients.sql
-const OPERATIONAL_COLUMNS_BASE = `${OPERATIONAL_COLUMNS_LEGACY},
+const OPERATIONAL_COLUMNS_LIFECYCLE = `${OPERATIONAL_COLUMNS_LEGACY},
   qbo_customer_id, matched_at
 `;
 
-const OPERATIONAL_COLUMNS_BASE_ALT_PHONE = `${OPERATIONAL_COLUMNS_LEGACY_ALT_PHONE},
+const OPERATIONAL_COLUMNS_LIFECYCLE_ALT_PHONE = `${OPERATIONAL_COLUMNS_LEGACY_ALT_PHONE},
   qbo_customer_id, matched_at
+`;
+
+const OPERATIONAL_COLUMNS_BASE = `${OPERATIONAL_COLUMNS_LIFECYCLE},
+  quickbooks_sync_status, quickbooks_last_checked_at, quickbooks_last_synced_at, quickbooks_sync_error
+`;
+
+const OPERATIONAL_COLUMNS_BASE_ALT_PHONE = `${OPERATIONAL_COLUMNS_LIFECYCLE_ALT_PHONE},
+  quickbooks_sync_status, quickbooks_last_checked_at, quickbooks_last_synced_at, quickbooks_sync_error
 `;
 
 // Includes structured birth outcomes added by add_phi_clients_birth_outcomes_structured.sql
@@ -64,6 +72,13 @@ function isLifecycleColumnMissing(error: unknown): boolean {
     code === '42703' &&
     (message.includes('qbo_customer_id') || message.includes('matched_at'))
   );
+}
+
+function isQuickBooksSyncColumnMissing(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = String((error as { code?: string }).code || '');
+  const message = String((error as { message?: string }).message || '').toLowerCase();
+  return code === '42703' && message.includes('quickbooks_');
 }
 
 function isPhoneColumnMissing(error: unknown): boolean {
@@ -163,7 +178,7 @@ function mapRowToClient(row: Record<string, any>): Client {
     bio: row.bio,
   });
 
-  return new Client(
+  const client = new Client(
     row.id,
     user,
     row.service_needed ?? null,
@@ -183,6 +198,12 @@ function mapRowToClient(row: Record<string, any>): Client {
     row.portal_status ?? undefined,
     row.client_number ?? undefined
   );
+  client.qboCustomerId = row.qbo_customer_id ?? undefined;
+  client.quickbooksSyncStatus = row.quickbooks_sync_status ?? (row.qbo_customer_id ? 'link_stale' : 'not_linked');
+  client.quickbooksLastCheckedAt = row.quickbooks_last_checked_at ? new Date(row.quickbooks_last_checked_at) : undefined;
+  client.quickbooksLastSyncedAt = row.quickbooks_last_synced_at ? new Date(row.quickbooks_last_synced_at) : undefined;
+  client.quickbooksSyncError = row.quickbooks_sync_error ?? undefined;
+  return client;
 }
 
 /**
@@ -202,9 +223,11 @@ async function queryWithColumnFallback(
 ): Promise<{ rows: Record<string, any>[] }> {
   const tiers = [
     { cols: OPERATIONAL_COLUMNS, check: () => true },
-    { cols: OPERATIONAL_COLUMNS_ALT_PHONE, check: isPhoneColumnMissing },
-    { cols: OPERATIONAL_COLUMNS_BASE, check: (err: unknown) => isBirthOutcomesColumnMissing(err) || isPhoneNumberColumnMissing(err) },
-    { cols: OPERATIONAL_COLUMNS_BASE_ALT_PHONE, check: (err: unknown) => isBirthOutcomesColumnMissing(err) || isPhoneColumnMissing(err) },
+    { cols: OPERATIONAL_COLUMNS_ALT_PHONE, check: (err: unknown) => isPhoneColumnMissing(err) || isBirthOutcomesColumnMissing(err) || isQuickBooksSyncColumnMissing(err) },
+    { cols: OPERATIONAL_COLUMNS_BASE, check: (err: unknown) => isBirthOutcomesColumnMissing(err) || isPhoneNumberColumnMissing(err) || isQuickBooksSyncColumnMissing(err) },
+    { cols: OPERATIONAL_COLUMNS_BASE_ALT_PHONE, check: (err: unknown) => isBirthOutcomesColumnMissing(err) || isPhoneColumnMissing(err) || isQuickBooksSyncColumnMissing(err) },
+    { cols: OPERATIONAL_COLUMNS_LIFECYCLE, check: (err: unknown) => isQuickBooksSyncColumnMissing(err) || isPhoneNumberColumnMissing(err) },
+    { cols: OPERATIONAL_COLUMNS_LIFECYCLE_ALT_PHONE, check: (err: unknown) => isQuickBooksSyncColumnMissing(err) || isPhoneColumnMissing(err) },
     { cols: OPERATIONAL_COLUMNS_LEGACY, check: (err: unknown) => isLifecycleColumnMissing(err) || isPhoneNumberColumnMissing(err) },
     { cols: OPERATIONAL_COLUMNS_LEGACY_ALT_PHONE, check: (err: unknown) => isLifecycleColumnMissing(err) || isPhoneColumnMissing(err) },
   ];

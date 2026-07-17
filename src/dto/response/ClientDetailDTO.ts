@@ -88,6 +88,10 @@ export interface ClientDetailDTO {
   // ========== LIFECYCLE / QB SYNC FIELDS ==========
   matched_at?: string;
   qbo_customer_id?: string;
+  quickbooks_sync_status?: string;
+  quickbooks_last_checked_at?: string;
+  quickbooks_last_synced_at?: string;
+  quickbooks_sync_error?: string;
 
   // ========== PHI FIELDS (only when authorized; omitted otherwise) ==========
   // These fields come from PHI Broker (Cloud SQL) and are gated by authorization.

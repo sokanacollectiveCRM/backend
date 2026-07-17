@@ -24,6 +24,10 @@ export type ClientOperationalRow = {
   updated_at: string | null;
   qbo_customer_id?: string | null;
   matched_at?: string | null;
+  quickbooks_sync_status?: string | null;
+  quickbooks_last_checked_at?: string | null;
+  quickbooks_last_synced_at?: string | null;
+  quickbooks_sync_error?: string | null;
   payment_method?: string | null;
   insurance?: string | null;
   insurance_provider?: string | null;

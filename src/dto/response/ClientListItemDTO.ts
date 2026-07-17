@@ -44,6 +44,11 @@ export interface ClientListItemDTO {
   payment_authorization_satisfied?: boolean;
   card_on_file?: boolean;
   qb_customer_id?: string | null;
+  qbo_customer_id?: string;
+  quickbooks_sync_status?: string;
+  quickbooks_last_checked_at?: string;
+  quickbooks_last_synced_at?: string;
+  quickbooks_sync_error?: string;
   qb_stored_payment_method_id?: string | null;
   verification_invoice_id?: string | null;
   verification_invoice_sent_at?: string | null;

@@ -53,6 +53,11 @@ export class ClientMapper {
       invited_at: undefined, // Will be populated when invite tracking is added
       updated_at: entity.updatedAt?.toISOString(),
       is_eligible: isEligible,
+      qbo_customer_id: entity.qboCustomerId,
+      quickbooks_sync_status: entity.quickbooksSyncStatus,
+      quickbooks_last_checked_at: entity.quickbooksLastCheckedAt?.toISOString(),
+      quickbooks_last_synced_at: entity.quickbooksLastSyncedAt?.toISOString(),
+      quickbooks_sync_error: entity.quickbooksSyncError,
     };
   }
 
@@ -108,6 +113,10 @@ export class ClientMapper {
       self_pay_card_info?: string | null;
       matched_at?: string | null;
       qbo_customer_id?: string | null;
+      quickbooks_sync_status?: string | null;
+      quickbooks_last_checked_at?: string | Date | null;
+      quickbooks_last_synced_at?: string | Date | null;
+      quickbooks_sync_error?: string | null;
     },
     isEligible?: boolean
   ): ClientDetailDTO {
@@ -157,6 +166,14 @@ export class ClientMapper {
       is_eligible: isEligible,
       matched_at: row.matched_at ?? undefined,
       qbo_customer_id: row.qbo_customer_id ?? undefined,
+      quickbooks_sync_status: row.quickbooks_sync_status ?? (row.qbo_customer_id ? 'link_stale' : 'not_linked'),
+      quickbooks_last_checked_at: row.quickbooks_last_checked_at
+        ? new Date(row.quickbooks_last_checked_at).toISOString()
+        : undefined,
+      quickbooks_last_synced_at: row.quickbooks_last_synced_at
+        ? new Date(row.quickbooks_last_synced_at).toISOString()
+        : undefined,
+      quickbooks_sync_error: row.quickbooks_sync_error ?? undefined,
     };
   }
 }

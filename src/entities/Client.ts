@@ -2,6 +2,12 @@ import { CLIENT_STATUS, ServiceTypes } from '../types';
 import { User } from './User';
 
 export class Client {
+  public qboCustomerId?: string;
+  public quickbooksSyncStatus?: string;
+  public quickbooksLastCheckedAt?: Date;
+  public quickbooksLastSyncedAt?: Date;
+  public quickbooksSyncError?: string;
+
   constructor(
     public id: string,
     public user: User,

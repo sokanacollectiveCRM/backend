@@ -10,7 +10,8 @@ import {
   handleQuickBooksCallback,
   quickBooksAuthUrl,
   quickBooksDisconnect,
-  quickBooksStatus
+  quickBooksStatus,
+  refreshQuickBooksCustomerSyncStatus
 } from '../controllers/quickbooksController'
 import authMiddleware from '../middleware/authMiddleware'
 import { quickBooksInvoicePaidWebhook } from '../controllers/quickbooksWebhookController'
@@ -31,6 +32,7 @@ router.get('/status', quickBooksStatus)
 router.get('/invoices', getInvoices)
 router.get('/customers', getQuickBooksCustomers)
 router.get('/customers/invoiceable', getInvoiceableCustomersController)
+router.post('/customers/:clientId/sync-status/refresh', refreshQuickBooksCustomerSyncStatus)
 router.post('/customer', createCustomer)
 router.post('/disconnect', quickBooksDisconnect)
 router.post('/invoice', createInvoice)

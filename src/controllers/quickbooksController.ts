@@ -11,6 +11,8 @@ import createInvoiceService from '../services/invoice/createInvoice';
 // ← 1) Import your invoiceable-customers logic
 import getInvoiceableCustomers from '../services/customer/getInvoiceableCustomers';
 import getCustomersFromQuickBooks from '../services/customer/getCustomersFromQuickBooks';
+import { getQuickBooksCompanyInfo } from '../services/customer/getQuickBooksCompanyInfo';
+import { refreshCustomerQuickBooksSyncStatus } from '../services/customer/refreshCustomerQuickBooksSyncStatus';
 import { listInvoicesFromCloudSql } from '../repositories/cloudSqlInvoiceRepository';
 // Ensure you have SUPABASE_JWT_SECRET in your env
 const JWT_SECRET = process.env.SUPABASE_JWT_SECRET!
@@ -153,7 +155,17 @@ export const quickBooksStatus: RequestHandler = async (req, res, next) => {
     console.log('🔍 [QB Status] Checking connection status...');
     const connected = await isConnected();
     console.log('📊 [QB Status] Connection result:', connected);
-    res.json({ connected });
+    if (!connected) {
+      res.json({ connected: false, company: null });
+      return;
+    }
+    try {
+      const company = await getQuickBooksCompanyInfo();
+      res.json({ connected: true, company });
+    } catch (companyError) {
+      console.warn('⚠️ [QB Status] Connected, but company details could not be loaded:', companyError);
+      res.json({ connected: true, company: null, companyDetailsUnavailable: true });
+    }
   } catch (err) {
     console.error('❌ [QB Status] Error checking status:', err);
     next(err);
@@ -208,5 +220,22 @@ export const getQuickBooksCustomers: RequestHandler = async (req, res, next) => 
       error: 'Failed to fetch customers from QuickBooks',
       message: err.message || 'Unknown error'
     });
+  }
+}
+
+/**
+ * POST /quickbooks/customers/:clientId/sync-status/refresh
+ * Performs an on-demand comparison of the CRM customer with QuickBooks.
+ */
+export const refreshQuickBooksCustomerSyncStatus: RequestHandler = async (req, res, next) => {
+  try {
+    const result = await refreshCustomerQuickBooksSyncStatus(req.params.clientId);
+    if (!result) {
+      res.status(404).json({ error: 'Customer not found' });
+      return;
+    }
+    res.json(result);
+  } catch (err) {
+    next(err);
   }
 }
