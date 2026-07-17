@@ -1,10 +1,10 @@
-import { getPool } from '../db/cloudSqlPool';
 import {
   BillingPath,
   OnboardingEventType,
   PortalBlockerCode,
   PortalEligibilitySnapshot,
 } from '../constants/portalEligibility';
+import { getPool } from '../db/cloudSqlPool';
 
 export interface ClientOnboardingReadinessRow {
   id: string;
@@ -48,7 +48,9 @@ export interface UpsertReadinessParams {
 
 function parseBlockers(value: unknown): PortalBlockerCode[] {
   if (Array.isArray(value)) {
-    return value.filter((item): item is PortalBlockerCode => typeof item === 'string');
+    return value.filter(
+      (item): item is PortalBlockerCode => typeof item === 'string'
+    );
   }
   if (typeof value === 'string') {
     try {
@@ -68,7 +70,9 @@ function toIso(value: Date | string | null | undefined): string | null {
   return trimmed || null;
 }
 
-export function mapReadinessRow(row: ClientOnboardingReadinessRow): PortalEligibilitySnapshot {
+export function mapReadinessRow(
+  row: ClientOnboardingReadinessRow
+): PortalEligibilitySnapshot {
   const billing_path = (row.billing_path || 'unknown') as BillingPath;
   return {
     contract_signed: row.contract_signed,
@@ -76,7 +80,8 @@ export function mapReadinessRow(row: ClientOnboardingReadinessRow): PortalEligib
     billing_path,
     is_eligible: row.is_eligible,
     portal_blockers: parseBlockers(row.portal_blockers),
-    primary_portal_blocker: (row.primary_portal_blocker as PortalBlockerCode | null) ?? null,
+    primary_portal_blocker:
+      (row.primary_portal_blocker as PortalBlockerCode | null) ?? null,
     payment_authorization_required: row.payment_authorization_required,
     payment_authorization_satisfied: row.payment_authorization_satisfied,
     card_on_file: row.card_on_file,
@@ -87,9 +92,6 @@ export function mapReadinessRow(row: ClientOnboardingReadinessRow): PortalEligib
     verification_invoice_paid_at: toIso(row.verification_invoice_paid_at),
     allowed_actions: {
       can_invite_to_portal: row.is_eligible,
-      can_send_verification_invoice:
-        row.payment_authorization_required &&
-        row.primary_portal_blocker === 'missing_card_on_file',
       can_mark_contract_signed: !row.contract_signed,
       can_mark_deposit_paid: row.contract_signed && !row.deposit_paid,
     },
@@ -97,7 +99,9 @@ export function mapReadinessRow(row: ClientOnboardingReadinessRow): PortalEligib
 }
 
 export class CloudSqlClientOnboardingReadinessRepository {
-  async getByClientId(clientId: string): Promise<ClientOnboardingReadinessRow | null> {
+  async getByClientId(
+    clientId: string
+  ): Promise<ClientOnboardingReadinessRow | null> {
     const { rows } = await getPool().query<ClientOnboardingReadinessRow>(
       `SELECT *
        FROM public.client_onboarding_readiness
@@ -108,7 +112,9 @@ export class CloudSqlClientOnboardingReadinessRepository {
     return rows[0] ?? null;
   }
 
-  async getByClientIds(clientIds: string[]): Promise<Map<string, ClientOnboardingReadinessRow>> {
+  async getByClientIds(
+    clientIds: string[]
+  ): Promise<Map<string, ClientOnboardingReadinessRow>> {
     if (!clientIds.length) {
       return new Map();
     }
@@ -127,7 +133,9 @@ export class CloudSqlClientOnboardingReadinessRepository {
     return map;
   }
 
-  async getByVerificationInvoiceId(qboInvoiceId: string): Promise<ClientOnboardingReadinessRow | null> {
+  async getByVerificationInvoiceId(
+    qboInvoiceId: string
+  ): Promise<ClientOnboardingReadinessRow | null> {
     const { rows } = await getPool().query<ClientOnboardingReadinessRow>(
       `SELECT *
        FROM public.client_onboarding_readiness
@@ -138,7 +146,9 @@ export class CloudSqlClientOnboardingReadinessRepository {
     return rows[0] ?? null;
   }
 
-  async upsert(params: UpsertReadinessParams): Promise<ClientOnboardingReadinessRow> {
+  async upsert(
+    params: UpsertReadinessParams
+  ): Promise<ClientOnboardingReadinessRow> {
     const { rows } = await getPool().query<ClientOnboardingReadinessRow>(
       `
       INSERT INTO public.client_onboarding_readiness (

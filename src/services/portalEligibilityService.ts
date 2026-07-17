@@ -1,11 +1,11 @@
-import { getPool } from '../db/cloudSqlPool';
 import {
   BillingPath,
+  PortalEligibilitySnapshot,
   computeAllowedActions,
   computePortalEligibility,
-  PortalEligibilitySnapshot,
   resolveBillingPath,
 } from '../constants/portalEligibility';
+import { getPool } from '../db/cloudSqlPool';
 import {
   clientOnboardingReadinessRepository,
   mapReadinessRow,
@@ -99,12 +99,23 @@ export class PortalEligibilityService {
   private async resolveCardOnFile(
     clientId: string,
     qbCustomerId: string | null
-  ): Promise<{ card_on_file: boolean; qb_stored_payment_method_id: string | null }> {
-    const localMethod = await clientPaymentMethodRepository.getByClientId(clientId);
-    if (localMethod?.provider_payment_method_reference) {
+  ): Promise<{
+    card_on_file: boolean;
+    qb_stored_payment_method_id: string | null;
+  }> {
+    const localMethod =
+      await clientPaymentMethodRepository.getByClientId(clientId);
+    const now = new Date();
+    const localMethodIsActive =
+      localMethod?.status.toLowerCase() === 'active' &&
+      (localMethod.exp_year > now.getUTCFullYear() ||
+        (localMethod.exp_year === now.getUTCFullYear() &&
+          localMethod.exp_month >= now.getUTCMonth() + 1));
+    if (localMethod?.provider_payment_method_reference && localMethodIsActive) {
       return {
         card_on_file: true,
-        qb_stored_payment_method_id: localMethod.provider_payment_method_reference,
+        qb_stored_payment_method_id:
+          localMethod.provider_payment_method_reference,
       };
     }
 
@@ -112,7 +123,8 @@ export class PortalEligibilityService {
       return { card_on_file: false, qb_stored_payment_method_id: null };
     }
 
-    const remoteMethod = await getPrimaryQuickBooksStoredPaymentMethod(qbCustomerId);
+    const remoteMethod =
+      await getPrimaryQuickBooksStoredPaymentMethod(qbCustomerId);
     if (!remoteMethod?.id) {
       return { card_on_file: false, qb_stored_payment_method_id: null };
     }
@@ -123,19 +135,27 @@ export class PortalEligibilityService {
     };
   }
 
-  async computeAndPersist(clientId: string, options?: {
-    verification_invoice_id?: string | null;
-    verification_invoice_sent_at?: Date | string | null;
-    verification_invoice_paid_at?: Date | string | null;
-    force_deposit_paid?: boolean;
-    force_contract_signed?: boolean;
-    event_source?: string;
-  }): Promise<PortalEligibilitySnapshot> {
-    const existing = await clientOnboardingReadinessRepository.getByClientId(clientId);
+  async computeAndPersist(
+    clientId: string,
+    options?: {
+      verification_invoice_id?: string | null;
+      verification_invoice_sent_at?: Date | string | null;
+      verification_invoice_paid_at?: Date | string | null;
+      force_deposit_paid?: boolean;
+      force_contract_signed?: boolean;
+      event_source?: string;
+    }
+  ): Promise<PortalEligibilitySnapshot> {
+    const existing =
+      await clientOnboardingReadinessRepository.getByClientId(clientId);
     const gates = await this.getOnboardingGates(clientId);
-    const cardState = await this.resolveCardOnFile(clientId, gates.qb_customer_id);
+    const cardState = await this.resolveCardOnFile(
+      clientId,
+      gates.qb_customer_id
+    );
 
-    const contract_signed = options?.force_contract_signed ?? gates.contract_signed;
+    const contract_signed =
+      options?.force_contract_signed ?? gates.contract_signed;
     const deposit_paid = options?.force_deposit_paid ?? gates.deposit_paid;
 
     const computed = computePortalEligibility({
@@ -158,11 +178,18 @@ export class PortalEligibilityService {
       is_eligible: computed.is_eligible,
       portal_blockers: computed.portal_blockers,
       primary_portal_blocker: computed.primary_portal_blocker,
-      verification_invoice_id: options?.verification_invoice_id ?? existing?.verification_invoice_id ?? null,
+      verification_invoice_id:
+        options?.verification_invoice_id ??
+        existing?.verification_invoice_id ??
+        null,
       verification_invoice_sent_at:
-        options?.verification_invoice_sent_at ?? existing?.verification_invoice_sent_at ?? null,
+        options?.verification_invoice_sent_at ??
+        existing?.verification_invoice_sent_at ??
+        null,
       verification_invoice_paid_at:
-        options?.verification_invoice_paid_at ?? existing?.verification_invoice_paid_at ?? null,
+        options?.verification_invoice_paid_at ??
+        existing?.verification_invoice_paid_at ??
+        null,
     });
 
     const previousEligible = existing?.is_eligible ?? false;
@@ -200,11 +227,15 @@ export class PortalEligibilityService {
     return snapshot;
   }
 
-  async getPortalEligibility(clientId: string): Promise<PortalEligibilitySnapshot> {
+  async getPortalEligibility(
+    clientId: string
+  ): Promise<PortalEligibilitySnapshot> {
     return this.computeAndPersist(clientId);
   }
 
-  async getPortalEligibilityBatch(clientIds: string[]): Promise<Map<string, PortalEligibilitySnapshot>> {
+  async getPortalEligibilityBatch(
+    clientIds: string[]
+  ): Promise<Map<string, PortalEligibilitySnapshot>> {
     const uniqueIds = [...new Set(clientIds.filter(Boolean))];
     const map = new Map<string, PortalEligibilitySnapshot>();
 
@@ -238,12 +269,17 @@ export class PortalEligibilityService {
         snapshot,
       };
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to check invite eligibility';
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Failed to check invite eligibility';
       throw new Error(`Failed to check invite eligibility: ${message}`);
     }
   }
 
-  private blockerMessage(blocker: PortalEligibilitySnapshot['primary_portal_blocker']): string {
+  private blockerMessage(
+    blocker: PortalEligibilitySnapshot['primary_portal_blocker']
+  ): string {
     switch (blocker) {
       case 'contract_unsigned':
         return 'Invite available after contract is signed and deposit is paid.';

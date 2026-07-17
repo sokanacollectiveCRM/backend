@@ -1,8 +1,8 @@
 import { Response } from 'express';
 
 import { ClientController } from '../controllers/clientController';
-import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
 import { ClientRepository } from '../repositories/interface/clientRepository';
+import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
 import { AuthRequest, ROLE } from '../types';
 import { ClientUseCase } from '../usecase/clientUseCase';
 
@@ -58,7 +58,6 @@ describe('GET /api/clients readiness fields', () => {
               deposit_paid: true,
               allowed_actions: {
                 can_invite_to_portal: false,
-                can_send_verification_invoice: true,
                 can_mark_contract_signed: false,
                 can_mark_deposit_paid: false,
               },
@@ -82,7 +81,10 @@ describe('GET /api/clients readiness fields', () => {
 
     await controller.getClients(req, res);
 
-    expect(clientUseCase.getClientsLite).toHaveBeenCalledWith('admin-1', ROLE.ADMIN);
+    expect(clientUseCase.getClientsLite).toHaveBeenCalledWith(
+      'admin-1',
+      ROLE.ADMIN
+    );
     expect(res.json).toHaveBeenCalledWith({
       success: true,
       data: [
@@ -97,7 +99,6 @@ describe('GET /api/clients readiness fields', () => {
           card_on_file: false,
           allowed_actions: {
             can_invite_to_portal: false,
-            can_send_verification_invoice: true,
             can_mark_contract_signed: false,
             can_mark_deposit_paid: false,
           },

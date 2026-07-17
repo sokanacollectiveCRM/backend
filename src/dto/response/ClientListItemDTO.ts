@@ -2,17 +2,17 @@
  * DTO for client list items in canonical API response.
  * Flat structure with snake_case fields - no nested user object.
  * Used by GET /clients when SPLIT_DB_READ_MODE=primary.
- * 
+ *
  * HIPAA COMPLIANCE:
  * This DTO contains ONLY operational fields (non-PHI).
- * 
+ *
  * ALLOWED (operational):
  * - id, first_name, last_name (identifiers)
  * - email, phone_number (PII - needed for contact, redact in logs)
  * - status, portal_status (workflow state)
  * - invited_at, updated_at (timestamps)
  * - is_eligible (computed flag)
- * 
+ *
  * NEVER ADD (PHI - belongs in Sensitive DB only):
  * - health_history, allergies, health_notes
  * - due_date, baby_sex, pregnancy info
@@ -50,7 +50,6 @@ export interface ClientListItemDTO {
   verification_invoice_paid_at?: string | null;
   allowed_actions?: {
     can_invite_to_portal: boolean;
-    can_send_verification_invoice: boolean;
     can_mark_contract_signed: boolean;
     can_mark_deposit_paid: boolean;
   };

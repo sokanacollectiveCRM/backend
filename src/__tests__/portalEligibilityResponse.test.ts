@@ -25,7 +25,6 @@ describe('portal eligibility API response shape', () => {
         deposit_paid: true,
         allowed_actions: {
           can_invite_to_portal: false,
-          can_send_verification_invoice: true,
           can_mark_contract_signed: false,
           can_mark_deposit_paid: false,
         },
@@ -44,9 +43,7 @@ describe('portal eligibility API response shape', () => {
         qb_customer_id: 'qb-cust-1',
         qbo_customer_id: 'qb-cust-1',
         verification_invoice_id: 'inv-1',
-        allowed_actions: expect.objectContaining({
-          can_send_verification_invoice: true,
-        }),
+        allowed_actions: expect.objectContaining({}),
       })
     );
   });

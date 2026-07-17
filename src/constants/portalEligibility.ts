@@ -30,12 +30,17 @@ export const ONBOARDING_EVENT_TYPES = [
   'contract_signed',
   'deposit_paid',
   'quickbooks_card_missing',
+  /** @deprecated Historical audit compatibility only. */
   'verification_invoice_sent',
+  /** @deprecated Historical audit compatibility only. */
   'verification_invoice_paid',
+  'installment_invoice_generated',
+  'installment_invoice_email_failed',
   'card_on_file_confirmed',
   'portal_locked',
   'portal_unlocked',
   'portal_eligibility_computed',
+  /** @deprecated Historical audit compatibility only. */
   'verification_invoice_paid_no_stored_method',
 ] as const;
 
@@ -43,7 +48,6 @@ export type OnboardingEventType = (typeof ONBOARDING_EVENT_TYPES)[number];
 
 export interface PortalAllowedActions {
   can_invite_to_portal: boolean;
-  can_send_verification_invoice: boolean;
   can_mark_contract_signed: boolean;
   can_mark_deposit_paid: boolean;
 }
@@ -66,7 +70,9 @@ export interface PortalEligibilitySnapshot {
   allowed_actions: PortalAllowedActions;
 }
 
-export function resolveBillingPath(paymentMethod: string | null | undefined): BillingPath {
+export function resolveBillingPath(
+  paymentMethod: string | null | undefined
+): BillingPath {
   const normalized = String(paymentMethod || '')
     .trim()
     .toLowerCase()
@@ -106,7 +112,9 @@ export function resolveBillingPath(paymentMethod: string | null | undefined): Bi
   return 'unknown';
 }
 
-export function isPaymentAuthorizationRequired(billingPath: BillingPath): boolean {
+export function isPaymentAuthorizationRequired(
+  billingPath: BillingPath
+): boolean {
   return billingPath === 'insurance' || billingPath === 'self_pay';
 }
 
@@ -132,7 +140,9 @@ export function computePortalBlockers(
     blockers.push('deposit_unpaid');
   }
 
-  const paymentAuthorizationRequired = isPaymentAuthorizationRequired(input.billing_path);
+  const paymentAuthorizationRequired = isPaymentAuthorizationRequired(
+    input.billing_path
+  );
   if (paymentAuthorizationRequired && !input.card_on_file) {
     blockers.push('missing_card_on_file');
   }
@@ -163,7 +173,9 @@ export function computePortalEligibility(
   | 'allowed_actions'
 > {
   const portal_blockers = computePortalBlockers(input);
-  const payment_authorization_required = isPaymentAuthorizationRequired(input.billing_path);
+  const payment_authorization_required = isPaymentAuthorizationRequired(
+    input.billing_path
+  );
   const payment_authorization_satisfied =
     !payment_authorization_required || input.card_on_file;
 
@@ -192,9 +204,6 @@ export function computeAllowedActions(
 ): PortalAllowedActions {
   return {
     can_invite_to_portal: snapshot.is_eligible,
-    can_send_verification_invoice:
-      snapshot.payment_authorization_required &&
-      snapshot.primary_portal_blocker === 'missing_card_on_file',
     can_mark_contract_signed: !snapshot.contract_signed,
     can_mark_deposit_paid: snapshot.contract_signed && !snapshot.deposit_paid,
   };

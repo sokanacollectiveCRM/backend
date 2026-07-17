@@ -2,7 +2,7 @@ import { queryCloudSql } from '../db/cloudSqlPool';
 import createInvoiceService from './invoice/createInvoice';
 import { portalEligibilityService } from './portalEligibilityService';
 
-const DEFAULT_SERVICE_ITEM_ID = process.env.QBO_DEPOSIT_ITEM_ID || process.env.QBO_VERIFICATION_ITEM_ID || '1';
+const DEFAULT_SERVICE_ITEM_ID = process.env.QBO_DEPOSIT_ITEM_ID || '1';
 
 interface ContractRow {
   contract_id: string;
@@ -28,7 +28,8 @@ export interface ContractSignatureCompletionResult {
 }
 
 function parseAmount(value: string | number): number {
-  const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value));
+  const parsed =
+    typeof value === 'number' ? value : Number.parseFloat(String(value));
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new Error(`Invalid deposit amount: ${value}`);
   }
@@ -71,10 +72,13 @@ export class ContractSignatureCompletionService {
       );
     }
 
-    const snapshot = await portalEligibilityService.computeAndPersist(contract.client_id, {
-      force_contract_signed: true,
-      event_source: 'signnow_status_sync',
-    });
+    const snapshot = await portalEligibilityService.computeAndPersist(
+      contract.client_id,
+      {
+        force_contract_signed: true,
+        event_source: 'signnow_status_sync',
+      }
+    );
 
     const installmentRows = await queryCloudSql<DepositInstallmentRow>(
       `SELECT
@@ -116,10 +120,14 @@ export class ContractSignatureCompletionService {
       };
     }
 
-    if (!snapshot.deposit_paid && snapshot.primary_portal_blocker === 'deposit_unpaid') {
+    if (
+      !snapshot.deposit_paid &&
+      snapshot.primary_portal_blocker === 'deposit_unpaid'
+    ) {
       const amount = parseAmount(depositInstallment.amount);
       const dueDate =
-        depositInstallment.due_date?.slice(0, 10) || new Date().toISOString().slice(0, 10);
+        depositInstallment.due_date?.slice(0, 10) ||
+        new Date().toISOString().slice(0, 10);
       const invoice = await createInvoiceService({
         userId: 'system-contract-signature',
         internalCustomerId: contract.client_id,
@@ -174,4 +182,5 @@ export class ContractSignatureCompletionService {
   }
 }
 
-export const contractSignatureCompletionService = new ContractSignatureCompletionService();
+export const contractSignatureCompletionService =
+  new ContractSignatureCompletionService();

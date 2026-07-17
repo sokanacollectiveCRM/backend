@@ -1,29 +1,66 @@
 import { Response } from 'express';
-import { ValidationError } from '../domains/errors';
+
+import {
+  InstallmentInvoiceError,
+  installmentInvoiceService,
+} from '../services/installmentInvoiceService';
 import { AuthRequest } from '../types';
 import { ApiResponse } from '../utils/responseBuilder';
-import { verificationInvoiceService } from '../services/verificationInvoiceService';
 
-export async function sendVerificationInvoice(req: AuthRequest, res: Response): Promise<void> {
+export async function getClientPaymentSchedule(
+  req: AuthRequest,
+  res: Response
+): Promise<void> {
   try {
-    const clientId = req.params.clientId;
-    if (!clientId) {
-      res.status(400).json(ApiResponse.error('Missing clientId', 'VALIDATION_ERROR'));
+    const result = await installmentInvoiceService.list(req.params.clientId);
+    res.json(ApiResponse.success(result));
+  } catch (error) {
+    if (error instanceof InstallmentInvoiceError) {
+      res
+        .status(error.statusCode)
+        .json(ApiResponse.error(error.message, error.code));
       return;
     }
+    res
+      .status(500)
+      .json(
+        ApiResponse.error(
+          error instanceof Error
+            ? error.message
+            : 'Failed to load payment schedule',
+          'PAYMENT_SCHEDULE_FAILED'
+        )
+      );
+  }
+}
 
-    const result = await verificationInvoiceService.sendVerificationInvoice(
-      clientId,
+export async function generateInstallmentInvoice(
+  req: AuthRequest,
+  res: Response
+): Promise<void> {
+  try {
+    const result = await installmentInvoiceService.generate(
+      req.params.clientId,
+      req.params.installmentId,
       req.user?.id || 'staff'
     );
     res.json(ApiResponse.success(result));
   } catch (error) {
-    if (error instanceof ValidationError) {
-      res.status(400).json(ApiResponse.error(error.message, 'VALIDATION_ERROR'));
+    if (error instanceof InstallmentInvoiceError) {
+      res
+        .status(error.statusCode)
+        .json(ApiResponse.error(error.message, error.code));
       return;
     }
-    const message = error instanceof Error ? error.message : 'Failed to send verification invoice';
-    const status = message.includes('not found') ? 404 : 500;
-    res.status(status).json(ApiResponse.error(message, 'VERIFICATION_INVOICE_FAILED'));
+    res
+      .status(500)
+      .json(
+        ApiResponse.error(
+          error instanceof Error
+            ? error.message
+            : 'Failed to generate installment invoice',
+          'INSTALLMENT_INVOICE_FAILED'
+        )
+      );
   }
 }

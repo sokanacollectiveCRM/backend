@@ -1,7 +1,7 @@
 import {
+  computeAllowedActions,
   computePortalBlockers,
   computePortalEligibility,
-  computeAllowedActions,
   isPaymentAuthorizationRequired,
   resolveBillingPath,
   selectPrimaryPortalBlocker,
@@ -20,7 +20,9 @@ describe('portal eligibility computation', () => {
 
     it('maps medicaid and full support', () => {
       expect(resolveBillingPath('Medicaid')).toBe('medicaid');
-      expect(resolveBillingPath('I am unable to pay / Full Support Option')).toBe('full_support');
+      expect(
+        resolveBillingPath('I am unable to pay / Full Support Option')
+      ).toBe('full_support');
     });
 
     it('returns unknown for empty values', () => {
@@ -49,7 +51,11 @@ describe('portal eligibility computation', () => {
         card_on_file: false,
       });
       expect(blockers).toEqual(
-        expect.arrayContaining(['contract_unsigned', 'deposit_unpaid', 'missing_card_on_file'])
+        expect.arrayContaining([
+          'contract_unsigned',
+          'deposit_unpaid',
+          'missing_card_on_file',
+        ])
       );
     });
 
@@ -147,7 +153,7 @@ describe('portal eligibility computation', () => {
   });
 
   describe('allowed actions', () => {
-    it('allows verification invoice only when missing card blocker applies', () => {
+    it('does not expose the deprecated verification-invoice action', () => {
       const actions = computeAllowedActions({
         is_eligible: false,
         contract_signed: true,
@@ -155,7 +161,7 @@ describe('portal eligibility computation', () => {
         primary_portal_blocker: 'missing_card_on_file',
         payment_authorization_required: true,
       });
-      expect(actions.can_send_verification_invoice).toBe(true);
+      expect(actions).not.toHaveProperty('can_send_verification_invoice');
       expect(actions.can_invite_to_portal).toBe(false);
     });
   });

@@ -1,12 +1,17 @@
+import {
+  isPaymentAuthorizationRequired,
+  resolveBillingPath,
+} from '../../constants/portalEligibility';
+import { getPool } from '../../db/cloudSqlPool';
+import {
+  ClientPaymentMethodRow,
+  clientPaymentMethodRepository,
+} from '../../repositories/cloudSqlPaymentMethodRepository';
 import ensureCustomerInQuickBooks from './ensureCustomerInQuickBooks';
 import {
-  clientPaymentMethodRepository,
-  ClientPaymentMethodRow,
-} from '../../repositories/cloudSqlPaymentMethodRepository';
-import {
+  QuickBooksPaymentsError,
   createQuickBooksCardOnFile,
   normalizeSavedCardResponse,
-  QuickBooksPaymentsError,
 } from './quickbooksPaymentsClient';
 
 export interface SaveClientPaymentMethodInput {
@@ -28,6 +33,19 @@ export interface ClientPaymentMethodResponse {
   updated_at: string;
 }
 
+export interface CardOnFileStatus {
+  required: boolean;
+  on_file: boolean;
+  status: 'active' | 'missing' | 'expired' | 'inactive' | 'not_required';
+  quickbooks_customer_id: string | null;
+  payment_method_reference: string | null;
+  card_brand: string | null;
+  last4: string | null;
+  exp_month: number | null;
+  exp_year: number | null;
+  last_verified_at: string | null;
+}
+
 export class PaymentMethodServiceError extends Error {
   readonly code: string;
   readonly statusCode: number;
@@ -41,7 +59,9 @@ export class PaymentMethodServiceError extends Error {
 }
 
 function toIso(value: string | Date): string {
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+  return value instanceof Date
+    ? value.toISOString()
+    : new Date(value).toISOString();
 }
 
 function mapRow(row: ClientPaymentMethodRow): ClientPaymentMethodResponse {
@@ -63,30 +83,63 @@ function normalizeServiceError(error: unknown): PaymentMethodServiceError {
   if (error instanceof QuickBooksPaymentsError) {
     switch (error.code) {
       case 'invalid_token':
-        return new PaymentMethodServiceError('invalid_token', 400, 'Intuit token is invalid');
+        return new PaymentMethodServiceError(
+          'invalid_token',
+          400,
+          'Intuit token is invalid'
+        );
       case 'expired_token':
-        return new PaymentMethodServiceError('expired_token', 400, 'Intuit token has expired');
+        return new PaymentMethodServiceError(
+          'expired_token',
+          400,
+          'Intuit token has expired'
+        );
       case 'duplicate_request':
-        return new PaymentMethodServiceError('duplicate_request', 409, 'Duplicate payment method request');
+        return new PaymentMethodServiceError(
+          'duplicate_request',
+          409,
+          'Duplicate payment method request'
+        );
       case 'provider_timeout':
-        return new PaymentMethodServiceError('provider_timeout', 504, 'QuickBooks Payments request timed out');
+        return new PaymentMethodServiceError(
+          'provider_timeout',
+          504,
+          'QuickBooks Payments request timed out'
+        );
       case 'quickbooks_not_connected':
-        return new PaymentMethodServiceError('quickbooks_not_connected', 503, 'QuickBooks is not connected');
+        return new PaymentMethodServiceError(
+          'quickbooks_not_connected',
+          503,
+          'QuickBooks is not connected'
+        );
       case 'provider_save_failure':
       default:
-        return new PaymentMethodServiceError('provider_save_failure', error.statusCode || 502, error.message);
+        return new PaymentMethodServiceError(
+          'provider_save_failure',
+          error.statusCode || 502,
+          error.message
+        );
     }
   }
   if (error instanceof PaymentMethodServiceError) {
     return error;
   }
 
-  const message = error instanceof Error ? error.message : 'Unknown payment method error';
+  const message =
+    error instanceof Error ? error.message : 'Unknown payment method error';
   if (message.includes('Customer not found')) {
-    return new PaymentMethodServiceError('client_not_found', 404, 'Client not found');
+    return new PaymentMethodServiceError(
+      'client_not_found',
+      404,
+      'Client not found'
+    );
   }
   if (message.includes('QuickBooks is not connected')) {
-    return new PaymentMethodServiceError('quickbooks_not_connected', 503, 'QuickBooks is not connected');
+    return new PaymentMethodServiceError(
+      'quickbooks_not_connected',
+      503,
+      'QuickBooks is not connected'
+    );
   }
   if (message.includes('failed to persist')) {
     return new PaymentMethodServiceError(
@@ -108,7 +161,9 @@ export class CustomerPaymentMethodService {
     input: SaveClientPaymentMethodInput
   ): Promise<ClientPaymentMethodResponse> {
     try {
-      const quickbooksCustomerId = await ensureCustomerInQuickBooks(input.client_id);
+      const quickbooksCustomerId = await ensureCustomerInQuickBooks(
+        input.client_id
+      );
       const qboCard = await createQuickBooksCardOnFile({
         quickbooksCustomerId,
         intuitToken: input.intuit_token,
@@ -118,7 +173,8 @@ export class CustomerPaymentMethodService {
       const row = await clientPaymentMethodRepository.upsert({
         client_id: input.client_id,
         quickbooks_customer_id: quickbooksCustomerId,
-        provider_payment_method_reference: normalized.provider_payment_method_reference,
+        provider_payment_method_reference:
+          normalized.provider_payment_method_reference,
         card_brand: normalized.card_brand,
         last4: normalized.last4,
         exp_month: normalized.exp_month,
@@ -131,10 +187,93 @@ export class CustomerPaymentMethodService {
     }
   }
 
-  async getPaymentMethod(clientId: string): Promise<ClientPaymentMethodResponse | null> {
+  async getPaymentMethod(
+    clientId: string
+  ): Promise<ClientPaymentMethodResponse | null> {
     try {
       const row = await clientPaymentMethodRepository.getByClientId(clientId);
       return row ? mapRow(row) : null;
+    } catch (error) {
+      throw normalizeServiceError(error);
+    }
+  }
+
+  async getCardOnFileStatus(clientId: string): Promise<CardOnFileStatus> {
+    try {
+      const { rows } = await getPool().query<{
+        payment_method: string | null;
+        qbo_customer_id: string | null;
+      }>(
+        `SELECT payment_method, qbo_customer_id FROM public.phi_clients WHERE id = $1::uuid LIMIT 1`,
+        [clientId]
+      );
+      const client = rows[0];
+      if (!client)
+        throw new PaymentMethodServiceError(
+          'client_not_found',
+          404,
+          'Client not found'
+        );
+
+      const required = isPaymentAuthorizationRequired(
+        resolveBillingPath(client.payment_method)
+      );
+      if (!required) {
+        return {
+          required: false,
+          on_file: false,
+          status: 'not_required',
+          quickbooks_customer_id: client.qbo_customer_id,
+          payment_method_reference: null,
+          card_brand: null,
+          last4: null,
+          exp_month: null,
+          exp_year: null,
+          last_verified_at: null,
+        };
+      }
+
+      const row = await clientPaymentMethodRepository.getByClientId(clientId);
+      if (!row) {
+        return {
+          required: true,
+          on_file: false,
+          status: 'missing',
+          quickbooks_customer_id: client.qbo_customer_id,
+          payment_method_reference: null,
+          card_brand: null,
+          last4: null,
+          exp_month: null,
+          exp_year: null,
+          last_verified_at: null,
+        };
+      }
+
+      const providerStatus = String(row.status || '').toLowerCase();
+      const now = new Date();
+      const expired =
+        row.exp_year < now.getUTCFullYear() ||
+        (row.exp_year === now.getUTCFullYear() &&
+          row.exp_month < now.getUTCMonth() + 1);
+      const active = providerStatus === 'active' && !expired;
+      const status: CardOnFileStatus['status'] = expired
+        ? 'expired'
+        : active
+          ? 'active'
+          : 'inactive';
+      return {
+        required: true,
+        on_file: active,
+        status,
+        quickbooks_customer_id:
+          client.qbo_customer_id ?? row.quickbooks_customer_id,
+        payment_method_reference: row.provider_payment_method_reference,
+        card_brand: row.card_brand,
+        last4: row.last4,
+        exp_month: row.exp_month,
+        exp_year: row.exp_year,
+        last_verified_at: toIso(row.updated_at),
+      };
     } catch (error) {
       throw normalizeServiceError(error);
     }

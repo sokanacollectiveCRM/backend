@@ -2,12 +2,12 @@
  * DTO for single client detail in canonical API response.
  * Flat structure with snake_case fields - no nested user object.
  * Used by GET /clients/:id when SPLIT_DB_READ_MODE=primary.
- * 
+ *
  * HIPAA COMPLIANCE:
  * - Operational fields (non-PHI) are always included
  * - PHI fields are OPTIONAL and only included when user is authorized
  * - When unauthorized, PHI fields are OMITTED (not set to null)
- * 
+ *
  * OPERATIONAL (always included):
  * - id, first_name, last_name (identifiers)
  * - email, phone_number (PII - needed for contact, redact in logs)
@@ -15,7 +15,7 @@
  * - portal_status, invite tracking fields
  * - requested_at, updated_at (timestamps)
  * - is_eligible (computed flag)
- * 
+ *
  * PHI (only when authorized via PHI Broker - omitted otherwise):
  * - Pregnancy: due_date, pregnancy_number, baby_sex, baby_name, number_of_babies
  * - Past pregnancies: had_previous_pregnancies, previous_pregnancies_count,
@@ -81,7 +81,6 @@ export interface ClientDetailDTO {
   deposit_paid?: boolean;
   allowed_actions?: {
     can_invite_to_portal: boolean;
-    can_send_verification_invoice: boolean;
     can_mark_contract_signed: boolean;
     can_mark_deposit_paid: boolean;
   };
