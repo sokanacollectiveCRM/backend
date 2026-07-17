@@ -9,6 +9,12 @@ export interface TokenStore {
   expiresAt: string;
 }
 
+export interface QuickBooksConnectionHealth {
+  status: 'connected' | 'refresh_failed' | 'reauthorization_required';
+  lastRefreshFailedAt: string | null;
+  lastRefreshSucceededAt: string | null;
+}
+
 const QB_ENVIRONMENT = process.env.QUICKBOOKS_ENVIRONMENT || 'production';
 
 /**
@@ -63,23 +69,54 @@ export async function getTokenFromDatabase(): Promise<TokenStore | null> {
  */
 export async function refreshQuickBooksToken(): Promise<TokenStore | null> {
   console.log('🔄 [QB] Starting token refresh...');
-
-  const tokens = await getTokenFromDatabase();
-  if (!tokens) {
-    console.log('❌ [QB] No tokens to refresh');
-    return null;
-  }
-
-  const url = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
-  const auth = Buffer.from(`${process.env.QB_CLIENT_ID}:${process.env.QB_CLIENT_SECRET}`).toString('base64');
-  const body = new URLSearchParams({
-    grant_type: 'refresh_token',
-    refresh_token: tokens.refreshToken
-  });
-
-  console.log('📤 [QB] Making refresh request to:', url);
-
+  const client = await getPool().connect();
   try {
+    await client.query('BEGIN');
+    // Vercel may run several instances. Only one may rotate the current refresh token.
+    await client.query(
+      'SELECT pg_advisory_xact_lock(hashtext($1)::bigint)',
+      [`quickbooks-token-refresh:${QB_ENVIRONMENT}`]
+    );
+    const { rows } = await client.query<{
+      realm_id: string;
+      access_token: string;
+      refresh_token: string;
+      access_token_expires_at: Date | null;
+    }>(
+      `SELECT realm_id, access_token, refresh_token, access_token_expires_at
+       FROM public.quickbooks_tokens
+       WHERE environment = $1
+       ORDER BY updated_at DESC
+       LIMIT 1
+       FOR UPDATE`,
+      [QB_ENVIRONMENT]
+    );
+    const row = rows[0];
+    if (!row) {
+      await client.query('COMMIT');
+      console.log('❌ [QB] No tokens to refresh');
+      return null;
+    }
+
+    // Another request may have refreshed while this request waited for the lock.
+    const expiresAt = row.access_token_expires_at?.getTime() ?? 0;
+    if (expiresAt > Date.now() + 60000) {
+      await client.query('COMMIT');
+      return {
+        realmId: row.realm_id,
+        accessToken: row.access_token,
+        refreshToken: row.refresh_token,
+        expiresAt: row.access_token_expires_at!.toISOString(),
+      };
+    }
+
+    const url = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
+    const auth = Buffer.from(`${process.env.QB_CLIENT_ID}:${process.env.QB_CLIENT_SECRET}`).toString('base64');
+    const body = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: row.refresh_token,
+    });
+    console.log('📤 [QB] Making serialized refresh request to:', url);
     const resp = await fetch(url, {
       method: 'POST',
       headers: {
@@ -93,61 +130,62 @@ export async function refreshQuickBooksToken(): Promise<TokenStore | null> {
 
     if (!resp.ok) {
       const errorText = await resp.text();
-      console.error('❌ [QB] Refresh failed:', resp.status, errorText);
-
-      // Parse error response to check for invalid_grant
-      let errorData: any = {};
+      let errorData: { error?: string; error_description?: string } = {};
       try {
         errorData = JSON.parse(errorText);
       } catch {
-        // If parsing fails, use the raw text
+        // Keep the public error generic when Intuit does not return JSON.
       }
-
-      // If token is invalid (invalid_grant), delete the stored tokens
-      // This allows the user to reconnect with a new authorization
-      if (errorData.error === 'invalid_grant' || resp.status === 400) {
-        console.warn('⚠️ [QB] Token is invalid (invalid_grant). Deleting stored tokens to allow reconnection...');
-        try {
-          await deleteTokens();
-          console.log('✅ [QB] Invalid tokens deleted successfully');
-        } catch (deleteError) {
-          console.error('❌ [QB] Failed to delete invalid tokens:', deleteError);
-        }
-      }
-
-      throw new Error(`Failed to refresh token: ${resp.status}`);
+      const needsReauthorization = errorData.error === 'invalid_grant';
+      const status = needsReauthorization ? 'reauthorization_required' : 'refresh_failed';
+      const safeError = `${errorData.error || `http_${resp.status}`}${errorData.error_description ? `: ${errorData.error_description}` : ''}`.slice(0, 500);
+      await client.query(
+        `UPDATE public.quickbooks_tokens
+         SET connection_status = $2,
+             last_refresh_error = $3,
+             last_refresh_failed_at = CURRENT_TIMESTAMP,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE realm_id = $1 AND environment = $4`,
+        [row.realm_id, status, safeError, QB_ENVIRONMENT]
+      );
+      await client.query('COMMIT');
+      console.error('❌ [QB] Refresh failed; token retained:', resp.status, status);
+      return null;
     }
 
-    const json = await resp.json() as { access_token: string; refresh_token: string; expires_in: number };
+    const json = await resp.json() as { access_token: string; refresh_token?: string; expires_in: number };
     console.log('✅ [QB] Refresh successful, expires in:', json.expires_in, 'seconds');
 
     const tokenData: TokenStore = {
-      realmId: tokens.realmId,
+      realmId: row.realm_id,
       accessToken: json.access_token,
-      refreshToken: json.refresh_token,
+      refreshToken: json.refresh_token || row.refresh_token,
       expiresAt: new Date(Date.now() + json.expires_in * 1000).toISOString()
     };
 
-    console.log('💾 [QB] Saving refreshed tokens...');
-    await saveTokensToDatabase(tokenData);
+    await client.query(
+      `UPDATE public.quickbooks_tokens
+       SET access_token = $2,
+           refresh_token = $3,
+           access_token_expires_at = $4,
+           connection_status = 'connected',
+           last_refresh_error = NULL,
+           last_refresh_failed_at = NULL,
+           last_refresh_succeeded_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE realm_id = $1 AND environment = $5`,
+      [tokenData.realmId, tokenData.accessToken, tokenData.refreshToken, tokenData.expiresAt, QB_ENVIRONMENT]
+    );
+    await client.query('COMMIT');
     console.log('✅ [QB] Refreshed tokens saved successfully');
 
     return tokenData;
   } catch (error: any) {
+    await client.query('ROLLBACK').catch(() => undefined);
     console.error('❌ [QB] Error refreshing token:', error);
-
-    // If the error indicates invalid token, try to clean up
-    if (error?.message?.includes('invalid_grant') || error?.message?.includes('400')) {
-      console.warn('⚠️ [QB] Detected invalid token error. Attempting to clean up...');
-      try {
-        await deleteTokens();
-        console.log('✅ [QB] Cleaned up invalid tokens');
-      } catch (deleteError) {
-        console.error('❌ [QB] Failed to clean up tokens:', deleteError);
-      }
-    }
-
     return null;
+  } finally {
+    client.release();
   }
 }
 
@@ -198,6 +236,9 @@ export async function saveTokensToDatabase(tokens: TokenStore): Promise<void> {
        access_token = EXCLUDED.access_token,
        refresh_token = EXCLUDED.refresh_token,
        access_token_expires_at = EXCLUDED.access_token_expires_at,
+       connection_status = 'connected',
+       last_refresh_error = NULL,
+       last_refresh_failed_at = NULL,
        updated_at = CURRENT_TIMESTAMP`,
     [tokens.realmId, tokens.accessToken, tokens.refreshToken, expiresAt, QB_ENVIRONMENT]
   );
@@ -221,3 +262,24 @@ export async function deleteTokens(): Promise<void> {
 // Add these exports for the QuickBooks service
 export const getTokens = getTokenFromDatabase;
 export const saveTokens = saveTokensToDatabase;
+
+export async function getQuickBooksConnectionHealth(): Promise<QuickBooksConnectionHealth | null> {
+  const { rows } = await getPool().query<{
+    connection_status: QuickBooksConnectionHealth['status'];
+    last_refresh_failed_at: Date | null;
+    last_refresh_succeeded_at: Date | null;
+  }>(
+    `SELECT connection_status, last_refresh_failed_at, last_refresh_succeeded_at
+     FROM public.quickbooks_tokens
+     WHERE environment = $1
+     ORDER BY updated_at DESC
+     LIMIT 1`,
+    [QB_ENVIRONMENT]
+  );
+  if (!rows[0]) return null;
+  return {
+    status: rows[0].connection_status,
+    lastRefreshFailedAt: rows[0].last_refresh_failed_at?.toISOString() || null,
+    lastRefreshSucceededAt: rows[0].last_refresh_succeeded_at?.toISOString() || null,
+  };
+}

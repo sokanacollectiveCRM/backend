@@ -14,6 +14,7 @@ import getCustomersFromQuickBooks from '../services/customer/getCustomersFromQui
 import { getQuickBooksCompanyInfo } from '../services/customer/getQuickBooksCompanyInfo';
 import { refreshCustomerQuickBooksSyncStatus } from '../services/customer/refreshCustomerQuickBooksSyncStatus';
 import { listInvoicesFromCloudSql } from '../repositories/cloudSqlInvoiceRepository';
+import { getQuickBooksConnectionHealth } from '../utils/tokenUtils';
 // Ensure you have SUPABASE_JWT_SECRET in your env
 const JWT_SECRET = process.env.SUPABASE_JWT_SECRET!
 
@@ -156,7 +157,8 @@ export const quickBooksStatus: RequestHandler = async (req, res, next) => {
     const connected = await isConnected();
     console.log('📊 [QB Status] Connection result:', connected);
     if (!connected) {
-      res.json({ connected: false, company: null });
+      const connectionHealth = await getQuickBooksConnectionHealth();
+      res.json({ connected: false, company: null, connectionHealth });
       return;
     }
     try {
