@@ -55,6 +55,9 @@ type JoinedRow = {
   payment_link: string | null;
   invoice_status: string | null;
   invoice_created_at: string | Date | null;
+  card_status_at_invoice: CardOnFileStatus['status'] | null;
+  card_warning_included: boolean | null;
+  invoice_email_status: string | null;
   updated_at: string | Date;
   paid_at: string | Date | null;
   client_id: string;
@@ -63,6 +66,10 @@ type JoinedRow = {
   first_name: string | null;
   last_name: string | null;
   email: string | null;
+  service_needed: string | null;
+  postpartum_hours: string | number | null;
+  doula_names: string | null;
+  contract_terms: string | null;
   readiness_qbo_customer_id: string | null;
 };
 
@@ -74,7 +81,9 @@ const BILLING_TIME_ZONE = process.env.BILLING_TIME_ZONE || 'America/New_York';
 const businessDate = () =>
   new Intl.DateTimeFormat('en-CA', {
     timeZone: BILLING_TIME_ZONE,
-    year: 'numeric', month: '2-digit', day: '2-digit',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
   }).format(new Date());
 
 function displayStatus(row: JoinedRow): string {
@@ -96,14 +105,40 @@ async function queryRows(
     `
     SELECT pi.id, pi.schedule_id, ps.status AS schedule_status, pi.amount, pi.due_date, pi.status,
       pi.payment_type, pi.payment_number, pi.is_overdue, pi.qbo_invoice_id, pi.payment_link,
-      pi.invoice_status, pi.invoice_created_at, pi.updated_at, pi.paid_at, pc.client_id, c.qbo_customer_id,
-      c.payment_method, c.first_name, c.last_name, c.email,
+      pi.invoice_status, pi.invoice_created_at, pi.card_status_at_invoice,
+      pi.card_warning_included, pi.invoice_email_status, pi.updated_at, pi.paid_at,
+      pc.client_id, c.qbo_customer_id,
+      c.payment_method, c.first_name, c.last_name, c.email, c.service_needed,
+      COALESCE(
+        NULLIF(to_jsonb(pc)->>'total_hours', ''),
+        NULLIF(to_jsonb(pc)#>>'{contract_data,totalHours}', ''),
+        NULLIF(to_jsonb(pc)#>>'{contract_data,total_hours}', ''),
+        postpartum_hours.total_hours
+      ) AS postpartum_hours,
+      assigned_doulas.doula_names,
+      COALESCE(
+        NULLIF(to_jsonb(pc)->>'payment_terms', ''),
+        NULLIF(to_jsonb(pc)->>'terms', ''),
+        NULLIF(to_jsonb(pc)#>>'{contract_data,paymentTerms}', ''),
+        ps.payment_frequency || ' installments; payment ' || pi.payment_number || ' of ' || pi.total_payments
+      ) AS contract_terms,
       cor.qb_customer_id AS readiness_qbo_customer_id
     FROM public.payment_installments pi
     JOIN public.payment_schedules ps ON ps.id = pi.schedule_id
     JOIN public.phi_contracts pc ON pc.id = ps.contract_id
     JOIN public.phi_clients c ON c.id = pc.client_id
     LEFT JOIN public.client_onboarding_readiness cor ON cor.client_id = c.id
+    LEFT JOIN LATERAL (
+      SELECT string_agg(DISTINCT NULLIF(btrim(d.full_name), ''), ', ') AS doula_names
+      FROM public.doula_assignments da
+      JOIN public.doulas d ON d.id = da.doula_id
+      WHERE da.client_id = c.id
+    ) assigned_doulas ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT trim(to_char(SUM(EXTRACT(EPOCH FROM (h.end_time - h.start_time))) / 3600.0, 'FM999999990.##')) AS total_hours
+      FROM public.hours h
+      WHERE h.client_id = c.id AND LOWER(COALESCE(h.type, '')) = 'postpartum'
+    ) postpartum_hours ON TRUE
     WHERE pc.client_id = $1::uuid
     ORDER BY pi.due_date ASC NULLS LAST, pi.payment_number ASC NULLS LAST, pi.created_at ASC`,
     [clientId]
@@ -270,7 +305,7 @@ function toView(rows: JoinedRow[], row: JoinedRow): PaymentInstallmentView {
   };
 }
 
-function emailContent(
+export function buildInstallmentInvoiceEmail(
   row: JoinedRow,
   link: string | null,
   card: CardOnFileStatus
@@ -282,16 +317,23 @@ function emailContent(
     currency: 'USD',
   }).format(Number(row.amount));
   const due = isoDate(row.due_date) || 'the scheduled due date';
-  let warning = '';
-  if (card.status === 'expired')
-    warning =
-      'The payment method previously saved for your account appears to be expired. When paying this invoice, please select the option to save your payment method for future payments.';
-  else if (card.required && card.status !== 'active')
-    warning =
-      'Our records show that your previous payment was completed, but your payment method is not currently saved for future installments. Your service agreement requires an authorized card to remain on file. When paying this invoice, please select the option to save your payment method for future payments.';
-  const subject = warning
-    ? 'Action Required — Installment Invoice and Card on File'
-    : 'Sokana Collective — Upcoming Installment Invoice';
+  const warnings: Partial<Record<CardOnFileStatus['status'], string>> = {
+    missing:
+      'Our records show that your previous payment was completed, but your payment method is not currently saved for future installments. Your service agreement requires an authorized card to remain on file. When paying this invoice, please select the option to save your payment method for future payments.',
+    expired:
+      'Our records show that the payment method previously saved to your account appears to be expired. When paying this invoice, please update and save your payment method for future installments.',
+    inactive:
+      'Our records show that there is not currently an active payment method available for future installments. When paying this invoice, please enter and save an active payment method for future payments.',
+  };
+  const subjects: Partial<Record<CardOnFileStatus['status'], string>> = {
+    missing: 'Action Required — Installment Invoice and Card on File',
+    expired: 'Action Required — Update Your Card for Your Installment',
+    inactive: 'Action Required — Installment Invoice and Payment Method',
+  };
+  const warning = card.required ? warnings[card.status] || '' : '';
+  const subject =
+    (card.required ? subjects[card.status] : undefined) ||
+    'Sokana Collective — Upcoming Installment Invoice';
   const text = `Hello ${name},\nYour next scheduled installment of ${amount} is due on ${due}.\n${warning ? `${warning}\n` : ''}You may review and pay the invoice using the secure QuickBooks link below:\n${link || ''}\n${warning ? 'Please contact Sokana Collective if you need assistance.\n' : ''}Thank you,\nSokana Collective`;
   return { subject, text, warningIncluded: Boolean(warning) };
 }
@@ -333,13 +375,19 @@ export class InstallmentInvoiceService {
           await customerPaymentMethodService.getCardOnFileStatus(clientId);
         return {
           ...toView(rows, row),
+          card_status: card,
           card_on_file: card.on_file,
-          card_warning_included: false,
+          card_warning_included: Boolean(row.card_warning_included),
           invoice_status: row.invoice_status || 'created',
         };
       }
       const eligibilityFailure = eligibilityError(rows, row);
       if (eligibilityFailure) throw eligibilityFailure;
+
+      // This decision is authoritative and is made before invoice creation.
+      const card =
+        await customerPaymentMethodService.getCardOnFileStatus(clientId);
+      const content = buildInstallmentInvoiceEmail(row, null, card);
 
       const itemId =
         process.env.QBO_INVOICE_ITEM_ID ||
@@ -347,11 +395,26 @@ export class InstallmentInvoiceService {
         '1';
       const description =
         `Sokana Collective Service Installment ${row.payment_number ?? ''}`.trim();
+      const clientName =
+        [row.first_name, row.last_name].filter(Boolean).join(' ') || 'Client';
+      const service = row.service_needed?.trim() || 'Doula services';
+      const invoiceDetails = [
+        `Client: ${clientName}`,
+        `Service provided: ${service}`,
+        service.toLowerCase().includes('postpartum') &&
+        row.postpartum_hours != null
+          ? `Total postpartum hours: ${row.postpartum_hours}`
+          : null,
+        row.doula_names ? `Doula: ${row.doula_names}` : null,
+        row.contract_terms ? `Terms: ${row.contract_terms}` : null,
+        'Billing questions: billing@sokanacollective.com',
+      ].filter((value): value is string => Boolean(value));
+      const visibleDescription = [description, ...invoiceDetails].join('\n');
       const lineItems = [
         {
           DetailType: 'SalesItemLineDetail',
           Amount: Number(row.amount),
-          Description: description,
+          Description: visibleDescription,
           SalesItemLineDetail: {
             ItemRef: { value: itemId },
             UnitPrice: Number(row.amount),
@@ -364,6 +427,7 @@ export class InstallmentInvoiceService {
           lineItems,
           dueDate: isoDate(row.due_date)!,
           memo: description,
+          customerMemo: invoiceDetails.join('\n'),
           customerEmail: row.email || '',
         }),
         `installment-${installmentId}`
@@ -376,32 +440,48 @@ export class InstallmentInvoiceService {
         : null;
       await db.query(
         `UPDATE public.payment_installments SET qbo_invoice_id=$1, payment_link=$2,
-        invoice_status='created', invoice_created_at=NOW(), invoice_generated_by=$3::uuid, updated_at=NOW() WHERE id=$4::uuid`,
-        [invoiceId, paymentLink, staffUserId, installmentId]
+        invoice_status='created', invoice_created_at=NOW(), invoice_generated_by=$3::uuid,
+        card_status_at_invoice=$5, card_warning_included=$6,
+        invoice_email_status='pending', invoice_email_error=NULL, updated_at=NOW()
+        WHERE id=$4::uuid`,
+        [
+          invoiceId,
+          paymentLink,
+          staffUserId,
+          installmentId,
+          card.status,
+          content.warningIncluded,
+        ]
       );
       await db.query('COMMIT');
 
-      const card =
-        await customerPaymentMethodService.getCardOnFileStatus(clientId);
-      const content = emailContent(row, paymentLink, card);
+      const email = buildInstallmentInvoiceEmail(row, paymentLink, card);
       let invoiceStatus = 'created';
       if (row.email) {
         try {
           await new NodemailerService().sendEmail(
             row.email,
-            content.subject,
-            content.text
+            email.subject,
+            email.text
           );
           await getPool().query(
-            `UPDATE public.payment_installments SET invoice_status='sent' WHERE id=$1::uuid`,
+            `UPDATE public.payment_installments SET invoice_status='sent',
+             invoice_email_status='sent', invoice_email_sent_at=NOW(), invoice_email_error=NULL
+             WHERE id=$1::uuid`,
             [installmentId]
           );
           invoiceStatus = 'sent';
         } catch (error) {
           invoiceStatus = 'email_failed';
           await getPool().query(
-            `UPDATE public.payment_installments SET invoice_status='email_failed' WHERE id=$1::uuid`,
-            [installmentId]
+            `UPDATE public.payment_installments SET invoice_status='email_failed',
+             invoice_email_status='failed', invoice_email_error=$2 WHERE id=$1::uuid`,
+            [
+              installmentId,
+              error instanceof Error
+                ? error.message.slice(0, 1000)
+                : 'Email delivery failed',
+            ]
           );
           await clientOnboardingReadinessRepository.recordEvent({
             client_id: clientId,
@@ -415,6 +495,12 @@ export class InstallmentInvoiceService {
             },
           });
         }
+      } else {
+        await getPool().query(
+          `UPDATE public.payment_installments SET invoice_email_status='skipped',
+           invoice_email_error='Client billing email is missing' WHERE id=$1::uuid`,
+          [installmentId]
+        );
       }
       await clientOnboardingReadinessRepository.recordEvent({
         client_id: clientId,
@@ -426,7 +512,8 @@ export class InstallmentInvoiceService {
           qbo_invoice_id: invoiceId,
           generated_by: staffUserId,
           card_on_file: card.on_file,
-          card_warning_included: content.warningIncluded,
+          card_status: card.status,
+          card_warning_included: email.warningIncluded,
           generated_at: new Date().toISOString(),
         },
       });
@@ -440,7 +527,8 @@ export class InstallmentInvoiceService {
         qbo_invoice_id: invoiceId,
         payment_link: paymentLink,
         card_on_file: card.on_file,
-        card_warning_included: content.warningIncluded,
+        card_status: card,
+        card_warning_included: email.warningIncluded,
         invoice_status: invoiceStatus,
       };
     } catch (error) {

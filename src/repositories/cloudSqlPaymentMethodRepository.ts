@@ -2,12 +2,12 @@ import { getPool } from '../db/cloudSqlPool';
 
 export interface ClientPaymentMethodRow {
   client_id: string;
-  quickbooks_customer_id: string;
-  provider_payment_method_reference: string;
-  card_brand: string;
-  last4: string;
-  exp_month: number;
-  exp_year: number;
+  quickbooks_customer_id: string | null;
+  provider_payment_method_reference: string | null;
+  card_brand: string | null;
+  last4: string | null;
+  exp_month: number | null;
+  exp_year: number | null;
   status: string;
   created_at: string | Date;
   updated_at: string | Date;
@@ -25,7 +25,9 @@ export interface UpsertClientPaymentMethodParams {
 }
 
 export class CloudSqlPaymentMethodRepository {
-  async getByClientId(clientId: string): Promise<ClientPaymentMethodRow | null> {
+  async getByClientId(
+    clientId: string
+  ): Promise<ClientPaymentMethodRow | null> {
     const { rows } = await getPool().query<ClientPaymentMethodRow>(
       `
       SELECT
@@ -49,7 +51,9 @@ export class CloudSqlPaymentMethodRepository {
     return rows[0] ?? null;
   }
 
-  async upsert(params: UpsertClientPaymentMethodParams): Promise<ClientPaymentMethodRow> {
+  async upsert(
+    params: UpsertClientPaymentMethodParams
+  ): Promise<ClientPaymentMethodRow> {
     const { rows } = await getPool().query<ClientPaymentMethodRow>(
       `
       INSERT INTO public.client_payment_methods (
@@ -106,4 +110,5 @@ export class CloudSqlPaymentMethodRepository {
   }
 }
 
-export const clientPaymentMethodRepository = new CloudSqlPaymentMethodRepository();
+export const clientPaymentMethodRepository =
+  new CloudSqlPaymentMethodRepository();

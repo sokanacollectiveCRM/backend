@@ -15,20 +15,27 @@ export interface RawLineItem {
  */
 export default function buildInvoicePayload(
   qboCustomerId: string,
-  opts: { lineItems: RawLineItem[]; dueDate: string; memo?: string; customerEmail: string }
+  opts: {
+    lineItems: RawLineItem[];
+    dueDate: string;
+    memo?: string;
+    customerMemo?: string;
+    customerEmail: string;
+  }
 ) {
-  const { lineItems, dueDate, memo, customerEmail } = opts;
+  const { lineItems, dueDate, memo, customerMemo, customerEmail } = opts;
   return {
     CustomerRef: { value: qboCustomerId },
     Line: lineItems,
     TxnDate: dueDate,
     DueDate: dueDate,
-    PrivateNote: memo || "",
+    PrivateNote: memo || '',
+    CustomerMemo: customerMemo ? { value: customerMemo } : undefined,
     BillEmail: { Address: customerEmail },
     AllowOnlineACHPayment: true,
     AllowOnlineCreditCardPayment: true,
-    EmailStatus: "NeedToSend",
-    domain: "QBO",
-    sparse: false
+    EmailStatus: 'NeedToSend',
+    domain: 'QBO',
+    sparse: false,
   };
 }

@@ -10,8 +10,7 @@ import {
   clientOnboardingReadinessRepository,
   mapReadinessRow,
 } from '../repositories/cloudSqlClientOnboardingReadinessRepository';
-import { clientPaymentMethodRepository } from '../repositories/cloudSqlPaymentMethodRepository';
-import { getPrimaryQuickBooksStoredPaymentMethod } from './payments/listQuickBooksStoredPaymentMethods';
+import { customerPaymentMethodService } from './payments/customerPaymentMethodService';
 
 export interface InviteEligibility {
   eligible: boolean;
@@ -96,45 +95,6 @@ export class PortalEligibilityService {
     };
   }
 
-  private async resolveCardOnFile(
-    clientId: string,
-    qbCustomerId: string | null
-  ): Promise<{
-    card_on_file: boolean;
-    qb_stored_payment_method_id: string | null;
-  }> {
-    const localMethod =
-      await clientPaymentMethodRepository.getByClientId(clientId);
-    const now = new Date();
-    const localMethodIsActive =
-      localMethod?.status.toLowerCase() === 'active' &&
-      (localMethod.exp_year > now.getUTCFullYear() ||
-        (localMethod.exp_year === now.getUTCFullYear() &&
-          localMethod.exp_month >= now.getUTCMonth() + 1));
-    if (localMethod?.provider_payment_method_reference && localMethodIsActive) {
-      return {
-        card_on_file: true,
-        qb_stored_payment_method_id:
-          localMethod.provider_payment_method_reference,
-      };
-    }
-
-    if (!qbCustomerId) {
-      return { card_on_file: false, qb_stored_payment_method_id: null };
-    }
-
-    const remoteMethod =
-      await getPrimaryQuickBooksStoredPaymentMethod(qbCustomerId);
-    if (!remoteMethod?.id) {
-      return { card_on_file: false, qb_stored_payment_method_id: null };
-    }
-
-    return {
-      card_on_file: true,
-      qb_stored_payment_method_id: remoteMethod.id,
-    };
-  }
-
   async computeAndPersist(
     clientId: string,
     options?: {
@@ -149,10 +109,12 @@ export class PortalEligibilityService {
     const existing =
       await clientOnboardingReadinessRepository.getByClientId(clientId);
     const gates = await this.getOnboardingGates(clientId);
-    const cardState = await this.resolveCardOnFile(
-      clientId,
-      gates.qb_customer_id
-    );
+    const normalizedCard =
+      await customerPaymentMethodService.getCardOnFileStatus(clientId);
+    const cardState = {
+      card_on_file: normalizedCard.on_file,
+      qb_stored_payment_method_id: normalizedCard.payment_method_reference,
+    };
 
     const contract_signed =
       options?.force_contract_signed ?? gates.contract_signed;

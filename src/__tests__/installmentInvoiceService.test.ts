@@ -2,6 +2,7 @@ import { getPool } from '../db/cloudSqlPool';
 import { NodemailerService } from '../services/emailService';
 import {
   InstallmentInvoiceError,
+  buildInstallmentInvoiceEmail,
   installmentInvoiceService,
 } from '../services/installmentInvoiceService';
 import createInvoiceInQuickBooks from '../services/invoice/createInvoiceInQuickBooks';
@@ -54,6 +55,10 @@ function row(overrides: Record<string, unknown> = {}) {
     first_name: 'Synthetic',
     last_name: 'Client',
     email: 'synthetic@example.test',
+    service_needed: 'Postpartum support',
+    postpartum_hours: '40',
+    doula_names: 'Dana Doula',
+    contract_terms: 'Monthly installments under signed service agreement',
     ...overrides,
   };
 }
@@ -112,7 +117,9 @@ describe('installment invoice service', () => {
   });
 
   it('returns an empty list when the client has no schedule', async () => {
-    (getPool as jest.Mock).mockReturnValue({ query: jest.fn().mockResolvedValue({ rows: [] }) });
+    (getPool as jest.Mock).mockReturnValue({
+      query: jest.fn().mockResolvedValue({ rows: [] }),
+    });
     await expect(installmentInvoiceService.list(clientId)).resolves.toEqual([]);
   });
 
@@ -211,7 +218,21 @@ describe('installment invoice service', () => {
       staffId
     );
     expect(createInvoiceInQuickBooks).toHaveBeenCalledWith(
-      expect.objectContaining({ CustomerRef: { value: 'qb-customer-1' } }),
+      expect.objectContaining({
+        CustomerRef: { value: 'qb-customer-1' },
+        Line: [
+          expect.objectContaining({
+            Description: expect.stringContaining(
+              'Client: Synthetic Client\nService provided: Postpartum support\nTotal postpartum hours: 40\nDoula: Dana Doula\nTerms: Monthly installments under signed service agreement\nBilling questions: billing@sokanacollective.com'
+            ),
+          }),
+        ],
+        CustomerMemo: {
+          value: expect.stringContaining(
+            'Billing questions: billing@sokanacollective.com'
+          ),
+        },
+      }),
       `installment-${installmentId}`
     );
     expect(sendEmail).toHaveBeenCalledWith(
@@ -220,6 +241,62 @@ describe('installment invoice service', () => {
       expect.stringContaining('authorized card to remain on file')
     );
     expect(result).toMatchObject({ card_warning_included: true });
+  });
+
+  it.each([
+    [
+      'expired',
+      'Action Required — Update Your Card for Your Installment',
+      'appears to be expired',
+    ],
+    [
+      'inactive',
+      'Action Required — Installment Invoice and Payment Method',
+      'not currently an active payment method',
+    ],
+  ])('selects the %s warning server-side', async (status, subject, phrase) => {
+    mockTransactionalPool([row()]);
+    (
+      customerPaymentMethodService.getCardOnFileStatus as jest.Mock
+    ).mockResolvedValue({ required: true, on_file: false, status });
+    const result = await installmentInvoiceService.generate(
+      clientId,
+      installmentId,
+      staffId
+    );
+    expect(sendEmail).toHaveBeenCalledWith(
+      'synthetic@example.test',
+      subject,
+      expect.stringContaining(phrase)
+    );
+    expect(result).toMatchObject({
+      card_status: { status },
+      card_warning_included: true,
+    });
+  });
+
+  it('uses the normal email when a card is not required', () => {
+    const email = buildInstallmentInvoiceEmail(
+      row() as never,
+      'https://qbo.example.test',
+      {
+        required: false,
+        on_file: false,
+        status: 'not_required',
+        quickbooks_customer_id: 'qb-1',
+        payment_method_reference: null,
+        card_brand: null,
+        last4: null,
+        exp_month: null,
+        exp_year: null,
+        last_verified_at: null,
+        source: 'none',
+      }
+    );
+    expect(email).toMatchObject({
+      subject: 'Sokana Collective — Upcoming Installment Invoice',
+      warningIncluded: false,
+    });
   });
 
   it('preserves the created invoice when email delivery fails', async () => {

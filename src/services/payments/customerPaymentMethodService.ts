@@ -22,12 +22,12 @@ export interface SaveClientPaymentMethodInput {
 
 export interface ClientPaymentMethodResponse {
   client_id: string;
-  quickbooks_customer_id: string;
-  provider_payment_method_reference: string;
-  card_brand: string;
-  last4: string;
-  exp_month: number;
-  exp_year: number;
+  quickbooks_customer_id: string | null;
+  provider_payment_method_reference: string | null;
+  card_brand: string | null;
+  last4: string | null;
+  exp_month: number | null;
+  exp_year: number | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -44,6 +44,33 @@ export interface CardOnFileStatus {
   exp_month: number | null;
   exp_year: number | null;
   last_verified_at: string | null;
+  source: 'local' | 'quickbooks' | 'none';
+}
+
+const ACTIVE_PROVIDER_STATUSES = new Set(['active', 'verified']);
+
+export function isCardExpired(
+  expMonth: number | null,
+  expYear: number | null,
+  now: Date = new Date()
+): boolean {
+  if (
+    expMonth == null ||
+    expYear == null ||
+    !Number.isInteger(expMonth) ||
+    expMonth < 1 ||
+    expMonth > 12 ||
+    !Number.isInteger(expYear) ||
+    expYear < 1
+  ) {
+    return false;
+  }
+  const currentMonth = now.getUTCMonth() + 1;
+  const currentYear = now.getUTCFullYear();
+  return (
+    expYear < currentYear ||
+    (expYear === currentYear && expMonth < currentMonth)
+  );
 }
 
 export class PaymentMethodServiceError extends Error {
@@ -230,6 +257,7 @@ export class CustomerPaymentMethodService {
           exp_month: null,
           exp_year: null,
           last_verified_at: null,
+          source: 'none',
         };
       }
 
@@ -246,21 +274,24 @@ export class CustomerPaymentMethodService {
           exp_month: null,
           exp_year: null,
           last_verified_at: null,
+          source: 'none',
         };
       }
 
-      const providerStatus = String(row.status || '').toLowerCase();
-      const now = new Date();
+      const providerStatus = String(row.status || '')
+        .trim()
+        .toLowerCase();
+      const providerActive = ACTIVE_PROVIDER_STATUSES.has(providerStatus);
+      // Provider usability takes precedence over expiry. Missing/invalid expiry
+      // metadata is never invented and is not, by itself, an expired card.
       const expired =
-        row.exp_year < now.getUTCFullYear() ||
-        (row.exp_year === now.getUTCFullYear() &&
-          row.exp_month < now.getUTCMonth() + 1);
-      const active = providerStatus === 'active' && !expired;
-      const status: CardOnFileStatus['status'] = expired
-        ? 'expired'
-        : active
-          ? 'active'
-          : 'inactive';
+        providerActive && isCardExpired(row.exp_month, row.exp_year);
+      const active = providerActive && !expired;
+      const status: CardOnFileStatus['status'] = !providerActive
+        ? 'inactive'
+        : expired
+          ? 'expired'
+          : 'active';
       return {
         required: true,
         on_file: active,
@@ -273,6 +304,7 @@ export class CustomerPaymentMethodService {
         exp_month: row.exp_month,
         exp_year: row.exp_year,
         last_verified_at: toIso(row.updated_at),
+        source: 'local',
       };
     } catch (error) {
       throw normalizeServiceError(error);
