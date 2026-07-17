@@ -11,16 +11,17 @@ export interface ClientPaymentMethodRow {
   status: string;
   created_at: string | Date;
   updated_at: string | Date;
+  last_verified_at: string | Date | null;
 }
 
 export interface UpsertClientPaymentMethodParams {
   client_id: string;
   quickbooks_customer_id: string;
   provider_payment_method_reference: string;
-  card_brand: string;
-  last4: string;
-  exp_month: number;
-  exp_year: number;
+  card_brand: string | null;
+  last4: string | null;
+  exp_month: number | null;
+  exp_year: number | null;
   status: string;
 }
 
@@ -41,6 +42,7 @@ export class CloudSqlPaymentMethodRepository {
         status,
         created_at,
         updated_at
+        ,last_verified_at
       FROM public.client_payment_methods
       WHERE client_id = $1::uuid
       LIMIT 1
@@ -76,6 +78,7 @@ export class CloudSqlPaymentMethodRepository {
         exp_month = EXCLUDED.exp_month,
         exp_year = EXCLUDED.exp_year,
         status = EXCLUDED.status,
+        last_verified_at = CURRENT_TIMESTAMP,
         updated_at = CURRENT_TIMESTAMP
       RETURNING
         client_id,
@@ -88,6 +91,7 @@ export class CloudSqlPaymentMethodRepository {
         status,
         created_at,
         updated_at
+        ,last_verified_at
       `,
       [
         params.client_id,

@@ -5,27 +5,54 @@ export interface QuickBooksStoredPaymentMethod {
   status?: string;
   cardType?: string;
   last4?: string;
+  expMonth?: number;
+  expYear?: number;
 }
 
+export class QuickBooksStoredPaymentMethodsError extends Error {}
+
 function getPaymentsBaseUrl(): string {
-  const env = (process.env.QBO_ENV || process.env.QUICKBOOKS_ENVIRONMENT || 'production').toLowerCase();
+  const env = (
+    process.env.QBO_ENV ||
+    process.env.QUICKBOOKS_ENVIRONMENT ||
+    'production'
+  ).toLowerCase();
   return env === 'sandbox'
     ? 'https://sandbox.api.intuit.com/quickbooks/v4/payments'
     : 'https://api.intuit.com/quickbooks/v4/payments';
 }
 
-function normalizeCardEntry(entry: Record<string, unknown>): QuickBooksStoredPaymentMethod | null {
+function normalizeCardEntry(
+  entry: Record<string, unknown>
+): QuickBooksStoredPaymentMethod | null {
   const card = (entry.card as Record<string, unknown> | undefined) ?? entry;
   const id = String(entry.id ?? card.id ?? '').trim();
   if (!id) {
     return null;
   }
 
+  const expMonth = Number(
+    entry.expMonth ?? card.expMonth ?? entry.exp_month ?? card.exp_month
+  );
+  const expYear = Number(
+    entry.expYear ?? card.expYear ?? entry.exp_year ?? card.exp_year
+  );
+  const maskedNumber = String(entry.number ?? card.number ?? '');
   return {
     id,
     status: String(entry.status ?? card.status ?? 'ACTIVE'),
-    cardType: String(entry.cardType ?? card.cardType ?? card.brand ?? '').trim() || undefined,
-    last4: String(entry.last4 ?? card.last4 ?? '').trim() || undefined,
+    cardType:
+      String(entry.cardType ?? card.cardType ?? card.brand ?? '').trim() ||
+      undefined,
+    last4:
+      String(
+        entry.last4 ?? card.last4 ?? maskedNumber.replace(/\D/g, '').slice(-4)
+      ).trim() || undefined,
+    expMonth:
+      Number.isInteger(expMonth) && expMonth >= 1 && expMonth <= 12
+        ? expMonth
+        : undefined,
+    expYear: Number.isInteger(expYear) && expYear >= 1 ? expYear : undefined,
   };
 }
 
@@ -59,7 +86,9 @@ export async function listQuickBooksStoredPaymentMethods(
 ): Promise<QuickBooksStoredPaymentMethod[]> {
   const accessToken = await getValidAccessToken();
   if (!accessToken) {
-    return [];
+    throw new QuickBooksStoredPaymentMethodsError(
+      'QuickBooks access is unavailable'
+    );
   }
 
   const url = `${getPaymentsBaseUrl()}/customers/${encodeURIComponent(quickbooksCustomerId)}/cards`;
@@ -81,16 +110,20 @@ export async function listQuickBooksStoredPaymentMethods(
     }
 
     if (!response.ok) {
-      return [];
+      throw new QuickBooksStoredPaymentMethodsError(
+        `QuickBooks stored-card lookup failed with status ${response.status}`
+      );
     }
 
     const payload = await response.json().catch(() => ({}));
-    return extractCards(payload).filter((card) => {
-      const status = String(card.status || 'ACTIVE').toUpperCase();
-      return status === 'ACTIVE' || status === 'VERIFIED';
-    });
-  } catch {
-    return [];
+    return extractCards(payload);
+  } catch (error) {
+    if (error instanceof QuickBooksStoredPaymentMethodsError) throw error;
+    throw new QuickBooksStoredPaymentMethodsError(
+      error instanceof Error && error.name === 'AbortError'
+        ? 'QuickBooks stored-card lookup timed out'
+        : 'QuickBooks stored-card lookup failed'
+    );
   } finally {
     clearTimeout(timeout);
   }
@@ -99,6 +132,17 @@ export async function listQuickBooksStoredPaymentMethods(
 export async function getPrimaryQuickBooksStoredPaymentMethod(
   quickbooksCustomerId: string
 ): Promise<QuickBooksStoredPaymentMethod | null> {
-  const methods = await listQuickBooksStoredPaymentMethods(quickbooksCustomerId);
-  return methods[0] ?? null;
+  try {
+    const methods =
+      await listQuickBooksStoredPaymentMethods(quickbooksCustomerId);
+    return (
+      methods.find((method) =>
+        ['ACTIVE', 'VERIFIED'].includes(
+          String(method.status || '').toUpperCase()
+        )
+      ) ?? null
+    );
+  } catch {
+    return null;
+  }
 }

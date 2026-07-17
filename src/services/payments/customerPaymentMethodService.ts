@@ -8,6 +8,7 @@ import {
   clientPaymentMethodRepository,
 } from '../../repositories/cloudSqlPaymentMethodRepository';
 import ensureCustomerInQuickBooks from './ensureCustomerInQuickBooks';
+import { listQuickBooksStoredPaymentMethods } from './listQuickBooksStoredPaymentMethods';
 import {
   QuickBooksPaymentsError,
   createQuickBooksCardOnFile,
@@ -261,7 +262,53 @@ export class CustomerPaymentMethodService {
         };
       }
 
-      const row = await clientPaymentMethodRepository.getByClientId(clientId);
+      let row = await clientPaymentMethodRepository.getByClientId(clientId);
+      let source: CardOnFileStatus['source'] = row ? 'local' : 'none';
+
+      if (client.qbo_customer_id) {
+        try {
+          const remoteMethods = await listQuickBooksStoredPaymentMethods(
+            client.qbo_customer_id
+          );
+          const remote =
+            remoteMethods.find((method) =>
+              ACTIVE_PROVIDER_STATUSES.has(
+                String(method.status || '')
+                  .trim()
+                  .toLowerCase()
+              )
+            ) ?? remoteMethods[0];
+          source = 'quickbooks';
+          if (!remote) {
+            return {
+              required: true,
+              on_file: false,
+              status: 'missing',
+              quickbooks_customer_id: client.qbo_customer_id,
+              payment_method_reference: null,
+              card_brand: null,
+              last4: null,
+              exp_month: null,
+              exp_year: null,
+              last_verified_at: new Date().toISOString(),
+              source,
+            };
+          }
+          row = await clientPaymentMethodRepository.upsert({
+            client_id: clientId,
+            quickbooks_customer_id: client.qbo_customer_id,
+            provider_payment_method_reference: remote.id,
+            card_brand: remote.cardType ?? null,
+            last4: remote.last4 ?? null,
+            exp_month: remote.expMonth ?? null,
+            exp_year: remote.expYear ?? null,
+            status: remote.status || 'ACTIVE',
+          });
+        } catch {
+          // A provider outage must not break profile or invoice workflows.
+          // Use only the last known masked local status; never log credentials.
+        }
+      }
       if (!row) {
         return {
           required: true,
@@ -274,7 +321,7 @@ export class CustomerPaymentMethodService {
           exp_month: null,
           exp_year: null,
           last_verified_at: null,
-          source: 'none',
+          source,
         };
       }
 
@@ -303,8 +350,8 @@ export class CustomerPaymentMethodService {
         last4: row.last4,
         exp_month: row.exp_month,
         exp_year: row.exp_year,
-        last_verified_at: toIso(row.updated_at),
-        source: 'local',
+        last_verified_at: toIso(row.last_verified_at ?? row.updated_at),
+        source,
       };
     } catch (error) {
       throw normalizeServiceError(error);

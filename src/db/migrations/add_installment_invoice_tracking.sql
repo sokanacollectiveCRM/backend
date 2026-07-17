@@ -12,6 +12,15 @@ ALTER TABLE public.payment_installments
   ADD COLUMN IF NOT EXISTS invoice_email_status VARCHAR(50),
   ADD COLUMN IF NOT EXISTS invoice_email_error TEXT;
 
+-- Legacy rows and some QuickBooks responses may omit non-sensitive card metadata.
+-- Keep the provider reference/status authoritative without inventing expiry values.
+ALTER TABLE public.client_payment_methods
+  ALTER COLUMN card_brand DROP NOT NULL,
+  ALTER COLUMN last4 DROP NOT NULL,
+  ALTER COLUMN exp_month DROP NOT NULL,
+  ALTER COLUMN exp_year DROP NOT NULL,
+  ADD COLUMN IF NOT EXISTS last_verified_at TIMESTAMPTZ;
+
 CREATE UNIQUE INDEX IF NOT EXISTS payment_installments_qbo_invoice_id_uidx
   ON public.payment_installments (qbo_invoice_id)
   WHERE qbo_invoice_id IS NOT NULL;

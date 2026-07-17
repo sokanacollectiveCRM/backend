@@ -4,10 +4,17 @@ import {
   customerPaymentMethodService,
   isCardExpired,
 } from '../services/payments/customerPaymentMethodService';
+import { listQuickBooksStoredPaymentMethods } from '../services/payments/listQuickBooksStoredPaymentMethods';
 
 jest.mock('../db/cloudSqlPool', () => ({ getPool: jest.fn() }));
 jest.mock('../repositories/cloudSqlPaymentMethodRepository', () => ({
-  clientPaymentMethodRepository: { getByClientId: jest.fn() },
+  clientPaymentMethodRepository: {
+    getByClientId: jest.fn(),
+    upsert: jest.fn(),
+  },
+}));
+jest.mock('../services/payments/listQuickBooksStoredPaymentMethods', () => ({
+  listQuickBooksStoredPaymentMethods: jest.fn(),
 }));
 
 describe('normalized card-on-file status', () => {
@@ -20,6 +27,9 @@ describe('normalized card-on-file status', () => {
     query.mockResolvedValue({
       rows: [{ payment_method: 'Self-Pay', qbo_customer_id: 'qb-1' }],
     });
+    (listQuickBooksStoredPaymentMethods as jest.Mock).mockRejectedValue(
+      new Error('synthetic provider outage')
+    );
   });
 
   it('returns missing as normal business data', async () => {
@@ -90,6 +100,67 @@ describe('normalized card-on-file status', () => {
     await expect(
       customerPaymentMethodService.getCardOnFileStatus(clientId)
     ).resolves.toMatchObject({ status: 'active', on_file: true });
+  });
+
+  it('uses QuickBooks as the authoritative source and syncs masked metadata', async () => {
+    (
+      clientPaymentMethodRepository.getByClientId as jest.Mock
+    ).mockResolvedValue(null);
+    (listQuickBooksStoredPaymentMethods as jest.Mock).mockResolvedValue([
+      {
+        id: 'qb-card-1',
+        status: 'ACTIVE',
+        cardType: 'Visa',
+        last4: '4242',
+        expMonth: 12,
+        expYear: 2099,
+      },
+    ]);
+    (clientPaymentMethodRepository.upsert as jest.Mock).mockResolvedValue({
+      quickbooks_customer_id: 'qb-1',
+      provider_payment_method_reference: 'qb-card-1',
+      card_brand: 'Visa',
+      last4: '4242',
+      exp_month: 12,
+      exp_year: 2099,
+      status: 'ACTIVE',
+      updated_at: '2026-07-17T00:00:00.000Z',
+      last_verified_at: '2026-07-17T00:00:00.000Z',
+    });
+
+    await expect(
+      customerPaymentMethodService.getCardOnFileStatus(clientId)
+    ).resolves.toMatchObject({
+      status: 'active',
+      on_file: true,
+      source: 'quickbooks',
+      payment_method_reference: 'qb-card-1',
+    });
+    expect(clientPaymentMethodRepository.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider_payment_method_reference: 'qb-card-1',
+        last4: '4242',
+      })
+    );
+  });
+
+  it('returns missing when QuickBooks confirms there are no stored cards', async () => {
+    (
+      clientPaymentMethodRepository.getByClientId as jest.Mock
+    ).mockResolvedValue({
+      status: 'ACTIVE',
+      exp_month: 12,
+      exp_year: 2099,
+      updated_at: '2026-07-01T00:00:00.000Z',
+    });
+    (listQuickBooksStoredPaymentMethods as jest.Mock).mockResolvedValue([]);
+    await expect(
+      customerPaymentMethodService.getCardOnFileStatus(clientId)
+    ).resolves.toMatchObject({
+      status: 'missing',
+      on_file: false,
+      source: 'quickbooks',
+    });
   });
 
   it.each(['Medicaid', 'Full Support'])(
