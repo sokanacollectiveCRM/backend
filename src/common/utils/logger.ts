@@ -33,6 +33,27 @@ const baseOptions: pino.LoggerOptions = {
       return { severity: label.toUpperCase() };
     },
   },
+  hooks: {
+    logMethod(args, method) {
+      const allowed = new Set([
+        'service', 'module', 'operation', 'correlationId', 'method', 'route',
+        'status', 'durationMs', 'errorCode', 'retryable', 'severity', 'context',
+        'count', 'source', 'partsCount', 'port', 'host',
+      ]);
+      const first = args[0];
+      if (first && typeof first === 'object') {
+        const safe = Object.fromEntries(
+          Object.entries(first as Record<string, unknown>).filter(([key, value]) =>
+            allowed.has(key) && ['string', 'number', 'boolean'].includes(typeof value)
+          )
+        );
+        method.apply(this, [safe, ...args.slice(1)]);
+        return;
+      }
+      // A bare Error or dynamic object has no approved diagnostic fields.
+      method.apply(this, args);
+    },
+  },
   transport: isProd
     ? undefined
     : {

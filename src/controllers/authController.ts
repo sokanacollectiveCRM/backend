@@ -19,6 +19,7 @@ import {
 } from '../types';
 import { AuthUseCase } from '../usecase/authUseCase.js';
 import { logger } from '../common/utils/logger';
+import { toSafeProviderError } from '../common/utils/safeLogging';
 
 
 export class AuthController {
@@ -115,8 +116,6 @@ export class AuthController {
       if (tokenParts.length !== 3) {
         logger.error({
           context: 'AuthController.getMe',
-          tokenLength: token.length,
-          tokenPreview: token.substring(0, 50) + '...',
           partsCount: tokenParts.length,
         }, 'Invalid JWT format');
         res.status(401).json({ error: 'Invalid token format: JWT must have 3 parts', details: `Received ${tokenParts.length} parts, expected 3` })
@@ -266,7 +265,7 @@ export class AuthController {
     res: Response
   ): Promise<void> {
     try {
-      logger.info({ context: 'AuthController.handleOAuthCallback', query: req.query }, 'OAuth callback received');
+      logger.info({ service: 'supabase', operation: 'oauth_callback' }, 'OAuth callback received');
       const code = req.query.code as string;
 
       // call useCase to retrieve current session and user
@@ -320,7 +319,7 @@ export class AuthController {
 
       res.json({ success: true , user: user.toJSON()});
     } catch (handleTokenError) {
-      logger.error({ err: handleTokenError, context: 'AuthController.handleToken' }, 'Handle token failed');
+      logger.error(toSafeProviderError('supabase', 'handle_token', handleTokenError), 'Handle token failed');
       // const error = this.handleError(handleTokenError, res);
       // res.status(error.status).json({ error: error.message})
     }
@@ -415,7 +414,7 @@ export class AuthController {
     error: Error,
     res: Response
   ): { status: number, message: string } {
-    logger.error({ err: error, context: 'AuthController.handleError' }, 'Error handling request');
+    logger.error(toSafeProviderError('supabase', 'auth_request', error), 'Error handling request');
 
     if (error instanceof ValidationError) {
       return { status: 400, message: error.message};

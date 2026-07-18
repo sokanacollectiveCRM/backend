@@ -15,6 +15,8 @@ import { getQuickBooksCompanyInfo } from '../services/customer/getQuickBooksComp
 import { refreshCustomerQuickBooksSyncStatus } from '../services/customer/refreshCustomerQuickBooksSyncStatus';
 import { listInvoicesFromCloudSql } from '../repositories/cloudSqlInvoiceRepository';
 import { getQuickBooksConnectionHealth } from '../utils/tokenUtils';
+import { logger } from '../common/utils/logger';
+import { toSafeProviderError } from '../common/utils/safeLogging';
 // Ensure you have SUPABASE_JWT_SECRET in your env
 const JWT_SECRET = process.env.SUPABASE_JWT_SECRET!
 
@@ -53,7 +55,7 @@ export const quickBooksAuthUrl: RequestHandler = (_req, res, next) => {
     console.log('✅ [QB Auth] Generated auth URL successfully');
     res.json({ url });
   } catch (err: any) {
-    console.error('❌ [QB Auth] Error generating auth URL:', err);
+    logger.error(toSafeProviderError('quickbooks', 'generate_consent_url', err), 'QuickBooks operation failed');
     res.status(500).json({
       error: 'Could not fetch QuickBooks auth URL',
       details: err?.message || 'Unknown error occurred'
@@ -80,7 +82,7 @@ export const connectQuickBooks: RequestHandler = (req, res, next) => {
 export const handleQuickBooksCallback: RequestHandler = async (req, res, next) => {
   try {
     const fullUrl = `${req.protocol}://${req.get('host')}${req.originalUrl}`
-    console.log('🔄 [QB Callback] Processing OAuth callback:', fullUrl);
+    logger.info({ service: 'quickbooks', operation: 'oauth_callback' }, 'QuickBooks callback received');
 
     await handleAuthCallback(fullUrl)
     console.log('✅ [QB Callback] QuickBooks connected successfully');
@@ -89,13 +91,12 @@ export const handleQuickBooksCallback: RequestHandler = async (req, res, next) =
     const frontendUrl = process.env.FRONTEND_URL || process.env.FRONTEND_URL_DEV || 'http://localhost:3001';
     const successPath = process.env.QUICKBOOKS_SUCCESS_REDIRECT_PATH || '/integrations/quickbooks';
     const redirectUrl = `${frontendUrl}${successPath.startsWith('/') ? successPath : `/${successPath}`}?quickbooks=connected`;
-    console.log('🔀 [QB Callback] Redirecting to:', redirectUrl);
 
     // Use HTTP redirect so the browser navigates immediately (no reliance on JavaScript)
     res.redirect(302, redirectUrl);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Connection failed';
-    console.error('❌ [QB Callback] Error processing callback:', err);
+    logger.error(toSafeProviderError('quickbooks', 'oauth_callback', err), 'QuickBooks operation failed');
     const frontendUrl = process.env.FRONTEND_URL || process.env.FRONTEND_URL_DEV || 'http://localhost:3001';
     const errorPath = process.env.QUICKBOOKS_SUCCESS_REDIRECT_PATH || '/integrations/quickbooks';
     const errorRedirectUrl = `${frontendUrl}${errorPath.startsWith('/') ? errorPath : `/${errorPath}`}?quickbooks=error&message=${encodeURIComponent(message)}`;
@@ -165,11 +166,11 @@ export const quickBooksStatus: RequestHandler = async (req, res, next) => {
       const company = await getQuickBooksCompanyInfo();
       res.json({ connected: true, company });
     } catch (companyError) {
-      console.warn('⚠️ [QB Status] Connected, but company details could not be loaded:', companyError);
+      logger.warn(toSafeProviderError('quickbooks', 'company_details', companyError), 'QuickBooks operation failed');
       res.json({ connected: true, company: null, companyDetailsUnavailable: true });
     }
   } catch (err) {
-    console.error('❌ [QB Status] Error checking status:', err);
+    logger.error(toSafeProviderError('quickbooks', 'connection_status', err), 'QuickBooks operation failed');
     next(err);
   }
 }
@@ -217,7 +218,7 @@ export const getQuickBooksCustomers: RequestHandler = async (req, res, next) => 
     console.log(`✅ [QB Customers] Returning ${customers.length} customers`);
     res.json(customers);
   } catch (err: any) {
-    console.error('❌ [QB Customers] Error fetching customers:', err);
+    logger.error(toSafeProviderError('quickbooks', 'list_customers', err), 'QuickBooks operation failed');
     res.status(500).json({
       error: 'Failed to fetch customers from QuickBooks',
       message: err.message || 'Unknown error'

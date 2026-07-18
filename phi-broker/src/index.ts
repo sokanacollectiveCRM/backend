@@ -56,8 +56,7 @@ function phiClientHandler(req: Request, res: Response, next: NextFunction): void
     // HIPAA-safe: no PHI, no request body
     console.error('[Server] Unhandled error in PHI handler', {
       request_id: requestId,
-      error_name: err instanceof Error ? err.name : 'Unknown',
-      error_message: err instanceof Error ? err.message : String(err),
+      error_code: 'PHI_HANDLER_FAILED',
     });
     if (!res.headersSent) {
       res.status(500).json(ResponseBuilder.error('Internal server error', 'INTERNAL_ERROR', requestId));
@@ -74,8 +73,7 @@ function phiUpdateHandler(req: Request, res: Response, next: NextFunction): void
     const requestId = reqWithId.requestId;
     console.error('[Server] Unhandled error in PHI update handler', {
       request_id: requestId,
-      error_name: err instanceof Error ? err.name : 'Unknown',
-      error_message: err instanceof Error ? err.message : String(err),
+      error_code: 'PHI_UPDATE_FAILED',
     });
     if (!res.headersSent) {
       res.status(500).json(ResponseBuilder.error('Internal server error', 'INTERNAL_ERROR', requestId));
@@ -96,8 +94,7 @@ app.use((err: Error, req: Request, res: Response, _next: express.NextFunction) =
   const requestId = reqWithId.requestId;
   console.error('[Server] Unhandled error', {
     request_id: requestId,
-    error_name: err.name,
-    error_message: err.message,
+    error_code: 'PHI_BROKER_FAILURE',
   });
   if (!res.headersSent) {
     res.status(500).json(ResponseBuilder.error('Internal server error', 'INTERNAL_ERROR', requestId));
