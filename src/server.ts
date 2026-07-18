@@ -5,7 +5,6 @@ import express, { Express, NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 
 import cookieParser from 'cookie-parser';
-import pinoHttp from 'pino-http';
 
 import {
   FEATURE_QUICKBOOKS,
@@ -13,6 +12,7 @@ import {
   getAllowedOrigins,
 } from './config/env';
 import { logger } from './common/utils/logger';
+import { createSafeRequestLogger, installProductionConsoleGuard } from './common/utils/safeLogging';
 import emailRoutes from './routes/EmailRoutes';
 import authRoutes from './routes/authRoutes';
 import adminRoutes from './routes/adminRoutes';
@@ -33,6 +33,8 @@ import userRoutes from './routes/specificUserRoutes';
 import { authController } from './index';
 
 const app: Express = express();
+
+installProductionConsoleGuard();
 
 app.disable('x-powered-by');
 app.use(helmet());
@@ -64,49 +66,7 @@ app.use(cookieParser());
 
 app.use(express.json());
 
-const httpLogger = pinoHttp({
-  logger,
-  redact: {
-    paths: [
-      'req.headers.cookie',
-      'req.headers.authorization',
-      'req.headers["x-session-token"]',
-      'req.body.email',
-      'req.body.password',
-      'req.body.session_token',
-      'req.body.token',
-      'req.body.intuit_token',
-      'req.body.cardToken',
-      'req.body.card.number',
-      'req.body.card.cvc',
-      'req.body.card.expMonth',
-      'req.body.card.expYear',
-      'req.body.address',
-      'req.body.ssn',
-      'req.body.phone',
-      'req.body.health_history',
-      'req.body.dob',
-      'req.body.*.email',
-      'req.body.*.*.email',
-      'res.body.session_token',
-    ],
-    censor: '[PHI_REDACTED]',
-  },
-  serializers: {
-    req(req) {
-      return {
-        method: req.method,
-        url: req.url,
-        headers: req.headers,
-        body: req.body,
-      };
-    },
-    res(res) {
-      return { statusCode: res.statusCode };
-    },
-  },
-});
-app.use(httpLogger);
+app.use(createSafeRequestLogger(logger));
 
 // normalize duplicate slashes
 app.use((req, _res, next) => {

@@ -3,9 +3,9 @@
  *
  * HIPAA COMPLIANCE:
  * - PHI values are NEVER logged
- * - Only metadata is logged (role, user_id, client_id, authorized, latency)
+ * - Only correlation, outcome, count, and latency metadata is logged
  * - Unauthorized requests return empty data (not error)
- * - Error logs: error.name, message, pg code/constraint/table/column only — no body, no PHI
+ * - Error logs use fixed internal categories and never serialize errors
  */
 
 import { Request, Response } from 'express';
@@ -51,24 +51,18 @@ function isAuthorized(requester: PhiRequest['requester'], clientId: string): boo
 }
 
 /**
- * HIPAA-safe error log: error.name, message, optional pg fields; client_id, user_id, role, authorized, latency_ms, request_id.
- * Never log request body or PHI values.
+ * HIPAA-safe error log: fixed category, correlation ID, and latency only.
  */
 function logPhiError(
   requestId: string | undefined,
   error: unknown,
-  meta: { client_id?: string; user_id?: string; role?: string; authorized?: boolean; latency_ms: number }
+  meta: { latency_ms: number }
 ): void {
-  const err = error instanceof Error ? error : new Error(String(error));
-  const pg = err as { code?: string; constraint?: string; table?: string; column?: string };
+  void error;
   console.error('[PHI] Error processing request', {
     request_id: requestId,
-    error_name: err.name,
-    error_message: err.message,
-    ...(pg.code && { pg_code: pg.code }),
-    ...(pg.constraint && { pg_constraint: pg.constraint }),
-    ...(pg.table && { pg_table: pg.table }),
-    ...(pg.column && { pg_column: pg.column }),
+    error_code: 'PHI_OPERATION_FAILED',
+    retryable: false,
     ...meta,
   });
 }
@@ -109,9 +103,6 @@ export async function getClientPhi(req: Request, res: Response): Promise<void> {
 
     console.log('[PHI] Request', {
       request_id: requestId,
-      client_id,
-      user_id: requester.user_id,
-      role: requester.role,
       authorized,
       latency_ms: Date.now() - startTime,
     });
@@ -131,8 +122,6 @@ export async function getClientPhi(req: Request, res: Response): Promise<void> {
     const totalLatency = Date.now() - startTime;
     console.log('[PHI] Response', {
       request_id: requestId,
-      client_id,
-      user_id: requester.user_id,
       authorized: true,
       field_count: Object.keys(result.data).length,
       latency_ms: totalLatency,
@@ -142,10 +131,6 @@ export async function getClientPhi(req: Request, res: Response): Promise<void> {
   } catch (error) {
     const latency = Date.now() - startTime;
     logPhiError(requestId, error, {
-      client_id: (req.body as PhiRequest)?.client_id,
-      user_id: (req.body as PhiRequest)?.requester?.user_id,
-      role: (req.body as PhiRequest)?.requester?.role,
-      authorized: (req.body as PhiRequest) ? isAuthorized((req.body as PhiRequest).requester, (req.body as PhiRequest).client_id) : undefined,
       latency_ms: latency,
     });
     if (!res.headersSent) {
@@ -228,23 +213,16 @@ export async function updateClientPhi(req: Request, res: Response): Promise<void
     if (requester.role !== 'admin') {
       console.log('[PHI] Update denied (not admin)', {
         request_id: requestId,
-        client_id,
-        user_id: requester.user_id,
-        role: requester.role,
         latency_ms: Date.now() - startTime,
       });
       res.status(403).json(ResponseBuilder.error('Not authorized to update PHI', 'FORBIDDEN', requestId));
       return;
     }
 
-    // HIPAA: log metadata only — keys are fine, values NEVER
+    // HIPAA: log count only; field names and values are not logged.
     console.log('[PHI] Update request', {
       request_id: requestId,
-      client_id,
-      user_id: requester.user_id,
-      role: requester.role,
       field_count: Object.keys(fields).length,
-      field_keys: Object.keys(fields),
     });
 
     // ── Perform update ──
@@ -253,10 +231,8 @@ export async function updateClientPhi(req: Request, res: Response): Promise<void
     const totalLatency = Date.now() - startTime;
     console.log('[PHI] Update response', {
       request_id: requestId,
-      client_id,
-      user_id: requester.user_id,
       updated: result.updated,
-      updated_keys: result.updated_keys,
+      updated_count: result.updated_keys.length,
       latency_ms: totalLatency,
     });
 
@@ -264,9 +240,6 @@ export async function updateClientPhi(req: Request, res: Response): Promise<void
   } catch (error) {
     const latency = Date.now() - startTime;
     logPhiError(requestId, error, {
-      client_id: (req.body as any)?.client_id,
-      user_id: (req.body as any)?.requester?.user_id,
-      role: (req.body as any)?.requester?.role,
       latency_ms: latency,
     });
     if (!res.headersSent) {

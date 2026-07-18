@@ -54,7 +54,7 @@ export function getPool(): Pool {
     // Do NOT log err object which may contain connection info
   });
 
-  console.log('[DB] Pool initialized', { host: host.substring(0, 10) + '...', port, ssl });
+  console.log('[DB] Pool initialized', { port, ssl: Boolean(ssl) });
 
   return pool;
 }
