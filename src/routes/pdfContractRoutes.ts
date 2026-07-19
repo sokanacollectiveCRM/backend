@@ -1,5 +1,9 @@
 import express, { Request, Response } from 'express';
 
+import authMiddleware from '../middleware/authMiddleware';
+import authorizeRoles from '../middleware/authorizeRoles';
+import { IS_PRODUCTION } from '../config/env';
+
 import {
   getAvailableContractTemplates,
   processContractWithPdfTemplate,
@@ -7,6 +11,16 @@ import {
 } from '../utils/pdfContractProcessor';
 
 const router = express.Router();
+
+router.use(
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin'])
+);
+
+const getSignNowAccessToken = (): string | undefined => {
+  const token = process.env.SIGNNOW_ACCESS_TOKEN;
+  return typeof token === 'string' && token.trim() ? token.trim() : undefined;
+};
 
 interface PdfContractRequest extends Request {
   body: {
@@ -68,9 +82,14 @@ router.post(
         return;
       }
 
-      // For now, we'll use a placeholder token. In production, you'd get this from authentication
-      const signNowToken =
-        '42d2a44df392aa3418c4e4486316dd2429b27e7b690834c68cd0e407144';
+      const signNowToken = getSignNowAccessToken();
+      if (!signNowToken) {
+        res.status(503).json({
+          success: false,
+          error: 'Contract signing provider is unavailable',
+        });
+        return;
+      }
 
       // Process the contract
       const result = await processContractWithPdfTemplate(
@@ -167,6 +186,11 @@ router.post('/validate', async (req: Request, res: Response): Promise<void> => {
  */
 router.post('/test', async (req: Request, res: Response): Promise<void> => {
   try {
+    if (IS_PRODUCTION) {
+      res.status(404).json({ success: false, error: 'Not found' });
+      return;
+    }
+
     const { templateKey = 'labor_support_v1' } = req.body;
 
     // Sample contract data
@@ -182,9 +206,14 @@ router.post('/test', async (req: Request, res: Response): Promise<void> => {
       client_signed_date: new Date().toLocaleDateString(),
     };
 
-    // For testing, we'll use a placeholder token
-    const signNowToken =
-      '42d2a44df392aa3418c4e4486316dd2429b27e7b690834c68cd0e407144';
+    const signNowToken = getSignNowAccessToken();
+    if (!signNowToken) {
+      res.status(503).json({
+        success: false,
+        error: 'Contract signing provider is unavailable',
+      });
+      return;
+    }
 
     // Process the test contract
     const result = await processContractWithPdfTemplate(
@@ -207,7 +236,6 @@ router.post('/test', async (req: Request, res: Response): Promise<void> => {
 });
 
 export default router;
-
 
 
 
