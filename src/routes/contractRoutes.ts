@@ -2,8 +2,15 @@ import { Request, Response, Router } from 'express';
 import { calculatePostpartumContract, formatForSignNow, ValidationError } from '../services/postpartum/calculateContract';
 import { signNowService } from '../services/signNowService';
 import { PostpartumContractInput } from '../types/postpartum';
+import authMiddleware from '../middleware/authMiddleware';
+import authorizeRoles from '../middleware/authorizeRoles';
 
 const router = Router();
+
+router.use(
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin'])
+);
 
 router.post('/postpartum/calculate', async (req, res) => {
   try {

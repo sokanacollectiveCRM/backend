@@ -1,6 +1,8 @@
 import { Request, Response, Router } from 'express';
 import { signNowCallback } from '../controllers/signNowWebhookController';
 import { signNowService } from '../services/signNowService';
+import authMiddleware from '../middleware/authMiddleware';
+import authorizeRoles from '../middleware/authorizeRoles';
 
 const router = Router();
 
@@ -22,7 +24,11 @@ interface SignNowRequest extends Request {
 }
 
 // Test authentication
-router.post('/test-auth', async (_req: Request, res: Response): Promise<void> => {
+router.post(
+  '/test-auth',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
+  async (_req: Request, res: Response): Promise<void> => {
   try {
     const result = await signNowService.testAuthentication();
     res.json(result);
@@ -33,10 +39,17 @@ router.post('/test-auth', async (_req: Request, res: Response): Promise<void> =>
       error: error instanceof Error ? error.message : 'Authentication test failed'
     });
   }
-});
+  }
+);
 
 // SignNow webhook callback for document completion
 router.post('/callback', signNowCallback);
+
+// Provider callback remains public; every operational SignNow action below is admin-only.
+router.use(
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin'])
+);
 
 // Test template access
 router.post('/test-template', async (_req: Request, res: Response): Promise<void> => {

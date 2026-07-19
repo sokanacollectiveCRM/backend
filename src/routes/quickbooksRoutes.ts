@@ -14,6 +14,7 @@ import {
   refreshQuickBooksCustomerSyncStatus
 } from '../controllers/quickbooksController'
 import authMiddleware from '../middleware/authMiddleware'
+import authorizeRoles from '../middleware/authorizeRoles'
 import { quickBooksInvoicePaidWebhook } from '../controllers/quickbooksWebhookController'
 import { simulatePaymentController } from '../services/payments/paymentsController'
 
@@ -25,6 +26,7 @@ router.get('/callback', handleQuickBooksCallback)
 
 // 2️⃣ Now apply auth + admin guard to the rest
 router.use(authMiddleware)
+router.use((req, res, next) => authorizeRoles(req, res, next, ['admin', 'billing']))
 
 // 3️⃣ Protected AJAX endpoints
 router.get('/auth/url', quickBooksAuthUrl)

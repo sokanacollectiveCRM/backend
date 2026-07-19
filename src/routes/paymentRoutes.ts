@@ -38,7 +38,7 @@ router.get('/', authMiddleware, (req, res, next) => authorizeRoles(req, res, nex
 router.get('', authMiddleware, (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']), listPaymentsHandler);
 
 // Get payment dashboard
-router.get('/dashboard', async (req, res) => {
+router.get('/dashboard', authMiddleware, (req, res, next) => authorizeRoles(req, res, next, ['admin', 'billing']), async (req, res) => {
   try {
     const dashboard = await paymentService.getPaymentDashboard();
     res.json({ success: true, data: dashboard });
@@ -49,7 +49,7 @@ router.get('/dashboard', async (req, res) => {
 });
 
 // Get overdue payments
-router.get('/overdue', async (req, res) => {
+router.get('/overdue', authMiddleware, (req, res, next) => authorizeRoles(req, res, next, ['admin', 'billing']), async (req, res) => {
   try {
     const overdue = await paymentService.getOverduePayments();
     res.json({ success: true, data: overdue });
@@ -60,7 +60,7 @@ router.get('/overdue', async (req, res) => {
 });
 
 // Get payment summary for a contract
-router.get('/contract/:contractId/summary', async (req, res) => {
+router.get('/contract/:contractId/summary', authMiddleware, (req, res, next) => authorizeRoles(req, res, next, ['admin', 'billing', 'doula', 'client']), async (req, res) => {
   try {
     const { contractId } = req.params;
     const summary = await paymentService.getPaymentSummary(contractId);
@@ -72,7 +72,7 @@ router.get('/contract/:contractId/summary', async (req, res) => {
 });
 
 // Get payment schedule for a contract
-router.get('/contract/:contractId/schedule', async (req, res) => {
+router.get('/contract/:contractId/schedule', authMiddleware, (req, res, next) => authorizeRoles(req, res, next, ['admin', 'billing', 'doula', 'client']), async (req, res) => {
   try {
     const { contractId } = req.params;
     const schedule = await paymentService.getPaymentSchedule(contractId);
@@ -116,7 +116,7 @@ router.get(
 });
 
 // Update payment status
-router.put('/payment/:paymentId/status', async (req: Request, res: Response): Promise<void> => {
+router.put('/payment/:paymentId/status', authMiddleware, (req, res, next) => authorizeRoles(req, res, next, ['admin', 'billing']), async (req: Request, res: Response): Promise<void> => {
   try {
     const { paymentId } = req.params;
     const { status, stripe_payment_intent_id, notes } = req.body;
@@ -140,7 +140,7 @@ router.put('/payment/:paymentId/status', async (req: Request, res: Response): Pr
 });
 
 // Get payments by status
-router.get('/status/:status', async (req: Request, res: Response): Promise<void> => {
+router.get('/status/:status', authMiddleware, (req, res, next) => authorizeRoles(req, res, next, ['admin', 'billing']), async (req: Request, res: Response): Promise<void> => {
   try {
     const { status } = req.params;
     const payments = await paymentService.getPaymentsByStatus(status as 'pending' | 'succeeded' | 'failed' | 'canceled' | 'refunded');
@@ -152,7 +152,7 @@ router.get('/status/:status', async (req: Request, res: Response): Promise<void>
 });
 
 // Get payments due within a date range
-router.get('/due-between', async (req: Request, res: Response): Promise<void> => {
+router.get('/due-between', authMiddleware, (req, res, next) => authorizeRoles(req, res, next, ['admin', 'billing']), async (req: Request, res: Response): Promise<void> => {
   try {
     const { start_date, end_date } = req.query;
 
@@ -176,7 +176,7 @@ router.get('/due-between', async (req: Request, res: Response): Promise<void> =>
 });
 
 // Run daily maintenance (for cron jobs or manual triggers)
-router.post('/maintenance/daily', async (req, res) => {
+router.post('/maintenance/daily', authMiddleware, (req, res, next) => authorizeRoles(req, res, next, ['admin']), async (req, res) => {
   try {
     await paymentService.runDailyMaintenance();
     res.json({ success: true, message: 'Daily payment maintenance completed' });
@@ -187,7 +187,7 @@ router.post('/maintenance/daily', async (req, res) => {
 });
 
 // Update overdue flags manually
-router.post('/maintenance/overdue-flags', async (req, res) => {
+router.post('/maintenance/overdue-flags', authMiddleware, (req, res, next) => authorizeRoles(req, res, next, ['admin']), async (req, res) => {
   try {
     await paymentService.updateOverdueFlags();
     res.json({ success: true, message: 'Overdue flags updated' });
