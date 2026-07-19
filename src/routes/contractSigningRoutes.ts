@@ -2,8 +2,15 @@ import crypto from 'crypto';
 import { Request, Response, Router } from 'express';
 import { SignNowService } from '../services/signNowService';
 import { checkSignNowDocumentStatus, processContractWithSignNow, type SignNowContractData } from '../utils/signNowContractProcessor';
+import authMiddleware from '../middleware/authMiddleware';
+import authorizeRoles from '../middleware/authorizeRoles';
 
 const router = Router();
+
+router.use(
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin'])
+);
 
 interface ContractSigningRequest extends Request {
   body: SignNowContractData;
