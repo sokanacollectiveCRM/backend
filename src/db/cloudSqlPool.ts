@@ -72,9 +72,19 @@ export function getPool(): Pool {
   const password = getRequiredEnv('CLOUD_SQL_PASSWORD');
   const port = parseInt(process.env.CLOUD_SQL_PORT || '5432', 10);
   const sslMode = (process.env.CLOUD_SQL_SSLMODE || '').toLowerCase();
-  const ssl = sslMode === 'require' || sslMode === 'verify-full' || process.env.NODE_ENV === 'production'
-    ? { rejectUnauthorized: sslMode === 'verify-full' }
-    : false;
+  // Cloud SQL unix sockets (/cloudsql/...) and explicit disable must not negotiate TLS.
+  // NODE_ENV=production alone must not override an explicit disable (Cloud Run socket path).
+  const usingUnixSocket = host.startsWith('/');
+  const sslDisabled =
+    sslMode === 'disable' || sslMode === 'false' || sslMode === 'off' || usingUnixSocket;
+  const ssl =
+    sslDisabled
+      ? false
+      : sslMode === 'require' ||
+          sslMode === 'verify-full' ||
+          process.env.NODE_ENV === 'production'
+        ? { rejectUnauthorized: sslMode === 'verify-full' }
+        : false;
 
   pool = new Pool({
     host,
