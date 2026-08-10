@@ -109,47 +109,108 @@ export class SupabaseContractService implements ContractService {
     return { buffer, filename };
   }
   
-  async getAllTemplates(): Promise<Template[]> {
-    const { data, error } = await this.supabaseClient
-      .from('contract_templates')
-      .select('*')
+  private static readonly KNOWN_STORAGE_TEMPLATES = [
+    'Agreement for Postpartum Doula Services.docx',
+    'Labor Support Agreement for Service.docx',
+  ];
 
-    if (error || !data) {
-      console.error('Error fetching templates:', error)
-      throw new Error('Could not fetch contract templates')
+  private isTemplateFile(name: string): boolean {
+    const lower = name.toLowerCase();
+    return (
+      !name.startsWith('.') &&
+      name !== '.emptyFolderPlaceholder' &&
+      (lower.endsWith('.docx') || lower.endsWith('.doc') || lower.endsWith('.pdf'))
+    );
+  }
+
+  private displayNameFromStoragePath(storagePath: string): string {
+    return storagePath.replace(/\.(docx|doc|pdf)$/i, '');
+  }
+
+  private resolveStoragePath(templateName: string): string {
+    if (/\.(docx|doc|pdf)$/i.test(templateName)) {
+      return templateName;
+    }
+    return `${templateName}.docx`;
+  }
+
+  private templatesFromNames(names: string[]): Template[] {
+    return names.map(
+      (storagePath, index) =>
+        new Template(
+          storagePath,
+          this.displayNameFromStoragePath(storagePath),
+          0,
+          0,
+          storagePath
+        )
+    );
+  }
+
+  /**
+   * List templates from the Supabase storage bucket (source of truth).
+   * Falls back to known DOCX filenames when listing returns empty
+   * (table contract_templates is not required).
+   */
+  async getAllTemplates(): Promise<Template[]> {
+    const { data, error } = await this.supabaseClient.storage
+      .from('contract-templates')
+      .list('', {
+        limit: 200,
+        sortBy: { column: 'name', order: 'asc' },
+      });
+
+    if (error) {
+      console.error('Error listing contract templates from storage:', error);
+      // Fall back so Contracts UI still loads known templates
+      return this.templatesFromNames(
+        SupabaseContractService.KNOWN_STORAGE_TEMPLATES
+      );
     }
 
-    return data.map((row) => new Template(
-      row.id,
-      row.title,
-      parseFloat(row.deposit),
-      parseFloat(row.fee),
-      row.storagePath
-    ))
+    const listed = (data ?? [])
+      .filter((file) => this.isTemplateFile(file.name))
+      .map(
+        (file) =>
+          new Template(
+            file.id ?? file.name,
+            this.displayNameFromStoragePath(file.name),
+            0,
+            0,
+            file.name
+          )
+      );
+
+    if (listed.length > 0) {
+      return listed;
+    }
+
+    console.warn(
+      'Storage list returned 0 templates; using known contract-templates filenames'
+    );
+    return this.templatesFromNames(
+      SupabaseContractService.KNOWN_STORAGE_TEMPLATES
+    );
   }
 
   async deleteTemplate(templateName: string): Promise<boolean> {
-
-    const { error: tableError } = await this.supabaseClient
-      .from('contract_templates')
-      .delete()
-      .eq('title', templateName)
-      .select()
-      .single()
-
-    if (tableError) throw new Error(`Failed to delete template: ${tableError.message}`);
+    const filePath = this.resolveStoragePath(templateName);
 
     const { error: storageError } = await this.supabaseClient.storage
       .from('contract-templates')
-      .remove([`${templateName}.docx`])
+      .remove([filePath]);
 
-    if (storageError) throw new Error(`Failed to delete template from stroage: ${storageError.message}`);
+    if (storageError) {
+      throw new Error(`Failed to delete template from storage: ${storageError.message}`);
+    }
 
     return true;
   }
 
   async uploadTemplate(file: File, name: string, deposit: number, fee: number): Promise<Boolean> {
-    const filePath = name.endsWith('.docx') ? name : `${name}.docx`;
+    void deposit;
+    void fee;
+    const filePath = this.resolveStoragePath(name);
 
     if (file) {
       const { error: uploadError } = await this.supabaseClient.storage
@@ -157,48 +218,28 @@ export class SupabaseContractService implements ContractService {
         .upload(filePath, file.buffer, {
           contentType: file.mimetype,
           upsert: true,
-      });
-  
+        });
+
       if (uploadError) {
         throw new Error('failed to upload new template');
       }
-    }
-
-    const { error: tableError } = await this.supabaseClient
-    .from('contract_templates')
-    .upsert([
-      {
-        title: name,
-        deposit: deposit,
-        fee: fee,
-        storage_path: filePath,
-      }
-    ]);
-
-    if (tableError) {
-      console.error('Table insert error:', tableError);
-      throw new Error('Failed to insert template metadata');
     }
 
     return true;
   }
 
   async getTemplate(templateName: string): Promise<Buffer> {
-    const filePath = templateName.endsWith('.docx') ? templateName : `${templateName}.docx`;
+    const filePath = this.resolveStoragePath(templateName);
 
-    const { data } = this.supabaseClient
-      .storage
+    const { data, error } = await this.supabaseClient.storage
       .from('contract-templates')
-      .getPublicUrl(filePath);
+      .download(filePath);
 
-    const publicUrl = data.publicUrl;
-    if (!publicUrl) throw new NotFoundError('Template public URL not generated');
+    if (error || !data) {
+      throw new NotFoundError(`Failed to fetch template: ${error?.message ?? 'not found'}`);
+    }
 
-    const res = await fetch(publicUrl);
-    if (!res.ok) throw new NotFoundError(`Failed to fetch template: ${res.statusText}`);
-
-    const buffer = Buffer.from(await res.arrayBuffer());
-    return buffer;
+    return Buffer.from(await data.arrayBuffer());
   }
 
   async generateTemplate(buffer: Buffer, fields: Record<string, string>): Promise<Buffer> {
@@ -209,9 +250,10 @@ export class SupabaseContractService implements ContractService {
     const doc = new Docxtemplater(zip, {
       paragraphLoop: true,
       linebreaks: true,
+      nullGetter: () => '',
     });
 
-    doc.render(fields);
+    doc.render(fields ?? {});
 
     const filled = doc.getZip().generate({
       type: 'nodebuffer',
