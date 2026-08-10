@@ -29,6 +29,7 @@ jest.mock('../services/payments/findCustomerInQuickBooks', () => {
     __esModule: true,
     default: jest.fn(async () => null),
     findCustomerInQuickBooksByDisplayName: jest.fn(async () => null),
+    findCustomerInQuickBooksById: jest.fn(async (id: string) => id),
   };
 });
 
@@ -37,6 +38,7 @@ import createCustomerInQuickBooks from '../services/customer/createCustomerInQui
 import saveQboCustomerIdToPhiClient from '../services/customer/saveQboCustomerIdToPhiClient';
 import findCustomerInQuickBooks, {
   findCustomerInQuickBooksByDisplayName,
+  findCustomerInQuickBooksById,
 } from '../services/payments/findCustomerInQuickBooks';
 
 describe('syncMatchedClientToQuickBooks', () => {
@@ -54,6 +56,7 @@ describe('syncMatchedClientToQuickBooks', () => {
     });
 
     expect(result).toEqual({ qboCustomerId: 'QB-EXISTING', alreadyExisted: true });
+    expect(findCustomerInQuickBooksById).toHaveBeenCalledWith('QB-EXISTING');
     expect(findCustomerInQuickBooks).not.toHaveBeenCalled();
     expect(findCustomerInQuickBooksByDisplayName).not.toHaveBeenCalled();
     expect(createCustomerInQuickBooks).not.toHaveBeenCalled();

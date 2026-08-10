@@ -670,6 +670,46 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
   - [x] Context updated
   - [x] Implementation started
 
+## Preflight Update 2026-05-26 (Invoices: Cloud SQL ledger, QBO SOR)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Remove Supabase invoice persistence; use QuickBooks as invoice object source-of-truth and Cloud SQL `phi_invoices` as CRM ledger source-of-truth.
+- **Repos Scanned**: both
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+### Files Scanned
+- `sokana-crm-frontend/frontend-crm/src/api/financial/invoicesApi.ts`
+- `sokana-crm-frontend/frontend-crm/src/api/quickbooks/auth/invoice.ts`
+- `sokana-crm-frontend/frontend-crm/src/api/quickbooks/auth/customer.ts`
+- `sokana-crm-frontend/frontend-crm/src/features/InvoicesPage/InvoicesPage.tsx`
+- `backend/src/routes/invoiceRoutes.ts`
+- `backend/src/repositories/cloudSqlInvoiceRepository.ts`
+- `backend/src/controllers/quickbooksController.ts`
+- `backend/src/services/customer/getInvoiceableCustomers.ts`
+- `backend/src/services/invoice/createInvoice.ts`
+- `backend/src/services/invoice/createInvoiceInQuickBooks.ts`
+- `backend/src/services/invoice/persistInvoiceToSupabase.ts`
+
+### Contract Findings
+- Invoice list UI reads **Cloud SQL** via `GET /api/invoices` and tolerates `{ success: true, data: [...] }` (frontend normalizes wrapper/array).
+- Invoice creation UI posts to `POST /quickbooks/invoice` with `{ internalCustomerId, lineItems, dueDate, memo }` (cookies/credentials included).
+- Invoiceable customers list uses `GET /quickbooks/customers/invoiceable` and expects `{ id, qboCustomerId, name, email }[]` where `id` is the **Cloud SQL** client id.
+
+### Drift Risk
+- Backend invoice creation currently looks up `qbo_customer_id` from **Supabase** `customers`, which can drift from the Cloud SQL client list used by the UI.
+- Writing invoices into Supabase `invoices` causes Cloud SQL `GET /api/invoices` to miss newly created invoices, breaking ledger/reporting parity.
+
+### Required Compatibility
+- Keep `GET /api/invoices` response shape stable: `{ success: true, data: InvoiceRow[] }`.
+- Keep `GET /quickbooks/customers/invoiceable` stable and Cloud SQL-based.
+- `POST /quickbooks/invoice` must create invoice in QBO, then **upsert** a Cloud SQL `phi_invoices` ledger row keyed to Cloud SQL `phi_clients.id`.
+
+### Action
+- [x] Context updated
+- [ ] Implementation started
+
 ## Preflight Update 2026-05-11 (Expanded primary insurance / Medicaid parity)
 
 - **Gate Result**: `run_preflight`
@@ -786,6 +826,15 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 - **Required Compatibility**: CRM sends `home_type` as string array; counts `0`–`5+`; validate counts on intake; migration `add_phi_clients_home_intake_fields.sql` before manual QA.
 - **Context Updated**: yes | **Implementation**: yes
 
+## Preflight Update 2026-05-24 (birth place + intake payment verification)
+
+- **Gate Result**: `run_preflight` | **Handoffs**: `no_open_handoff_tasks`
+- **Task Intent**: Verify May 2026 prompt — `birth_location` + `birth_hospital` validation/persistence; four intake payment labels; reject Medicaid on public `requestSubmission` only.
+- **Files Scanned**: `requestSubmissionDto.ts`, `RequestFormService.ts`, `requestFormRepository.ts`, `clientController.ts`, `clientBillingEndpoint.test.ts`; frontend `useRequestForm.ts`, `dummyTestLead.ts`.
+- **Contract Findings**: `validateIntakeBirthPlace` + `parseIntakePaymentMethod` in intake DTO; `newForm` applies both; INSERT binds `birth_location`/`birth_hospital` (params 9–10); staff billing still accepts Medicaid via client APIs.
+- **Definition of done**: all checklist items satisfied; PHI DB has `birth_location` + `birth_hospital` columns.
+- **Context Updated**: yes | **Implementation**: verified (no mapper changes required)
+
 ## Preflight Update 2026-05-12 (request submission tests + intake DTO)
 
 - **Gate Result**: `run_preflight`
@@ -816,3 +865,179 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 - **Action**:
   - [x] Context updated
   - [x] Implementation started
+
+## Preflight Update 2026-05-26
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Fix production `GET /clients/team/all` UNION column mismatch (`listTeamMembers`).
+
+- **Repos Scanned**: both
+
+- **Files Scanned**:
+  - `sokana-crm-frontend/frontend-crm/src/features/teams/teams.tsx` (`fetch` → `/clients/team/all`, raw array)
+  - `backend/src/services/cloudSqlTeamService.ts` (`listTeamMembers` UNION)
+  - `backend/src/controllers/userController.ts`
+
+- **Contract Findings**:
+  - Frontend expects a JSON array of team members with `role` in `admin` | `doula`; errors surface as toast + console.
+
+- **Drift Risk**: Admin UNION branch must pad the same nullable columns as doulas (`languages_other_than_english` before `role`).
+
+- **Required Compatibility**: No response-shape change; fix SQL only.
+
+- **Context Updated**: yes
+
+- **Implementation Started After Gate**: yes
+
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started
+
+## Preflight Update 2026-07-08
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Backend-owned portal eligibility, onboarding readiness persistence, and client API readiness fields.
+- **Repos Scanned**: backend + frontend-crm
+- **Files Scanned**:
+  - `frontend-crm/src/api/dto/client.dto.ts`
+  - `frontend-crm/src/api/mappers/client.mapper.ts`
+  - `frontend-crm/src/features/clients/utils/portalStatus.ts`
+  - `frontend-crm/src/features/clients/Clients.tsx`
+  - `frontend-crm/docs/FAMILY_ONBOARDING_SOP.md`
+  - `backend/src/controllers/clientController.ts`
+  - `backend/src/dto/response/ClientDetailDTO.ts`
+  - `backend/src/dto/response/ClientListItemDTO.ts`
+
+- **Contract Findings**:
+  - Frontend already prefers backend `is_eligible` in `portalStatus.ts` but still has client-side contract/payment fallbacks.
+  - Frontend DTO placeholders include `payment_authorization_status`; backend now returns `payment_authorization_required`, `payment_authorization_satisfied`, `card_on_file`, `portal_blockers`, `primary_portal_blocker`, and `allowed_actions`. Historical verification-invoice metadata remains deprecated and reconciliation-only.
+  - Client mappers currently map only `is_eligible`; new readiness fields are additive.
+
+- **Drift Risk**:
+  - Local frontend blocker logic can disagree with backend `allowed_actions`.
+
+- **Required Compatibility**:
+  - Preserve `is_eligible` on list/detail responses.
+  - Additive snake_case readiness fields on GET `/clients` and GET `/clients/:id`.
+  - Keep legacy `qbo_customer_id` while also exposing `qb_customer_id`.
+
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started
+
+## Preflight Update 2026-07-08 (portal readiness API test)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Run portal readiness API oracle with staff test admin `info@techluminateacademy.com`.
+- **Handoff inbox**: `no_open_handoff_tasks`
+- **Repos Scanned**: backend only (API verification)
+- **Files Scanned**: `docs/PORTAL_READINESS_TEST_PLAN.md`, `scripts/test/.env.test-readiness.example`, `.env`
+- **Compatibility**: No API contract change; staff JWT login confirmed for GET `/api/clients/:id` readiness fields.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-10 (Cloud Run gradual cutover probe)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Probe terminal access to Cloud Run private API before gradual env-flag cutover from Vercel.
+- **Handoff inbox**: `no_open_handoff_tasks`
+- **Repos Scanned**: backend docs only (no frontend contract change yet)
+- **Files Scanned**:
+  - `docs/dev-cloudrun-auth.md`
+  - `docs/CLOUD_SQL_LOCAL_TEST.md`
+  - `docs/PRODUCTION_CLOUD_SQL_VERCEL.md`
+- **Contract Findings**:
+  - App auth remains Supabase JWT (cookie/`Authorization`/`X-Session-Token`).
+  - Cloud Run service URL is IAM-gated; terminal/scripts need a Google identity token in addition to Supabase session for protected invoke.
+- **Drift Risk**: None yet — no env-flag routing implemented.
+- **Compatibility assumptions**: Keep frontend `NEXT_PUBLIC_API_URL` / Vercel base URL unchanged until explicit cutover flag; Supabase login flow unchanged.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: no (access probe only)
+
+## Preflight Update 2026-08-10 (Cloud Run Cloud SQL SSL/password fix)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Fix Cloud Run Cloud SQL SSL and password so `/clients` can read sokana_private.
+- **Handoff inbox**: `no_open_handoff_tasks`
+- **Repos Scanned**: backend
+- **Files Scanned**: `src/db/cloudSqlPool.ts`, Cloud Run service env/secrets, `deploy.sh`
+- **Findings**:
+  - Unix socket `/cloudsql/...` must use `CLOUD_SQL_SSLMODE=disable`; prior pool code forced SSL when `NODE_ENV=production`.
+  - `DB_PASSWORD` secret v1 mismatched local `CLOUD_SQL_PASSWORD`; synced to secret v2 and bound as `latest`.
+- **Compatibility**: No frontend contract change; Supabase remains app auth.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-10 (frontend Cloud Run cutover flag)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Gradual frontend cutover to Cloud Run API for local login test.
+- **Handoff inbox**: `no_open_handoff_tasks`
+- **Repos Scanned**: frontend-crm + backend CORS
+- **Files Scanned**:
+  - `frontend-crm/src/config/env.ts`
+  - `frontend-crm/src/api/http.ts`
+  - `frontend-crm/src/common/contexts/UserContext.tsx`
+  - `frontend-crm/.env`
+  - `backend/src/config/env.ts` (getAllowedOrigins)
+- **Contract Findings**:
+  - Frontend uses `VITE_USE_CLOUD_RUN=true` → `VITE_CLOUD_RUN_API_URL` for API base.
+  - Auth remains cookie mode (`credentials: include`) against Cloud Run; Cloud Run must allow `http://localhost:3001` in `FRONTEND_ORIGIN`.
+- **Drift Risk**: Missing CORS origin causes browser login "Failed to fetch".
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-10 (team members empty on Cloud Run cutover)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Fix Team page empty list after Cloud Run cutover.
+- **Handoff inbox**: `no_open_handoff_tasks`
+- **Repos Scanned**: frontend-crm + backend logs
+- **Files Scanned**: `frontend-crm/src/features/teams/teams.tsx`, local backend logs (`/clients/team/all` 401)
+- **Findings**: Team page hard-coded `VITE_APP_BACKEND_URL` (localhost:5050), bypassing `VITE_USE_CLOUD_RUN` / `apiBaseUrl`. Cookie from Cloud Run login was not sent to localhost → 401 empty UI.
+- **Fix**: Use `buildUrl` + `fetchWithAuth` for team list/update/delete/invite.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-10 (hard-coded backend URL sweep)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Replace hard-coded `VITE_APP_BACKEND_URL` fetches with `apiBaseUrl` / `buildUrl` / `fetchWithAuth` so Cloud Run cutover flag works app-wide.
+- **Handoff inbox**: `no_open_handoff_tasks`
+- **Files changed (prod)**: teams + adminService, doulaApi, notes, doulaAssignments, signNowService, qb status, client utils, hooks, Clients, auth, contracts, hours, request, integrations, ClientProfileTab.
+- **Left intentional**: `env.ts` resolver, type defs, error strings, test stubs.
+- **Context Updated**: yes
+
+## Preflight Update 2026-08-10 (backend test run)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Run backend unit/build checks after Cloud Run cutover work.
+- **Handoff inbox**: `no_open_handoff_tasks`
+- **Repos Scanned**: backend only
+- **Files Scanned**: `package.json` scripts
+- **Compatibility**: No API/frontend contract changes in this verification pass.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes (test execution only)
+
+## Preflight Update 2026-08-10 (Cloud Run FE→API cutover wiring)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Wire Cloud Run frontend login to Cloud Run API via CORS + frontend redeploy.
+- **Handoff inbox**: `no_open_handoff_tasks`
+- **Actions**:
+  - API `FRONTEND_ORIGIN` now includes Cloud Run FE URLs + localhost + Vercel.
+  - Triggered frontend Cloud Build (bake `VITE_APP_BACKEND_URL` = Cloud Run API). Build SUCCESS.
+- **Context Updated**: yes

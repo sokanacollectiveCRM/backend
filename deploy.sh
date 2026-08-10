@@ -26,4 +26,4 @@ gcloud run deploy "${SERVICE}" \
   --region "${REGION}" \
   --image "${IMAGE}" \
   --platform managed \
-  --allow-unauthenticated=false
+  --no-allow-unauthenticated
