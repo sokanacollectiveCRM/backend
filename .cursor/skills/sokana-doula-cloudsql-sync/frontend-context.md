@@ -1041,3 +1041,84 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
   - API `FRONTEND_ORIGIN` now includes Cloud Run FE URLs + localhost + Vercel.
   - Triggered frontend Cloud Build (bake `VITE_APP_BACKEND_URL` = Cloud Run API). Build SUCCESS.
 - **Context Updated**: yes
+
+## Preflight Update 2026-08-10 (contract templates locate + download)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Locate contract templates in Supabase storage / local repo; download existing templates locally.
+- **Handoff inbox**: `no_open_handoff_tasks`
+- **Repos Scanned**: both
+- **Files Scanned**: `frontend-crm/src/common/hooks/contracts/useTemplates.ts`, `frontend-crm/src/common/types/template.ts`, backend `supabaseContractService`, storage bucket `contract-templates`
+- **Findings**:
+  - Supabase table `public.contract_templates` missing (PGRST205).
+  - Bucket `contract-templates` has 2 DOCX templates (Postpartum + Labor Support).
+  - No source template DOCX/PDF in repo; only generated outputs under `generated/`.
+  - Downloaded both to `backend/templates/`.
+- **FE contract expect**: `GET /contracts/templates` → `{ id, name, depositFee, serviceFee, storagePath }[]` (currently 404 on API).
+- **Context Updated**: yes
+- **Implementation Started After Gate**: download only (no route wiring yet)
+
+## Preflight Update 2026-08-10 (contracts templates storage list)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Load existing Supabase storage DOCX templates into Contracts UI Templates panel via storage-only listing.
+- **Handoff inbox**: `no_open_handoff_tasks`
+- **Repos Scanned**: both
+- **Files Scanned**: `frontend-crm/src/common/hooks/contracts/useTemplates.ts`, `PdfPreview.tsx`, `NewTemplateDialog.tsx`, `EditTemplateDialog.tsx`, `Viewport.tsx`, backend `supabaseContractService.ts`, `server.ts`
+- **Compatibility assumptions**:
+  - FE calls `GET /contracts/templates` expecting `{ id, name, depositFee, serviceFee, storagePath }[]`.
+  - Storage-only mode returns depositFee/serviceFee as 0 (no `contract_templates` table).
+  - Template display name is storage filename without extension.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-10 (templates empty UI auth/cache)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Fix Contracts Templates panel empty despite storage templates existing.
+- **Handoff inbox**: `no_open_handoff_tasks`
+- **Root cause**: GET /contracts/templates returned 304 under React Strict Mode double-fetch; FE treated !ok and cleared list. Cookie-only auth also intermittent after Cloud Run cutover.
+- **Fix**: Bearer+cookie in getRequestAuth; cache:no-store on template fetch; Cache-Control:no-store on route; show error in Viewport.
+- **Context Updated**: yes
+
+## Preflight Update 2026-08-10 (contracts preview + layout)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Fix template preview on select + widen Contracts templates panel.
+- **Handoff inbox**: `no_open_handoff_tasks`
+- **Repos Scanned**: both
+- **Files Scanned/Changed**: `PdfPreview.tsx` (Office Online embed of public DOCX), `Viewport.tsx`, `TemplateItem.tsx`
+- **Compatibility**: Preview no longer depends on POST `/contracts/templates/generate` + CloudConvert; uses public Supabase storage URL + Office viewer.
+- **Context Updated**: yes
+
+## Preflight Update 2026-08-10 (Customers QB not-connected UX)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Replace raw HTML 404 on Customers page with friendly “connect QuickBooks” empty state.
+- **Handoff inbox**: `no_open_handoff_tasks`
+- **Files**: `createCustomer.tsx`, `api/quickbooks/auth/customer.ts`
+- **Behavior**: Check `/quickbooks/status` first; if disconnected or invoiceable route missing, show CTA to `/integrations/quickbooks` instead of error HTML.
+- **Context Updated**: yes
+
+## Preflight Update 2026-08-10 (ship trimmed PRs to main)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Ship contracts templates API + FE Contracts/Customers UX enhancements to main via trimmed PRs (exclude docs, binaries, local-only churn).
+- **Handoff inbox**: `no_open_handoff_tasks`
+- **Repos Scanned**: both
+- **Files Scanned (shipping)**:
+  - Backend: `contractTemplateRoutes.ts`, `server.ts`, `supabaseContractService.ts/.js`, `contractController.ts`, `authorizeRoles.ts`
+  - Frontend: `http.ts`, `useTemplates.ts`, `Viewport.tsx`, `PdfPreview.tsx`, `ContractRoutes.tsx`, `sidebar-data.ts(+test)`, `createCustomer.tsx`, `quickbooks/auth/customer.ts`
+- **Excluded**: `templates/*.docx`, architecture docs, portal-readiness doc/script edits, `.env`
+- **Compatibility**:
+  - FE expects `GET /contracts/templates` → template array; BE lists Supabase storage (+ filename fallback).
+  - Preview uses public storage URL + Office Online embed (no generate/CloudConvert required).
+  - Customers page soft-fails when QB disconnected / invoiceable route 404.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes (PR ship)

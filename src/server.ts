@@ -20,6 +20,7 @@ import doulasRoutes from './routes/doulas';
 import clientRoutes from './routes/clientRoutes';
 import doulaRoutes from './routes/doulaRoutes';
 import contractRoutes from './routes/contractRoutes';
+import contractTemplateRoutes from './routes/contractTemplateRoutes';
 import contractSigningRoutes from './routes/contractSigningRoutes';
 import paymentRoutes from './routes/paymentRoutes';
 import invoiceRoutes from './routes/invoiceRoutes';
@@ -103,6 +104,9 @@ if (FEATURE_QUICKBOOKS) {
 
 app.use('/users', asMiddleware(userRoutes));
 app.use('/api/contract', asMiddleware(contractRoutes));
+// Frontend Contracts page: GET/POST /contracts/templates (Supabase storage)
+app.use('/contracts', asMiddleware(contractTemplateRoutes));
+app.use('/api/contracts', asMiddleware(contractTemplateRoutes));
 app.use('/api/contract-signing', asMiddleware(contractSigningRoutes));
 app.use('/api/dashboard', asMiddleware(dashboardRoutes));
 app.use('/api/pdf-contract', asMiddleware(pdfContractRoutes));

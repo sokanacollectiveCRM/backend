@@ -18,7 +18,9 @@ const authorizeRoles = async (
       return   // ← stop here!
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    const role = String(req.user.role || '').toLowerCase()
+    const allowed = allowedRoles.map((r) => String(r).toLowerCase())
+    if (!allowed.includes(role)) {
       res.status(403).json({ error: 'Forbidden: Insufficient permissions' })
       return   // ← and stop here!
     }

@@ -90,45 +90,83 @@ class SupabaseContractService {
     const filename = `contract_${contractId}.pdf`;
     return { buffer, filename };
   }
-  async getAllTemplates() {
-    const { data, error } = await this.supabaseClient
-      .from('contract_templates')
-      .select('*');
-    if (error || !data) {
-      console.error('Error fetching templates:', error);
-      throw new Error('Could not fetch contract templates');
+  isTemplateFile(name) {
+    const lower = name.toLowerCase();
+    return (
+      !name.startsWith('.') &&
+      name !== '.emptyFolderPlaceholder' &&
+      (lower.endsWith('.docx') || lower.endsWith('.doc') || lower.endsWith('.pdf'))
+    );
+  }
+  displayNameFromStoragePath(storagePath) {
+    return storagePath.replace(/\.(docx|doc|pdf)$/i, '');
+  }
+  resolveStoragePath(templateName) {
+    if (/\.(docx|doc|pdf)$/i.test(templateName)) {
+      return templateName;
     }
-    return data.map(
-      (row) =>
+    return `${templateName}.docx`;
+  }
+  templatesFromNames(names) {
+    return names.map(
+      (storagePath) =>
         new Template_1.Template(
-          row.id,
-          row.title,
-          parseFloat(row.deposit),
-          parseFloat(row.fee),
-          row.storagePath
+          storagePath,
+          this.displayNameFromStoragePath(storagePath),
+          0,
+          0,
+          storagePath
         )
     );
   }
+  async getAllTemplates() {
+    const known = [
+      'Agreement for Postpartum Doula Services.docx',
+      'Labor Support Agreement for Service.docx',
+    ];
+    const { data, error } = await this.supabaseClient.storage
+      .from('contract-templates')
+      .list('', {
+        limit: 200,
+        sortBy: { column: 'name', order: 'asc' },
+      });
+    if (error) {
+      console.error('Error listing contract templates from storage:', error);
+      return this.templatesFromNames(known);
+    }
+    const listed = (data ?? [])
+      .filter((file) => this.isTemplateFile(file.name))
+      .map(
+        (file) =>
+          new Template_1.Template(
+            file.id ?? file.name,
+            this.displayNameFromStoragePath(file.name),
+            0,
+            0,
+            file.name
+          )
+      );
+    if (listed.length > 0) return listed;
+    console.warn(
+      'Storage list returned 0 templates; using known contract-templates filenames'
+    );
+    return this.templatesFromNames(known);
+  }
   async deleteTemplate(templateName) {
-    const { error: tableError } = await this.supabaseClient
-      .from('contract_templates')
-      .delete()
-      .eq('title', templateName)
-      .select()
-      .single();
-    if (tableError)
-      throw new Error(`Failed to delete template: ${tableError.message}`);
+    const filePath = this.resolveStoragePath(templateName);
     const { error: storageError } = await this.supabaseClient.storage
       .from('contract-templates')
-      .remove([`${templateName}.docx`]);
+      .remove([filePath]);
     if (storageError)
       throw new Error(
-        `Failed to delete template from stroage: ${storageError.message}`
+        `Failed to delete template from storage: ${storageError.message}`
       );
     return true;
   }
   async uploadTemplate(file, name, deposit, fee) {
-    const filePath = name.endsWith('.docx') ? name : `${name}.docx`;
+    void deposit;
+    void fee;
+    const filePath = this.resolveStoragePath(name);
     if (file) {
       const { error: uploadError } = await this.supabaseClient.storage
         .from('contract-templates')
@@ -140,38 +178,18 @@ class SupabaseContractService {
         throw new Error('failed to upload new template');
       }
     }
-    const { error: tableError } = await this.supabaseClient
-      .from('contract_templates')
-      .upsert([
-        {
-          title: name,
-          deposit: deposit,
-          fee: fee,
-          storage_path: filePath,
-        },
-      ]);
-    if (tableError) {
-      console.error('Table insert error:', tableError);
-      throw new Error('Failed to insert template metadata');
-    }
     return true;
   }
   async getTemplate(templateName) {
-    const filePath = templateName.endsWith('.docx')
-      ? templateName
-      : `${templateName}.docx`;
-    const { data } = this.supabaseClient.storage
+    const filePath = this.resolveStoragePath(templateName);
+    const { data, error } = await this.supabaseClient.storage
       .from('contract-templates')
-      .getPublicUrl(filePath);
-    const publicUrl = data.publicUrl;
-    if (!publicUrl)
-      throw new errors_1.NotFoundError('Template public URL not generated');
-    const res = await fetch(publicUrl);
-    if (!res.ok)
+      .download(filePath);
+    if (error || !data)
       throw new errors_1.NotFoundError(
-        `Failed to fetch template: ${res.statusText}`
+        `Failed to fetch template: ${(error && error.message) || 'not found'}`
       );
-    const buffer = Buffer.from(await res.arrayBuffer());
+    const buffer = Buffer.from(await data.arrayBuffer());
     return buffer;
   }
   async generateTemplate(buffer, fields) {
@@ -180,8 +198,9 @@ class SupabaseContractService {
     const doc = new docxtemplater_1.default(zip, {
       paragraphLoop: true,
       linebreaks: true,
+      nullGetter: () => '',
     });
-    doc.render(fields);
+    doc.render(fields ?? {});
     const filled = doc.getZip().generate({
       type: 'nodebuffer',
       mimeType:
@@ -192,3 +211,4 @@ class SupabaseContractService {
   }
 }
 exports.SupabaseContractService = SupabaseContractService;
+

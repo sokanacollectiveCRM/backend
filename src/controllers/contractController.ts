@@ -110,10 +110,11 @@ export class ContractController {
     req: Request,
     res: Response
   ): Promise<void> {
-    const name = req.params.name;
+    const name = decodeURIComponent(req.params.name);
 
     try {
       const result = await this.contractUseCase.deleteTemplate(name);
+      void result;
       res.status(204).send();
     }
     catch (delError) {
@@ -137,12 +138,18 @@ export class ContractController {
     req: UpdateRequest,
     res: Response
   ): Promise<void> {
-    const name = req.params.name;
+    const name = decodeURIComponent(req.params.name);
     const file = req.file;
     const { deposit, fee } = req.body;
 
     try {
-      const result = await this.contractUseCase.updateTemplate(name, deposit, fee, file);
+      const result = await this.contractUseCase.updateTemplate(
+        name,
+        Number(deposit),
+        Number(fee),
+        file as any
+      );
+      void result;
       res.status(204).send();
     }
     catch (delError) {
@@ -173,7 +180,7 @@ export class ContractController {
       if (!file) throw new ValidationError('No file uploaded');
       if (!name) throw new ValidationError('No contract name specified');
   
-      await this.contractUseCase.uploadTemplate(file, name, deposit, fee);
+      await this.contractUseCase.uploadTemplate(file, name, Number(deposit), Number(fee));
   
       res.status(201).json({ success: true });
     } 
