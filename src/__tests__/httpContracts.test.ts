@@ -1,5 +1,6 @@
 import express from 'express';
 import request from 'supertest';
+import { z } from 'zod';
 
 import {
   authErrorBody,
@@ -17,11 +18,13 @@ import {
   resetRouteDeprecationCountersForTests,
   setDeprecationHeaders,
 } from '../security/routeDeprecationTelemetry';
-import { z } from 'zod';
 
 describe('PR 7 canonical HTTP envelope', () => {
   it('builds success and error envelopes with stable codes', () => {
-    expect(canonicalOk({ id: '1' })).toEqual({ success: true, data: { id: '1' } });
+    expect(canonicalOk({ id: '1' })).toEqual({
+      success: true,
+      data: { id: '1' },
+    });
     expect(canonicalError('Nope', ApiErrorCode.FORBIDDEN)).toEqual({
       success: false,
       error: 'Nope',
@@ -30,9 +33,11 @@ describe('PR 7 canonical HTTP envelope', () => {
   });
 
   it('keeps auth-compatible error strings and adds codes', () => {
-    expect(authErrorBody('No session token provided', ApiErrorCode.UNAUTHENTICATED, {
-      hint: 'Provide Cookie or X-Session-Token header',
-    })).toEqual({
+    expect(
+      authErrorBody('No session token provided', ApiErrorCode.UNAUTHENTICATED, {
+        hint: 'Provide Cookie or X-Session-Token header',
+      })
+    ).toEqual({
       error: 'No session token provided',
       code: 'UNAUTHENTICATED',
       hint: 'Provide Cookie or X-Session-Token header',
@@ -40,7 +45,9 @@ describe('PR 7 canonical HTTP envelope', () => {
   });
 
   it('validation body always includes string error for FE parsers', () => {
-    const body = validationErrorBody('Valid email is required', [{ path: 'email' }]);
+    const body = validationErrorBody('Valid email is required', [
+      { path: 'email' },
+    ]);
     expect(body.success).toBe(false);
     expect(body.code).toBe('VALIDATION_ERROR');
     expect(typeof body.error).toBe('string');
@@ -55,7 +62,10 @@ describe('PR 7 Zod validateRequest', () => {
       res.status(200).json({ message: 'Login successful' });
     });
 
-    const res = await request(app).post('/auth/login').send({ email: 'not-an-email' }).expect(400);
+    const res = await request(app)
+      .post('/auth/login')
+      .send({ email: 'not-an-email' })
+      .expect(400);
     expect(res.body.success).toBe(false);
     expect(res.body.code).toBe('VALIDATION_ERROR');
     expect(res.body.error).toMatch(/email|password|required/i);
@@ -92,11 +102,13 @@ describe('PR 7 Zod validateRequest', () => {
       }),
       (_req, res) => {
         res.status(200).json({ ok: true });
-      },
+      }
     );
 
     await request(app).get('/items/not-a-uuid').expect(400);
-    await request(app).get('/items/11111111-1111-1111-1111-111111111111').expect(200);
+    await request(app)
+      .get('/items/11111111-1111-1111-1111-111111111111')
+      .expect(200);
   });
 });
 
@@ -112,7 +124,7 @@ describe('PR 7 alias deprecation', () => {
       deprecateAlias({ aliasKey: 'alias.login', successorPath: '/auth/login' }),
       (_req, res) => {
         res.status(200).json({ ok: true });
-      },
+      }
     );
 
     const res = await request(app).post('/login').expect(200);

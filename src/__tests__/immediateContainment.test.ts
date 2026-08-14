@@ -1,6 +1,6 @@
+import express from 'express';
 import fs from 'fs';
 import path from 'path';
-import express from 'express';
 import request from 'supertest';
 
 import { logger } from '../common/utils/logger';
@@ -27,7 +27,11 @@ const SENSITIVE = [
 
 function walkSourceFiles(dir: string, files: string[] = []): string[] {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === 'node_modules' || entry.name === '__tests__' || entry.name === 'dist') {
+    if (
+      entry.name === 'node_modules' ||
+      entry.name === '__tests__' ||
+      entry.name === 'dist'
+    ) {
       continue;
     }
     const full = path.join(dir, entry.name);
@@ -45,7 +49,9 @@ describe('PR3 immediate containment', () => {
     const srcRoot = path.join(__dirname, '..');
     const offenders = walkSourceFiles(srcRoot).filter((file) => {
       const content = fs.readFileSync(file, 'utf8');
-      return content.includes('127.0.0.1:7707') || content.includes('localhost:7707');
+      return (
+        content.includes('127.0.0.1:7707') || content.includes('localhost:7707')
+      );
     });
     expect(offenders).toEqual([]);
   });
@@ -68,7 +74,11 @@ describe('PR3 immediate containment', () => {
       stack: 'Error: secret-stack\n    at leak',
       response: {
         status: 502,
-        data: { errors: [{ message: 'provider-raw-payload', field: 'signnow-private-field' }] },
+        data: {
+          errors: [
+            { message: 'provider-raw-payload', field: 'signnow-private-field' },
+          ],
+        },
       },
       config: {
         headers: { Authorization: 'Bearer authorization-secret' },
@@ -76,7 +86,12 @@ describe('PR3 immediate containment', () => {
       },
     };
 
-    const safe = toSafeProviderError('signnow', 'send_invite', error, 'corr_PR3');
+    const safe = toSafeProviderError(
+      'signnow',
+      'send_invite',
+      error,
+      'corr_PR3'
+    );
     const output = JSON.stringify(safe);
     SENSITIVE.forEach((value) => expect(output).not.toContain(value));
     expect(output).not.toContain('secret-stack');
@@ -106,7 +121,10 @@ describe('PR3 immediate containment', () => {
       const err = new Error('SQL detail: relation phi_clients does not exist');
       (err as Error & { stack?: string }).stack =
         'Error: SQL detail\n    at Controllers.leak (/app/src/controllers/clientController.ts:1:1)';
-      logger.error(toSafeProviderError('clients', 'request', err), 'unexpected');
+      logger.error(
+        toSafeProviderError('clients', 'request', err),
+        'unexpected'
+      );
       res.status(500).json(toSafeClientErrorBody());
     });
 
@@ -116,12 +134,16 @@ describe('PR3 immediate containment', () => {
       error: SAFE_INTERNAL_ERROR_MESSAGE,
       code: 'INTERNAL_ERROR',
     });
-    expect(JSON.stringify(response.body)).not.toMatch(/stack|phi_clients|Controllers\.leak/i);
+    expect(JSON.stringify(response.body)).not.toMatch(
+      /stack|phi_clients|Controllers\.leak/i
+    );
   });
 
   it('HTTP request logging still emits safe operational context', async () => {
     const entries: unknown[][] = [];
-    const fakeLogger = { info: (...args: unknown[]) => entries.push(args) } as any;
+    const fakeLogger = {
+      info: (...args: unknown[]) => entries.push(args),
+    } as any;
     const app = express();
     app.use(express.json());
     app.use(createSafeRequestLogger(fakeLogger));

@@ -1,15 +1,7 @@
-import { ValidationError } from "../domains/errors";
-import {
-  parseIntakeReferral,
-} from '../constants/referralSource';
-import { RequestForm } from '../entities/RequestForm';
-import { RequestFormRepository } from "../repositories/requestFormRepository";
-import {
-    RequestFormData,
-    RequestFormResponse,
-    RequestStatus
-} from "../types";
 import { logger } from '../common/utils/logger';
+import { parseIntakeReferral } from '../constants/referralSource';
+import { ValidationError } from '../domains/errors';
+import { RequestForm } from '../entities/RequestForm';
 import {
   LegacyRequestFormRepositoryAdapter,
   diffIntakeShadowSlices,
@@ -18,6 +10,8 @@ import {
   pickIntakeShadowCompareSlice,
   submitPublicRequestForm,
 } from '../features/intake';
+import { RequestFormRepository } from '../repositories/requestFormRepository';
+import { RequestFormData, RequestFormResponse, RequestStatus } from '../types';
 
 function intakeUseFeaturePackage(): boolean {
   const raw = process.env.INTAKE_USE_FEATURE_PACKAGE;
@@ -35,58 +29,77 @@ export class RequestFormService {
 
   constructor(requestFormRepository: RequestFormRepository) {
     this.repository = requestFormRepository;
-    this.intakeAdapter = new LegacyRequestFormRepositoryAdapter(requestFormRepository);
+    this.intakeAdapter = new LegacyRequestFormRepositoryAdapter(
+      requestFormRepository
+    );
   }
 
   async createRequest(formData: RequestFormData): Promise<RequestFormResponse> {
     // Validate required fields
     if (!formData.firstname || !formData.lastname) {
-      throw new ValidationError("Missing required fields: first name and last name");
+      throw new ValidationError(
+        'Missing required fields: first name and last name'
+      );
     }
 
     if (!formData.service_needed) {
-      throw new ValidationError("Missing required field: service_needed");
+      throw new ValidationError('Missing required field: service_needed');
     }
 
     if (!formData.email || !formData.email.includes('@')) {
-      throw new ValidationError("Valid email is required");
+      throw new ValidationError('Valid email is required');
     }
 
     if (!formData.phone_number) {
-      throw new ValidationError("Phone number is required");
+      throw new ValidationError('Phone number is required');
     }
 
-    if (!formData.address || !formData.city || !formData.state || !formData.zip_code) {
-      throw new ValidationError("Complete address is required");
+    if (
+      !formData.address ||
+      !formData.city ||
+      !formData.state ||
+      !formData.zip_code
+    ) {
+      throw new ValidationError('Complete address is required');
     }
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
-      throw new ValidationError("Invalid email format");
+      throw new ValidationError('Invalid email format');
     }
 
     // Validate phone number format (basic validation)
     const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
     if (!phoneRegex.test(formData.phone_number.replace(/[\s\-\(\)]/g, ''))) {
-      throw new ValidationError("Invalid phone number format");
+      throw new ValidationError('Invalid phone number format');
     }
 
     // Validate zip code format
     const zipRegex = /^\d{5}(-\d{4})?$/;
     if (!zipRegex.test(formData.zip_code)) {
-      throw new ValidationError("Invalid zip code format");
+      throw new ValidationError('Invalid zip code format');
     }
 
-    const referralTouched = ['referral_source', 'referral_name', 'referral_email', 'referral_source_other'].some(
+    const referralTouched = [
+      'referral_source',
+      'referral_name',
+      'referral_email',
+      'referral_source_other',
+    ].some(
       (k) => (formData as unknown as Record<string, unknown>)[k] !== undefined
     );
     if (referralTouched) {
-      const r = parseIntakeReferral(formData as unknown as Record<string, unknown>);
+      const r = parseIntakeReferral(
+        formData as unknown as Record<string, unknown>
+      );
       (formData as RequestFormData).referral_source = r.referral_source;
-      (formData as RequestFormData).referral_name = r.referral_name ?? undefined;
-      (formData as RequestFormData).referral_email = r.referral_email ?? undefined;
-      (formData as RequestFormData).referral_source_other = r.referral_source_other ?? undefined;
+      (formData as RequestFormData).referral_name =
+        r.referral_name ?? undefined;
+      (formData as RequestFormData).referral_email =
+        r.referral_email ?? undefined;
+      (formData as RequestFormData).referral_source_other =
+        r.referral_source_other ?? undefined;
     }
 
     // Save to repository (no userId)
@@ -97,7 +110,10 @@ export class RequestFormService {
     return await this.repository.getUserRequests(userId);
   }
 
-  async getRequestById(requestId: string, userId: string): Promise<RequestFormResponse | null> {
+  async getRequestById(
+    requestId: string,
+    userId: string
+  ): Promise<RequestFormResponse | null> {
     return await this.repository.getRequestById(requestId, userId);
   }
 
@@ -105,15 +121,20 @@ export class RequestFormService {
     return await this.repository.getAllRequests();
   }
 
-  async getRequestByIdAdmin(requestId: string): Promise<RequestFormResponse | null> {
+  async getRequestByIdAdmin(
+    requestId: string
+  ): Promise<RequestFormResponse | null> {
     return await this.repository.getRequestByIdAdmin(requestId);
   }
 
-  async updateRequestStatus(requestId: string, status: RequestStatus): Promise<RequestFormResponse> {
+  async updateRequestStatus(
+    requestId: string,
+    status: RequestStatus
+  ): Promise<RequestFormResponse> {
     // Validate status
     const validStatuses = Object.values(RequestStatus);
     if (!validStatuses.includes(status)) {
-      throw new ValidationError("Invalid status value");
+      throw new ValidationError('Invalid status value');
     }
 
     return await this.repository.updateRequestStatus(requestId, status);
@@ -189,7 +210,7 @@ export class RequestFormService {
               home_youth_count: normalized.home_youth_count,
               has_secondary_insurance: normalized.has_secondary_insurance,
               service_needed: viaUseCase.service_needed,
-            } as any),
+            } as any)
           );
 
           logger.info(
@@ -200,16 +221,19 @@ export class RequestFormService {
               diffKeys: diffs,
               useFeaturePackage: intakeUseFeaturePackage(),
             },
-            'Intake shadow compare completed',
+            'Intake shadow compare completed'
           );
         } catch (shadowError) {
           logger.warn(
             {
               service: 'intake',
               operation: 'shadow_compare',
-              errorCode: shadowError instanceof Error ? shadowError.name : 'SHADOW_FAILURE',
+              errorCode:
+                shadowError instanceof Error
+                  ? shadowError.name
+                  : 'SHADOW_FAILURE',
             },
-            'Intake shadow compare failed',
+            'Intake shadow compare failed'
           );
         }
       }
@@ -221,7 +245,7 @@ export class RequestFormService {
       const response = await this.repository.saveData(normalized);
       return mapIntakeResponseToRequestForm(response);
     } catch (error) {
-      console.error("Error in newForm:", error);
+      console.error('Error in newForm:', error);
       throw error;
     }
   }

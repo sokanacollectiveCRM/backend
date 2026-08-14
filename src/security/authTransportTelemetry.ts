@@ -2,7 +2,6 @@
  * Auth transport telemetry (PR 6).
  * Counts only — never logs token values.
  */
-
 import { logger } from '../common/utils/logger';
 
 export type AuthTransportCounter =
@@ -17,7 +16,10 @@ export type AuthTransportCounter =
 
 const counters = new Map<AuthTransportCounter, number>();
 
-export function recordAuthTransport(event: AuthTransportCounter, context?: Record<string, unknown>): void {
+export function recordAuthTransport(
+  event: AuthTransportCounter,
+  context?: Record<string, unknown>
+): void {
   const next = (counters.get(event) ?? 0) + 1;
   counters.set(event, next);
   logger.info(
@@ -27,7 +29,7 @@ export function recordAuthTransport(event: AuthTransportCounter, context?: Recor
       count: next,
       ...(context || {}),
     },
-    'Auth transport telemetry',
+    'Auth transport telemetry'
   );
 }
 

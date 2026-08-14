@@ -1,4 +1,16 @@
 import {
+  MemoryOAuthStateStore,
+  OAUTH_STATE_TTL_MS,
+  consumeOAuthState,
+  createOAuthState,
+  resetOAuthStateStoreForTests,
+  setOAuthStateStoreForTests,
+} from '../security/oauthStateStore';
+import {
+  requireQuickBooksWebhookAuth,
+  requireSignNowWebhookAuth,
+} from '../security/webhookAuth';
+import {
   hmacSha256Base64,
   hmacSha256Hex,
   isWebhookTimestampFresh,
@@ -6,20 +18,11 @@ import {
   verifySignNowSignature,
 } from '../security/webhookCrypto';
 import {
-  MemoryOAuthStateStore,
-  createOAuthState,
-  consumeOAuthState,
-  setOAuthStateStoreForTests,
-  resetOAuthStateStoreForTests,
-  OAUTH_STATE_TTL_MS,
-} from '../security/oauthStateStore';
-import {
   MemoryWebhookEventStore,
   claimWebhookEvent,
-  setWebhookEventStoreForTests,
   resetWebhookEventStoreForTests,
+  setWebhookEventStoreForTests,
 } from '../security/webhookEventStore';
-import { requireQuickBooksWebhookAuth, requireSignNowWebhookAuth } from '../security/webhookAuth';
 
 describe('PR 5 webhook crypto', () => {
   const payload = Buffer.from('{"hello":"world"}', 'utf8');
@@ -33,18 +36,30 @@ describe('PR 5 webhook crypto', () => {
   });
 
   it('verifies SignNow base64 or hex HMAC signatures', () => {
-    expect(verifySignNowSignature(payload, hmacSha256Base64(secret, payload), secret)).toBe(true);
-    expect(verifySignNowSignature(payload, hmacSha256Hex(secret, payload), secret)).toBe(true);
+    expect(
+      verifySignNowSignature(payload, hmacSha256Base64(secret, payload), secret)
+    ).toBe(true);
+    expect(
+      verifySignNowSignature(payload, hmacSha256Hex(secret, payload), secret)
+    ).toBe(true);
     expect(verifySignNowSignature(payload, 'nope', secret)).toBe(false);
   });
 
   it('rejects stale intuit-created-time timestamps', () => {
     const now = Date.parse('2026-08-14T12:00:00.000Z');
-    expect(isWebhookTimestampFresh(new Date(now - 60_000).toISOString(), 15 * 60_000, now)).toBe(
-      true,
-    );
     expect(
-      isWebhookTimestampFresh(new Date(now - 20 * 60_000).toISOString(), 15 * 60_000, now),
+      isWebhookTimestampFresh(
+        new Date(now - 60_000).toISOString(),
+        15 * 60_000,
+        now
+      )
+    ).toBe(true);
+    expect(
+      isWebhookTimestampFresh(
+        new Date(now - 20 * 60_000).toISOString(),
+        15 * 60_000,
+        now
+      )
     ).toBe(false);
     expect(isWebhookTimestampFresh(undefined, 15 * 60_000, now)).toBe(true);
   });
@@ -61,11 +76,15 @@ describe('PR 5 webhook event idempotency', () => {
   });
 
   it('claims once and treats replays as duplicates', async () => {
-    expect(await claimWebhookEvent('signnow', 'signnow:doc-1:document.completed')).toBe('claimed');
-    expect(await claimWebhookEvent('signnow', 'signnow:doc-1:document.completed')).toBe(
-      'duplicate',
+    expect(
+      await claimWebhookEvent('signnow', 'signnow:doc-1:document.completed')
+    ).toBe('claimed');
+    expect(
+      await claimWebhookEvent('signnow', 'signnow:doc-1:document.completed')
+    ).toBe('duplicate');
+    expect(await claimWebhookEvent('quickbooks', 'qbo:invoice:99:paid')).toBe(
+      'claimed'
     );
-    expect(await claimWebhookEvent('quickbooks', 'qbo:invoice:99:paid')).toBe('claimed');
   });
 });
 
@@ -133,10 +152,13 @@ describe('PR 5 webhook auth middleware', () => {
 
   it('rejects SignNow callbacks with bad signatures when secret is set', () => {
     process.env.SIGNNOW_WEBHOOK_SECRET = 'sn-secret';
-    const body = Buffer.from('{"document_id":"d1","event":"document.completed"}');
+    const body = Buffer.from(
+      '{"document_id":"d1","event":"document.completed"}'
+    );
     const req: any = {
       rawBody: body,
-      get: (name: string) => (name.toLowerCase() === 'x-signnow-signature' ? 'invalid' : undefined),
+      get: (name: string) =>
+        name.toLowerCase() === 'x-signnow-signature' ? 'invalid' : undefined,
       headers: { 'x-signnow-signature': 'invalid' },
     };
     const res = createRes();
@@ -148,7 +170,9 @@ describe('PR 5 webhook auth middleware', () => {
 
   it('accepts SignNow callbacks with valid HMAC', () => {
     process.env.SIGNNOW_WEBHOOK_SECRET = 'sn-secret';
-    const body = Buffer.from('{"document_id":"d1","event":"document.completed"}');
+    const body = Buffer.from(
+      '{"document_id":"d1","event":"document.completed"}'
+    );
     const signature = hmacSha256Base64('sn-secret', body);
     const req: any = {
       rawBody: body,

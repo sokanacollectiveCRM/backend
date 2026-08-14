@@ -23,12 +23,16 @@ function parseCliArgs(argv: string[]): CliArgs {
     }
   }
 
-  const to = argMap.to || process.env.TEST_EMAIL_TO || process.env.EMAIL_USER || '';
+  const to =
+    argMap.to || process.env.TEST_EMAIL_TO || process.env.EMAIL_USER || '';
   const subject = argMap.subject || 'Sokana CRM Email Test';
-  const text = argMap.text || 'This is a test email sent from the Sokana backend script.';
+  const text =
+    argMap.text || 'This is a test email sent from the Sokana backend script.';
 
   if (!to) {
-    throw new Error('Missing recipient. Provide --to you@example.com or set TEST_EMAIL_TO.');
+    throw new Error(
+      'Missing recipient. Provide --to you@example.com or set TEST_EMAIL_TO.'
+    );
   }
 
   return { to, subject, text };

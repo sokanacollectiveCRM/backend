@@ -2,13 +2,12 @@
  * Pure public-intake validation + normalization (PR 8).
  * No Express, DB, email, or env access.
  */
-
-import { ValidationError } from '../../../domains/errors';
-import { parseIntakeReferral } from '../../../constants/referralSource';
 import {
   parseInsurancePolicyHolderDob,
   validatePrimaryInsuranceWhenRequired,
 } from '../../../billing/expandedInsuranceBilling';
+import { parseIntakeReferral } from '../../../constants/referralSource';
+import { ValidationError } from '../../../domains/errors';
 import { RequestFormData } from '../../../types';
 import {
   normalizeIntakeHomeTypes,
@@ -43,11 +42,15 @@ function normalizeOptionalBoolean(value: unknown): boolean | null | undefined {
  * Validate and normalize a raw CRM public request-form body into `RequestFormData`.
  * Throws `ValidationError` with the same messages the legacy service used.
  */
-export function normalizePublicIntakeSubmission(formData: unknown): RequestFormData {
+export function normalizePublicIntakeSubmission(
+  formData: unknown
+): RequestFormData {
   const raw = (formData ?? {}) as Record<string, any>;
 
   if (!raw.firstname || !raw.lastname) {
-    throw new ValidationError('Missing required fields: first name and last name');
+    throw new ValidationError(
+      'Missing required fields: first name and last name'
+    );
   }
 
   if (!raw.service_needed) {
@@ -93,18 +96,27 @@ export function normalizePublicIntakeSubmission(formData: unknown): RequestFormD
     throw new ValidationError(providerResult.message);
   }
 
-  const homeAdults = parseIntakeHomePeopleCount(raw.home_adults_count, 'home_adults_count');
+  const homeAdults = parseIntakeHomePeopleCount(
+    raw.home_adults_count,
+    'home_adults_count'
+  );
   if (homeAdults.ok === false) {
     throw new ValidationError(homeAdults.message);
   }
-  const homeYouth = parseIntakeHomePeopleCount(raw.home_youth_count, 'home_youth_count');
+  const homeYouth = parseIntakeHomePeopleCount(
+    raw.home_youth_count,
+    'home_youth_count'
+  );
   if (homeYouth.ok === false) {
     throw new ValidationError(homeYouth.message);
   }
   const homeTypes = normalizeIntakeHomeTypes(raw.home_types ?? raw.home_type);
   const homeTypeOther = trimNullableString(raw.home_type_other);
 
-  const birthPlace = validateIntakeBirthPlace(raw.birth_location, raw.birth_hospital);
+  const birthPlace = validateIntakeBirthPlace(
+    raw.birth_location,
+    raw.birth_hospital
+  );
   if (birthPlace.ok === false) {
     throw new ValidationError(birthPlace.message);
   }
@@ -120,19 +132,29 @@ export function normalizePublicIntakeSubmission(formData: unknown): RequestFormD
   const insuranceMemberId = trimNullableString(raw.insurance_member_id);
   const policyNumber = trimNullableString(raw.policy_number);
   const insurancePhoneNumber = trimNullableString(raw.insurance_phone_number);
-  const hasSecondaryInsurance = normalizeOptionalBoolean(raw.has_secondary_insurance);
-  const secondaryInsuranceProvider = trimNullableString(raw.secondary_insurance_provider);
-  const secondaryInsuranceMemberId = trimNullableString(raw.secondary_insurance_member_id);
+  const hasSecondaryInsurance = normalizeOptionalBoolean(
+    raw.has_secondary_insurance
+  );
+  const secondaryInsuranceProvider = trimNullableString(
+    raw.secondary_insurance_provider
+  );
+  const secondaryInsuranceMemberId = trimNullableString(
+    raw.secondary_insurance_member_id
+  );
   const secondaryPolicyNumber = trimNullableString(raw.secondary_policy_number);
   const selfPayCardInfo = trimNullableString(raw.self_pay_card_info);
-  const insurancePolicyHolderName = trimNullableString(raw.insurance_policy_holder_name);
-  const parsedHolderDob = parseInsurancePolicyHolderDob(raw.insurance_policy_holder_dob);
+  const insurancePolicyHolderName = trimNullableString(
+    raw.insurance_policy_holder_name
+  );
+  const parsedHolderDob = parseInsurancePolicyHolderDob(
+    raw.insurance_policy_holder_dob
+  );
   if (parsedHolderDob.ok === false) {
     throw new ValidationError(parsedHolderDob.message);
   }
   const insurancePolicyHolderDob = parsedHolderDob.value;
   const insurancePolicyHolderRelationship = trimNullableString(
-    raw.insurance_policy_holder_relationship,
+    raw.insurance_policy_holder_relationship
   );
   const insurancePlanType = trimNullableString(raw.insurance_plan_type);
 
@@ -194,24 +216,38 @@ export function normalizePublicIntakeSubmission(formData: unknown): RequestFormD
     health_notes: raw.health_notes,
 
     payment_method: paymentMethod,
-    insurance_provider: requiresInsurance ? insuranceProvider ?? null : null,
-    insurance_member_id: requiresInsurance ? insuranceMemberId ?? null : null,
-    insurance_policy_holder_name: requiresInsurance ? insurancePolicyHolderName ?? null : null,
-    insurance_policy_holder_dob: requiresInsurance ? insurancePolicyHolderDob ?? null : null,
-    insurance_policy_holder_relationship: requiresInsurance
-      ? insurancePolicyHolderRelationship ?? null
+    insurance_provider: requiresInsurance ? (insuranceProvider ?? null) : null,
+    insurance_member_id: requiresInsurance ? (insuranceMemberId ?? null) : null,
+    insurance_policy_holder_name: requiresInsurance
+      ? (insurancePolicyHolderName ?? null)
       : null,
-    insurance_plan_type: requiresInsurance ? insurancePlanType ?? null : null,
-    policy_number: requiresInsurance ? policyNumber ?? null : null,
-    insurance_phone_number: requiresInsurance ? insurancePhoneNumber ?? null : null,
-    has_secondary_insurance: requiresInsurance ? (hasSecondaryInsurance ?? null) : false,
+    insurance_policy_holder_dob: requiresInsurance
+      ? (insurancePolicyHolderDob ?? null)
+      : null,
+    insurance_policy_holder_relationship: requiresInsurance
+      ? (insurancePolicyHolderRelationship ?? null)
+      : null,
+    insurance_plan_type: requiresInsurance ? (insurancePlanType ?? null) : null,
+    policy_number: requiresInsurance ? (policyNumber ?? null) : null,
+    insurance_phone_number: requiresInsurance
+      ? (insurancePhoneNumber ?? null)
+      : null,
+    has_secondary_insurance: requiresInsurance
+      ? (hasSecondaryInsurance ?? null)
+      : false,
     secondary_insurance_provider:
-      requiresInsurance && hasSecondaryInsurance === true ? secondaryInsuranceProvider ?? null : null,
+      requiresInsurance && hasSecondaryInsurance === true
+        ? (secondaryInsuranceProvider ?? null)
+        : null,
     secondary_insurance_member_id:
-      requiresInsurance && hasSecondaryInsurance === true ? secondaryInsuranceMemberId ?? null : null,
+      requiresInsurance && hasSecondaryInsurance === true
+        ? (secondaryInsuranceMemberId ?? null)
+        : null,
     secondary_policy_number:
-      requiresInsurance && hasSecondaryInsurance === true ? secondaryPolicyNumber ?? null : null,
-    self_pay_card_info: !requiresInsurance ? selfPayCardInfo ?? null : null,
+      requiresInsurance && hasSecondaryInsurance === true
+        ? (secondaryPolicyNumber ?? null)
+        : null,
+    self_pay_card_info: !requiresInsurance ? (selfPayCardInfo ?? null) : null,
     annual_income: raw.annual_income,
     service_needed: raw.service_needed,
     service_specifics: raw.service_specifics,
@@ -235,7 +271,7 @@ export function normalizePublicIntakeSubmission(formData: unknown): RequestFormD
     race_ethnicity: raw.race_ethnicity,
     primary_language: raw.primary_language,
     client_age_range: raw.client_age_range,
-    insurance: requiresInsurance ? raw.insurance ?? null : null,
+    insurance: requiresInsurance ? (raw.insurance ?? null) : null,
     demographics_multi: raw.demographics_multi,
   };
 }
@@ -258,7 +294,7 @@ export const INTAKE_SHADOW_COMPARE_KEYS = [
 ] as const;
 
 export function pickIntakeShadowCompareSlice(
-  data: RequestFormData,
+  data: RequestFormData
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   const record = data as unknown as Record<string, unknown>;
@@ -270,7 +306,7 @@ export function pickIntakeShadowCompareSlice(
 
 export function diffIntakeShadowSlices(
   left: Record<string, unknown>,
-  right: Record<string, unknown>,
+  right: Record<string, unknown>
 ): string[] {
   const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
   const diffs: string[] = [];

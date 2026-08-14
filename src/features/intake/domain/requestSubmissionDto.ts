@@ -8,17 +8,23 @@ export const INTAKE_PAYMENT_METHOD_OPTIONS = [
   'Not sure / Need help figuring this out',
 ] as const;
 
-export type IntakePaymentMethodOption = (typeof INTAKE_PAYMENT_METHOD_OPTIONS)[number];
+export type IntakePaymentMethodOption =
+  (typeof INTAKE_PAYMENT_METHOD_OPTIONS)[number];
 
-const INTAKE_PAYMENT_METHOD_SET = new Set<string>(INTAKE_PAYMENT_METHOD_OPTIONS);
+const INTAKE_PAYMENT_METHOD_SET = new Set<string>(
+  INTAKE_PAYMENT_METHOD_OPTIONS
+);
 
 /** Values stored on `phi_clients.payment_method` after intake normalization. */
-const PAYMENT_METHOD_NORMALIZATION: Record<IntakePaymentMethodOption, string> = {
-  'Private/Commercial Insurance': 'Commercial Insurance',
-  'Self-Pay, Sliding Scale Available': 'Self-Pay, Sliding Scale Available',
-  'I am unable to pay / Full Support Option': 'I am unable to pay / Full Support Option',
-  'Not sure / Need help figuring this out': 'Not sure / Need help figuring this out',
-};
+const PAYMENT_METHOD_NORMALIZATION: Record<IntakePaymentMethodOption, string> =
+  {
+    'Private/Commercial Insurance': 'Commercial Insurance',
+    'Self-Pay, Sliding Scale Available': 'Self-Pay, Sliding Scale Available',
+    'I am unable to pay / Full Support Option':
+      'I am unable to pay / Full Support Option',
+    'Not sure / Need help figuring this out':
+      'Not sure / Need help figuring this out',
+  };
 
 export const ALLOWED_INTAKE_BIRTH_LOCATIONS = new Set([
   'Hospital',
@@ -57,7 +63,9 @@ export function getBirthLocationPlaceError(birthLocation: string): string {
 export function validateIntakeBirthPlace(
   birthLocationRaw: unknown,
   birthHospitalRaw: unknown
-): { ok: true; birth_location: string; birth_hospital: string } | { ok: false; message: string } {
+):
+  | { ok: true; birth_location: string; birth_hospital: string }
+  | { ok: false; message: string } {
   const birth_location =
     typeof birthLocationRaw === 'string' ? birthLocationRaw.trim() : '';
   if (!birth_location) {
@@ -66,7 +74,8 @@ export function validateIntakeBirthPlace(
   if (!ALLOWED_INTAKE_BIRTH_LOCATIONS.has(birth_location)) {
     return {
       ok: false,
-      message: 'birth_location must be one of: Hospital, Home, Birth Center, Other',
+      message:
+        'birth_location must be one of: Hospital, Home, Birth Center, Other',
     };
   }
 
@@ -84,7 +93,9 @@ export function validateIntakeBirthPlace(
  */
 export function parseIntakePaymentMethod(
   raw: unknown
-): { ok: true; value: string; requiresInsurance: boolean } | { ok: false; message: string } {
+):
+  | { ok: true; value: string; requiresInsurance: boolean }
+  | { ok: false; message: string } {
   if (typeof raw !== 'string') {
     return { ok: false, message: 'payment_method is required' };
   }
@@ -105,7 +116,8 @@ export function parseIntakePaymentMethod(
       message: `payment_method must be one of: ${INTAKE_PAYMENT_METHOD_OPTIONS.join(', ')}`,
     };
   }
-  const value = PAYMENT_METHOD_NORMALIZATION[trimmed as IntakePaymentMethodOption];
+  const value =
+    PAYMENT_METHOD_NORMALIZATION[trimmed as IntakePaymentMethodOption];
   const requiresInsurance = value === 'Commercial Insurance';
   return { ok: true, value, requiresInsurance };
 }
@@ -113,7 +125,9 @@ export function parseIntakePaymentMethod(
 /**
  * @deprecated Use {@link parseIntakePaymentMethod} for intake; kept for unit tests of label mapping.
  */
-export function normalizeIntakePaymentMethod(trimmedPaymentMethod: string): string {
+export function normalizeIntakePaymentMethod(
+  trimmedPaymentMethod: string
+): string {
   const parsed = parseIntakePaymentMethod(trimmedPaymentMethod);
   if (parsed.ok) {
     return parsed.value;
@@ -133,7 +147,10 @@ export function parseIntakeClientAgeYears(
   let n: number;
   if (typeof raw === 'number') {
     if (!Number.isFinite(raw) || !Number.isInteger(raw)) {
-      return { ok: false, message: 'age must be a whole number between 1 and 120' };
+      return {
+        ok: false,
+        message: 'age must be a whole number between 1 and 120',
+      };
     }
     n = raw;
   } else if (typeof raw === 'string') {
@@ -142,7 +159,10 @@ export function parseIntakeClientAgeYears(
       return { ok: false, message: 'age is required' };
     }
     if (!/^\d+$/.test(t)) {
-      return { ok: false, message: 'age must be a whole number between 1 and 120' };
+      return {
+        ok: false,
+        message: 'age must be a whole number between 1 and 120',
+      };
     }
     n = parseInt(t, 10);
   } else {
@@ -182,7 +202,9 @@ export function normalizeIntakeHomeTypes(raw: unknown): string[] | null {
   }
   if (Array.isArray(raw)) {
     const items = raw
-      .map((item) => (typeof item === 'string' ? item.trim() : String(item).trim()))
+      .map((item) =>
+        typeof item === 'string' ? item.trim() : String(item).trim()
+      )
       .filter((item) => item.length > 0);
     return items.length > 0 ? items : null;
   }
@@ -204,7 +226,9 @@ export function normalizeIntakeHomeTypes(raw: unknown): string[] | null {
 }
 
 /** Legacy `home_type` VARCHAR — first selection or joined labels (max 100 chars). */
-export function legacyHomeTypeVarchar(homeTypes: string[] | null): string | null {
+export function legacyHomeTypeVarchar(
+  homeTypes: string[] | null
+): string | null {
   if (!homeTypes?.length) {
     return null;
   }
@@ -212,7 +236,14 @@ export function legacyHomeTypeVarchar(homeTypes: string[] | null): string | null
   return joined.length > 100 ? joined.slice(0, 100) : joined;
 }
 
-export const INTAKE_HOME_PEOPLE_COUNT_OPTIONS = ['0', '1', '2', '3', '4', '5+'] as const;
+export const INTAKE_HOME_PEOPLE_COUNT_OPTIONS = [
+  '0',
+  '1',
+  '2',
+  '3',
+  '4',
+  '5+',
+] as const;
 
 export function parseIntakeHomePeopleCount(
   raw: unknown,
@@ -221,7 +252,12 @@ export function parseIntakeHomePeopleCount(
   if (raw === undefined || raw === null) {
     return { ok: false, message: `${fieldLabel} is required` };
   }
-  const s = typeof raw === 'number' ? String(raw) : typeof raw === 'string' ? raw.trim() : '';
+  const s =
+    typeof raw === 'number'
+      ? String(raw)
+      : typeof raw === 'string'
+        ? raw.trim()
+        : '';
   if (!s) {
     return { ok: false, message: `${fieldLabel} is required` };
   }

@@ -1,8 +1,8 @@
 import { RequestHandler } from 'express';
 
 import { SAFE_INTERNAL_ERROR_MESSAGE } from '../common/utils/safeLogging';
-import { quickbooksInvoiceWebhookService } from '../services/quickbooksInvoiceWebhookService';
 import { claimWebhookEvent } from '../security/webhookEventStore';
+import { quickbooksInvoiceWebhookService } from '../services/quickbooksInvoiceWebhookService';
 
 function extractInvoiceId(payload: Record<string, unknown>): string | null {
   const direct =
@@ -31,8 +31,13 @@ function extractInvoiceId(payload: Record<string, unknown>): string | null {
       if (Array.isArray(innerEntities)) {
         for (const inner of innerEntities) {
           const id = (inner as Record<string, unknown>).id;
-          const name = String((inner as Record<string, unknown>).name || '').toLowerCase();
-          if (name.includes('invoice') && (typeof id === 'string' || typeof id === 'number')) {
+          const name = String(
+            (inner as Record<string, unknown>).name || ''
+          ).toLowerCase();
+          if (
+            name.includes('invoice') &&
+            (typeof id === 'string' || typeof id === 'number')
+          ) {
             return String(id);
           }
         }
@@ -54,9 +59,12 @@ function extractTotal(payload: Record<string, unknown>): number | null {
 }
 
 function buildQuickBooksEventKey(
-  req: { get?: (name: string) => string | undefined; headers?: Record<string, unknown> },
+  req: {
+    get?: (name: string) => string | undefined;
+    headers?: Record<string, unknown>;
+  },
   _payload: Record<string, unknown>,
-  qboInvoiceId: string,
+  qboInvoiceId: string
 ): string {
   const intuitTid =
     (typeof req.get === 'function' ? req.get('intuit-t-id') : undefined) ??
@@ -67,7 +75,10 @@ function buildQuickBooksEventKey(
   return `qbo:invoice:${qboInvoiceId}:paid`;
 }
 
-export const quickBooksInvoicePaidWebhook: RequestHandler = async (req, res) => {
+export const quickBooksInvoicePaidWebhook: RequestHandler = async (
+  req,
+  res
+) => {
   try {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const qboInvoiceId = extractInvoiceId(body);
@@ -78,7 +89,7 @@ export const quickBooksInvoicePaidWebhook: RequestHandler = async (req, res) => 
 
     const claim = await claimWebhookEvent(
       'quickbooks',
-      buildQuickBooksEventKey(req, body, qboInvoiceId),
+      buildQuickBooksEventKey(req, body, qboInvoiceId)
     );
     if (claim === 'duplicate') {
       res.status(200).json({ received: true, duplicate: true });

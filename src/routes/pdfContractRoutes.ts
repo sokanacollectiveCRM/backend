@@ -1,9 +1,9 @@
 import express, { Request, Response } from 'express';
-import authMiddleware from '../middleware/authMiddleware';
-import authorizeRoles from '../middleware/authorizeRoles';
 
 import { logger } from '../common/utils/logger';
 import { toSafeProviderError } from '../common/utils/safeLogging';
+import authMiddleware from '../middleware/authMiddleware';
+import authorizeRoles from '../middleware/authorizeRoles';
 import { SignNowService } from '../services/signNowService';
 import {
   getAvailableContractTemplates,
@@ -13,10 +13,10 @@ import {
 
 const router = express.Router();
 
-const requireAdmin = (req: any, res: any, next: any) => authorizeRoles(req, res, next, ['admin']);
+const requireAdmin = (req: any, res: any, next: any) =>
+  authorizeRoles(req, res, next, ['admin']);
 router.use(authMiddleware);
 router.use(requireAdmin);
-
 
 interface PdfContractRequest extends Request {
   body: {
@@ -108,7 +108,10 @@ router.post(
         data: result,
       });
     } catch (error: any) {
-      logger.error(toSafeProviderError('signnow', 'pdf_process', error), 'Error processing PDF contract');
+      logger.error(
+        toSafeProviderError('signnow', 'pdf_process', error),
+        'Error processing PDF contract'
+      );
       res.status(500).json({
         success: false,
         error: 'Failed to process contract',
@@ -224,7 +227,10 @@ router.post('/test', async (req: Request, res: Response): Promise<void> => {
       data: result,
     });
   } catch (error: any) {
-    logger.error(toSafeProviderError('signnow', 'pdf_test', error), 'Error processing test contract');
+    logger.error(
+      toSafeProviderError('signnow', 'pdf_test', error),
+      'Error processing test contract'
+    );
     res.status(500).json({
       success: false,
       error: 'Failed to process test contract',
@@ -233,9 +239,3 @@ router.post('/test', async (req: Request, res: Response): Promise<void> => {
 });
 
 export default router;
-
-
-
-
-
-

@@ -1,12 +1,17 @@
 // src/features/quickbooks/routes/customersRoutes.js
 import { Router } from 'express';
+
+import {
+  createCustomer,
+  getInvoiceableCustomersController,
+} from '../controllers/quickbooksController';
 import authMiddleware from '../middleware/authMiddleware';
 import authorizeRoles from '../middleware/authorizeRoles';
 
-import { createCustomer, getInvoiceableCustomersController } from '../controllers/quickbooksController';
 const router = Router();
 
-const requireStaff = (req: any, res: any, next: any) => authorizeRoles(req, res, next, ['admin', 'billing']);
+const requireStaff = (req: any, res: any, next: any) =>
+  authorizeRoles(req, res, next, ['admin', 'billing']);
 router.use(authMiddleware);
 router.use(requireStaff);
 

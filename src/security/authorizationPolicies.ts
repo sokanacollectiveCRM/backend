@@ -24,7 +24,10 @@ export function normalizeRole(role: unknown): string {
 }
 
 /** Role allowlist check (mirrors authorizeRoles semantics). */
-export function roleAllows(actor: Actor | null | undefined, allowedRoles: readonly string[]): boolean {
+export function roleAllows(
+  actor: Actor | null | undefined,
+  allowedRoles: readonly string[]
+): boolean {
   if (!actor?.email && !actor?.id) return false;
   const role = normalizeRole(actor.role);
   const allowed = allowedRoles.map((r) => r.toLowerCase());
@@ -59,7 +62,8 @@ export function decideClientResourceAccess(input: {
 }): AccessDecision {
   const role = normalizeRole(input.actor?.role);
   if (!input.actor?.id) return 'deny';
-  if (role === 'admin' || role === 'billing' || role === 'doula') return 'allow';
+  if (role === 'admin' || role === 'billing' || role === 'doula')
+    return 'allow';
   if (role !== 'client') return 'deny';
   if (!input.requestedClientId || !input.actorClientId) return 'deny';
   return input.requestedClientId === input.actorClientId ? 'allow' : 'deny';
@@ -70,7 +74,11 @@ export function forbiddenBody(): { error: string; code: string } {
   return { error: 'Forbidden: Insufficient permissions', code: 'FORBIDDEN' };
 }
 
-export function unauthorizedBody(): { error: string; code: string; hint?: string } {
+export function unauthorizedBody(): {
+  error: string;
+  code: string;
+  hint?: string;
+} {
   return {
     error: 'No session token provided',
     code: 'UNAUTHENTICATED',

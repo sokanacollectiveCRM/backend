@@ -2,7 +2,6 @@
  * Route-alias deprecation telemetry + HTTP headers (PR 7).
  * Does not remove aliases. Never logs request bodies or tokens.
  */
-
 import { NextFunction, Request, RequestHandler, Response } from 'express';
 
 import { logger } from '../common/utils/logger';
@@ -14,7 +13,7 @@ export const DEFAULT_ALIAS_SUNSET = 'Sat, 14 Feb 2027 00:00:00 GMT';
 
 export function recordRouteDeprecation(
   aliasKey: string,
-  context?: Record<string, unknown>,
+  context?: Record<string, unknown>
 ): void {
   const next = (counters.get(aliasKey) ?? 0) + 1;
   counters.set(aliasKey, next);
@@ -26,7 +25,7 @@ export function recordRouteDeprecation(
       count: next,
       ...(context || {}),
     },
-    'Deprecated route alias used',
+    'Deprecated route alias used'
   );
 }
 
@@ -43,7 +42,7 @@ export function setDeprecationHeaders(
   options: {
     successorPath: string;
     sunset?: string;
-  },
+  }
 ): void {
   res.setHeader('Deprecation', 'true');
   res.setHeader('Sunset', options.sunset ?? DEFAULT_ALIAS_SUNSET);

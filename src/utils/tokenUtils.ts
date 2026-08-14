@@ -24,7 +24,9 @@ const QB_ENVIRONMENT = process.env.QUICKBOOKS_ENVIRONMENT || 'production';
  * production QuickBooks token row unless explicitly allowed (Cloud Run sets K_SERVICE).
  */
 export function allowQuickBooksTokenWrites(): boolean {
-  const raw = (process.env.QUICKBOOKS_ALLOW_TOKEN_WRITES || '').trim().toLowerCase();
+  const raw = (process.env.QUICKBOOKS_ALLOW_TOKEN_WRITES || '')
+    .trim()
+    .toLowerCase();
   if (raw === 'true' || raw === '1' || raw === 'yes') return true;
   if (raw === 'false' || raw === '0' || raw === 'no') return false;
   return Boolean(process.env.K_SERVICE);
@@ -73,9 +75,14 @@ export async function getTokenFromDatabase(): Promise<TokenStore | null> {
   console.log('✅ [QB] Tokens loaded successfully');
   console.log('📅 [QB] Token expires at:', tokens.expiresAt);
   console.log('⏰ [QB] Current time:', new Date().toISOString());
-  console.log('🔍 [QB] Token expired?', new Date(tokens.expiresAt) <= new Date());
+  console.log(
+    '🔍 [QB] Token expired?',
+    new Date(tokens.expiresAt) <= new Date()
+  );
   if (tokens.needsReauthorization) {
-    console.log('⚠️ [QB] connection_status=reauthorization_required; skip refresh until reconnect');
+    console.log(
+      '⚠️ [QB] connection_status=reauthorization_required; skip refresh until reconnect'
+    );
   }
 
   return tokens;
@@ -88,7 +95,7 @@ export async function getTokenFromDatabase(): Promise<TokenStore | null> {
 export async function refreshQuickBooksToken(): Promise<TokenStore | null> {
   if (!allowQuickBooksTokenWrites()) {
     console.warn(
-      '⚠️ [QB] Token refresh blocked outside Cloud Run (set QUICKBOOKS_ALLOW_TOKEN_WRITES=true only for an intentional local sandbox).',
+      '⚠️ [QB] Token refresh blocked outside Cloud Run (set QUICKBOOKS_ALLOW_TOKEN_WRITES=true only for an intentional local sandbox).'
     );
     return null;
   }
@@ -97,10 +104,9 @@ export async function refreshQuickBooksToken(): Promise<TokenStore | null> {
   try {
     await client.query('BEGIN');
     // Vercel may run several instances. Only one may rotate the current refresh token.
-    await client.query(
-      'SELECT pg_advisory_xact_lock(hashtext($1)::bigint)',
-      [`quickbooks-token-refresh:${QB_ENVIRONMENT}`]
-    );
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [
+      `quickbooks-token-refresh:${QB_ENVIRONMENT}`,
+    ]);
     const { rows } = await client.query<{
       realm_id: string;
       access_token: string;
@@ -135,7 +141,9 @@ export async function refreshQuickBooksToken(): Promise<TokenStore | null> {
     }
 
     const url = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
-    const auth = Buffer.from(`${process.env.QB_CLIENT_ID}:${process.env.QB_CLIENT_SECRET}`).toString('base64');
+    const auth = Buffer.from(
+      `${process.env.QB_CLIENT_ID}:${process.env.QB_CLIENT_SECRET}`
+    ).toString('base64');
     const body = new URLSearchParams({
       grant_type: 'refresh_token',
       refresh_token: row.refresh_token,
@@ -145,9 +153,9 @@ export async function refreshQuickBooksToken(): Promise<TokenStore | null> {
       method: 'POST',
       headers: {
         Authorization: `Basic ${auth}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: body.toString()
+      body: body.toString(),
     });
 
     console.log('📥 [QB] Refresh response status:', resp.status);
@@ -161,8 +169,14 @@ export async function refreshQuickBooksToken(): Promise<TokenStore | null> {
         // Keep the public error generic when Intuit does not return JSON.
       }
       const needsReauthorization = errorData.error === 'invalid_grant';
-      const status = needsReauthorization ? 'reauthorization_required' : 'refresh_failed';
-      const safeError = `${errorData.error || `http_${resp.status}`}${errorData.error_description ? `: ${errorData.error_description}` : ''}`.slice(0, 500);
+      const status = needsReauthorization
+        ? 'reauthorization_required'
+        : 'refresh_failed';
+      const safeError =
+        `${errorData.error || `http_${resp.status}`}${errorData.error_description ? `: ${errorData.error_description}` : ''}`.slice(
+          0,
+          500
+        );
       await client.query(
         `UPDATE public.quickbooks_tokens
          SET connection_status = $2,
@@ -173,18 +187,30 @@ export async function refreshQuickBooksToken(): Promise<TokenStore | null> {
         [row.realm_id, status, safeError, QB_ENVIRONMENT]
       );
       await client.query('COMMIT');
-      console.error('❌ [QB] Refresh failed; token retained:', resp.status, status);
+      console.error(
+        '❌ [QB] Refresh failed; token retained:',
+        resp.status,
+        status
+      );
       return null;
     }
 
-    const json = await resp.json() as { access_token: string; refresh_token?: string; expires_in: number };
-    console.log('✅ [QB] Refresh successful, expires in:', json.expires_in, 'seconds');
+    const json = (await resp.json()) as {
+      access_token: string;
+      refresh_token?: string;
+      expires_in: number;
+    };
+    console.log(
+      '✅ [QB] Refresh successful, expires in:',
+      json.expires_in,
+      'seconds'
+    );
 
     const tokenData: TokenStore = {
       realmId: row.realm_id,
       accessToken: json.access_token,
       refreshToken: json.refresh_token || row.refresh_token,
-      expiresAt: new Date(Date.now() + json.expires_in * 1000).toISOString()
+      expiresAt: new Date(Date.now() + json.expires_in * 1000).toISOString(),
     };
 
     await client.query(
@@ -198,7 +224,13 @@ export async function refreshQuickBooksToken(): Promise<TokenStore | null> {
            last_refresh_succeeded_at = CURRENT_TIMESTAMP,
            updated_at = CURRENT_TIMESTAMP
        WHERE realm_id = $1 AND environment = $5`,
-      [tokenData.realmId, tokenData.accessToken, tokenData.refreshToken, tokenData.expiresAt, QB_ENVIRONMENT]
+      [
+        tokenData.realmId,
+        tokenData.accessToken,
+        tokenData.refreshToken,
+        tokenData.expiresAt,
+        QB_ENVIRONMENT,
+      ]
     );
     await client.query('COMMIT');
     console.log('✅ [QB] Refreshed tokens saved successfully');
@@ -230,17 +262,23 @@ export async function getValidAccessToken(): Promise<string | null> {
   const expiresAt = new Date(tokens.expiresAt).getTime();
   const timeUntilExpiry = expiresAt - now;
 
-  console.log('⏱️ [QB] Time until expiry:', Math.round(timeUntilExpiry / 1000), 'seconds');
+  console.log(
+    '⏱️ [QB] Time until expiry:',
+    Math.round(timeUntilExpiry / 1000),
+    'seconds'
+  );
 
   // Check if token is expired or will expire in the next minute
   if (new Date(tokens.expiresAt) <= new Date(Date.now() + 60000)) {
     if (tokens.needsReauthorization) {
-      console.log('❌ [QB] Skipping refresh; reconnect QuickBooks OAuth required');
+      console.log(
+        '❌ [QB] Skipping refresh; reconnect QuickBooks OAuth required'
+      );
       return null;
     }
     if (!allowQuickBooksTokenWrites()) {
       console.warn(
-        '⚠️ [QB] Expired token; local/dev will not refresh the shared prod connection',
+        '⚠️ [QB] Expired token; local/dev will not refresh the shared prod connection'
       );
       return null;
     }
@@ -258,7 +296,9 @@ export async function getValidAccessToken(): Promise<string | null> {
  */
 export async function saveTokensToDatabase(tokens: TokenStore): Promise<void> {
   if (!allowQuickBooksTokenWrites()) {
-    console.warn('⚠️ [QB] saveTokensToDatabase blocked outside Cloud Run / explicit allow');
+    console.warn(
+      '⚠️ [QB] saveTokensToDatabase blocked outside Cloud Run / explicit allow'
+    );
     throw new Error('QuickBooks token writes are disabled in this environment');
   }
   console.log('💾 [QB] Saving tokens to Cloud SQL...');
@@ -278,7 +318,13 @@ export async function saveTokensToDatabase(tokens: TokenStore): Promise<void> {
        last_refresh_error = NULL,
        last_refresh_failed_at = NULL,
        updated_at = CURRENT_TIMESTAMP`,
-    [tokens.realmId, tokens.accessToken, tokens.refreshToken, expiresAt, QB_ENVIRONMENT]
+    [
+      tokens.realmId,
+      tokens.accessToken,
+      tokens.refreshToken,
+      expiresAt,
+      QB_ENVIRONMENT,
+    ]
   );
 
   console.log('✅ [QB] Tokens saved successfully');
@@ -287,7 +333,9 @@ export async function saveTokensToDatabase(tokens: TokenStore): Promise<void> {
 /** Delete QuickBooks tokens from Cloud SQL (all rows for current environment). */
 export async function deleteTokens(): Promise<void> {
   if (!allowQuickBooksTokenWrites()) {
-    console.warn('⚠️ [QB] deleteTokens blocked outside Cloud Run / explicit allow');
+    console.warn(
+      '⚠️ [QB] deleteTokens blocked outside Cloud Run / explicit allow'
+    );
     throw new Error('QuickBooks token writes are disabled in this environment');
   }
   console.log('🗑️ [QB] Deleting tokens from Cloud SQL...');
@@ -298,7 +346,10 @@ export async function deleteTokens(): Promise<void> {
     [QB_ENVIRONMENT]
   );
 
-  console.log('✅ [QB] Tokens deleted successfully', rowCount != null ? `(${rowCount} row(s))` : '');
+  console.log(
+    '✅ [QB] Tokens deleted successfully',
+    rowCount != null ? `(${rowCount} row(s))` : ''
+  );
 }
 
 // Add these exports for the QuickBooks service
@@ -322,6 +373,7 @@ export async function getQuickBooksConnectionHealth(): Promise<QuickBooksConnect
   return {
     status: rows[0].connection_status,
     lastRefreshFailedAt: rows[0].last_refresh_failed_at?.toISOString() || null,
-    lastRefreshSucceededAt: rows[0].last_refresh_succeeded_at?.toISOString() || null,
+    lastRefreshSucceededAt:
+      rows[0].last_refresh_succeeded_at?.toISOString() || null,
   };
 }

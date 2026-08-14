@@ -9,8 +9,8 @@ import {
 } from '../security/authTransportTelemetry';
 import {
   MemoryAuthoritativeRoleLookup,
-  resolveAuthoritativeRole,
   resetAuthoritativeRoleLookupForTests,
+  resolveAuthoritativeRole,
   setAuthoritativeRoleLookupForTests,
 } from '../security/resolveAuthoritativeRole';
 import {
@@ -39,14 +39,14 @@ describe('PR 6 authoritative roles', () => {
     setAuthoritativeRoleLookupForTests(
       new MemoryAuthoritativeRoleLookup({
         admins: [{ id: 'admin-1', email: 'admin@example.com' }],
-      }),
+      })
     );
     await expect(
       resolveAuthoritativeRole({
         authUserId: 'admin-1',
         email: 'admin@example.com',
         appManagedRole: 'client',
-      }),
+      })
     ).resolves.toBe('admin');
   });
 
@@ -54,14 +54,14 @@ describe('PR 6 authoritative roles', () => {
     setAuthoritativeRoleLookupForTests(
       new MemoryAuthoritativeRoleLookup({
         doulas: [{ id: 'doula-1', email: 'doula@example.com' }],
-      }),
+      })
     );
     await expect(
       resolveAuthoritativeRole({
         authUserId: 'doula-1',
         email: 'doula@example.com',
         appManagedRole: null,
-      }),
+      })
     ).resolves.toBe('doula');
   });
 
@@ -72,7 +72,7 @@ describe('PR 6 authoritative roles', () => {
         authUserId: 'bill-1',
         email: 'billing@example.com',
         appManagedRole: 'billing',
-      }),
+      })
     ).resolves.toBe('billing');
   });
 
@@ -80,14 +80,14 @@ describe('PR 6 authoritative roles', () => {
     setAuthoritativeRoleLookupForTests(
       new MemoryAuthoritativeRoleLookup({
         clients: [{ userId: 'client-1' }],
-      }),
+      })
     );
     await expect(
       resolveAuthoritativeRole({
         authUserId: 'client-1',
         email: 'client@example.com',
         appManagedRole: null,
-      }),
+      })
     ).resolves.toBe('client');
   });
 });
@@ -115,24 +115,26 @@ describe('PR 6 session token dual-support', () => {
       getSessionTokenAndSource({
         headers: { authorization: 'Bearer bearer-token' },
         cookies: {},
-      } as any),
+      } as any)
     ).toEqual({ token: 'bearer-token', source: 'bearer' });
 
     expect(
       getSessionTokenAndSource({
         headers: {},
         cookies: { [SESSION_COOKIE]: 'cookie-token' },
-      } as any),
+      } as any)
     ).toEqual({ token: 'cookie-token', source: 'cookie' });
 
     expect(
       getSessionTokenAndSource({
         headers: {},
         cookies: { [LEGACY_SESSION_COOKIE]: 'legacy-token' },
-      } as any),
+      } as any)
     ).toEqual({ token: 'legacy-token', source: 'legacy_session_cookie' });
 
-    expect(getSessionToken({ headers: {}, cookies: {} } as any)).toBeUndefined();
+    expect(
+      getSessionToken({ headers: {}, cookies: {} } as any)
+    ).toBeUndefined();
   });
 });
 
@@ -160,7 +162,7 @@ describe('PR 6 cookie helpers and transport telemetry', () => {
 
     clearSessionCookies(res);
     expect(cleared).toEqual(
-      expect.arrayContaining([SESSION_COOKIE, LEGACY_SESSION_COOKIE]),
+      expect.arrayContaining([SESSION_COOKIE, LEGACY_SESSION_COOKIE])
     );
   });
 

@@ -274,10 +274,7 @@ export class SignNowService {
         })),
       };
 
-      console.log(
-        'Sending PUT request with field count:',
-        fieldValues.length
-      );
+      console.log('Sending PUT request with field count:', fieldValues.length);
 
       // Use PUT endpoint to update fields
       const response = await axios.put(
@@ -390,7 +387,10 @@ export class SignNowService {
       // Get a fresh token
       await this.authenticate();
 
-      console.log('Prefilling template:', { documentId, fieldCount: Object.keys(fields || {}).length });
+      console.log('Prefilling template:', {
+        documentId,
+        fieldCount: Object.keys(fields || {}).length,
+      });
 
       // Clone the template first
       const cloneResult = await this.cloneTemplate(

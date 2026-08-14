@@ -1,10 +1,12 @@
-import fs from 'fs-extra';
 import path from 'path';
+
+import fs from 'fs-extra';
+
 import { getPool } from '../db/cloudSqlPool';
 import { createPaymentScheduleInCloudSql } from '../services/cloudSqlPaymentScheduleService';
+import { contractSignatureCompletionService } from '../services/contractSignatureCompletionService';
 import { NodemailerService } from '../services/emailService';
 import { signNowService } from '../services/signNowService';
-import { contractSignatureCompletionService } from '../services/contractSignatureCompletionService';
 import { convertDocxToPdf, generateContractDocx } from './contractProcessor';
 
 function parseCurrency(val: string | undefined): number {
@@ -76,7 +78,9 @@ export async function processContractWithSignNow(
         fieldCount: Object.keys(data).length,
       });
       docxPath = await generateContractDocx(data, contractId);
-      console.log(`✅ Contract generated: ${typeof docxPath === 'string' ? docxPath : 'Buffer'}`);
+      console.log(
+        `✅ Contract generated: ${typeof docxPath === 'string' ? docxPath : 'Buffer'}`
+      );
     } catch (error) {
       console.error('Error in contract generation:', {
         message: error instanceof Error ? error.message : 'Unknown error',
@@ -121,7 +125,10 @@ export async function processContractWithSignNow(
         fileName = `contract-${contractId}.docx`;
       }
 
-      const uploadResult = await signNowService.uploadDocument(fileBuffer, fileName);
+      const uploadResult = await signNowService.uploadDocument(
+        fileBuffer,
+        fileName
+      );
       documentId = uploadResult.documentId;
       console.log(`✅ Document uploaded to SignNow: ${documentId}`);
     } catch (error) {
@@ -132,9 +139,16 @@ export async function processContractWithSignNow(
     }
 
     // Step 4: Add signature fields with PDF analysis for positioning
-    console.log('✍️ Step 4: Adding signature fields with automatic positioning...');
+    console.log(
+      '✍️ Step 4: Adding signature fields with automatic positioning...'
+    );
     try {
-      await signNowService.addSignatureFields(documentId, clientName, contractData, fileToUpload);
+      await signNowService.addSignatureFields(
+        documentId,
+        clientName,
+        contractData,
+        fileToUpload
+      );
       console.log('✅ Signature fields added successfully');
     } catch (error) {
       console.error('Error in signature fields addition:', {
@@ -175,7 +189,10 @@ export async function processContractWithSignNow(
       console.log('✅ Contract record created successfully');
     } catch (contractErr) {
       // phi_contracts may have different schema; try minimal insert
-      console.warn('Contract insert (with signnow_document_id) failed, trying minimal insert:', contractErr);
+      console.warn(
+        'Contract insert (with signnow_document_id) failed, trying minimal insert:',
+        contractErr
+      );
       try {
         await getPool().query(
           `INSERT INTO phi_contracts (id, client_id, status) VALUES ($1, $2, 'pending_signature')
@@ -184,20 +201,26 @@ export async function processContractWithSignNow(
         );
         console.log('✅ Contract record created (minimal)');
       } catch (minimalErr) {
-        console.error('Contract record creation failed (non-blocking):', minimalErr);
+        console.error(
+          'Contract record creation failed (non-blocking):',
+          minimalErr
+        );
         // Continue — SignNow invitation will still be sent
       }
     }
 
     // Step 7: Payment schedule (Labor Support only) — Cloud SQL
-    const isLaborSupport = contractData.serviceType?.toLowerCase().includes('labor support');
+    const isLaborSupport = contractData.serviceType
+      ?.toLowerCase()
+      .includes('labor support');
     let installmentCount: number | null = null;
     if (isLaborSupport) {
       const totalAmount = parseCurrency(contractData.totalInvestment);
       const depositAmount = parseCurrency(contractData.depositAmount);
       if (totalAmount > 0) {
         try {
-          installmentCount = depositAmount > 0 && totalAmount > depositAmount ? 3 : 0;
+          installmentCount =
+            depositAmount > 0 && totalAmount > depositAmount ? 3 : 0;
           const startDate = contractData.startDate
             ? new Date(contractData.startDate)
             : new Date();
@@ -212,7 +235,10 @@ export async function processContractWithSignNow(
           });
           console.log('✅ Step 7: Payment schedule created');
         } catch (err) {
-          console.error('⚠️ Step 7: Payment schedule creation failed (non-blocking):', err);
+          console.error(
+            '⚠️ Step 7: Payment schedule creation failed (non-blocking):',
+            err
+          );
         }
       } else {
         console.log('💰 Step 7: Skipping payment schedule (no total amount)');
@@ -234,7 +260,10 @@ export async function processContractWithSignNow(
       });
       console.log('✅ Step 7b: Billing notification sent');
     } catch (err) {
-      console.error('⚠️ Step 7b: Billing notification failed (non-blocking):', err);
+      console.error(
+        '⚠️ Step 7b: Billing notification failed (non-blocking):',
+        err
+      );
     }
 
     // Step 8: Send SignNow invitation with conditional redirect URLs
@@ -247,12 +276,16 @@ export async function processContractWithSignNow(
         // Labor Support: redirect to payment page
         redirectUrl = `${process.env.FRONTEND_URL || 'https://jerrybony.me'}/payment?contract_id=${contractId}`;
         declineUrl = `${process.env.FRONTEND_URL || 'https://jerrybony.me'}/`;
-        console.log('🎯 Labor Support contract: redirecting to payment page after signing');
+        console.log(
+          '🎯 Labor Support contract: redirecting to payment page after signing'
+        );
       } else {
         // Postpartum: redirect to success page (no payment required)
         redirectUrl = `${process.env.FRONTEND_URL || 'https://jerrybony.me'}/contract-signed?contract_id=${contractId}`;
         declineUrl = `${process.env.FRONTEND_URL || 'https://jerrybony.me'}/`;
-        console.log('🎯 Postpartum contract: redirecting to success page (no payment required)');
+        console.log(
+          '🎯 Postpartum contract: redirecting to success page (no payment required)'
+        );
       }
 
       invitationResult = await signNowService.createInvitationClientPartner(
@@ -265,7 +298,9 @@ export async function processContractWithSignNow(
           declineUrl: declineUrl,
         }
       );
-      console.log('✅ SignNow invitation sent successfully with appropriate redirect');
+      console.log(
+        '✅ SignNow invitation sent successfully with appropriate redirect'
+      );
     } catch (error) {
       console.error('Error in SignNow invitation:', error);
       console.error('Error details:', {
@@ -289,7 +324,7 @@ export async function processContractWithSignNow(
       signNow: {
         documentId,
         invitationSent: invitationResult.success,
-        status: 'invitation_sent'
+        status: 'invitation_sent',
       },
 
       // Email delivery info
@@ -298,18 +333,17 @@ export async function processContractWithSignNow(
         sent: invitationResult.success,
         message: invitationResult.success
           ? `Professional signing invitation sent via SignNow to ${clientEmail}`
-          : 'Failed to send SignNow invitation'
-      }
+          : 'Failed to send SignNow invitation',
+      },
     };
 
     console.log(`🎉 SignNow workflow completed for ${contractId}`);
     return result;
-
   } catch (error) {
     console.error('❌ SignNow contract processing failed:', error);
     console.error('Error details:', {
       message: error instanceof Error ? error.message : 'Unknown error',
-      contractId: contractData.contractId
+      contractId: contractData.contractId,
     });
 
     return {
@@ -321,13 +355,13 @@ export async function processContractWithSignNow(
       signNow: {
         documentId: '',
         invitationSent: false,
-        status: 'failed'
+        status: 'failed',
       },
       emailDelivery: {
         provider: 'SignNow',
         sent: false,
-        message: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-      }
+        message: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      },
     };
   }
 }
@@ -341,9 +375,12 @@ export async function checkSignNowDocumentStatus(documentId: string) {
   try {
     await signNowService.testAuthentication();
 
-    const response = await fetch(`https://api.signnow.com/document/${documentId}`, {
-      headers: signNowService.getAuthHeaders()
-    });
+    const response = await fetch(
+      `https://api.signnow.com/document/${documentId}`,
+      {
+        headers: signNowService.getAuthHeaders(),
+      }
+    );
 
     if (!response.ok) {
       throw new Error(`SignNow API error: ${response.status}`);
@@ -351,11 +388,14 @@ export async function checkSignNowDocumentStatus(documentId: string) {
 
     const document = await response.json();
     const signatures = document.signatures || [];
-    const isComplete = signatures.every((sig: any) => sig.data && sig.data.length > 0);
-    const postSigningWorkflow =
-      isComplete
-        ? await contractSignatureCompletionService.finalizeSignedDocument(documentId)
-        : null;
+    const isComplete = signatures.every(
+      (sig: any) => sig.data && sig.data.length > 0
+    );
+    const postSigningWorkflow = isComplete
+      ? await contractSignatureCompletionService.finalizeSignedDocument(
+          documentId
+        )
+      : null;
 
     return {
       success: true,
@@ -368,15 +408,14 @@ export async function checkSignNowDocumentStatus(documentId: string) {
         role: sig.role,
         email: sig.email,
         signed: !!(sig.data && sig.data.length > 0),
-        signed_date: sig.created
-      }))
+        signed_date: sig.created,
+      })),
     };
-
   } catch (error) {
     console.error('❌ Failed to check SignNow document status:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }

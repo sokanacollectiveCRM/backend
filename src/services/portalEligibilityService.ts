@@ -204,7 +204,8 @@ export class PortalEligibilityService {
 
     // List views must stay cheap: one cached readiness query, no per-client
     // recompute / QuickBooks card checks (those run on invite/detail paths).
-    const rows = await clientOnboardingReadinessRepository.getByClientIds(uniqueIds);
+    const rows =
+      await clientOnboardingReadinessRepository.getByClientIds(uniqueIds);
     for (const clientId of uniqueIds) {
       const row = rows.get(clientId);
       if (row) {

@@ -1,13 +1,13 @@
 import express, { Request, Response } from 'express';
+
 import { logger } from '../common/utils/logger';
-import { toSafeClientErrorBody, toSafeProviderError } from '../common/utils/safeLogging';
-import { ContractClientService } from '../services/contractClientService';
-import { SimplePaymentService } from '../services/simplePaymentService';
+import {
+  toSafeClientErrorBody,
+  toSafeProviderError,
+} from '../common/utils/safeLogging';
 import authMiddleware from '../middleware/authMiddleware';
 import authorizeRoles from '../middleware/authorizeRoles';
 import { listPaymentsFromCloudSql } from '../repositories/cloudSqlPaymentRepository';
-import { AuthRequest } from '../types';
-import { CloudSqlDoulaAssignmentService } from '../services/cloudSqlDoulaAssignmentService';
 import {
   ADMIN_BILLING,
   ADMIN_BILLING_DOULA,
@@ -16,6 +16,10 @@ import {
   decideClientResourceAccess,
   forbiddenBody,
 } from '../security/authorizationPolicies';
+import { CloudSqlDoulaAssignmentService } from '../services/cloudSqlDoulaAssignmentService';
+import { ContractClientService } from '../services/contractClientService';
+import { SimplePaymentService } from '../services/simplePaymentService';
+import { AuthRequest } from '../types';
 
 const router = express.Router();
 const contractService = new ContractClientService();
@@ -29,7 +33,10 @@ const requireRoles =
   };
 
 // GET /api/payments — list payment rows from Cloud SQL (Financial tab). Auth required.
-const listPaymentsHandler = async (req: Request, res: Response): Promise<void> => {
+const listPaymentsHandler = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const limit = Math.min(Number(req.query.limit) || 500, 1000);
     const data = await listPaymentsFromCloudSql(limit);
@@ -37,7 +44,10 @@ const listPaymentsHandler = async (req: Request, res: Response): Promise<void> =
   } catch (error) {
     const err = error as Error;
     const msg = err?.message ?? '';
-    if (msg.includes('payments') && (msg.includes('does not exist') || msg.includes('relation'))) {
+    if (
+      msg.includes('payments') &&
+      (msg.includes('does not exist') || msg.includes('relation'))
+    ) {
       res.status(200).json({ success: true, data: [] });
       return;
     }
@@ -45,13 +55,26 @@ const listPaymentsHandler = async (req: Request, res: Response): Promise<void> =
       res.status(200).json({ success: true, data: [] });
       return;
     }
-    logger.error(toSafeProviderError('payments', 'list', error), 'Error listing payments');
+    logger.error(
+      toSafeProviderError('payments', 'list', error),
+      'Error listing payments'
+    );
     res.status(500).json(toSafeClientErrorBody('Payment operation failed'));
   }
 };
 
-router.get('/', authMiddleware, requireRoles(ADMIN_BILLING_DOULA), listPaymentsHandler);
-router.get('', authMiddleware, requireRoles(ADMIN_BILLING_DOULA), listPaymentsHandler);
+router.get(
+  '/',
+  authMiddleware,
+  requireRoles(ADMIN_BILLING_DOULA),
+  listPaymentsHandler
+);
+router.get(
+  '',
+  authMiddleware,
+  requireRoles(ADMIN_BILLING_DOULA),
+  listPaymentsHandler
+);
 
 // Get payment dashboard — security bug fix (PR 4): was anonymous
 router.get(
@@ -63,7 +86,10 @@ router.get(
       const dashboard = await paymentService.getPaymentDashboard();
       res.json({ success: true, data: dashboard });
     } catch (error) {
-      logger.error(toSafeProviderError('payments', 'dashboard', error), 'Error getting payment dashboard');
+      logger.error(
+        toSafeProviderError('payments', 'dashboard', error),
+        'Error getting payment dashboard'
+      );
       res.status(500).json(toSafeClientErrorBody('Payment operation failed'));
     }
   }
@@ -79,7 +105,10 @@ router.get(
       const overdue = await paymentService.getOverduePayments();
       res.json({ success: true, data: overdue });
     } catch (error) {
-      logger.error(toSafeProviderError('payments', 'overdue', error), 'Error getting overdue payments');
+      logger.error(
+        toSafeProviderError('payments', 'overdue', error),
+        'Error getting overdue payments'
+      );
       res.status(500).json(toSafeClientErrorBody('Payment operation failed'));
     }
   }
@@ -92,7 +121,9 @@ async function assertContractPaymentAccess(
   contractId: string
 ): Promise<boolean> {
   if (req.user?.role !== 'client') return true;
-  const ownClientId = await cloudSqlAssignmentService.getClientIdByAuthUserId(req.user.id);
+  const ownClientId = await cloudSqlAssignmentService.getClientIdByAuthUserId(
+    req.user.id
+  );
   if (!ownClientId) {
     res.status(404).json({ success: false, error: 'Client profile not found' });
     return false;
@@ -124,7 +155,10 @@ router.get(
       const summary = await paymentService.getPaymentSummary(contractId);
       res.json({ success: true, data: summary });
     } catch (error) {
-      logger.error(toSafeProviderError('payments', 'summary', error), 'Error getting payment summary');
+      logger.error(
+        toSafeProviderError('payments', 'summary', error),
+        'Error getting payment summary'
+      );
       res.status(500).json(toSafeClientErrorBody('Payment operation failed'));
     }
   }
@@ -142,7 +176,10 @@ router.get(
       const schedule = await paymentService.getPaymentSchedule(contractId);
       res.json({ success: true, data: schedule });
     } catch (error) {
-      logger.error(toSafeProviderError('payments', 'schedule', error), 'Error getting payment schedule');
+      logger.error(
+        toSafeProviderError('payments', 'schedule', error),
+        'Error getting payment schedule'
+      );
       res.status(500).json(toSafeClientErrorBody('Payment operation failed'));
     }
   }
@@ -160,22 +197,35 @@ router.get(
 
       // Client users can only see their own payment history.
       if (req.user?.role === 'client') {
-        const ownClientId = await cloudSqlAssignmentService.getClientIdByAuthUserId(req.user.id);
+        const ownClientId =
+          await cloudSqlAssignmentService.getClientIdByAuthUserId(req.user.id);
         if (!ownClientId) {
-          res.status(404).json({ success: false, error: 'Client profile not found' });
+          res
+            .status(404)
+            .json({ success: false, error: 'Client profile not found' });
           return;
         }
         clientIdFilter = ownClientId;
       }
 
-      const history = await paymentService.getContractPayments(contractId, clientIdFilter);
+      const history = await paymentService.getContractPayments(
+        contractId,
+        clientIdFilter
+      );
       if (history.length === 0) {
-        res.json({ success: true, data: [], message: 'No payment history found' });
+        res.json({
+          success: true,
+          data: [],
+          message: 'No payment history found',
+        });
         return;
       }
       res.json({ success: true, data: history });
     } catch (error) {
-      logger.error(toSafeProviderError('payments', 'history', error), 'Error getting payment history');
+      logger.error(
+        toSafeProviderError('payments', 'history', error),
+        'Error getting payment history'
+      );
       res.status(500).json(toSafeClientErrorBody('Payment operation failed'));
     }
   }
@@ -205,7 +255,10 @@ router.put(
 
       res.json({ success: true, data: payment });
     } catch (error) {
-      logger.error(toSafeProviderError('payments', 'update_status', error), 'Error updating payment status');
+      logger.error(
+        toSafeProviderError('payments', 'update_status', error),
+        'Error updating payment status'
+      );
       res.status(500).json(toSafeClientErrorBody('Payment operation failed'));
     }
   }
@@ -224,7 +277,10 @@ router.get(
       );
       res.json({ success: true, data: payments });
     } catch (error) {
-      logger.error(toSafeProviderError('payments', 'by_status', error), 'Error getting payments by status');
+      logger.error(
+        toSafeProviderError('payments', 'by_status', error),
+        'Error getting payments by status'
+      );
       res.status(500).json(toSafeClientErrorBody('Payment operation failed'));
     }
   }
@@ -254,7 +310,10 @@ router.get(
 
       res.json({ success: true, data: payments });
     } catch (error) {
-      logger.error(toSafeProviderError('payments', 'due_between', error), 'Error getting payments due between dates');
+      logger.error(
+        toSafeProviderError('payments', 'due_between', error),
+        'Error getting payments due between dates'
+      );
       res.status(500).json(toSafeClientErrorBody('Payment operation failed'));
     }
   }
@@ -268,9 +327,15 @@ router.post(
   async (_req, res) => {
     try {
       await paymentService.runDailyMaintenance();
-      res.json({ success: true, message: 'Daily payment maintenance completed' });
+      res.json({
+        success: true,
+        message: 'Daily payment maintenance completed',
+      });
     } catch (error) {
-      logger.error(toSafeProviderError('payments', 'maintenance_daily', error), 'Error running daily maintenance');
+      logger.error(
+        toSafeProviderError('payments', 'maintenance_daily', error),
+        'Error running daily maintenance'
+      );
       res.status(500).json(toSafeClientErrorBody('Payment operation failed'));
     }
   }
@@ -286,7 +351,10 @@ router.post(
       await paymentService.updateOverdueFlags();
       res.json({ success: true, message: 'Overdue flags updated' });
     } catch (error) {
-      logger.error(toSafeProviderError('payments', 'maintenance_overdue', error), 'Error updating overdue flags');
+      logger.error(
+        toSafeProviderError('payments', 'maintenance_overdue', error),
+        'Error updating overdue flags'
+      );
       res.status(500).json(toSafeClientErrorBody('Payment operation failed'));
     }
   }

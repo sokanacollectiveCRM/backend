@@ -1,7 +1,6 @@
 /**
  * Shared Zod request schemas for incrementally migrated routes (PR 7).
  */
-
 import { z } from 'zod';
 
 export const loginBodySchema = z.object({

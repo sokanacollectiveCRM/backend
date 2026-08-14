@@ -1,11 +1,31 @@
+import express from 'express';
+import http, { Server } from 'http';
+import request from 'supertest';
+
+import contractRoutes from '../routes/contractRoutes';
+import contractSigningRoutes from '../routes/contractSigningRoutes';
+import customersRoutes from '../routes/customersRoutes';
+import paymentRoutes from '../routes/paymentRoutes';
+import pdfContractRoutes from '../routes/pdfContractRoutes';
+import quickbooksRoutes from '../routes/quickbooksRoutes';
+import signNowRoutes from '../routes/signNowRoutes';
+import {
+  decideClientResourceAccess,
+  decideOwnershipAccess,
+  roleAllows,
+} from '../security/authorizationPolicies';
+import {
+  PILOT_CRITICAL_PROTECTED_PREFIXES,
+  PILOT_CRITICAL_PUBLIC_PATHS,
+  SECURITY_SMOKE_BASELINE,
+} from '../security/securitySmokeBaseline';
+
 /**
  * PR 4 authorization matrix / security smoke expansion.
  * Mocks auth middleware — no network, no providers, no open handles beyond closed servers.
  */
 
-let currentUser:
-  | { id: string; role: string; email: string }
-  | null = null;
+let currentUser: { id: string; role: string; email: string } | null = null;
 
 jest.mock('../middleware/authMiddleware', () => ({
   __esModule: true,
@@ -32,9 +52,13 @@ jest.mock('../services/signNowService', () => ({
     testTemplate: jest.fn().mockResolvedValue({ success: true }),
     listTemplates: jest.fn().mockResolvedValue({ success: true }),
     getTemplateFields: jest.fn().mockResolvedValue({ success: true }),
-    createPrefilledDocFromTemplate: jest.fn().mockResolvedValue({ documentId: 'doc-1' }),
+    createPrefilledDocFromTemplate: jest
+      .fn()
+      .mockResolvedValue({ documentId: 'doc-1' }),
     inspectDocumentFields: jest.fn().mockResolvedValue({ fields: [] }),
-    createInvitationClientPartner: jest.fn().mockResolvedValue({ success: true }),
+    createInvitationClientPartner: jest
+      .fn()
+      .mockResolvedValue({ success: true }),
     apiToken: 'test-token',
   })),
   signNowService: {
@@ -42,18 +66,24 @@ jest.mock('../services/signNowService', () => ({
     testTemplate: jest.fn().mockResolvedValue({ success: true }),
     listTemplates: jest.fn().mockResolvedValue({ success: true }),
     getTemplateFields: jest.fn().mockResolvedValue({ success: true }),
-    createPrefilledDocFromTemplate: jest.fn().mockResolvedValue({ documentId: 'doc-1' }),
+    createPrefilledDocFromTemplate: jest
+      .fn()
+      .mockResolvedValue({ documentId: 'doc-1' }),
     inspectDocumentFields: jest.fn().mockResolvedValue({ fields: [] }),
-    createInvitationClientPartner: jest.fn().mockResolvedValue({ success: true }),
+    createInvitationClientPartner: jest
+      .fn()
+      .mockResolvedValue({ success: true }),
   },
 }));
 
 jest.mock('../controllers/signNowWebhookController', () => ({
-  signNowCallback: (_req: any, res: any) => res.status(200).json({ received: true }),
+  signNowCallback: (_req: any, res: any) =>
+    res.status(200).json({ received: true }),
 }));
 
 jest.mock('../controllers/quickbooksWebhookController', () => ({
-  quickBooksInvoicePaidWebhook: (_req: any, res: any) => res.status(200).json({ received: true }),
+  quickBooksInvoicePaidWebhook: (_req: any, res: any) =>
+    res.status(200).json({ received: true }),
 }));
 
 // HMAC is covered in webhookAndOauthSecurity.test.ts. This suite only asserts
@@ -64,21 +94,29 @@ jest.mock('../security/webhookAuth', () => ({
 }));
 
 jest.mock('../controllers/quickbooksController', () => ({
-  connectQuickBooks: (_req: any, res: any) => res.status(200).json({ ok: true }),
-  handleQuickBooksCallback: (_req: any, res: any) => res.status(200).json({ ok: true }),
-  quickBooksAuthUrl: (_req: any, res: any) => res.status(200).json({ url: 'https://example.test' }),
-  quickBooksStatus: (_req: any, res: any) => res.status(200).json({ connected: false }),
+  connectQuickBooks: (_req: any, res: any) =>
+    res.status(200).json({ ok: true }),
+  handleQuickBooksCallback: (_req: any, res: any) =>
+    res.status(200).json({ ok: true }),
+  quickBooksAuthUrl: (_req: any, res: any) =>
+    res.status(200).json({ url: 'https://example.test' }),
+  quickBooksStatus: (_req: any, res: any) =>
+    res.status(200).json({ connected: false }),
   getInvoices: (_req: any, res: any) => res.status(200).json([]),
   getQuickBooksCustomers: (_req: any, res: any) => res.status(200).json([]),
-  getInvoiceableCustomersController: (_req: any, res: any) => res.status(200).json([]),
-  refreshQuickBooksCustomerSyncStatus: (_req: any, res: any) => res.status(200).json({ ok: true }),
+  getInvoiceableCustomersController: (_req: any, res: any) =>
+    res.status(200).json([]),
+  refreshQuickBooksCustomerSyncStatus: (_req: any, res: any) =>
+    res.status(200).json({ ok: true }),
   createCustomer: (_req: any, res: any) => res.status(200).json({ ok: true }),
-  quickBooksDisconnect: (_req: any, res: any) => res.status(200).json({ ok: true }),
+  quickBooksDisconnect: (_req: any, res: any) =>
+    res.status(200).json({ ok: true }),
   createInvoice: (_req: any, res: any) => res.status(201).json({ ok: true }),
 }));
 
 jest.mock('../services/payments/paymentsController', () => ({
-  simulatePaymentController: (_req: any, res: any) => res.status(200).json({ ok: true }),
+  simulatePaymentController: (_req: any, res: any) =>
+    res.status(200).json({ ok: true }),
 }));
 
 jest.mock('../services/simplePaymentService', () => ({
@@ -88,7 +126,9 @@ jest.mock('../services/simplePaymentService', () => ({
     getPaymentSummary: jest.fn().mockResolvedValue({ balance: 0 }),
     getPaymentSchedule: jest.fn().mockResolvedValue([]),
     getContractPayments: jest.fn().mockResolvedValue([]),
-    updatePaymentStatus: jest.fn().mockResolvedValue({ id: 'p1', status: 'succeeded' }),
+    updatePaymentStatus: jest
+      .fn()
+      .mockResolvedValue({ id: 'p1', status: 'succeeded' }),
     getPaymentsByStatus: jest.fn().mockResolvedValue([]),
     getPaymentsDueBetween: jest.fn().mockResolvedValue([]),
     runDailyMaintenance: jest.fn().mockResolvedValue(undefined),
@@ -98,24 +138,28 @@ jest.mock('../services/simplePaymentService', () => ({
 
 jest.mock('../services/contractClientService', () => ({
   ContractClientService: jest.fn().mockImplementation(() => ({
-    getContractWithClient: jest.fn().mockImplementation(async (contractId: string) => {
-      if (contractId === 'other-contract') {
-        return { contract: { id: contractId, client_id: 'client-other' } };
-      }
-      if (contractId === 'own-contract') {
-        return { contract: { id: contractId, client_id: 'client-own' } };
-      }
-      return null;
-    }),
+    getContractWithClient: jest
+      .fn()
+      .mockImplementation(async (contractId: string) => {
+        if (contractId === 'other-contract') {
+          return { contract: { id: contractId, client_id: 'client-other' } };
+        }
+        if (contractId === 'own-contract') {
+          return { contract: { id: contractId, client_id: 'client-own' } };
+        }
+        return null;
+      }),
   })),
 }));
 
 jest.mock('../services/cloudSqlDoulaAssignmentService', () => ({
   CloudSqlDoulaAssignmentService: jest.fn().mockImplementation(() => ({
-    getClientIdByAuthUserId: jest.fn().mockImplementation(async (userId: string) => {
-      if (userId === 'client-user') return 'client-own';
-      return null;
-    }),
+    getClientIdByAuthUserId: jest
+      .fn()
+      .mockImplementation(async (userId: string) => {
+        if (userId === 'client-user') return 'client-own';
+        return null;
+      }),
   })),
 }));
 
@@ -139,33 +183,14 @@ jest.mock('../utils/signNowContractProcessor', () => ({
 }));
 
 jest.mock('../utils/pdfContractProcessor', () => ({
-  getAvailableContractTemplates: jest.fn().mockReturnValue(['labor_support_v1']),
+  getAvailableContractTemplates: jest
+    .fn()
+    .mockReturnValue(['labor_support_v1']),
   processContractWithPdfTemplate: jest.fn().mockResolvedValue({ ok: true }),
-  validateContractDataForTemplate: jest.fn().mockReturnValue({ valid: true, missingFields: [] }),
+  validateContractDataForTemplate: jest
+    .fn()
+    .mockReturnValue({ valid: true, missingFields: [] }),
 }));
-
-import express from 'express';
-import http, { Server } from 'http';
-import request from 'supertest';
-
-import {
-  decideClientResourceAccess,
-  decideOwnershipAccess,
-  roleAllows,
-} from '../security/authorizationPolicies';
-import {
-  PILOT_CRITICAL_PROTECTED_PREFIXES,
-  PILOT_CRITICAL_PUBLIC_PATHS,
-  SECURITY_SMOKE_BASELINE,
-} from '../security/securitySmokeBaseline';
-
-import paymentRoutes from '../routes/paymentRoutes';
-import contractSigningRoutes from '../routes/contractSigningRoutes';
-import signNowRoutes from '../routes/signNowRoutes';
-import contractRoutes from '../routes/contractRoutes';
-import pdfContractRoutes from '../routes/pdfContractRoutes';
-import customersRoutes from '../routes/customersRoutes';
-import quickbooksRoutes from '../routes/quickbooksRoutes';
 
 async function listen(app: express.Application): Promise<Server> {
   const server = http.createServer(app);
@@ -174,7 +199,8 @@ async function listen(app: express.Application): Promise<Server> {
 }
 
 async function closeServer(server: Server): Promise<void> {
-  if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
+  if (typeof server.closeAllConnections === 'function')
+    server.closeAllConnections();
   await new Promise<void>((resolve, reject) => {
     server.close((err) => (err ? reject(err) : resolve()));
   });
@@ -196,8 +222,18 @@ function buildApp(): express.Application {
 
 describe('authorizationPolicies', () => {
   it('allows listed roles and denies others', () => {
-    expect(roleAllows({ id: '1', email: 'a@b.c', role: 'admin' }, ['admin', 'billing'])).toBe(true);
-    expect(roleAllows({ id: '1', email: 'a@b.c', role: 'client' }, ['admin', 'billing'])).toBe(false);
+    expect(
+      roleAllows({ id: '1', email: 'a@b.c', role: 'admin' }, [
+        'admin',
+        'billing',
+      ])
+    ).toBe(true);
+    expect(
+      roleAllows({ id: '1', email: 'a@b.c', role: 'client' }, [
+        'admin',
+        'billing',
+      ])
+    ).toBe(false);
     expect(roleAllows(null, ['admin'])).toBe(false);
   });
 
@@ -275,24 +311,38 @@ describe('PR4 auth matrix HTTP', () => {
   ] as const;
 
   it.each(anonDenied)('denies anonymous %s %s', async (method, path) => {
-    const res = await request(server)[method.toLowerCase() as 'get' | 'post' | 'put'](path);
+    const res =
+      await request(server)[method.toLowerCase() as 'get' | 'post' | 'put'](
+        path
+      );
     expect(res.status).toBe(401);
     expect(res.body.error).toMatch(/No session token provided/i);
   });
 
   it('keeps SignNow webhook off CRM session auth', async () => {
-    const res = await request(server).post('/api/signnow/callback').send({}).expect(200);
+    const res = await request(server)
+      .post('/api/signnow/callback')
+      .send({})
+      .expect(200);
     expect(res.body).toEqual({ received: true });
   });
 
   it('keeps QuickBooks webhook publicly reachable on aliases', async () => {
-    await request(server).post('/quickbooks/webhooks/invoice-paid').send({}).expect(200);
-    await request(server).post('/api/quickbooks/webhooks/invoice-paid').send({}).expect(200);
+    await request(server)
+      .post('/quickbooks/webhooks/invoice-paid')
+      .send({})
+      .expect(200);
+    await request(server)
+      .post('/api/quickbooks/webhooks/invoice-paid')
+      .send({})
+      .expect(200);
   });
 
   it('allows admin on newly protected payment dashboard', async () => {
     currentUser = { id: 'a1', role: 'admin', email: 'admin@test' };
-    const res = await request(server).get('/api/payments/dashboard').expect(200);
+    const res = await request(server)
+      .get('/api/payments/dashboard')
+      .expect(200);
     expect(res.body.success).toBe(true);
   });
 
@@ -322,14 +372,20 @@ describe('PR4 auth matrix HTTP', () => {
     await request(server).get('/quickbooks/customers/invoiceable').expect(200);
 
     currentUser = { id: 'client-user', role: 'client', email: 'c@test' };
-    const denied = await request(server).get('/quickbooks/customers/invoiceable');
+    const denied = await request(server).get(
+      '/quickbooks/customers/invoiceable'
+    );
     expect(denied.status).toBe(403);
   });
 
   it('enforces client ownership on payment summary', async () => {
     currentUser = { id: 'client-user', role: 'client', email: 'c@test' };
-    await request(server).get('/api/payments/contract/own-contract/summary').expect(200);
-    const other = await request(server).get('/api/payments/contract/other-contract/summary');
+    await request(server)
+      .get('/api/payments/contract/own-contract/summary')
+      .expect(200);
+    const other = await request(server).get(
+      '/api/payments/contract/other-contract/summary'
+    );
     expect(other.status).toBe(403);
     expect(other.body.error).toMatch(/Forbidden/i);
   });

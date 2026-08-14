@@ -2,7 +2,6 @@
  * Cross-instance webhook event claim ledger (idempotency / replay prevention).
  * Unique (provider, event_key). First insert wins; duplicates are no-ops.
  */
-
 import { getPool } from '../db/cloudSqlPool';
 
 export type WebhookClaimResult = 'claimed' | 'duplicate';
@@ -34,7 +33,7 @@ export class DbWebhookEventStore implements WebhookEventStore {
        VALUES ($1, $2)
        ON CONFLICT (provider, event_key) DO NOTHING
        RETURNING id`,
-      [provider, eventKey],
+      [provider, eventKey]
     );
     return result.rowCount && result.rowCount > 0 ? 'claimed' : 'duplicate';
   }
@@ -63,7 +62,7 @@ export function resetWebhookEventStoreForTests(): void {
 
 export async function claimWebhookEvent(
   provider: string,
-  eventKey: string,
+  eventKey: string
 ): Promise<WebhookClaimResult> {
   return getWebhookEventStore().claim(provider, eventKey);
 }

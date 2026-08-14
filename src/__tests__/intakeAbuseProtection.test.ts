@@ -1,6 +1,7 @@
 import express from 'express';
 import request from 'supertest';
 
+import { PUBLIC_INTAKE_SUCCESS_MESSAGE } from '../features/intake';
 import {
   MemoryIntakeAbuseStore,
   buildSoftDedupeKey,
@@ -11,7 +12,6 @@ import {
   resetIntakeAbuseStoreForTests,
   setIntakeAbuseStoreForTests,
 } from '../features/intake/infrastructure/intakeAbuseProtection';
-import { PUBLIC_INTAKE_SUCCESS_MESSAGE } from '../features/intake';
 
 describe('intake abuse protection', () => {
   beforeEach(() => {
@@ -36,16 +36,22 @@ describe('intake abuse protection', () => {
   });
 
   it('detects honeypot fields', () => {
-    expect(isIntakeHoneypotTriggered({ website: 'http://spam.test' })).toBe(true);
+    expect(isIntakeHoneypotTriggered({ website: 'http://spam.test' })).toBe(
+      true
+    );
     expect(isIntakeHoneypotTriggered({ firstname: 'Ada' })).toBe(false);
   });
 
   it('returns fake success for honeypot submissions', async () => {
     const app = express();
     app.use(express.json());
-    app.post('/requestService/requestSubmission', protectPublicIntakeEarly, (_req, res) => {
-      res.status(200).json({ message: 'should-not-reach' });
-    });
+    app.post(
+      '/requestService/requestSubmission',
+      protectPublicIntakeEarly,
+      (_req, res) => {
+        res.status(200).json({ message: 'should-not-reach' });
+      }
+    );
 
     const res = await request(app)
       .post('/requestService/requestSubmission')
@@ -57,12 +63,22 @@ describe('intake abuse protection', () => {
   it('rate limits by IP', async () => {
     const app = express();
     app.use(express.json());
-    app.post('/requestService/requestSubmission', protectPublicIntakeEarly, (_req, res) => {
-      res.status(200).json({ ok: true });
-    });
+    app.post(
+      '/requestService/requestSubmission',
+      protectPublicIntakeEarly,
+      (_req, res) => {
+        res.status(200).json({ ok: true });
+      }
+    );
 
-    await request(app).post('/requestService/requestSubmission').send({ email: 'a@b.c' }).expect(200);
-    await request(app).post('/requestService/requestSubmission').send({ email: 'a@b.c' }).expect(200);
+    await request(app)
+      .post('/requestService/requestSubmission')
+      .send({ email: 'a@b.c' })
+      .expect(200);
+    await request(app)
+      .post('/requestService/requestSubmission')
+      .send({ email: 'a@b.c' })
+      .expect(200);
     const limited = await request(app)
       .post('/requestService/requestSubmission')
       .send({ email: 'a@b.c' })
@@ -85,8 +101,12 @@ describe('intake abuse protection', () => {
       get: (name: string) =>
         name.toLowerCase() === 'idempotency-key' ? 'key-1' : undefined,
     };
-    expect(await evaluateIntakeSubmissionGuards(req1, body)).toEqual({ action: 'proceed' });
-    await finalizeIntakeIdempotency(req1, body, 200, { message: PUBLIC_INTAKE_SUCCESS_MESSAGE });
+    expect(await evaluateIntakeSubmissionGuards(req1, body)).toEqual({
+      action: 'proceed',
+    });
+    await finalizeIntakeIdempotency(req1, body, 200, {
+      message: PUBLIC_INTAKE_SUCCESS_MESSAGE,
+    });
 
     const replay = await evaluateIntakeSubmissionGuards(req1, body);
     expect(replay).toEqual({
@@ -109,11 +129,18 @@ describe('intake abuse protection', () => {
       service_needed: 'Labor Support',
     };
     const req: any = { headers: {}, get: () => undefined };
-    expect(await evaluateIntakeSubmissionGuards(req, body)).toEqual({ action: 'proceed' });
-    expect(await evaluateIntakeSubmissionGuards(req, { ...body, firstname: 'C' })).toEqual({
+    expect(await evaluateIntakeSubmissionGuards(req, body)).toEqual({
       action: 'proceed',
     });
-    const limited = await evaluateIntakeSubmissionGuards(req, { ...body, firstname: 'D' });
+    expect(
+      await evaluateIntakeSubmissionGuards(req, { ...body, firstname: 'C' })
+    ).toEqual({
+      action: 'proceed',
+    });
+    const limited = await evaluateIntakeSubmissionGuards(req, {
+      ...body,
+      firstname: 'D',
+    });
     expect(limited.action).toBe('rate_limited');
   });
 });

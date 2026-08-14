@@ -1,6 +1,7 @@
 import { NextFunction, Response } from 'express';
-import type { AuthRequest } from '../types';
+
 import { ApiErrorCode } from '../security/errorCodes';
+import type { AuthRequest } from '../types';
 
 // authorizeRoles
 //

@@ -24,12 +24,18 @@ function isPartsBag(value: unknown): value is RequestValidationSchemas {
  * - `validateRequest({ body, params, query })` → selected parts
  * On failure: 400 `{ success: false, error, code: 'VALIDATION_ERROR', details? }`
  */
-export function validateRequest(schemaOrParts: ZodTypeAny | RequestValidationSchemas) {
+export function validateRequest(
+  schemaOrParts: ZodTypeAny | RequestValidationSchemas
+) {
   const parts: RequestValidationSchemas = isPartsBag(schemaOrParts)
     ? schemaOrParts
     : { body: schemaOrParts as ZodTypeAny };
 
-  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  return async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
     try {
       if (parts.body) {
         req.body = await parts.body.parseAsync(req.body);

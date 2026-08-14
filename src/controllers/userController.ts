@@ -1,11 +1,21 @@
 import { Response } from 'express';
-import { AuthenticationError, AuthorizationError, ConflictError, NotFoundError, ValidationError } from '../domains/errors';
-import { AuthRequest, UpdateRequest } from '../types';
-import { UserUseCase } from "../usecase/userUseCase";
+
+import {
+  AuthenticationError,
+  AuthorizationError,
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from '../domains/errors';
 import { CloudSqlTeamService } from '../services/cloudSqlTeamService';
 import { DoulaDocumentCompletenessService } from '../services/doulaDocumentCompletenessService';
-import { buildHourSummary, parseHourFilter, parseHourType } from '../utils/hourTypes';
-
+import { AuthRequest, UpdateRequest } from '../types';
+import { UserUseCase } from '../usecase/userUseCase';
+import {
+  buildHourSummary,
+  parseHourFilter,
+  parseHourType,
+} from '../utils/hourTypes';
 
 export class UserController {
   private userUseCase: UserUseCase;
@@ -26,7 +36,8 @@ export class UserController {
       const targetUserId = req.params.id;
 
       // Staff profiles are in Cloud SQL; Supabase public.users is gone.
-      const member = await this.cloudSqlTeamService.getTeamMemberById(targetUserId);
+      const member =
+        await this.cloudSqlTeamService.getTeamMemberById(targetUserId);
       if (member) {
         res.status(200).json({
           ...member,
@@ -65,7 +76,7 @@ export class UserController {
       const doulas = await this.cloudSqlTeamService.listDoulas();
       res.json({
         success: true,
-        doulas: doulas.map(d => ({
+        doulas: doulas.map((d) => ({
           id: d.id,
           firstname: d.firstname,
           lastname: d.lastname,
@@ -74,7 +85,7 @@ export class UserController {
           bio: d.bio ?? null,
           phone_number: d.phone_number,
           scheduling_url: d.scheduling_url ?? null,
-        }))
+        })),
       });
     } catch (error) {
       this.handleError(error, res);
@@ -86,28 +97,35 @@ export class UserController {
       const userId = req.params.id;
       const removed = await this.cloudSqlTeamService.deleteTeamMember(userId);
       if (!removed) {
-        res.status(404).json({ success: false, error: 'Team member not found' });
+        res
+          .status(404)
+          .json({ success: false, error: 'Team member not found' });
         return;
       }
       res.status(200).json({
         success: true,
-        message: 'Team member has been deleted successfully'
+        message: 'Team member has been deleted successfully',
       });
     } catch (error) {
       this.handleError(error, res);
     }
   }
 
-  async addMember(req: AuthRequest, res: Response): Promise<void>{
-    try{
-      const userName = req.params.firstname
-      const userEmail = req.params.email
-      const userRole = req.params.role
-      const userBio = req.params.bio
-      const user = await this.userUseCase.addMember(userName, userEmail, userRole, userBio)
-      res.status(200).json(user.toJSON())
+  async addMember(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const userName = req.params.firstname;
+      const userEmail = req.params.email;
+      const userRole = req.params.role;
+      const userBio = req.params.bio;
+      const user = await this.userUseCase.addMember(
+        userName,
+        userEmail,
+        userRole,
+        userBio
+      );
+      res.status(200).json(user.toJSON());
     } catch (error) {
-      this.handleError(error, res)
+      this.handleError(error, res);
     }
   }
 
@@ -117,14 +135,19 @@ export class UserController {
       const hourTypeFilter = parseHourFilter(req.query.type);
       if (req.query.type && !hourTypeFilter) {
         res.status(400).json({
-          error: 'Invalid hour type filter. Must be prenatal, postpartum, or unknown'
+          error:
+            'Invalid hour type filter. Must be prenatal, postpartum, or unknown',
         });
         return;
       }
 
-      if(role === "admin") {
+      if (role === 'admin') {
         const allHoursData = await this.userUseCase.getAllHours();
-        const hours = hourTypeFilter ? allHoursData.filter((entry: any) => (entry.type ?? 'unknown') === hourTypeFilter) : allHoursData;
+        const hours = hourTypeFilter
+          ? allHoursData.filter(
+              (entry: any) => (entry.type ?? 'unknown') === hourTypeFilter
+            )
+          : allHoursData;
         res.status(200).json({
           success: true,
           hours,
@@ -132,7 +155,11 @@ export class UserController {
         });
       } else {
         const specificHoursData = await this.userUseCase.getHoursById(id);
-        const hours = hourTypeFilter ? specificHoursData.filter((entry: any) => (entry.type ?? 'unknown') === hourTypeFilter) : specificHoursData;
+        const hours = hourTypeFilter
+          ? specificHoursData.filter(
+              (entry: any) => (entry.type ?? 'unknown') === hourTypeFilter
+            )
+          : specificHoursData;
         res.status(200).json({
           success: true,
           hours,
@@ -147,25 +174,35 @@ export class UserController {
 
   async addNewHours(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { doula_id, client_id, start_time, end_time, note, type } = req.body;
+      const { doula_id, client_id, start_time, end_time, note, type } =
+        req.body;
 
       const normalizedType = parseHourType(type);
       if (!normalizedType) {
         res.status(400).json({
-          error: 'type is required and must be either prenatal or postpartum'
+          error: 'type is required and must be either prenatal or postpartum',
         });
         return;
       }
 
-      if(!doula_id || !client_id || !start_time|| !end_time) {
+      if (!doula_id || !client_id || !start_time || !end_time) {
         console.log(`${doula_id}, ${client_id}, ${start_time}, ${end_time}`);
-        throw new Error(`Error: missing doula_id, client_id, start_time, or end_time`);
+        throw new Error(
+          `Error: missing doula_id, client_id, start_time, or end_time`
+        );
       }
 
-      const newWorkEntry = await this.userUseCase.addNewHours(doula_id, client_id, new Date(start_time), new Date(end_time), note, normalizedType);
+      const newWorkEntry = await this.userUseCase.addNewHours(
+        doula_id,
+        client_id,
+        new Date(start_time),
+        new Date(end_time),
+        note,
+        normalizedType
+      );
       res.status(200).json(newWorkEntry);
     } catch (error) {
-      console.log("Error trying to add new work entry");
+      console.log('Error trying to add new work entry');
       this.handleError(error, res);
     }
   }
@@ -183,7 +220,7 @@ export class UserController {
 
       if (!normalizedType) {
         res.status(400).json({
-          error: 'type is required and must be either prenatal or postpartum'
+          error: 'type is required and must be either prenatal or postpartum',
         });
         return;
       }
@@ -201,7 +238,7 @@ export class UserController {
 
       res.status(200).json({
         success: true,
-        workEntry: updatedHour
+        workEntry: updatedHour,
       });
     } catch (error) {
       console.log('Error trying to update work entry');
@@ -217,7 +254,10 @@ export class UserController {
 
       // upload profile picture to supabase storage so we can grab it later
       if (profilePicture) {
-        const imageUrl = await this.userUseCase.uploadProfilePicture(user, profilePicture);
+        const imageUrl = await this.userUseCase.uploadProfilePicture(
+          user,
+          profilePicture
+        );
         updateData.profile_picture = imageUrl;
       }
 
@@ -225,54 +265,89 @@ export class UserController {
 
       // Staff profiles live in Cloud SQL (admins/doulas). Supabase public.users is gone.
       if (role === 'admin' || role === 'doula') {
-        const updated = await this.cloudSqlTeamService.updateTeamMember(user.id, {
-          firstname: typeof updateData.firstname === 'string' ? updateData.firstname : undefined,
-          lastname: typeof updateData.lastname === 'string' ? updateData.lastname : undefined,
-          email: typeof updateData.email === 'string' ? updateData.email : undefined,
-          phone_number:
-            typeof updateData.phone_number === 'string'
-              ? updateData.phone_number
-              : typeof updateData.phone === 'string'
-                ? updateData.phone
+        const updated = await this.cloudSqlTeamService.updateTeamMember(
+          user.id,
+          {
+            firstname:
+              typeof updateData.firstname === 'string'
+                ? updateData.firstname
                 : undefined,
-          address: typeof updateData.address === 'string' ? updateData.address : undefined,
-          city: typeof updateData.city === 'string' ? updateData.city : undefined,
-          state: typeof updateData.state === 'string' ? updateData.state : undefined,
-          country: typeof updateData.country === 'string' ? updateData.country : undefined,
-          zip_code:
-            updateData.zip_code === null ||
-            typeof updateData.zip_code === 'string' ||
-            typeof updateData.zip_code === 'number'
-              ? (updateData.zip_code as string | null)
+            lastname:
+              typeof updateData.lastname === 'string'
+                ? updateData.lastname
+                : undefined,
+            email:
+              typeof updateData.email === 'string'
+                ? updateData.email
+                : undefined,
+            phone_number:
+              typeof updateData.phone_number === 'string'
+                ? updateData.phone_number
+                : typeof updateData.phone === 'string'
+                  ? updateData.phone
+                  : undefined,
+            address:
+              typeof updateData.address === 'string'
+                ? updateData.address
+                : undefined,
+            city:
+              typeof updateData.city === 'string' ? updateData.city : undefined,
+            state:
+              typeof updateData.state === 'string'
+                ? updateData.state
+                : undefined,
+            country:
+              typeof updateData.country === 'string'
+                ? updateData.country
+                : undefined,
+            zip_code:
+              updateData.zip_code === null ||
+              typeof updateData.zip_code === 'string' ||
+              typeof updateData.zip_code === 'number'
+                ? (updateData.zip_code as string | null)
+                : undefined,
+            bio:
+              typeof updateData.bio === 'string' ? updateData.bio : undefined,
+            gender:
+              typeof updateData.gender === 'string'
+                ? updateData.gender
+                : undefined,
+            pronouns:
+              typeof updateData.pronouns === 'string'
+                ? updateData.pronouns
+                : undefined,
+            race_ethnicity: Array.isArray(updateData.race_ethnicity)
+              ? (updateData.race_ethnicity as string[])
               : undefined,
-          bio: typeof updateData.bio === 'string' ? updateData.bio : undefined,
-          gender: typeof updateData.gender === 'string' ? updateData.gender : undefined,
-          pronouns: typeof updateData.pronouns === 'string' ? updateData.pronouns : undefined,
-          race_ethnicity: Array.isArray(updateData.race_ethnicity)
-            ? (updateData.race_ethnicity as string[])
-            : undefined,
-          languages_other_than_english: Array.isArray(updateData.languages_other_than_english)
-            ? (updateData.languages_other_than_english as string[])
-            : undefined,
-          race_ethnicity_other:
-            typeof updateData.race_ethnicity_other === 'string'
-              ? updateData.race_ethnicity_other
+            languages_other_than_english: Array.isArray(
+              updateData.languages_other_than_english
+            )
+              ? (updateData.languages_other_than_english as string[])
               : undefined,
-          other_demographic_details:
-            typeof updateData.other_demographic_details === 'string'
-              ? updateData.other_demographic_details
-              : undefined,
-          scheduling_url:
-            typeof updateData.scheduling_url === 'string' ? updateData.scheduling_url : undefined,
-          profile_picture:
-            typeof updateData.profile_picture === 'string' &&
-            updateData.profile_picture.trim().length > 0
-              ? updateData.profile_picture.trim()
-              : undefined,
-        });
+            race_ethnicity_other:
+              typeof updateData.race_ethnicity_other === 'string'
+                ? updateData.race_ethnicity_other
+                : undefined,
+            other_demographic_details:
+              typeof updateData.other_demographic_details === 'string'
+                ? updateData.other_demographic_details
+                : undefined,
+            scheduling_url:
+              typeof updateData.scheduling_url === 'string'
+                ? updateData.scheduling_url
+                : undefined,
+            profile_picture:
+              typeof updateData.profile_picture === 'string' &&
+              updateData.profile_picture.trim().length > 0
+                ? updateData.profile_picture.trim()
+                : undefined,
+          }
+        );
 
         if (!updated) {
-          res.status(404).json({ error: 'Profile not found in Cloud SQL team tables' });
+          res
+            .status(404)
+            .json({ error: 'Profile not found in Cloud SQL team tables' });
           return;
         }
 
@@ -289,8 +364,9 @@ export class UserController {
         error:
           'This account type cannot be updated via /users/update. Use the client portal profile endpoints or team admin tools.',
       });
-    } catch(error) {
-      const message = error instanceof Error ? error.message : 'Failed to update user';
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to update user';
       res.status(400).json({ error: message });
     }
   }
@@ -306,7 +382,9 @@ export class UserController {
 
       const normalizedRole = String(role).toLowerCase();
       if (normalizedRole !== 'doula' && normalizedRole !== 'admin') {
-        res.status(400).json({ error: 'Role must be either "admin" or "doula"' });
+        res
+          .status(400)
+          .json({ error: 'Role must be either "admin" or "doula"' });
         return;
       }
 
@@ -321,7 +399,11 @@ export class UserController {
     } catch (error) {
       const message = (error as Error)?.message || 'Failed to add team member';
       const lower = message.toLowerCase();
-      if (lower.includes('already') || lower.includes('exists') || lower.includes('duplicate')) {
+      if (
+        lower.includes('already') ||
+        lower.includes('exists') ||
+        lower.includes('duplicate')
+      ) {
         res.status(409).json({ error: message });
         return;
       }
@@ -339,7 +421,8 @@ export class UserController {
       if (newStatus === 'approved' && this.documentCompletenessService) {
         const member = await this.cloudSqlTeamService.getTeamMemberById(userId);
         if (member && member.role === 'doula') {
-          const completeness = await this.documentCompletenessService.getCompleteness(userId);
+          const completeness =
+            await this.documentCompletenessService.getCompleteness(userId);
           if (!completeness.canBeActive) {
             const missing = completeness.missingTypes.join(', ');
             const notApproved = completeness.items
@@ -355,7 +438,10 @@ export class UserController {
         }
       }
 
-      const updatedMember = await this.cloudSqlTeamService.updateTeamMember(userId, updateData);
+      const updatedMember = await this.cloudSqlTeamService.updateTeamMember(
+        userId,
+        updateData
+      );
       if (!updatedMember) {
         res.status(404).json({ error: 'Team member not found' });
         return;

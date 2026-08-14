@@ -1,21 +1,26 @@
 import { NextFunction, Response } from 'express';
-import { authService } from '../index';
-import supabase from '../supabase';
-import type { AuthRequest } from '../types';
+
 import { logger } from '../common/utils/logger';
 import { SAFE_INTERNAL_ERROR_MESSAGE } from '../common/utils/safeLogging';
+import { authService } from '../index';
 import { recordAuthTransport } from '../security/authTransportTelemetry';
 import { ApiErrorCode } from '../security/errorCodes';
 import {
   LEGACY_SESSION_COOKIE,
   SESSION_COOKIE,
 } from '../security/sessionCookies';
+import supabase from '../supabase';
+import type { AuthRequest } from '../types';
 
 /** Cookie and header names for session token (canonical). */
 export { SESSION_COOKIE } from '../security/sessionCookies';
 export const SESSION_HEADER = 'x-session-token';
 
-export type SessionSource = 'cookie' | 'header' | 'bearer' | 'legacy_session_cookie';
+export type SessionSource =
+  | 'cookie'
+  | 'header'
+  | 'bearer'
+  | 'legacy_session_cookie';
 
 /**
  * Resolve session token from request.
@@ -53,14 +58,35 @@ export function getSessionTokenAndSource(req: AuthRequest): {
   return {};
 }
 
-function recordTokenSource(source: SessionSource | undefined, req: AuthRequest): void {
+function recordTokenSource(
+  source: SessionSource | undefined,
+  req: AuthRequest
+): void {
   if (!source) return;
-  if (source === 'cookie') recordAuthTransport('token_source.cookie', { path: req.path, method: req.method });
-  else if (source === 'header') recordAuthTransport('token_source.header', { path: req.path, method: req.method });
-  else if (source === 'bearer') recordAuthTransport('token_source.bearer', { path: req.path, method: req.method });
+  if (source === 'cookie')
+    recordAuthTransport('token_source.cookie', {
+      path: req.path,
+      method: req.method,
+    });
+  else if (source === 'header')
+    recordAuthTransport('token_source.header', {
+      path: req.path,
+      method: req.method,
+    });
+  else if (source === 'bearer')
+    recordAuthTransport('token_source.bearer', {
+      path: req.path,
+      method: req.method,
+    });
   else if (source === 'legacy_session_cookie') {
-    recordAuthTransport('token_source.legacy_session_cookie', { path: req.path, method: req.method });
-    recordAuthTransport('legacy.session_cookie_seen', { path: req.path, method: req.method });
+    recordAuthTransport('token_source.legacy_session_cookie', {
+      path: req.path,
+      method: req.method,
+    });
+    recordAuthTransport('legacy.session_cookie_seen', {
+      path: req.path,
+      method: req.method,
+    });
   }
 }
 
@@ -75,21 +101,27 @@ const authMiddleware = async (
       (typeof req.query?.access_token === 'string' && req.query.access_token) ||
       (typeof req.query?.token === 'string' && req.query.token);
     if (queryToken) {
-      recordAuthTransport('legacy.query_access_token', { path: req.path, method: req.method });
+      recordAuthTransport('legacy.query_access_token', {
+        path: req.path,
+        method: req.method,
+      });
     }
 
     const { token, source } = getSessionTokenAndSource(req);
 
     if (!token) {
-      logger.warn({
-        context: 'authMiddleware',
-        path: req.path,
-        method: req.method
-      }, 'No token provided');
+      logger.warn(
+        {
+          context: 'authMiddleware',
+          path: req.path,
+          method: req.method,
+        },
+        'No token provided'
+      );
       res.status(401).json({
         error: 'No session token provided',
         code: ApiErrorCode.UNAUTHENTICATED,
-        hint: 'Provide Cookie or X-Session-Token header'
+        hint: 'Provide Cookie or X-Session-Token header',
       });
       return;
     }
@@ -98,28 +130,34 @@ const authMiddleware = async (
 
     const {
       data: { user },
-      error
-    } = await supabase.auth.getUser(token)
+      error,
+    } = await supabase.auth.getUser(token);
 
     if (error || !user) {
-      logger.warn({
-        context: 'authMiddleware',
-        path: req.path,
-        error: error?.message,
-        hasUser: !!user
-      }, 'Invalid or expired token');
+      logger.warn(
+        {
+          context: 'authMiddleware',
+          path: req.path,
+          error: error?.message,
+          hasUser: !!user,
+        },
+        'Invalid or expired token'
+      );
       res.status(401).json({
         error: 'Invalid or expired session token',
         code: ApiErrorCode.UNAUTHENTICATED,
       });
-      return
+      return;
     }
 
-    const user_entity = await authService.getUserFromToken(token)
+    const user_entity = await authService.getUserFromToken(token);
     req.user = user_entity;
     next();
   } catch (err: any) {
-    logger.error({ err, context: 'authMiddleware', path: req.path }, 'Middleware error');
+    logger.error(
+      { err, context: 'authMiddleware', path: req.path },
+      'Middleware error'
+    );
     res.status(500).json({
       error: SAFE_INTERNAL_ERROR_MESSAGE,
       code: ApiErrorCode.INTERNAL_ERROR,
@@ -127,4 +165,4 @@ const authMiddleware = async (
   }
 };
 
-export default authMiddleware
+export default authMiddleware;

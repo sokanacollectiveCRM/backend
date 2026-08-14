@@ -1,17 +1,21 @@
+import * as crypto from 'crypto';
 import { Response } from 'express';
-import { AuthRequest } from '../types';
-import { EmailController } from './emailController';
-import { UserRepository } from '../repositories/interface/userRepository';
+
+import {
+  ASSIGNMENT_SERVICE_CATALOG,
+  normalizeAssignmentServices,
+} from '../constants/assignmentServices';
 import { ClientRepository } from '../repositories/interface/clientRepository';
+import { UserRepository } from '../repositories/interface/userRepository';
 import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
-import { ACCOUNT_STATUS, CLIENT_STATUS, ROLE } from '../types';
 import {
   CloudSqlDoulaAssignmentService,
   normalizeDoulaAssignmentRole,
 } from '../services/cloudSqlDoulaAssignmentService';
 import { CloudSqlTeamService } from '../services/cloudSqlTeamService';
-import { ASSIGNMENT_SERVICE_CATALOG, normalizeAssignmentServices } from '../constants/assignmentServices';
-import * as crypto from 'crypto';
+import { AuthRequest } from '../types';
+import { ACCOUNT_STATUS, CLIENT_STATUS, ROLE } from '../types';
+import { EmailController } from './emailController';
 
 export class AdminController {
   private emailController: EmailController;
@@ -44,7 +48,7 @@ export class AdminController {
       if (!email || !firstname || !lastname) {
         res.status(400).json({
           success: false,
-          error: 'email, firstname, and lastname are required'
+          error: 'email, firstname, and lastname are required',
         });
         return;
       }
@@ -54,19 +58,21 @@ export class AdminController {
       if (!emailRegex.test(email)) {
         res.status(400).json({
           success: false,
-          error: 'Invalid email format'
+          error: 'Invalid email format',
         });
         return;
       }
 
       const normalizedEmail = String(email).trim().toLowerCase();
       const team = await this.cloudSqlTeamService.listTeamMembers();
-      const existing = team.find((m) => m.email.toLowerCase() === normalizedEmail);
+      const existing = team.find(
+        (m) => m.email.toLowerCase() === normalizedEmail
+      );
 
       if (existing && existing.role !== 'doula') {
         res.status(400).json({
           success: false,
-          error: 'A non-doula team member with this email already exists'
+          error: 'A non-doula team member with this email already exists',
         });
         return;
       }
@@ -82,7 +88,13 @@ export class AdminController {
         } catch (error: any) {
           const message = error?.message || 'Failed to create doula';
           const lower = message.toLowerCase();
-          if (!(lower.includes('already') || lower.includes('exists') || lower.includes('duplicate'))) {
+          if (
+            !(
+              lower.includes('already') ||
+              lower.includes('exists') ||
+              lower.includes('duplicate')
+            )
+          ) {
             res.status(500).json({
               success: false,
               error: message,
@@ -96,7 +108,12 @@ export class AdminController {
       const inviteToken = crypto.randomBytes(32).toString('hex');
 
       // Send invitation email
-      await this.emailController.sendDoulaInvite(email, firstname, lastname, inviteToken);
+      await this.emailController.sendDoulaInvite(
+        email,
+        firstname,
+        lastname,
+        inviteToken
+      );
 
       res.status(200).json({
         success: true,
@@ -123,16 +140,17 @@ export class AdminController {
       if (!clientId || !doulaId) {
         res.status(400).json({
           success: false,
-          error: 'Missing required fields: clientId and doulaId are required'
+          error: 'Missing required fields: clientId and doulaId are required',
         });
         return;
       }
 
-      const normalizedRole = role === undefined ? undefined : normalizeDoulaAssignmentRole(role);
+      const normalizedRole =
+        role === undefined ? undefined : normalizeDoulaAssignmentRole(role);
       if (role !== undefined && !normalizedRole) {
         res.status(400).json({
           success: false,
-          error: "Invalid role. Allowed values are 'primary' or 'backup'"
+          error: "Invalid role. Allowed values are 'primary' or 'backup'",
         });
         return;
       }
@@ -141,7 +159,7 @@ export class AdminController {
       if (!normalizedServices) {
         res.status(400).json({
           success: false,
-          error: `services is required and must include one or more values from: ${ASSIGNMENT_SERVICE_CATALOG.join(', ')}`
+          error: `services is required and must include one or more values from: ${ASSIGNMENT_SERVICE_CATALOG.join(', ')}`,
         });
         return;
       }
@@ -151,7 +169,7 @@ export class AdminController {
       if (!client) {
         res.status(404).json({
           success: false,
-          error: 'Client not found'
+          error: 'Client not found',
         });
         return;
       }
@@ -160,7 +178,7 @@ export class AdminController {
       if (client.status !== CLIENT_STATUS.MATCHING) {
         res.status(400).json({
           success: false,
-          error: `Client is not in matching phase. Current status: ${client.status}. Only clients with status 'matching' can be assigned to doulas.`
+          error: `Client is not in matching phase. Current status: ${client.status}. Only clients with status 'matching' can be assigned to doulas.`,
         });
         return;
       }
@@ -170,18 +188,22 @@ export class AdminController {
       if (!doula) {
         res.status(404).json({
           success: false,
-          error: 'Doula not found'
+          error: 'Doula not found',
         });
         return;
       }
 
       // Check if assignment already exists
-      const alreadyAssigned = await this.cloudSqlAssignmentService.assignmentExists(clientId, doulaId);
+      const alreadyAssigned =
+        await this.cloudSqlAssignmentService.assignmentExists(
+          clientId,
+          doulaId
+        );
 
       if (alreadyAssigned) {
         res.status(400).json({
           success: false,
-          error: 'This doula is already assigned to this client'
+          error: 'This doula is already assigned to this client',
         });
         return;
       }
@@ -208,7 +230,8 @@ export class AdminController {
           if (name1) return name1;
 
           // Try first_name/last_name as fallback
-          const name2 = `${user.first_name || ''} ${user.last_name || ''}`.trim();
+          const name2 =
+            `${user.first_name || ''} ${user.last_name || ''}`.trim();
           if (name2) return name2;
 
           // Try preferred_name if available
@@ -238,13 +261,17 @@ export class AdminController {
           doula.email || ''
         );
 
-        console.log(`📧 Sent match notification emails to doula (${doula.email || 'no-email'}) and client (${client.user.email})`);
+        console.log(
+          `📧 Sent match notification emails to doula (${doula.email || 'no-email'}) and client (${client.user.email})`
+        );
       } catch (emailError) {
         console.error('Failed to send match notification emails:', emailError);
         // Don't fail the request if email fails
       }
 
-      console.log(`✅ Admin ${adminId} matched doula ${doulaId} with client ${clientId}`);
+      console.log(
+        `✅ Admin ${adminId} matched doula ${doulaId} with client ${clientId}`
+      );
 
       res.status(201).json({
         success: true,
@@ -259,25 +286,25 @@ export class AdminController {
             assignedBy: assignment.assignedBy,
             notes: notes || assignment.notes,
             role: assignment.role,
-            status: assignment.status
+            status: assignment.status,
           },
           client: {
             id: client.id,
             name: `${client.user.firstname} ${client.user.lastname}`,
-            status: client.status
+            status: client.status,
           },
           doula: {
             id: doula.id,
             name: doula.fullName,
-            email: doula.email
-          }
-        }
+            email: doula.email,
+          },
+        },
       });
     } catch (error: any) {
       console.error('Error matching doula with client:', error);
       res.status(500).json({
         success: false,
-        error: error.message || 'Failed to match doula with client'
+        error: error.message || 'Failed to match doula with client',
       });
     }
   }
@@ -288,18 +315,24 @@ export class AdminController {
    */
   async getMatchingClients(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const clients = await this.clientRepository.findClientsByStatus(CLIENT_STATUS.MATCHING);
+      const clients = await this.clientRepository.findClientsByStatus(
+        CLIENT_STATUS.MATCHING
+      );
 
       res.status(200).json({
         success: true,
         count: clients.length,
-        data: clients.map(client => ({
+        data: clients.map((client) => ({
           id: client.id,
           firstname: client.user.firstname || '',
           lastname: client.user.lastname || '',
           email: client.user.email || '',
           phone: client.phoneNumber || client.user.phone_number || '',
-          dueDate: client.due_date ? (client.due_date instanceof Date ? client.due_date.toISOString().split('T')[0] : client.due_date) : '',
+          dueDate: client.due_date
+            ? client.due_date instanceof Date
+              ? client.due_date.toISOString().split('T')[0]
+              : client.due_date
+            : '',
           status: client.status,
           address: client.user.address || '',
           city: client.user.city || '',
@@ -316,14 +349,14 @@ export class AdminController {
           serviceSpecifics: client.service_specifics || '',
           childrenExpected: client.childrenExpected || '',
           // Include full user object for detailed views
-          user: client.user
-        }))
+          user: client.user,
+        })),
       });
     } catch (error: any) {
       console.error('Error fetching matching clients:', error);
       res.status(500).json({
         success: false,
-        error: error.message || 'Failed to fetch matching clients'
+        error: error.message || 'Failed to fetch matching clients',
       });
     }
   }

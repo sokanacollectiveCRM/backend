@@ -3,7 +3,6 @@
  * Staff roles come only from Cloud SQL team tables and/or app-managed
  * `public.users.role` — never from client-writable `user_metadata` / `app_metadata`.
  */
-
 import { getPool } from '../db/cloudSqlPool';
 import { ROLE } from '../types';
 import { normalizeRole } from './authorizationPolicies';
@@ -13,7 +12,10 @@ export type AppRole = 'admin' | 'doula' | 'billing' | 'client';
 export type CloudSqlRoleHint = 'admin' | 'doula' | 'client' | null;
 
 export interface AuthoritativeRoleLookup {
-  findCloudSqlRole(authUserId: string, email: string | null): Promise<CloudSqlRoleHint>;
+  findCloudSqlRole(
+    authUserId: string,
+    email: string | null
+  ): Promise<CloudSqlRoleHint>;
 }
 
 const STAFF_ROLES = new Set<AppRole>(['admin', 'doula', 'billing']);
@@ -24,14 +26,22 @@ export function isStaffRole(role: string | null | undefined): boolean {
 
 export function normalizeAppManagedRole(role: unknown): AppRole | null {
   const normalized = normalizeRole(role);
-  if (normalized === 'admin' || normalized === 'doula' || normalized === 'billing' || normalized === 'client') {
+  if (
+    normalized === 'admin' ||
+    normalized === 'doula' ||
+    normalized === 'billing' ||
+    normalized === 'client'
+  ) {
     return normalized;
   }
   return null;
 }
 
 export class DbAuthoritativeRoleLookup implements AuthoritativeRoleLookup {
-  async findCloudSqlRole(authUserId: string, email: string | null): Promise<CloudSqlRoleHint> {
+  async findCloudSqlRole(
+    authUserId: string,
+    email: string | null
+  ): Promise<CloudSqlRoleHint> {
     const pool = getPool();
     const normalizedEmail = email?.trim().toLowerCase() || null;
 
@@ -41,7 +51,7 @@ export class DbAuthoritativeRoleLookup implements AuthoritativeRoleLookup {
        WHERE id = $1::uuid
           OR ($2::text IS NOT NULL AND lower(email) = $2::text)
        LIMIT 1`,
-      [authUserId, normalizedEmail],
+      [authUserId, normalizedEmail]
     );
     if (admin.rowCount && admin.rowCount > 0) return 'admin';
 
@@ -51,7 +61,7 @@ export class DbAuthoritativeRoleLookup implements AuthoritativeRoleLookup {
        WHERE id = $1::uuid
           OR ($2::text IS NOT NULL AND lower(email) = $2::text)
        LIMIT 1`,
-      [authUserId, normalizedEmail],
+      [authUserId, normalizedEmail]
     );
     if (doula.rowCount && doula.rowCount > 0) return 'doula';
 
@@ -60,7 +70,7 @@ export class DbAuthoritativeRoleLookup implements AuthoritativeRoleLookup {
        FROM public.phi_clients
        WHERE user_id = $1::uuid
        LIMIT 1`,
-      [authUserId],
+      [authUserId]
     );
     if (client.rowCount && client.rowCount > 0) return 'client';
 
@@ -74,21 +84,28 @@ export class MemoryAuthoritativeRoleLookup implements AuthoritativeRoleLookup {
       admins?: Array<{ id: string; email?: string }>;
       doulas?: Array<{ id: string; email?: string }>;
       clients?: Array<{ userId: string }>;
-    } = {},
+    } = {}
   ) {}
 
-  async findCloudSqlRole(authUserId: string, email: string | null): Promise<CloudSqlRoleHint> {
+  async findCloudSqlRole(
+    authUserId: string,
+    email: string | null
+  ): Promise<CloudSqlRoleHint> {
     const normalizedEmail = email?.trim().toLowerCase() || null;
     if (
       (this.rows.admins || []).some(
-        (row) => row.id === authUserId || (normalizedEmail && row.email?.toLowerCase() === normalizedEmail),
+        (row) =>
+          row.id === authUserId ||
+          (normalizedEmail && row.email?.toLowerCase() === normalizedEmail)
       )
     ) {
       return 'admin';
     }
     if (
       (this.rows.doulas || []).some(
-        (row) => row.id === authUserId || (normalizedEmail && row.email?.toLowerCase() === normalizedEmail),
+        (row) =>
+          row.id === authUserId ||
+          (normalizedEmail && row.email?.toLowerCase() === normalizedEmail)
       )
     ) {
       return 'doula';
@@ -112,7 +129,9 @@ export function getAuthoritativeRoleLookup(): AuthoritativeRoleLookup {
   return lookup;
 }
 
-export function setAuthoritativeRoleLookupForTests(next: AuthoritativeRoleLookup): void {
+export function setAuthoritativeRoleLookupForTests(
+  next: AuthoritativeRoleLookup
+): void {
   lookup = next;
 }
 
@@ -137,7 +156,7 @@ export async function resolveAuthoritativeRole(input: {
 }): Promise<AppRole> {
   const cloud = await getAuthoritativeRoleLookup().findCloudSqlRole(
     input.authUserId,
-    input.email ?? null,
+    input.email ?? null
   );
 
   if (cloud === 'admin') return 'admin';

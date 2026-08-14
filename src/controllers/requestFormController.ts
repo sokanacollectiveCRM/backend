@@ -1,8 +1,5 @@
 import { Request, Response } from 'express';
 
-import { RequestFormService } from '../services/RequestFormService';
-import { NodemailerService } from '../services/emailService';
-import { AuthRequest, RequestFormData, RequestStatus } from '../types';
 import { PUBLIC_INTAKE_SUCCESS_MESSAGE } from '../features/intake';
 import {
   evaluateIntakeSubmissionGuards,
@@ -10,6 +7,9 @@ import {
   sendIntakeRateLimited,
   sendIntakeSoftDedupe,
 } from '../features/intake/infrastructure/intakeAbuseProtection';
+import { RequestFormService } from '../services/RequestFormService';
+import { NodemailerService } from '../services/emailService';
+import { AuthRequest, RequestFormData, RequestStatus } from '../types';
 
 const notificationEmail = 'hello@sokanacollective.com';
 const emailService = new NodemailerService();
@@ -257,9 +257,11 @@ Partner Work Phone: ${savedForm.work_phone || 'Not provided'}
 
 REFERRAL:
 Source: ${savedForm.referral_source || 'Not specified'}
-${savedForm.referral_source === 'Other' && savedForm.referral_source_other
-          ? `Other (details): ${savedForm.referral_source_other}\n`
-          : ''}Referral Name: ${savedForm.referral_name || 'Not provided'}
+${
+  savedForm.referral_source === 'Other' && savedForm.referral_source_other
+    ? `Other (details): ${savedForm.referral_source_other}\n`
+    : ''
+}Referral Name: ${savedForm.referral_name || 'Not provided'}
 Referral Email: ${savedForm.referral_email || 'Not provided'}
 
 HEALTH HISTORY:
@@ -349,9 +351,12 @@ View Client Profile: ${profileLink}`;
                         <h2 style="color: #333; background-color: #e8f5e8; padding: 10px; border-radius: 5px;">📞 Referral</h2>
                         <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
                           <tr><td style="font-weight: bold; padding: 8px; width: 30%; background-color: #f5f5f5;">Source:</td><td style="padding: 8px;">${savedForm.referral_source || 'Not specified'}</td></tr>
-                          ${savedForm.referral_source === 'Other' && savedForm.referral_source_other
-                            ? `<tr><td style="font-weight: bold; padding: 8px; background-color: #f5f5f5;">Other (details):</td><td style="padding: 8px;">${String(savedForm.referral_source_other).replace(/</g, '&lt;')}</td></tr>`
-                            : ''}
+                          ${
+                            savedForm.referral_source === 'Other' &&
+                            savedForm.referral_source_other
+                              ? `<tr><td style="font-weight: bold; padding: 8px; background-color: #f5f5f5;">Other (details):</td><td style="padding: 8px;">${String(savedForm.referral_source_other).replace(/</g, '&lt;')}</td></tr>`
+                              : ''
+                          }
                           <tr><td style="font-weight: bold; padding: 8px; background-color: #f5f5f5;">Referral Name:</td><td style="padding: 8px;">${savedForm.referral_name || 'Not provided'}</td></tr>
                           <tr><td style="font-weight: bold; padding: 8px; background-color: #f5f5f5;">Referral Email:</td><td style="padding: 8px;">${savedForm.referral_email || 'Not provided'}</td></tr>
                         </table>

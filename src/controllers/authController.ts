@@ -1,13 +1,21 @@
 import { Request, Response } from 'express';
 
+import { logger } from '../common/utils/logger';
+import { toSafeProviderError } from '../common/utils/safeLogging';
 import {
   AuthenticationError,
   AuthorizationError,
   ConflictError,
   NotFoundError,
-  ValidationError
+  ValidationError,
 } from '../domains/errors';
 import { getSessionToken } from '../middleware/authMiddleware';
+import { recordAuthTransport } from '../security/authTransportTelemetry';
+import {
+  clearSessionCookies,
+  setSessionCookie,
+} from '../security/sessionCookies';
+import { CloudSqlTeamService } from '../services/cloudSqlTeamService';
 import {
   AuthRequest,
   LoginBody,
@@ -17,12 +25,6 @@ import {
   UpdatePasswordBody,
 } from '../types';
 import { AuthUseCase } from '../usecase/authUseCase.js';
-import { logger } from '../common/utils/logger';
-import { toSafeProviderError } from '../common/utils/safeLogging';
-import { recordAuthTransport } from '../security/authTransportTelemetry';
-import { clearSessionCookies, setSessionCookie } from '../security/sessionCookies';
-import { CloudSqlTeamService } from '../services/cloudSqlTeamService';
-
 
 export class AuthController {
   private authUseCase: AuthUseCase;
@@ -48,12 +50,18 @@ export class AuthController {
     try {
       const { email, password, firstname, lastname } = req.body;
       // call useCase to grab newly created user
-      const user = await this.authUseCase.signup(email, password, firstname, lastname);
-      res.status(201).json({ message: 'User created successfully', user: user.toJSON() })
-    }
-    catch (signUpError) {
+      const user = await this.authUseCase.signup(
+        email,
+        password,
+        firstname,
+        lastname
+      );
+      res
+        .status(201)
+        .json({ message: 'User created successfully', user: user.toJSON() });
+    } catch (signUpError) {
       const error = this.handleError(signUpError, res);
-      res.status(error.status).json({ error: error.message})
+      res.status(error.status).json({ error: error.message });
     }
   }
 
@@ -76,16 +84,17 @@ export class AuthController {
       const result = await this.authUseCase.login(email, password);
       setSessionCookie(res, result.token);
       // Dual-support: keep JSON token for now; measure before retiring.
-      recordAuthTransport('legacy.login_json_token_returned', { path: req.path });
+      recordAuthTransport('legacy.login_json_token_returned', {
+        path: req.path,
+      });
       res.status(200).json({
         message: 'Login successful',
         user: result.user.toJSON(),
         token: result.token,
       });
-    }
-    catch (loginError) {
+    } catch (loginError) {
       const error = this.handleError(loginError, res);
-      res.status(error.status).json({ error: error.message})
+      res.status(error.status).json({ error: error.message });
     }
   }
 
@@ -101,11 +110,14 @@ export class AuthController {
     try {
       const token = getSessionToken(req as any);
       if (!token) {
-        logger.warn({ context: 'AuthController.getMe' }, 'No token found in request');
+        logger.warn(
+          { context: 'AuthController.getMe' },
+          'No token found in request'
+        );
         res.status(401).json({
           error: 'No session token provided',
           code: 'UNAUTHENTICATED',
-          hint: 'Provide Cookie or X-Session-Token header'
+          hint: 'Provide Cookie or X-Session-Token header',
         });
         return;
       }
@@ -113,29 +125,32 @@ export class AuthController {
       // Validate token format (JWT should have 3 parts separated by dots)
       const tokenParts = token.split('.');
       if (tokenParts.length !== 3) {
-        logger.error({
-          context: 'AuthController.getMe',
-          partsCount: tokenParts.length,
-        }, 'Invalid JWT format');
-        res.status(401).json({ error: 'Invalid token format: JWT must have 3 parts', details: `Received ${tokenParts.length} parts, expected 3` })
-        return
+        logger.error(
+          {
+            context: 'AuthController.getMe',
+            partsCount: tokenParts.length,
+          },
+          'Invalid JWT format'
+        );
+        res.status(401).json({
+          error: 'Invalid token format: JWT must have 3 parts',
+          details: `Received ${tokenParts.length} parts, expected 3`,
+        });
+        return;
       }
 
       // App-managed / Cloud SQL authoritative role (PR 6) — no user_metadata override.
-      const appUser = await this.authUseCase.getMe(token)
+      const appUser = await this.authUseCase.getMe(token);
       if (!appUser) {
-        res.status(404).json({ error: 'User not found' })
-        return
+        res.status(404).json({ error: 'User not found' });
+        return;
       }
-      res.json(appUser.toJSON())
+      res.json(appUser.toJSON());
     } catch (err: any) {
-      const errorInfo = this.handleError(err, res)
-      res.status(errorInfo.status).json({ error: errorInfo.message })
+      const errorInfo = this.handleError(err, res);
+      res.status(errorInfo.status).json({ error: errorInfo.message });
     }
   }
-
-
-
 
   //
   // logout()
@@ -145,10 +160,7 @@ export class AuthController {
   // returns:
   //    None
   //
-  async logout(
-    _req: Request,
-    res: Response
-  ): Promise<void> {
+  async logout(_req: Request, res: Response): Promise<void> {
     clearSessionCookies(res);
     await this.authUseCase.logout();
     logger.info({ context: 'AuthController.logout' }, 'Logged out');
@@ -163,10 +175,7 @@ export class AuthController {
   // returns:
   //    None
   //
-  async verifyEmail(
-    req: Request,
-    res: Response
-  ): Promise<void> {
+  async verifyEmail(req: Request, res: Response): Promise<void> {
     try {
       const token_hash = req.query.token_hash as string;
       const type = req.query.type as string;
@@ -174,10 +183,13 @@ export class AuthController {
       const queryParams = await this.authUseCase.verifyEmail(token_hash, type);
 
       // Redirect with tokens if verification is successful
-      return res.redirect(`${process.env.FRONTEND_URL}/auth/callback?${queryParams}`);
-    }
-    catch (error) {
-      res.redirect(`${process.env.FRONTEND_URL}/auth/callback?error=${error.message}`);
+      return res.redirect(
+        `${process.env.FRONTEND_URL}/auth/callback?${queryParams}`
+      );
+    } catch (error) {
+      res.redirect(
+        `${process.env.FRONTEND_URL}/auth/callback?error=${error.message}`
+      );
     }
   }
 
@@ -189,18 +201,14 @@ export class AuthController {
   // returns:
   //    users => user.toJSON()
   //
-  async getAllUsers(
-    _req: AuthRequest,
-    res: Response
-  ): Promise<void> {
+  async getAllUsers(_req: AuthRequest, res: Response): Promise<void> {
     try {
       // Staff directory lives in Cloud SQL (admins/doulas). Supabase public.users is gone.
       const users = await this.cloudSqlTeamService.listTeamMembers();
       res.status(200).json(users);
-    }
-    catch (getAllUsersError) {
+    } catch (getAllUsersError) {
       const error = this.handleError(getAllUsersError, res);
-      res.status(error.status).json({ error: error.message})
+      res.status(error.status).json({ error: error.message });
     }
   }
 
@@ -212,19 +220,18 @@ export class AuthController {
   // returns:
   //    url - OAuth URL
   //
-  async googleAuth(
-    _req: Request,
-    res: Response
-  ): Promise<void> {
+  async googleAuth(_req: Request, res: Response): Promise<void> {
     try {
-      logger.info({ context: 'AuthController.googleAuth' }, 'Starting google auth');
+      logger.info(
+        { context: 'AuthController.googleAuth' },
+        'Starting google auth'
+      );
       const redirectTo = `${process.env.FRONTEND_URL}/auth/callback`;
       const url = await this.authUseCase.googleAuth(redirectTo);
       res.json({ url });
-    }
-    catch (googleAuthError) {
+    } catch (googleAuthError) {
       const error = this.handleError(googleAuthError, res);
-      res.status(error.status).json({ error: error.message})
+      res.status(error.status).json({ error: error.message });
     }
   }
 
@@ -236,24 +243,28 @@ export class AuthController {
   // returns:
   //    none
   //
-  async handleOAuthCallback(
-    req: Request,
-    res: Response
-  ): Promise<void> {
+  async handleOAuthCallback(req: Request, res: Response): Promise<void> {
     try {
-      logger.info({ service: 'supabase', operation: 'oauth_callback' }, 'OAuth callback received');
+      logger.info(
+        { service: 'supabase', operation: 'oauth_callback' },
+        'OAuth callback received'
+      );
       const code = req.query.code as string;
 
       // call useCase to retrieve current session and user
       const data = await this.authUseCase.handleOAuthCallback(code);
       // Canonical session cookie (PR 6): sb-access-token, not legacy `session`.
-      logger.info({ context: 'AuthController.handleOAuthCallback' }, 'Creating session cookie');
+      logger.info(
+        { context: 'AuthController.handleOAuthCallback' },
+        'Creating session cookie'
+      );
       setSessionCookie(res, data.session.access_token);
       // Redirect to home page
       res.redirect(`${process.env.FRONTEND_URL}`);
     } catch (error) {
       res.redirect(
-        `${process.env.FRONTEND_URL}/login?error=` + encodeURIComponent(error.message)
+        `${process.env.FRONTEND_URL}/login?error=` +
+          encodeURIComponent(error.message)
       );
     }
   }
@@ -278,15 +289,21 @@ export class AuthController {
         return;
       }
 
-      recordAuthTransport('legacy.body_access_token', { path: req.path, method: req.method });
+      recordAuthTransport('legacy.body_access_token', {
+        path: req.path,
+        method: req.method,
+      });
 
       const user = await this.authUseCase.handleToken(access_token);
 
       setSessionCookie(res, access_token);
 
-      res.json({ success: true , user: user.toJSON()});
+      res.json({ success: true, user: user.toJSON() });
     } catch (handleTokenError) {
-      logger.error(toSafeProviderError('supabase', 'handle_token', handleTokenError), 'Handle token failed');
+      logger.error(
+        toSafeProviderError('supabase', 'handle_token', handleTokenError),
+        'Handle token failed'
+      );
       // const error = this.handleError(handleTokenError, res);
       // res.status(error.status).json({ error: error.message})
     }
@@ -311,10 +328,12 @@ export class AuthController {
       // call useCase to redirect user to reset password and check for errors
       await this.authUseCase.requestPasswordReset(email, redirectTo);
 
-      res.status(200).json({ message: 'Password reset instructions sent to email'});
+      res
+        .status(200)
+        .json({ message: 'Password reset instructions sent to email' });
     } catch (requestPasswordError) {
       const error = this.handleError(requestPasswordError, res);
-      res.status(error.status).json({ error: error.message})
+      res.status(error.status).json({ error: error.message });
     }
   }
 
@@ -326,16 +345,16 @@ export class AuthController {
   // returns:
   //    None
   //
-  async handlePasswordRecovery(
-    req: Request,
-    res: Response
-  ): Promise<void> {
+  async handlePasswordRecovery(req: Request, res: Response): Promise<void> {
     try {
       const token_hash = req.query.token_hash as string;
       const type = req.query.type as string;
 
       // call useCase to retrieve access and refresh tokens.
-      const queryParams = await this.authUseCase.handlePasswordRecovery(token_hash, type);
+      const queryParams = await this.authUseCase.handlePasswordRecovery(
+        token_hash,
+        type
+      );
 
       const redirectUrl = `${process.env.FRONTEND_URL}/auth/reset-password?${queryParams.toString()}`;
       res.redirect(redirectUrl);
@@ -372,7 +391,7 @@ export class AuthController {
       });
     } catch (updatePasswordError) {
       const error = this.handleError(updatePasswordError, res);
-      res.status(error.status).json({ error: error.message})
+      res.status(error.status).json({ error: error.message });
     }
   }
 
@@ -380,22 +399,25 @@ export class AuthController {
   private handleError(
     error: Error,
     res: Response
-  ): { status: number, message: string } {
-    logger.error(toSafeProviderError('supabase', 'auth_request', error), 'Error handling request');
+  ): { status: number; message: string } {
+    logger.error(
+      toSafeProviderError('supabase', 'auth_request', error),
+      'Error handling request'
+    );
 
     if (error instanceof ValidationError) {
-      return { status: 400, message: error.message};
+      return { status: 400, message: error.message };
     } else if (error instanceof ConflictError) {
-      return { status: 409, message: error.message};
+      return { status: 409, message: error.message };
     } else if (error instanceof AuthenticationError) {
       if (error.message.includes('temporarily unavailable')) {
         return { status: 503, message: error.message };
       }
-      return { status: 401, message: error.message};
+      return { status: 401, message: error.message };
     } else if (error instanceof NotFoundError) {
-      return { status: 404, message: error.message};
+      return { status: 404, message: error.message };
     } else if (error instanceof AuthorizationError) {
-      return { status: 403, message: error.message};
+      return { status: 403, message: error.message };
     } else {
       // Security bug fix (PR 3): unexpected auth failures must not return raw Error.message.
       return { status: 500, message: 'Internal Server Error' };

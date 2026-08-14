@@ -1,47 +1,19 @@
 import { Response } from 'express';
-import { logger } from '../common/utils/logger';
-import { SAFE_INTERNAL_ERROR_MESSAGE, toSafeProviderError } from '../common/utils/safeLogging';
-import {
-    AuthenticationError,
-    AuthorizationError,
-    ConflictError,
-    NotFoundError,
-    ValidationError
-} from '../domains/errors';
-import { Client } from '../entities/Client';
+import { File as MulterFile } from 'multer';
 
-import { AuthRequest } from '../types';
-import { ClientUseCase } from '../usecase/clientUseCase';
-import { ClientRepository } from '../repositories/interface/clientRepository';
-import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
-import {
-  PortalEligibilityService,
-  portalEligibilityService,
-} from '../services/portalEligibilityService';
-import { mergePortalEligibilityFields } from '../utils/portalEligibilityResponse';
-import { PortalEligibilitySnapshot } from '../constants/portalEligibility';
-import { ClientMapper } from '../mappers/ClientMapper';
-import { ActivityMapper } from '../mappers/ActivityMapper';
-import { ApiResponse } from '../utils/responseBuilder';
-import { canAccessSensitive } from '../utils/sensitiveAccess';
-import { updateClientPhi, fetchClientPhi } from '../services/phiBrokerService';
-import { syncMatchedClientToQuickBooks } from '../services/customer/syncMatchedClientToQuickBooks';
-import { normalizeClientPatch, splitClientPatch } from '../constants/phiFields';
-import {
-  CloudSqlDoulaAssignmentService,
-  normalizeDoulaAssignmentRole,
-} from '../services/cloudSqlDoulaAssignmentService';
-import { ASSIGNMENT_SERVICE_CATALOG, normalizeAssignmentServices } from '../constants/assignmentServices';
-import { normalizeStaffReferralOperationalPatch } from '../constants/referralSource';
 import {
   parseInsurancePolicyHolderDob,
   validatePrimaryInsuranceWhenRequired,
 } from '../billing/expandedInsuranceBilling';
-import { getSupabaseAdmin } from '../supabase';
-import { ActivityDTO } from '../dto/response/ActivityDTO';
-import { ClientDocumentRepository, ClientDocument } from '../repositories/clientDocumentRepository';
-import { ClientDocumentUploadService } from '../services/clientDocumentUploadService';
-import { File as MulterFile } from 'multer';
+import { logger } from '../common/utils/logger';
+import {
+  SAFE_INTERNAL_ERROR_MESSAGE,
+  toSafeProviderError,
+} from '../common/utils/safeLogging';
+import {
+  ASSIGNMENT_SERVICE_CATALOG,
+  normalizeAssignmentServices,
+} from '../constants/assignmentServices';
 import {
   CLIENT_DOCUMENT_ALLOWED_EXTENSIONS,
   CLIENT_DOCUMENT_ALLOWED_MIME_TYPES,
@@ -49,7 +21,44 @@ import {
   CLIENT_DOCUMENT_TYPE_INSURANCE_CARD,
   MAX_CLIENT_DOCUMENT_SIZE_BYTES,
 } from '../constants/clientDocuments';
+import { normalizeClientPatch, splitClientPatch } from '../constants/phiFields';
+import { PortalEligibilitySnapshot } from '../constants/portalEligibility';
+import { normalizeStaffReferralOperationalPatch } from '../constants/referralSource';
+import {
+  AuthenticationError,
+  AuthorizationError,
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from '../domains/errors';
+import { ActivityDTO } from '../dto/response/ActivityDTO';
+import { Client } from '../entities/Client';
+import { ActivityMapper } from '../mappers/ActivityMapper';
+import { ClientMapper } from '../mappers/ClientMapper';
+import {
+  ClientDocument,
+  ClientDocumentRepository,
+} from '../repositories/clientDocumentRepository';
+import { ClientRepository } from '../repositories/interface/clientRepository';
+import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
+import { ClientDocumentUploadService } from '../services/clientDocumentUploadService';
+import {
+  CloudSqlDoulaAssignmentService,
+  normalizeDoulaAssignmentRole,
+} from '../services/cloudSqlDoulaAssignmentService';
+import { syncMatchedClientToQuickBooks } from '../services/customer/syncMatchedClientToQuickBooks';
 import { DoulaAvailabilityService } from '../services/doulaAvailabilityService';
+import { fetchClientPhi, updateClientPhi } from '../services/phiBrokerService';
+import {
+  PortalEligibilityService,
+  portalEligibilityService,
+} from '../services/portalEligibilityService';
+import { getSupabaseAdmin } from '../supabase';
+import { AuthRequest } from '../types';
+import { ClientUseCase } from '../usecase/clientUseCase';
+import { mergePortalEligibilityFields } from '../utils/portalEligibilityResponse';
+import { ApiResponse } from '../utils/responseBuilder';
+import { canAccessSensitive } from '../utils/sensitiveAccess';
 
 export class ClientController {
   private static readonly BIRTH_OUTCOMES_DELIVERY_TYPES = new Set([
@@ -103,12 +112,17 @@ export class ClientController {
   private static readonly ZIP_CODE_REGEX = /^(?:\d{5})(?:-\d{4})?$/;
 
   private setNoStore(res: Response): void {
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set(
+      'Cache-Control',
+      'no-store, no-cache, must-revalidate, proxy-revalidate'
+    );
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
   }
 
-  private async getPortalEligibilitySnapshot(clientId: string): Promise<PortalEligibilitySnapshot | null> {
+  private async getPortalEligibilitySnapshot(
+    clientId: string
+  ): Promise<PortalEligibilitySnapshot | null> {
     try {
       return await this.eligibilityService.getPortalEligibility(clientId);
     } catch {
@@ -120,8 +134,10 @@ export class ClientController {
     payload: T,
     snapshot: PortalEligibilitySnapshot | null | undefined
   ): T & Partial<PortalEligibilitySnapshot> {
-    return mergePortalEligibilityFields(payload as Record<string, unknown>, snapshot ?? undefined) as T &
-      Partial<PortalEligibilitySnapshot>;
+    return mergePortalEligibilityFields(
+      payload as Record<string, unknown>,
+      snapshot ?? undefined
+    ) as T & Partial<PortalEligibilitySnapshot>;
   }
 
   private clientUseCase: ClientUseCase;
@@ -133,7 +149,7 @@ export class ClientController {
   private clientDocumentRepository?: ClientDocumentRepository;
   private clientDocumentUploadService?: ClientDocumentUploadService;
 
-  constructor (
+  constructor(
     clientUseCase: ClientUseCase,
     assignmentRepository: SupabaseAssignmentRepository,
     clientRepository: ClientRepository,
@@ -163,7 +179,9 @@ export class ClientController {
     options: { requireZipCode?: boolean } = {}
   ): { ok: true; value: Record<string, any> } | { ok: false; message: string } {
     const normalized = { ...input };
-    for (const [field, maxLen] of Object.entries(ClientController.PROFILE_FIELD_RULES)) {
+    for (const [field, maxLen] of Object.entries(
+      ClientController.PROFILE_FIELD_RULES
+    )) {
       if (!(field in normalized)) continue;
       const raw = normalized[field];
       if (raw === null) {
@@ -188,7 +206,10 @@ export class ClientController {
       if (field === 'zip_code') {
         if (trimmed.length === 0) {
           if (options.requireZipCode) {
-            return { ok: false, message: 'zip_code is required when updating address information' };
+            return {
+              ok: false,
+              message: 'zip_code is required when updating address information',
+            };
           }
           normalized[field] = null;
           continue;
@@ -202,9 +223,13 @@ export class ClientController {
     return { ok: true, value: normalized };
   }
 
-  private expandBillingInputKeys(input: Record<string, any>): Record<string, any> {
+  private expandBillingInputKeys(
+    input: Record<string, any>
+  ): Record<string, any> {
     const out: Record<string, any> = { ...input };
-    for (const [camel, snake] of Object.entries(ClientController.BILLING_CAMEL_TO_SNAKE)) {
+    for (const [camel, snake] of Object.entries(
+      ClientController.BILLING_CAMEL_TO_SNAKE
+    )) {
       if (
         Object.prototype.hasOwnProperty.call(input, camel) &&
         !Object.prototype.hasOwnProperty.call(input, snake)
@@ -237,8 +262,8 @@ export class ClientController {
   }
 
   private hasProfileAddressFields(input: Record<string, any>): boolean {
-    return ['address_line1', 'address', 'city', 'state', 'country'].some((field) =>
-      Object.prototype.hasOwnProperty.call(input, field)
+    return ['address_line1', 'address', 'city', 'state', 'country'].some(
+      (field) => Object.prototype.hasOwnProperty.call(input, field)
     );
   }
 
@@ -262,13 +287,15 @@ export class ClientController {
     return undefined;
   }
 
-  private normalizeBillingRow(row: Record<string, any> | null | undefined): Record<string, any> | null {
+  private normalizeBillingRow(
+    row: Record<string, any> | null | undefined
+  ): Record<string, any> | null {
     if (!row) return null;
     const holderDobRaw = row.insurance_policy_holder_dob;
     const holderDob =
       holderDobRaw instanceof Date
         ? holderDobRaw.toISOString().slice(0, 10)
-        : holderDobRaw ?? null;
+        : (holderDobRaw ?? null);
     const normalized: Record<string, any> = {
       payment_method: row.payment_method ?? null,
       insurance: row.insurance ?? null,
@@ -276,7 +303,8 @@ export class ClientController {
       insurance_member_id: row.insurance_member_id ?? null,
       insurance_policy_holder_name: row.insurance_policy_holder_name ?? null,
       insurance_policy_holder_dob: holderDob,
-      insurance_policy_holder_relationship: row.insurance_policy_holder_relationship ?? null,
+      insurance_policy_holder_relationship:
+        row.insurance_policy_holder_relationship ?? null,
       insurance_plan_type: row.insurance_plan_type ?? null,
       policy_number: row.policy_number ?? null,
       insurance_phone_number: row.insurance_phone_number ?? null,
@@ -287,14 +315,20 @@ export class ClientController {
       self_pay_card_info: row.self_pay_card_info ?? null,
       updated_at: row.updated_at ?? null,
     };
-    normalized.insurancePolicyHolderName = normalized.insurance_policy_holder_name;
-    normalized.insurancePolicyHolderDob = normalized.insurance_policy_holder_dob;
-    normalized.insurancePolicyHolderRelationship = normalized.insurance_policy_holder_relationship;
+    normalized.insurancePolicyHolderName =
+      normalized.insurance_policy_holder_name;
+    normalized.insurancePolicyHolderDob =
+      normalized.insurance_policy_holder_dob;
+    normalized.insurancePolicyHolderRelationship =
+      normalized.insurance_policy_holder_relationship;
     normalized.insurancePlanType = normalized.insurance_plan_type;
     return normalized;
   }
 
-  private validateBillingPayload(input: Record<string, any>): { value?: Record<string, any>; message?: string } {
+  private validateBillingPayload(input: Record<string, any>): {
+    value?: Record<string, any>;
+    message?: string;
+  } {
     if (!input || typeof input !== 'object' || Array.isArray(input)) {
       return { message: 'Invalid request body' };
     }
@@ -304,30 +338,56 @@ export class ClientController {
       return { message: 'payment_method is required' };
     }
     if (!ClientController.BILLING_PAYMENT_METHODS.has(paymentMethodRaw)) {
-      return { message: 'payment_method must be one of: Self-Pay, Commercial Insurance, Private Insurance, Medicaid' };
+      return {
+        message:
+          'payment_method must be one of: Self-Pay, Commercial Insurance, Private Insurance, Medicaid',
+      };
     }
 
     const insuranceProvider = this.trimNullableString(input.insurance_provider);
-    const insuranceMemberId = this.trimNullableString(input.insurance_member_id);
+    const insuranceMemberId = this.trimNullableString(
+      input.insurance_member_id
+    );
     const policyNumber = this.trimNullableString(input.policy_number);
-    const insurancePhoneNumber = this.trimNullableString(input.insurance_phone_number);
-    const hasSecondaryInsurance = this.normalizeOptionalBoolean(input.has_secondary_insurance);
-    if (input.has_secondary_insurance !== undefined && hasSecondaryInsurance === undefined) {
+    const insurancePhoneNumber = this.trimNullableString(
+      input.insurance_phone_number
+    );
+    const hasSecondaryInsurance = this.normalizeOptionalBoolean(
+      input.has_secondary_insurance
+    );
+    if (
+      input.has_secondary_insurance !== undefined &&
+      hasSecondaryInsurance === undefined
+    ) {
       return { message: 'has_secondary_insurance must be a boolean' };
     }
-    const secondaryInsuranceProvider = this.trimNullableString(input.secondary_insurance_provider);
-    const secondaryInsuranceMemberId = this.trimNullableString(input.secondary_insurance_member_id);
-    const secondaryPolicyNumber = this.trimNullableString(input.secondary_policy_number);
+    const secondaryInsuranceProvider = this.trimNullableString(
+      input.secondary_insurance_provider
+    );
+    const secondaryInsuranceMemberId = this.trimNullableString(
+      input.secondary_insurance_member_id
+    );
+    const secondaryPolicyNumber = this.trimNullableString(
+      input.secondary_policy_number
+    );
     const selfPayCardInfo = this.trimNullableString(input.self_pay_card_info);
     const insurance = this.trimNullableString(input.insurance);
-    const insurancePolicyHolderName = this.trimNullableString(input.insurance_policy_holder_name);
-    const parsedHolderDob = parseInsurancePolicyHolderDob(input.insurance_policy_holder_dob);
+    const insurancePolicyHolderName = this.trimNullableString(
+      input.insurance_policy_holder_name
+    );
+    const parsedHolderDob = parseInsurancePolicyHolderDob(
+      input.insurance_policy_holder_dob
+    );
     if (parsedHolderDob.ok === false) {
       return { message: parsedHolderDob.message };
     }
     const insurancePolicyHolderDob = parsedHolderDob.value;
-    const insurancePolicyHolderRelationship = this.trimNullableString(input.insurance_policy_holder_relationship);
-    const insurancePlanType = this.trimNullableString(input.insurance_plan_type);
+    const insurancePolicyHolderRelationship = this.trimNullableString(
+      input.insurance_policy_holder_relationship
+    );
+    const insurancePlanType = this.trimNullableString(
+      input.insurance_plan_type
+    );
 
     const billingValue: Record<string, any> = {
       payment_method: paymentMethodRaw,
@@ -390,24 +450,46 @@ export class ClientController {
         insurance_plan_type: insurancePlanType,
         policy_number: policyNumber ?? null,
         has_secondary_insurance: hasSecondaryInsurance ?? false,
-        secondary_insurance_provider: hasSecondaryInsurance === true ? secondaryInsuranceProvider : null,
-        secondary_insurance_member_id: hasSecondaryInsurance === true ? secondaryInsuranceMemberId : null,
-        secondary_policy_number: hasSecondaryInsurance === true ? secondaryPolicyNumber : null,
+        secondary_insurance_provider:
+          hasSecondaryInsurance === true ? secondaryInsuranceProvider : null,
+        secondary_insurance_member_id:
+          hasSecondaryInsurance === true ? secondaryInsuranceMemberId : null,
+        secondary_policy_number:
+          hasSecondaryInsurance === true ? secondaryPolicyNumber : null,
       },
     };
   }
 
-  private async resolveBillingTargetClientId(req: AuthRequest, idParam?: string): Promise<{ clientId?: string; status?: number; body?: ReturnType<typeof ApiResponse.error> }> {
+  private async resolveBillingTargetClientId(
+    req: AuthRequest,
+    idParam?: string
+  ): Promise<{
+    clientId?: string;
+    status?: number;
+    body?: ReturnType<typeof ApiResponse.error>;
+  }> {
     if (req.user?.role === 'client') {
-      const ownClientId = await this.cloudSqlAssignmentService.getClientIdByAuthUserId(req.user.id);
+      const ownClientId =
+        await this.cloudSqlAssignmentService.getClientIdByAuthUserId(
+          req.user.id
+        );
       if (!ownClientId) {
-        return { status: 404, body: ApiResponse.error('Client profile not found', 'NOT_FOUND') };
+        return {
+          status: 404,
+          body: ApiResponse.error('Client profile not found', 'NOT_FOUND'),
+        };
       }
 
       if (idParam) {
         const sentAuthUserId = idParam === req.user.id;
         if (!sentAuthUserId && idParam !== ownClientId) {
-          return { status: 403, body: ApiResponse.error('Forbidden: cannot access another client billing profile', 'FORBIDDEN') };
+          return {
+            status: 403,
+            body: ApiResponse.error(
+              'Forbidden: cannot access another client billing profile',
+              'FORBIDDEN'
+            ),
+          };
         }
       }
 
@@ -415,18 +497,31 @@ export class ClientController {
     }
 
     if (!idParam) {
-      return { status: 400, body: ApiResponse.error('Missing client ID', 'VALIDATION_ERROR') };
+      return {
+        status: 400,
+        body: ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'),
+      };
     }
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(idParam)) {
-      return { status: 400, body: ApiResponse.error(`Invalid client ID format: ${idParam}`, 'VALIDATION_ERROR') };
+      return {
+        status: 400,
+        body: ApiResponse.error(
+          `Invalid client ID format: ${idParam}`,
+          'VALIDATION_ERROR'
+        ),
+      };
     }
 
     return { clientId: idParam };
   }
 
-  private async ensureBillingAccess(req: AuthRequest, clientId: string): Promise<{ status?: number; body?: ReturnType<typeof ApiResponse.error> }> {
+  private async ensureBillingAccess(
+    req: AuthRequest,
+    clientId: string
+  ): Promise<{ status?: number; body?: ReturnType<typeof ApiResponse.error> }> {
     if (req.user?.role === 'client') {
       return {};
     }
@@ -445,7 +540,9 @@ export class ClientController {
     }
 
     const code = String((error as { code?: string }).code || '').toUpperCase();
-    const message = String((error as { message?: string }).message || '').toLowerCase();
+    const message = String(
+      (error as { message?: string }).message || ''
+    ).toLowerCase();
 
     return (
       code === 'ECONNRESET' ||
@@ -495,7 +592,11 @@ export class ClientController {
     return this.cloudSqlAssignmentService.getClientIdByAuthUserId(authUserId);
   }
 
-  private async authorizeStaffClientDocumentAccess(req: AuthRequest, res: Response, clientId: string): Promise<boolean> {
+  private async authorizeStaffClientDocumentAccess(
+    req: AuthRequest,
+    res: Response,
+    clientId: string
+  ): Promise<boolean> {
     if (!req.user?.id || !req.user.role) {
       res.status(401).json({ error: 'Unauthorized staff access' });
       return false;
@@ -521,7 +622,9 @@ export class ClientController {
   private static isBirthOutcomesColumnMissing(error: unknown): boolean {
     if (!error || typeof error !== 'object') return false;
     const code = String((error as { code?: string }).code || '');
-    const message = String((error as { message?: string }).message || '').toLowerCase();
+    const message = String(
+      (error as { message?: string }).message || ''
+    ).toLowerCase();
     return (
       code === '42703' &&
       (message.includes('birth_outcomes_induction') ||
@@ -531,33 +634,42 @@ export class ClientController {
   }
 
   private async hasInsuranceCardDocument(clientId: string): Promise<boolean> {
-    const documents = await this.getClientDocumentRepository().getDocumentsByClientId(clientId);
+    const documents =
+      await this.getClientDocumentRepository().getDocumentsByClientId(clientId);
     return documents.some(
-      (document) => document.documentType === CLIENT_DOCUMENT_TYPE_INSURANCE_CARD
+      (document) =>
+        document.documentType === CLIENT_DOCUMENT_TYPE_INSURANCE_CARD
     );
   }
 
-  private async requireInsuranceCardForBilling(clientId: string, res: Response): Promise<boolean> {
+  private async requireInsuranceCardForBilling(
+    clientId: string,
+    res: Response
+  ): Promise<boolean> {
     try {
       const hasInsuranceCard = await this.hasInsuranceCardDocument(clientId);
       if (!hasInsuranceCard) {
-        res.status(400).json(
-          ApiResponse.error(
-            'An insurance card upload is required before saving insurance billing',
-            'VALIDATION_ERROR'
-          )
-        );
+        res
+          .status(400)
+          .json(
+            ApiResponse.error(
+              'An insurance card upload is required before saving insurance billing',
+              'VALIDATION_ERROR'
+            )
+          );
         return false;
       }
       return true;
     } catch (error) {
       if (ClientController.isClientDocumentsTableMissing(error)) {
-        res.status(503).json(
-          ApiResponse.error(
-            'Client documents feature not available until client_documents migration is applied',
-            'SERVICE_UNAVAILABLE'
-          )
-        );
+        res
+          .status(503)
+          .json(
+            ApiResponse.error(
+              'Client documents feature not available until client_documents migration is applied',
+              'SERVICE_UNAVAILABLE'
+            )
+          );
         return false;
       }
       throw error;
@@ -583,13 +695,16 @@ export class ClientController {
         return;
       }
 
-      const documentType = String(req.body.documentType || req.body.document_type || '').trim();
+      const documentType = String(
+        req.body.documentType || req.body.document_type || ''
+      ).trim();
       if (documentType !== CLIENT_DOCUMENT_TYPE_INSURANCE_CARD) {
         res.status(400).json({ error: 'Unsupported document type' });
         return;
       }
 
-      const category = typeof req.body.category === 'string' ? req.body.category.trim() : '';
+      const category =
+        typeof req.body.category === 'string' ? req.body.category.trim() : '';
       if (category && category !== CLIENT_DOCUMENT_CATEGORY_BILLING) {
         res.status(400).json({ error: 'category must be billing' });
         return;
@@ -601,8 +716,12 @@ export class ClientController {
       }
 
       const fileExtension = this.getFileExtension(file.originalname);
-      const hasAllowedExtension = CLIENT_DOCUMENT_ALLOWED_EXTENSIONS.includes(fileExtension as typeof CLIENT_DOCUMENT_ALLOWED_EXTENSIONS[number]);
-      const hasAllowedMimeType = CLIENT_DOCUMENT_ALLOWED_MIME_TYPES.includes(file.mimetype as typeof CLIENT_DOCUMENT_ALLOWED_MIME_TYPES[number]);
+      const hasAllowedExtension = CLIENT_DOCUMENT_ALLOWED_EXTENSIONS.includes(
+        fileExtension as (typeof CLIENT_DOCUMENT_ALLOWED_EXTENSIONS)[number]
+      );
+      const hasAllowedMimeType = CLIENT_DOCUMENT_ALLOWED_MIME_TYPES.includes(
+        file.mimetype as (typeof CLIENT_DOCUMENT_ALLOWED_MIME_TYPES)[number]
+      );
       if (!hasAllowedExtension || !hasAllowedMimeType) {
         res.status(400).json({
           error:
@@ -611,11 +730,12 @@ export class ClientController {
         return;
       }
 
-      const uploaded = await this.getClientDocumentUploadService().uploadDocument(
-        file,
-        clientId,
-        CLIENT_DOCUMENT_TYPE_INSURANCE_CARD
-      );
+      const uploaded =
+        await this.getClientDocumentUploadService().uploadDocument(
+          file,
+          clientId,
+          CLIENT_DOCUMENT_TYPE_INSURANCE_CARD
+        );
 
       const document = await this.getClientDocumentRepository().createDocument({
         clientId,
@@ -633,7 +753,10 @@ export class ClientController {
       });
     } catch (error) {
       if (ClientController.isClientDocumentsTableMissing(error)) {
-        res.status(503).json({ error: 'Client documents feature not available until client_documents migration is applied' });
+        res.status(503).json({
+          error:
+            'Client documents feature not available until client_documents migration is applied',
+        });
         return;
       }
 
@@ -656,10 +779,15 @@ export class ClientController {
         return;
       }
 
-      const documents = await this.getClientDocumentRepository().getDocumentsByClientId(clientId);
+      const documents =
+        await this.getClientDocumentRepository().getDocumentsByClientId(
+          clientId
+        );
       res.json({
         success: true,
-        documents: documents.map((document) => this.mapClientDocument(document)),
+        documents: documents.map((document) =>
+          this.mapClientDocument(document)
+        ),
       });
     } catch (error) {
       if (ClientController.isClientDocumentsTableMissing(error)) {
@@ -686,13 +814,17 @@ export class ClientController {
         return;
       }
 
-      const document = await this.getClientDocumentRepository().getDocumentById(req.params.documentId);
+      const document = await this.getClientDocumentRepository().getDocumentById(
+        req.params.documentId
+      );
       if (!document || document.clientId !== clientId) {
         res.status(404).json({ error: 'Document not found' });
         return;
       }
 
-      const url = await this.getClientDocumentRepository().getSignedUrl(document.filePath);
+      const url = await this.getClientDocumentRepository().getSignedUrl(
+        document.filePath
+      );
       res.json({ success: true, url });
     } catch (error) {
       const err = this.handleError(error as Error, res);
@@ -719,13 +851,16 @@ export class ClientController {
         return;
       }
 
-      const document = await this.getClientDocumentRepository().getDocumentById(documentId);
+      const document =
+        await this.getClientDocumentRepository().getDocumentById(documentId);
       if (!document || document.clientId !== clientId) {
         res.status(404).json({ error: 'Document not found' });
         return;
       }
 
-      await this.getClientDocumentUploadService().deleteDocument(document.filePath);
+      await this.getClientDocumentUploadService().deleteDocument(
+        document.filePath
+      );
       await this.getClientDocumentRepository().deleteDocument(documentId);
 
       res.json({
@@ -747,15 +882,24 @@ export class ClientController {
         return;
       }
 
-      const authorized = await this.authorizeStaffClientDocumentAccess(req, res, clientId);
+      const authorized = await this.authorizeStaffClientDocumentAccess(
+        req,
+        res,
+        clientId
+      );
       if (!authorized) {
         return;
       }
 
-      const documents = await this.getClientDocumentRepository().getDocumentsByClientId(clientId);
+      const documents =
+        await this.getClientDocumentRepository().getDocumentsByClientId(
+          clientId
+        );
       res.json({
         success: true,
-        documents: documents.map((document) => this.mapClientDocument(document)),
+        documents: documents.map((document) =>
+          this.mapClientDocument(document)
+        ),
       });
     } catch (error) {
       if (ClientController.isClientDocumentsTableMissing(error)) {
@@ -777,18 +921,25 @@ export class ClientController {
         return;
       }
 
-      const authorized = await this.authorizeStaffClientDocumentAccess(req, res, clientId);
+      const authorized = await this.authorizeStaffClientDocumentAccess(
+        req,
+        res,
+        clientId
+      );
       if (!authorized) {
         return;
       }
 
-      const document = await this.getClientDocumentRepository().getDocumentById(documentId);
+      const document =
+        await this.getClientDocumentRepository().getDocumentById(documentId);
       if (!document || document.clientId !== clientId) {
         res.status(404).json({ error: 'Document not found' });
         return;
       }
 
-      const url = await this.getClientDocumentRepository().getSignedUrl(document.filePath);
+      const url = await this.getClientDocumentRepository().getSignedUrl(
+        document.filePath
+      );
       res.json({ success: true, url });
     } catch (error) {
       const err = this.handleError(error as Error, res);
@@ -796,11 +947,17 @@ export class ClientController {
     }
   }
 
-  private async enrichCreatorNames(dtos: ActivityDTO[]): Promise<ActivityDTO[]> {
+  private async enrichCreatorNames(
+    dtos: ActivityDTO[]
+  ): Promise<ActivityDTO[]> {
     const unresolvedIds = Array.from(
       new Set(
         dtos
-          .filter((d) => d.created_by && (!d.created_by_name || d.created_by_name === 'Staff member'))
+          .filter(
+            (d) =>
+              d.created_by &&
+              (!d.created_by_name || d.created_by_name === 'Staff member')
+          )
           .map((d) => d.created_by as string)
       )
     );
@@ -814,13 +971,18 @@ export class ClientController {
         try {
           const { data, error } = await supabase.auth.admin.getUserById(id);
           if (error || !data?.user) return;
-          const meta = (data.user.user_metadata as Record<string, unknown> | undefined) || {};
-          const appMeta = (data.user.app_metadata as Record<string, unknown> | undefined) || {};
+          const meta =
+            (data.user.user_metadata as Record<string, unknown> | undefined) ||
+            {};
+          const appMeta =
+            (data.user.app_metadata as Record<string, unknown> | undefined) ||
+            {};
           const first = String(meta.first_name ?? meta.firstname ?? '').trim();
           const last = String(meta.last_name ?? meta.lastname ?? '').trim();
           const full = `${first} ${last}`.trim();
           const email = String(data.user.email || '').trim();
-          const role = String(meta.role ?? appMeta.role ?? '').trim() || undefined;
+          const role =
+            String(meta.role ?? appMeta.role ?? '').trim() || undefined;
           const name = full || email || 'Staff member';
           resolved.set(id, { name, role });
         } catch {
@@ -854,16 +1016,22 @@ export class ClientController {
       this.setNoStore(res);
       const { id, role } = req.user;
       const { detailed, limit: limitParam } = req.query;
-      const clients = detailed === 'true'
-        ? await this.clientUseCase.getClientsDetailed(id, role)
-        : await this.clientUseCase.getClientsLite(id, role);
+      const clients =
+        detailed === 'true'
+          ? await this.clientUseCase.getClientsDetailed(id, role)
+          : await this.clientUseCase.getClientsLite(id, role);
 
-      const limit = limitParam != null ? Math.min(Math.max(0, parseInt(String(limitParam), 10) || 0), 1000) : undefined;
-      const sliced = limit != null && limit > 0 ? clients.slice(0, limit) : clients;
+      const limit =
+        limitParam != null
+          ? Math.min(Math.max(0, parseInt(String(limitParam), 10) || 0), 1000)
+          : undefined;
+      const sliced =
+        limit != null && limit > 0 ? clients.slice(0, limit) : clients;
 
-      const eligibilityByClientId = await this.eligibilityService.getPortalEligibilityBatch(
-        sliced.map((client) => client.id)
-      );
+      const eligibilityByClientId =
+        await this.eligibilityService.getPortalEligibilityBatch(
+          sliced.map((client) => client.id)
+        );
 
       const dtos = sliced.map((client) =>
         this.mergeEligibility(
@@ -874,11 +1042,16 @@ export class ClientController {
           eligibilityByClientId.get(client.id)
         )
       );
-      logger.info({ source: 'cloud_sql', count: dtos.length }, '[Client] list response');
+      logger.info(
+        { source: 'cloud_sql', count: dtos.length },
+        '[Client] list response'
+      );
       res.json(ApiResponse.list(dtos, dtos.length));
     } catch (getError) {
       if (ClientController.isTransientCloudSqlError(getError)) {
-        logger.warn('[Client] transient Cloud SQL error while listing clients; returning empty list');
+        logger.warn(
+          '[Client] transient Cloud SQL error while listing clients; returning empty list'
+        );
         res.setHeader('x-data-degraded', 'cloud-sql-transient');
         res.json(
           ApiResponse.list([], 0, {
@@ -890,11 +1063,16 @@ export class ClientController {
         return;
       }
 
-      const msg = (getError instanceof Error ? getError.message : String(getError)) || '';
-      if (msg.includes('does not exist') && msg.toLowerCase().includes('column')) {
+      const msg =
+        (getError instanceof Error ? getError.message : String(getError)) || '';
+      if (
+        msg.includes('does not exist') &&
+        msg.toLowerCase().includes('column')
+      ) {
         if (!res.headersSent) {
           res.status(503).json({
-            error: 'phi_clients is missing columns required by the backend. Run migrations/alter_phi_clients_backend_columns.sql on your Cloud SQL database (sokana_private).',
+            error:
+              'phi_clients is missing columns required by the backend. Run migrations/alter_phi_clients_backend_columns.sql on your Cloud SQL database (sokana_private).',
             code: 'CLOUD_SQL_SCHEMA',
           });
         }
@@ -906,7 +1084,7 @@ export class ClientController {
       }
     }
   }
-//
+  //
   // getCSVClients()
   //
   // Grabs all client data in CSV form
@@ -914,23 +1092,19 @@ export class ClientController {
   // returns:
   //    CSV of users
   //
-  async exportCSV(
-    req: AuthRequest,
-    res: Response,
-  ): Promise<void> {
+  async exportCSV(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const {role} = req.user;
+      const { role } = req.user;
       const clientsCSV = await this.clientUseCase.exportCSV(role);
-      res.header("Content-Type", "text/csv");
-      res.attachment("clients.csv");
+      res.header('Content-Type', 'text/csv');
+      res.attachment('clients.csv');
 
       res.send(clientsCSV);
-    }
-    catch (getError) {
+    } catch (getError) {
       const error = this.handleError(getError, res);
 
       if (!res.headersSent) {
-        res.status(error.status).json({ error: error.message})
+        res.status(error.status).json({ error: error.message });
       }
     }
   }
@@ -942,115 +1116,181 @@ export class ClientController {
   // Operational fields always; PHI fields only when user is authorized (admin or assigned doula).
   //
   async getClientById(req: AuthRequest, res: Response): Promise<void> {
-  try {
-    this.setNoStore(res);
-    const { id } = req.params;
-    let targetClientId = id;
-    if (!targetClientId) {
-      res.status(400).json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
-      return;
-    }
-
-    // Clients may send either client_id or auth_user_id in :id.
-    if (req.user?.role === 'client') {
-      const ownClientId = await this.cloudSqlAssignmentService.getClientIdByAuthUserId(req.user.id);
-      if (!ownClientId) {
-        res.status(404).json(ApiResponse.error('Client profile not found', 'NOT_FOUND'));
-        return;
-      }
-      const sentAuthUserId = targetClientId === req.user.id;
-      if (!sentAuthUserId && targetClientId !== ownClientId) {
-        res.status(403).json(ApiResponse.error('Forbidden: cannot access another client profile', 'FORBIDDEN'));
-        return;
-      }
-      targetClientId = ownClientId;
-    }
-
-    const clientRow = await this.clientRepository.getClientById?.(targetClientId) ?? null;
-    if (!clientRow) {
-      res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
-      return;
-    }
-
-    const eligibility = await this.getPortalEligibilitySnapshot(targetClientId);
-    const dto = this.mergeEligibility(
-      ClientMapper.toDetailDTO(clientRow, eligibility?.is_eligible),
-      eligibility
-    );
-
-    const { canAccess } = await canAccessSensitive(req.user, targetClientId);
-    const canAccessForResponse = canAccess || req.user?.role === 'client';
-    if (!canAccessForResponse) {
-      logger.info({ clientId: targetClientId, source: 'cloud_sql', phi: 'skipped (unauthorized)' }, '[Client] detail response');
-      res.json(ApiResponse.success(dto));
-      return;
-    }
-
     try {
-      const fullClient = await this.clientRepository.findClientDetailedById(targetClientId);
-      const u = fullClient.user;
-      const merged: Record<string, unknown> = { ...dto };
-      if (fullClient.health_history != null) merged.health_history = fullClient.health_history;
-      if (fullClient.allergies != null) merged.allergies = fullClient.allergies;
-      if (fullClient.due_date != null) merged.due_date = fullClient.due_date instanceof Date ? fullClient.due_date.toISOString().slice(0, 10) : fullClient.due_date;
-      if (fullClient.annual_income != null) merged.annual_income = fullClient.annual_income;
-      if (fullClient.baby_sex != null) merged.baby_sex = fullClient.baby_sex;
-      if (u?.health_notes != null) merged.health_notes = u.health_notes;
-      if ((u as any)?.birth_outcomes != null) merged.birth_outcomes = (u as any).birth_outcomes;
-      if ((u as any)?.birth_outcomes_induction != null) merged.birth_outcomes_induction = (u as any).birth_outcomes_induction;
-      if ((u as any)?.birth_outcomes_delivery_type != null) merged.birth_outcomes_delivery_type = (u as any).birth_outcomes_delivery_type;
-      if ((u as any)?.birth_outcomes_medications_used != null) merged.birth_outcomes_medications_used = (u as any).birth_outcomes_medications_used;
-      if (u?.baby_name != null) merged.baby_name = u.baby_name;
-      if (u?.number_of_babies != null) merged.number_of_babies = u.number_of_babies;
-      if (u?.race_ethnicity != null) merged.race_ethnicity = u.race_ethnicity;
-      if (u?.client_age_range != null) merged.client_age_range = u.client_age_range;
-      merged.insurance = u?.insurance ?? null;
-      merged.payment_method = u?.payment_method ?? null;
-      merged.insurance_provider = u?.insurance_provider ?? null;
-      merged.insurance_member_id = u?.insurance_member_id ?? null;
-      merged.insurance_policy_holder_name = u?.insurance_policy_holder_name ?? null;
-      const uDob = (u as any)?.insurance_policy_holder_dob;
-      merged.insurance_policy_holder_dob =
-        uDob instanceof Date ? uDob.toISOString().slice(0, 10) : uDob ?? null;
-      merged.insurance_policy_holder_relationship = u?.insurance_policy_holder_relationship ?? null;
-      merged.insurance_plan_type = u?.insurance_plan_type ?? null;
-      merged.policy_number = u?.policy_number ?? null;
-      merged.insurance_phone_number = u?.insurance_phone_number ?? null;
-      merged.has_secondary_insurance = u?.has_secondary_insurance ?? null;
-      merged.secondary_insurance_provider = u?.secondary_insurance_provider ?? null;
-      merged.secondary_insurance_member_id = u?.secondary_insurance_member_id ?? null;
-      merged.secondary_policy_number = u?.secondary_policy_number ?? null;
-      merged.self_pay_card_info = u?.self_pay_card_info ?? null;
-      merged.referral_source = u?.referral_source ?? null;
-      merged.referral_name = u?.referral_name ?? null;
-      merged.referral_email = u?.referral_email ?? null;
-      merged.referral_source_other = u?.referral_source_other ?? null;
-      if (u?.pregnancy_number != null) merged.pregnancy_number = u.pregnancy_number;
-      if (u?.had_previous_pregnancies != null) merged.had_previous_pregnancies = u.had_previous_pregnancies;
-      if (u?.previous_pregnancies_count != null) merged.previous_pregnancies_count = u.previous_pregnancies_count;
-      if (u?.living_children_count != null) merged.living_children_count = u.living_children_count;
-      if (u?.past_pregnancy_experience != null) merged.past_pregnancy_experience = u.past_pregnancy_experience;
-      if ((u as any)?.medications != null) merged.medications = (u as any).medications;
-      if ((u as any)?.date_of_birth != null) merged.date_of_birth = typeof (u as any).date_of_birth === 'string' ? (u as any).date_of_birth : ((u as any).date_of_birth as Date)?.toISOString?.()?.slice(0, 10);
-      if ((u as any)?.address_line1 != null) merged.address_line1 = (u as any).address_line1;
-      if ((u as any)?.address_line1 != null) merged.address = (u as any).address_line1;
-      if ((u as any)?.city != null) merged.city = (u as any).city;
-      if ((u as any)?.state != null) merged.state = (u as any).state;
-      if ((u as any)?.zip_code != null) merged.zipCode = (u as any).zip_code;
-      if ((u as any)?.country != null) merged.country = (u as any).country;
-      if ((u as any)?.bio != null) merged.bio = (u as any).bio;
-      logger.info({ clientId: targetClientId, source: 'cloud_sql', phi: 'included' }, '[Client] detail response');
-      res.json(ApiResponse.success(merged));
-    } catch {
-      res.json(ApiResponse.success(dto));
-    }
-  } catch (error) {
-    const err = this.handleError(error, res);
-    if (!res.headersSent) {
-      res.status(err.status).json(ApiResponse.error(err.message));
+      this.setNoStore(res);
+      const { id } = req.params;
+      let targetClientId = id;
+      if (!targetClientId) {
+        res
+          .status(400)
+          .json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
+        return;
+      }
+
+      // Clients may send either client_id or auth_user_id in :id.
+      if (req.user?.role === 'client') {
+        const ownClientId =
+          await this.cloudSqlAssignmentService.getClientIdByAuthUserId(
+            req.user.id
+          );
+        if (!ownClientId) {
+          res
+            .status(404)
+            .json(ApiResponse.error('Client profile not found', 'NOT_FOUND'));
+          return;
+        }
+        const sentAuthUserId = targetClientId === req.user.id;
+        if (!sentAuthUserId && targetClientId !== ownClientId) {
+          res
+            .status(403)
+            .json(
+              ApiResponse.error(
+                'Forbidden: cannot access another client profile',
+                'FORBIDDEN'
+              )
+            );
+          return;
+        }
+        targetClientId = ownClientId;
+      }
+
+      const clientRow =
+        (await this.clientRepository.getClientById?.(targetClientId)) ?? null;
+      if (!clientRow) {
+        res
+          .status(404)
+          .json(ApiResponse.error('Client not found', 'NOT_FOUND'));
+        return;
+      }
+
+      const eligibility =
+        await this.getPortalEligibilitySnapshot(targetClientId);
+      const dto = this.mergeEligibility(
+        ClientMapper.toDetailDTO(clientRow, eligibility?.is_eligible),
+        eligibility
+      );
+
+      const { canAccess } = await canAccessSensitive(req.user, targetClientId);
+      const canAccessForResponse = canAccess || req.user?.role === 'client';
+      if (!canAccessForResponse) {
+        logger.info(
+          {
+            clientId: targetClientId,
+            source: 'cloud_sql',
+            phi: 'skipped (unauthorized)',
+          },
+          '[Client] detail response'
+        );
+        res.json(ApiResponse.success(dto));
+        return;
+      }
+
+      try {
+        const fullClient =
+          await this.clientRepository.findClientDetailedById(targetClientId);
+        const u = fullClient.user;
+        const merged: Record<string, unknown> = { ...dto };
+        if (fullClient.health_history != null)
+          merged.health_history = fullClient.health_history;
+        if (fullClient.allergies != null)
+          merged.allergies = fullClient.allergies;
+        if (fullClient.due_date != null)
+          merged.due_date =
+            fullClient.due_date instanceof Date
+              ? fullClient.due_date.toISOString().slice(0, 10)
+              : fullClient.due_date;
+        if (fullClient.annual_income != null)
+          merged.annual_income = fullClient.annual_income;
+        if (fullClient.baby_sex != null) merged.baby_sex = fullClient.baby_sex;
+        if (u?.health_notes != null) merged.health_notes = u.health_notes;
+        if ((u as any)?.birth_outcomes != null)
+          merged.birth_outcomes = (u as any).birth_outcomes;
+        if ((u as any)?.birth_outcomes_induction != null)
+          merged.birth_outcomes_induction = (u as any).birth_outcomes_induction;
+        if ((u as any)?.birth_outcomes_delivery_type != null)
+          merged.birth_outcomes_delivery_type = (
+            u as any
+          ).birth_outcomes_delivery_type;
+        if ((u as any)?.birth_outcomes_medications_used != null)
+          merged.birth_outcomes_medications_used = (
+            u as any
+          ).birth_outcomes_medications_used;
+        if (u?.baby_name != null) merged.baby_name = u.baby_name;
+        if (u?.number_of_babies != null)
+          merged.number_of_babies = u.number_of_babies;
+        if (u?.race_ethnicity != null) merged.race_ethnicity = u.race_ethnicity;
+        if (u?.client_age_range != null)
+          merged.client_age_range = u.client_age_range;
+        merged.insurance = u?.insurance ?? null;
+        merged.payment_method = u?.payment_method ?? null;
+        merged.insurance_provider = u?.insurance_provider ?? null;
+        merged.insurance_member_id = u?.insurance_member_id ?? null;
+        merged.insurance_policy_holder_name =
+          u?.insurance_policy_holder_name ?? null;
+        const uDob = (u as any)?.insurance_policy_holder_dob;
+        merged.insurance_policy_holder_dob =
+          uDob instanceof Date
+            ? uDob.toISOString().slice(0, 10)
+            : (uDob ?? null);
+        merged.insurance_policy_holder_relationship =
+          u?.insurance_policy_holder_relationship ?? null;
+        merged.insurance_plan_type = u?.insurance_plan_type ?? null;
+        merged.policy_number = u?.policy_number ?? null;
+        merged.insurance_phone_number = u?.insurance_phone_number ?? null;
+        merged.has_secondary_insurance = u?.has_secondary_insurance ?? null;
+        merged.secondary_insurance_provider =
+          u?.secondary_insurance_provider ?? null;
+        merged.secondary_insurance_member_id =
+          u?.secondary_insurance_member_id ?? null;
+        merged.secondary_policy_number = u?.secondary_policy_number ?? null;
+        merged.self_pay_card_info = u?.self_pay_card_info ?? null;
+        merged.referral_source = u?.referral_source ?? null;
+        merged.referral_name = u?.referral_name ?? null;
+        merged.referral_email = u?.referral_email ?? null;
+        merged.referral_source_other = u?.referral_source_other ?? null;
+        if (u?.pregnancy_number != null)
+          merged.pregnancy_number = u.pregnancy_number;
+        if (u?.had_previous_pregnancies != null)
+          merged.had_previous_pregnancies = u.had_previous_pregnancies;
+        if (u?.previous_pregnancies_count != null)
+          merged.previous_pregnancies_count = u.previous_pregnancies_count;
+        if (u?.living_children_count != null)
+          merged.living_children_count = u.living_children_count;
+        if (u?.past_pregnancy_experience != null)
+          merged.past_pregnancy_experience = u.past_pregnancy_experience;
+        if ((u as any)?.medications != null)
+          merged.medications = (u as any).medications;
+        if ((u as any)?.date_of_birth != null)
+          merged.date_of_birth =
+            typeof (u as any).date_of_birth === 'string'
+              ? (u as any).date_of_birth
+              : ((u as any).date_of_birth as Date)
+                  ?.toISOString?.()
+                  ?.slice(0, 10);
+        if ((u as any)?.address_line1 != null)
+          merged.address_line1 = (u as any).address_line1;
+        if ((u as any)?.address_line1 != null)
+          merged.address = (u as any).address_line1;
+        if ((u as any)?.city != null) merged.city = (u as any).city;
+        if ((u as any)?.state != null) merged.state = (u as any).state;
+        if ((u as any)?.zip_code != null) merged.zipCode = (u as any).zip_code;
+        if ((u as any)?.country != null) merged.country = (u as any).country;
+        if ((u as any)?.bio != null) merged.bio = (u as any).bio;
+        logger.info(
+          { clientId: targetClientId, source: 'cloud_sql', phi: 'included' },
+          '[Client] detail response'
+        );
+        res.json(ApiResponse.success(merged));
+      } catch {
+        res.json(ApiResponse.success(dto));
+      }
+    } catch (error) {
+      const err = this.handleError(error, res);
+      if (!res.headersSent) {
+        res.status(err.status).json(ApiResponse.error(err.message));
+      }
     }
   }
-}
 
   async deleteClient(req: AuthRequest, res: Response): Promise<void> {
     const { id } = req.body;
@@ -1079,36 +1319,55 @@ export class ClientController {
   // returns:
   //    Client with updatedAt timestamp (or ClientDetailDTO in canonical mode)
   //
-  async updateClientStatus(
-    req: AuthRequest,
-    res: Response,
-  ): Promise<void> {
+  async updateClientStatus(req: AuthRequest, res: Response): Promise<void> {
     const { clientId, status } = req.body;
     const readMode = process.env.SPLIT_DB_READ_MODE;
 
     // Require PRIMARY mode - shadow mode disabled
     if (readMode !== 'primary') {
-      res.status(501).json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
+      res
+        .status(501)
+        .json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
       return;
     }
 
     // Validate request body
     if (!clientId || typeof clientId !== 'string') {
-      res.status(400).json(ApiResponse.error('Invalid request: clientId is required and must be a string', 'VALIDATION_ERROR'));
+      res
+        .status(400)
+        .json(
+          ApiResponse.error(
+            'Invalid request: clientId is required and must be a string',
+            'VALIDATION_ERROR'
+          )
+        );
       return;
     }
 
     if (!status || typeof status !== 'string' || status.trim() === '') {
-      res.status(400).json(ApiResponse.error('Invalid request: status is required and must be a non-empty string', 'VALIDATION_ERROR'));
+      res
+        .status(400)
+        .json(
+          ApiResponse.error(
+            'Invalid request: status is required and must be a non-empty string',
+            'VALIDATION_ERROR'
+          )
+        );
       return;
     }
 
     try {
       // Use repository with explicit SELECT columns (no select('*'), no PHI)
-      const updatedRow = await this.clientRepository.updateClientStatusCanonical?.(clientId, status.trim()) ?? null;
+      const updatedRow =
+        (await this.clientRepository.updateClientStatusCanonical?.(
+          clientId,
+          status.trim()
+        )) ?? null;
 
       if (!updatedRow) {
-        res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
+        res
+          .status(404)
+          .json(ApiResponse.error('Client not found', 'NOT_FOUND'));
         return;
       }
 
@@ -1118,7 +1377,8 @@ export class ClientController {
 
       // When transitioning to 'matched', fire QB customer sync (non-blocking).
       // QB may not be connected in all environments; failures are logged only.
-      const isMatchedConversion = status.trim() === 'matched' || status.trim() === 'customer';
+      const isMatchedConversion =
+        status.trim() === 'matched' || status.trim() === 'customer';
       if (isMatchedConversion) {
         syncMatchedClientToQuickBooks({
           clientId,
@@ -1129,22 +1389,31 @@ export class ClientController {
         })
           .then((result) => {
             logger.info(
-              { clientId, qboCustomerId: result.qboCustomerId, alreadyExisted: result.alreadyExisted },
+              {
+                clientId,
+                qboCustomerId: result.qboCustomerId,
+                alreadyExisted: result.alreadyExisted,
+              },
               result.alreadyExisted
                 ? '[Client] QB customer already existed; linked to CRM record'
                 : '[Client] QB customer created and linked to CRM record'
             );
           })
           .catch((err) => {
-            logger.warn({ clientId, error: (err as Error)?.message }, '[Client] QB customer sync failed (non-blocking)');
+            logger.warn(
+              { clientId, error: (err as Error)?.message },
+              '[Client] QB customer sync failed (non-blocking)'
+            );
           });
       }
 
       // Map to DTO and return canonical response
-      const dto = this.mergeEligibility(ClientMapper.toDetailDTO(updatedRow, isEligible), eligibility);
+      const dto = this.mergeEligibility(
+        ClientMapper.toDetailDTO(updatedRow, isEligible),
+        eligibility
+      );
       res.json(ApiResponse.success(dto));
-    }
-    catch (statusError) {
+    } catch (statusError) {
       const error = this.handleError(statusError, res);
       res.status(error.status).json(ApiResponse.error(error.message));
     }
@@ -1163,10 +1432,7 @@ export class ClientController {
   // returns:
   //    Canonical: { success: true, data: ClientDetailDTO (merged operational + PHI) }
   //
-  async updateClient(
-    req: AuthRequest,
-    res: Response,
-  ): Promise<void> {
+  async updateClient(req: AuthRequest, res: Response): Promise<void> {
     const { id } = req.params;
     let targetClientId = id;
     const updateData = req.body;
@@ -1174,38 +1440,64 @@ export class ClientController {
 
     // Require PRIMARY mode
     if (readMode !== 'primary') {
-      res.status(501).json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
+      res
+        .status(501)
+        .json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
       return;
     }
 
     // Validate client ID
     if (!targetClientId) {
-      res.status(400).json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
+      res
+        .status(400)
+        .json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
       return;
     }
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(targetClientId)) {
-      res.status(400).json(ApiResponse.error(`Invalid client ID format: ${targetClientId}`, 'VALIDATION_ERROR'));
+      res
+        .status(400)
+        .json(
+          ApiResponse.error(
+            `Invalid client ID format: ${targetClientId}`,
+            'VALIDATION_ERROR'
+          )
+        );
       return;
     }
 
     if (!updateData || Object.keys(updateData).length === 0) {
-      res.status(400).json(ApiResponse.error('No fields to update', 'VALIDATION_ERROR'));
+      res
+        .status(400)
+        .json(ApiResponse.error('No fields to update', 'VALIDATION_ERROR'));
       return;
     }
 
     // Clients can only update their own record.
     if (req.user?.role === 'client') {
-      const ownClientId = await this.cloudSqlAssignmentService.getClientIdByAuthUserId(req.user.id);
+      const ownClientId =
+        await this.cloudSqlAssignmentService.getClientIdByAuthUserId(
+          req.user.id
+        );
       if (!ownClientId) {
-        res.status(404).json(ApiResponse.error('Client profile not found', 'NOT_FOUND'));
+        res
+          .status(404)
+          .json(ApiResponse.error('Client profile not found', 'NOT_FOUND'));
         return;
       }
       // Frontend may send auth user id in :id; accept both auth id and resolved client id.
       const sentAuthUserId = targetClientId === req.user.id;
       if (!sentAuthUserId && ownClientId !== targetClientId) {
-        res.status(403).json(ApiResponse.error('Forbidden: cannot update another client profile', 'FORBIDDEN'));
+        res
+          .status(403)
+          .json(
+            ApiResponse.error(
+              'Forbidden: cannot update another client profile',
+              'FORBIDDEN'
+            )
+          );
         return;
       }
       targetClientId = ownClientId;
@@ -1219,15 +1511,30 @@ export class ClientController {
       const billingFieldsPresent = Object.keys(billingPatch).length > 0;
 
       const profilePatchForValidation = { ...profilePatch };
-      if (billingFieldsPresent && !this.hasProfileAddressFields(profilePatchForValidation)) {
+      if (
+        billingFieldsPresent &&
+        !this.hasProfileAddressFields(profilePatchForValidation)
+      ) {
         delete profilePatchForValidation.zip_code;
       }
 
-      const sanitized = this.sanitizeProfilePatchFields(profilePatchForValidation, {
-        requireZipCode: this.hasProfileAddressFields(profilePatchForValidation),
-      });
+      const sanitized = this.sanitizeProfilePatchFields(
+        profilePatchForValidation,
+        {
+          requireZipCode: this.hasProfileAddressFields(
+            profilePatchForValidation
+          ),
+        }
+      );
       if (!sanitized.ok) {
-        res.status(400).json(ApiResponse.error((sanitized as { ok: false; message: string }).message, 'VALIDATION_ERROR'));
+        res
+          .status(400)
+          .json(
+            ApiResponse.error(
+              (sanitized as { ok: false; message: string }).message,
+              'VALIDATION_ERROR'
+            )
+          );
         return;
       }
       const normalized = sanitized.value;
@@ -1242,15 +1549,28 @@ export class ClientController {
         phi = {};
       }
 
-      logger.info({
-        clientId: id,
-        operationalKeys: Object.keys(operational),
-        phiKeyCount: Object.keys(phi).length, // don't log PHI field names in prod
-      }, '[Client] update payload split');
+      logger.info(
+        {
+          clientId: id,
+          operationalKeys: Object.keys(operational),
+          phiKeyCount: Object.keys(phi).length, // don't log PHI field names in prod
+        },
+        '[Client] update payload split'
+      );
 
-      const referralPatchKeys = ['referral_source', 'referral_source_other', 'referral_name', 'referral_email'];
-      if (referralPatchKeys.some((k) => Object.prototype.hasOwnProperty.call(operational, k))) {
-        const fullClient = await this.clientRepository.findClientDetailedById(targetClientId);
+      const referralPatchKeys = [
+        'referral_source',
+        'referral_source_other',
+        'referral_name',
+        'referral_email',
+      ];
+      if (
+        referralPatchKeys.some((k) =>
+          Object.prototype.hasOwnProperty.call(operational, k)
+        )
+      ) {
+        const fullClient =
+          await this.clientRepository.findClientDetailedById(targetClientId);
         const u = fullClient.user;
         const current = {
           referral_source: u?.referral_source ?? null,
@@ -1258,16 +1578,24 @@ export class ClientController {
           referral_email: u?.referral_email ?? null,
           referral_source_other: u?.referral_source_other ?? null,
         };
-        const ref = normalizeStaffReferralOperationalPatch(operational as Record<string, unknown>, current);
+        const ref = normalizeStaffReferralOperationalPatch(
+          operational as Record<string, unknown>,
+          current
+        );
         if (ref.ok === false) {
-          res.status(400).json(ApiResponse.error(ref.message, 'VALIDATION_ERROR'));
+          res
+            .status(400)
+            .json(ApiResponse.error(ref.message, 'VALIDATION_ERROR'));
           return;
         }
         Object.assign(operational as Record<string, unknown>, ref.operational);
       }
 
       // ── Step 2: Authorization check (one call, reuse result) ──
-      const { canAccess, assignedClientIds } = await canAccessSensitive(req.user, targetClientId);
+      const { canAccess, assignedClientIds } = await canAccessSensitive(
+        req.user,
+        targetClientId
+      );
       const requester = {
         role: req.user?.role || '',
         userId: req.user?.id || '',
@@ -1276,8 +1604,18 @@ export class ClientController {
 
       // If PHI fields are present but user is not authorized → reject
       if (Object.keys(phi).length > 0 && !canAccess) {
-        logger.warn({ clientId: id, role: req.user?.role }, '[Client] unauthorized PHI update attempt');
-        res.status(403).json(ApiResponse.error('Not authorized to update PHI fields', 'FORBIDDEN'));
+        logger.warn(
+          { clientId: id, role: req.user?.role },
+          '[Client] unauthorized PHI update attempt'
+        );
+        res
+          .status(403)
+          .json(
+            ApiResponse.error(
+              'Not authorized to update PHI fields',
+              'FORBIDDEN'
+            )
+          );
         return;
       }
 
@@ -1287,39 +1625,69 @@ export class ClientController {
       if (billingFieldsPresent) {
         const validatedBilling = this.validateBillingPayload(billingPatch);
         if (!validatedBilling.value) {
-          res.status(400).json(ApiResponse.error(validatedBilling.message || 'Invalid request body', 'VALIDATION_ERROR'));
+          res
+            .status(400)
+            .json(
+              ApiResponse.error(
+                validatedBilling.message || 'Invalid request body',
+                'VALIDATION_ERROR'
+              )
+            );
           return;
         }
 
-        const billingAccess = await this.ensureBillingAccess(req, targetClientId);
+        const billingAccess = await this.ensureBillingAccess(
+          req,
+          targetClientId
+        );
         if (billingAccess.status) {
           res.status(billingAccess.status).json(billingAccess.body);
           return;
         }
 
         if (validatedBilling.value.payment_method !== 'Self-Pay') {
-          const hasInsuranceCard = await this.requireInsuranceCardForBilling(targetClientId, res);
+          const hasInsuranceCard = await this.requireInsuranceCardForBilling(
+            targetClientId,
+            res
+          );
           if (!hasInsuranceCard) {
             return;
           }
         }
 
-        billingWriteResult = await this.clientRepository.updateClientBilling?.(targetClientId, validatedBilling.value)
-          ?? await this.clientRepository.updateClientOperational?.(targetClientId, validatedBilling.value)
-          ?? null;
+        billingWriteResult =
+          (await this.clientRepository.updateClientBilling?.(
+            targetClientId,
+            validatedBilling.value
+          )) ??
+          (await this.clientRepository.updateClientOperational?.(
+            targetClientId,
+            validatedBilling.value
+          )) ??
+          null;
 
         if (!billingWriteResult) {
-          res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
+          res
+            .status(404)
+            .json(ApiResponse.error('Client not found', 'NOT_FOUND'));
           return;
         }
       }
 
       // ── Step 3a: Write operational fields (Supabase or Cloud SQL) ──
       let operationalResult = null;
-      if (Object.keys(operational).length > 0 && this.clientRepository.updateClientOperational) {
-        operationalResult = await this.clientRepository.updateClientOperational(targetClientId, operational);
+      if (
+        Object.keys(operational).length > 0 &&
+        this.clientRepository.updateClientOperational
+      ) {
+        operationalResult = await this.clientRepository.updateClientOperational(
+          targetClientId,
+          operational
+        );
         if (!operationalResult) {
-          res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
+          res
+            .status(404)
+            .json(ApiResponse.error('Client not found', 'NOT_FOUND'));
           return;
         }
       }
@@ -1341,20 +1709,31 @@ export class ClientController {
               phone_number: phi.phone_number,
             });
           } catch {
-            logger.warn({ clientId: id }, '[Client] identity cache write failed (non-blocking)');
+            logger.warn(
+              { clientId: id },
+              '[Client] identity cache write failed (non-blocking)'
+            );
           }
         }
       }
 
       // ── Step 4: Fresh read — get authoritative data from both sources ──
-      const freshOperational = operationalResult ?? await this.clientRepository.getClientById?.(targetClientId) ?? null;
+      const freshOperational =
+        operationalResult ??
+        (await this.clientRepository.getClientById?.(targetClientId)) ??
+        null;
       if (!freshOperational) {
-        res.status(404).json(ApiResponse.error('Client not found after update', 'NOT_FOUND'));
+        res
+          .status(404)
+          .json(
+            ApiResponse.error('Client not found after update', 'NOT_FOUND')
+          );
         return;
       }
 
       // Compute eligibility
-      const eligibility = await this.getPortalEligibilitySnapshot(targetClientId);
+      const eligibility =
+        await this.getPortalEligibilitySnapshot(targetClientId);
       const isEligible = eligibility?.is_eligible ?? false;
 
       // Map operational to canonical DTO
@@ -1366,55 +1745,96 @@ export class ClientController {
       // Merge PHI for the response (if authorized / self client view)
       let response: Record<string, any> = { ...dto };
       if (billingWriteResult) {
-        response = { ...response, ...this.normalizeBillingRow(billingWriteResult) };
+        response = {
+          ...response,
+          ...this.normalizeBillingRow(billingWriteResult),
+        };
       }
       if (req.user?.role === 'client') {
         try {
-          const fullClient = await this.clientRepository.findClientDetailedById(targetClientId);
+          const fullClient =
+            await this.clientRepository.findClientDetailedById(targetClientId);
           const u = fullClient.user as any;
-          if (fullClient.health_history != null) response.health_history = fullClient.health_history;
-          if (fullClient.allergies != null) response.allergies = fullClient.allergies;
-          if (fullClient.due_date != null) response.due_date = fullClient.due_date instanceof Date ? fullClient.due_date.toISOString().slice(0, 10) : fullClient.due_date;
-          if (fullClient.annual_income != null) response.annual_income = fullClient.annual_income;
-          if (fullClient.baby_sex != null) response.baby_sex = fullClient.baby_sex;
+          if (fullClient.health_history != null)
+            response.health_history = fullClient.health_history;
+          if (fullClient.allergies != null)
+            response.allergies = fullClient.allergies;
+          if (fullClient.due_date != null)
+            response.due_date =
+              fullClient.due_date instanceof Date
+                ? fullClient.due_date.toISOString().slice(0, 10)
+                : fullClient.due_date;
+          if (fullClient.annual_income != null)
+            response.annual_income = fullClient.annual_income;
+          if (fullClient.baby_sex != null)
+            response.baby_sex = fullClient.baby_sex;
           if (u?.health_notes != null) response.health_notes = u.health_notes;
-          if ((u as any)?.birth_outcomes != null) response.birth_outcomes = (u as any).birth_outcomes;
-          if ((u as any)?.birth_outcomes_induction != null) response.birth_outcomes_induction = (u as any).birth_outcomes_induction;
-          if ((u as any)?.birth_outcomes_delivery_type != null) response.birth_outcomes_delivery_type = (u as any).birth_outcomes_delivery_type;
-          if ((u as any)?.birth_outcomes_medications_used != null) response.birth_outcomes_medications_used = (u as any).birth_outcomes_medications_used;
+          if ((u as any)?.birth_outcomes != null)
+            response.birth_outcomes = (u as any).birth_outcomes;
+          if ((u as any)?.birth_outcomes_induction != null)
+            response.birth_outcomes_induction = (
+              u as any
+            ).birth_outcomes_induction;
+          if ((u as any)?.birth_outcomes_delivery_type != null)
+            response.birth_outcomes_delivery_type = (
+              u as any
+            ).birth_outcomes_delivery_type;
+          if ((u as any)?.birth_outcomes_medications_used != null)
+            response.birth_outcomes_medications_used = (
+              u as any
+            ).birth_outcomes_medications_used;
           if (u?.baby_name != null) response.baby_name = u.baby_name;
-          if (u?.number_of_babies != null) response.number_of_babies = u.number_of_babies;
-          if (u?.race_ethnicity != null) response.race_ethnicity = u.race_ethnicity;
-          if (u?.client_age_range != null) response.client_age_range = u.client_age_range;
+          if (u?.number_of_babies != null)
+            response.number_of_babies = u.number_of_babies;
+          if (u?.race_ethnicity != null)
+            response.race_ethnicity = u.race_ethnicity;
+          if (u?.client_age_range != null)
+            response.client_age_range = u.client_age_range;
           response.insurance = u?.insurance ?? null;
           response.payment_method = u?.payment_method ?? null;
           response.insurance_provider = u?.insurance_provider ?? null;
           response.insurance_member_id = u?.insurance_member_id ?? null;
-          response.insurance_policy_holder_name = u?.insurance_policy_holder_name ?? null;
+          response.insurance_policy_holder_name =
+            u?.insurance_policy_holder_name ?? null;
           const respHolderDob = u?.insurance_policy_holder_dob;
           response.insurance_policy_holder_dob =
-            respHolderDob instanceof Date ? respHolderDob.toISOString().slice(0, 10) : respHolderDob ?? null;
-          response.insurance_policy_holder_relationship = u?.insurance_policy_holder_relationship ?? null;
+            respHolderDob instanceof Date
+              ? respHolderDob.toISOString().slice(0, 10)
+              : (respHolderDob ?? null);
+          response.insurance_policy_holder_relationship =
+            u?.insurance_policy_holder_relationship ?? null;
           response.insurance_plan_type = u?.insurance_plan_type ?? null;
           response.policy_number = u?.policy_number ?? null;
           response.insurance_phone_number = u?.insurance_phone_number ?? null;
           response.has_secondary_insurance = u?.has_secondary_insurance ?? null;
-          response.secondary_insurance_provider = u?.secondary_insurance_provider ?? null;
-          response.secondary_insurance_member_id = u?.secondary_insurance_member_id ?? null;
+          response.secondary_insurance_provider =
+            u?.secondary_insurance_provider ?? null;
+          response.secondary_insurance_member_id =
+            u?.secondary_insurance_member_id ?? null;
           response.secondary_policy_number = u?.secondary_policy_number ?? null;
           response.self_pay_card_info = u?.self_pay_card_info ?? null;
           response.referral_source = u?.referral_source ?? null;
           response.referral_name = u?.referral_name ?? null;
           response.referral_email = u?.referral_email ?? null;
           response.referral_source_other = u?.referral_source_other ?? null;
-          if (u?.pregnancy_number != null) response.pregnancy_number = u.pregnancy_number;
-          if (u?.had_previous_pregnancies != null) response.had_previous_pregnancies = u.had_previous_pregnancies;
-          if (u?.previous_pregnancies_count != null) response.previous_pregnancies_count = u.previous_pregnancies_count;
-          if (u?.living_children_count != null) response.living_children_count = u.living_children_count;
-          if (u?.past_pregnancy_experience != null) response.past_pregnancy_experience = u.past_pregnancy_experience;
+          if (u?.pregnancy_number != null)
+            response.pregnancy_number = u.pregnancy_number;
+          if (u?.had_previous_pregnancies != null)
+            response.had_previous_pregnancies = u.had_previous_pregnancies;
+          if (u?.previous_pregnancies_count != null)
+            response.previous_pregnancies_count = u.previous_pregnancies_count;
+          if (u?.living_children_count != null)
+            response.living_children_count = u.living_children_count;
+          if (u?.past_pregnancy_experience != null)
+            response.past_pregnancy_experience = u.past_pregnancy_experience;
           if (u?.medications != null) response.medications = u.medications;
-          if (u?.date_of_birth != null) response.date_of_birth = typeof u.date_of_birth === 'string' ? u.date_of_birth : (u.date_of_birth as Date)?.toISOString?.()?.slice(0, 10);
-          if (u?.address_line1 != null) response.address_line1 = u.address_line1;
+          if (u?.date_of_birth != null)
+            response.date_of_birth =
+              typeof u.date_of_birth === 'string'
+                ? u.date_of_birth
+                : (u.date_of_birth as Date)?.toISOString?.()?.slice(0, 10);
+          if (u?.address_line1 != null)
+            response.address_line1 = u.address_line1;
           if (u?.address_line1 != null) response.address = u.address_line1;
           if (u?.city != null) response.city = u.city;
           if (u?.state != null) response.state = u.state;
@@ -1422,36 +1842,50 @@ export class ClientController {
           if (u?.country != null) response.country = u.country;
           if (u?.bio != null) response.bio = u.bio;
         } catch {
-          logger.warn({ clientId: targetClientId }, '[Client] self profile merge failed after update');
+          logger.warn(
+            { clientId: targetClientId },
+            '[Client] self profile merge failed after update'
+          );
         }
       } else if (canAccess) {
         try {
           // Use broker write result if we just wrote, otherwise fresh read
-          const freshPhi = phiWriteResult ?? await fetchClientPhi(targetClientId, requester);
+          const freshPhi =
+            phiWriteResult ?? (await fetchClientPhi(targetClientId, requester));
           response = { ...dto, ...freshPhi };
         } catch {
           // PHI fetch failed — return operational only, don't block update response
-          logger.warn({ clientId: id }, '[Client] PHI fetch failed after update, returning operational only');
+          logger.warn(
+            { clientId: id },
+            '[Client] PHI fetch failed after update, returning operational only'
+          );
         }
       }
 
       // ── Step 5: Source-of-truth instrumentation ──
-      logger.info({
-        clientId: targetClientId,
-        sources: {
-          operational: Object.keys(operational).length > 0 ? 'cloud_sql' : 'none',
-          sensitive: Object.keys(phi).length > 0 ? 'phiBroker' : 'none',
+      logger.info(
+        {
+          clientId: targetClientId,
+          sources: {
+            operational:
+              Object.keys(operational).length > 0 ? 'cloud_sql' : 'none',
+            sensitive: Object.keys(phi).length > 0 ? 'phiBroker' : 'none',
+          },
+          keys: {
+            operational: Object.keys(freshOperational),
+            sensitive: Object.keys(phiWriteResult ?? {}),
+            mergedSample: Object.keys(response).slice(0, 20),
+          },
         },
-        keys: {
-          operational: Object.keys(freshOperational),
-          sensitive: Object.keys(phiWriteResult ?? {}),
-          mergedSample: Object.keys(response).slice(0, 20),
-        },
-      }, '[Client] update response composition');
+        '[Client] update response composition'
+      );
 
       res.json(ApiResponse.success(response));
     } catch (error) {
-      logger.error({ errorMessage: (error as Error)?.message }, '[Client] update error');
+      logger.error(
+        { errorMessage: (error as Error)?.message },
+        '[Client] update error'
+      );
       const err = this.handleError(error as Error, res);
       if (!res.headersSent) {
         res.status(err.status).json(ApiResponse.error(err.message));
@@ -1470,23 +1904,38 @@ export class ClientController {
    *
    * Authorization: admin or assigned doula (enforced by route + middleware).
    */
-  async updateClientBirthOutcomes(req: AuthRequest, res: Response): Promise<void> {
+  async updateClientBirthOutcomes(
+    req: AuthRequest,
+    res: Response
+  ): Promise<void> {
     const { id } = req.params;
     const readMode = process.env.SPLIT_DB_READ_MODE;
 
     if (readMode !== 'primary') {
-      res.status(501).json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
+      res
+        .status(501)
+        .json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
       return;
     }
 
     if (!id) {
-      res.status(400).json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
+      res
+        .status(400)
+        .json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
       return;
     }
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(id)) {
-      res.status(400).json(ApiResponse.error(`Invalid client ID format: ${id}`, 'VALIDATION_ERROR'));
+      res
+        .status(400)
+        .json(
+          ApiResponse.error(
+            `Invalid client ID format: ${id}`,
+            'VALIDATION_ERROR'
+          )
+        );
       return;
     }
 
@@ -1496,52 +1945,103 @@ export class ClientController {
     const medsRaw = body.birth_outcomes_medications_used;
 
     if (typeof induction !== 'boolean') {
-      res.status(400).json(ApiResponse.error('birth_outcomes_induction is required and must be a boolean', 'VALIDATION_ERROR'));
+      res
+        .status(400)
+        .json(
+          ApiResponse.error(
+            'birth_outcomes_induction is required and must be a boolean',
+            'VALIDATION_ERROR'
+          )
+        );
       return;
     }
 
-    const deliveryType = typeof deliveryTypeRaw === 'string' ? deliveryTypeRaw.trim() : '';
+    const deliveryType =
+      typeof deliveryTypeRaw === 'string' ? deliveryTypeRaw.trim() : '';
     if (!deliveryType) {
-      res.status(400).json(ApiResponse.error('birth_outcomes_delivery_type is required', 'VALIDATION_ERROR'));
+      res
+        .status(400)
+        .json(
+          ApiResponse.error(
+            'birth_outcomes_delivery_type is required',
+            'VALIDATION_ERROR'
+          )
+        );
       return;
     }
     if (!ClientController.BIRTH_OUTCOMES_DELIVERY_TYPES.has(deliveryType)) {
-      res.status(400).json(ApiResponse.error('birth_outcomes_delivery_type must be one of the allowed options', 'VALIDATION_ERROR'));
+      res
+        .status(400)
+        .json(
+          ApiResponse.error(
+            'birth_outcomes_delivery_type must be one of the allowed options',
+            'VALIDATION_ERROR'
+          )
+        );
       return;
     }
 
     if (!Array.isArray(medsRaw)) {
-      res.status(400).json(ApiResponse.error('birth_outcomes_medications_used is required and must be an array', 'VALIDATION_ERROR'));
+      res
+        .status(400)
+        .json(
+          ApiResponse.error(
+            'birth_outcomes_medications_used is required and must be an array',
+            'VALIDATION_ERROR'
+          )
+        );
       return;
     }
     const meds = medsRaw
       .map((v) => (typeof v === 'string' ? v.trim() : ''))
       .filter((v) => v.length > 0);
     if (meds.length === 0) {
-      res.status(400).json(ApiResponse.error('birth_outcomes_medications_used must include at least one item', 'VALIDATION_ERROR'));
+      res
+        .status(400)
+        .json(
+          ApiResponse.error(
+            'birth_outcomes_medications_used must include at least one item',
+            'VALIDATION_ERROR'
+          )
+        );
       return;
     }
-    const invalidMeds = meds.filter((m) => !ClientController.BIRTH_OUTCOMES_MEDICATIONS.has(m));
+    const invalidMeds = meds.filter(
+      (m) => !ClientController.BIRTH_OUTCOMES_MEDICATIONS.has(m)
+    );
     if (invalidMeds.length > 0) {
-      res.status(400).json(ApiResponse.error('birth_outcomes_medications_used contains invalid option(s)', 'VALIDATION_ERROR'));
+      res
+        .status(400)
+        .json(
+          ApiResponse.error(
+            'birth_outcomes_medications_used contains invalid option(s)',
+            'VALIDATION_ERROR'
+          )
+        );
       return;
     }
 
     try {
-      const clientExists = await this.clientRepository.getClientById?.(id) ?? null;
+      const clientExists =
+        (await this.clientRepository.getClientById?.(id)) ?? null;
       if (!clientExists) {
-        res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
+        res
+          .status(404)
+          .json(ApiResponse.error('Client not found', 'NOT_FOUND'));
         return;
       }
 
-      const updated = await this.clientRepository.updateClientOperational?.(id, {
-        birth_outcomes_induction: induction,
-        birth_outcomes_delivery_type: deliveryType,
-        birth_outcomes_medications_used: meds,
-      }) ?? null;
+      const updated =
+        (await this.clientRepository.updateClientOperational?.(id, {
+          birth_outcomes_induction: induction,
+          birth_outcomes_delivery_type: deliveryType,
+          birth_outcomes_medications_used: meds,
+        })) ?? null;
 
       if (!updated) {
-        res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
+        res
+          .status(404)
+          .json(ApiResponse.error('Client not found', 'NOT_FOUND'));
         return;
       }
 
@@ -1555,10 +2055,14 @@ export class ClientController {
     } catch (error) {
       if (ClientController.isBirthOutcomesColumnMissing(error)) {
         if (!res.headersSent) {
-          res.status(503).json(ApiResponse.error(
-            'Birth outcomes columns are missing. Run migration: src/db/migrations/add_phi_clients_birth_outcomes_structured.sql',
-            'SERVICE_UNAVAILABLE'
-          ));
+          res
+            .status(503)
+            .json(
+              ApiResponse.error(
+                'Birth outcomes columns are missing. Run migration: src/db/migrations/add_phi_clients_birth_outcomes_structured.sql',
+                'SERVICE_UNAVAILABLE'
+              )
+            );
         }
         return;
       }
@@ -1584,34 +2088,45 @@ export class ClientController {
   // returns:
   //    Canonical: { success: true, message?: string }
   //
-  async updateClientPhi(
-    req: AuthRequest,
-    res: Response,
-  ): Promise<void> {
+  async updateClientPhi(req: AuthRequest, res: Response): Promise<void> {
     const { id } = req.params;
     const updateData = req.body;
     const readMode = process.env.SPLIT_DB_READ_MODE;
 
     // Require PRIMARY mode
     if (readMode !== 'primary') {
-      res.status(501).json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
+      res
+        .status(501)
+        .json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
       return;
     }
 
     // Validate client ID
     if (!id) {
-      res.status(400).json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
+      res
+        .status(400)
+        .json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
       return;
     }
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(id)) {
-      res.status(400).json(ApiResponse.error(`Invalid client ID format: ${id}`, 'VALIDATION_ERROR'));
+      res
+        .status(400)
+        .json(
+          ApiResponse.error(
+            `Invalid client ID format: ${id}`,
+            'VALIDATION_ERROR'
+          )
+        );
       return;
     }
 
     if (!updateData || Object.keys(updateData).length === 0) {
-      res.status(400).json(ApiResponse.error('No fields to update', 'VALIDATION_ERROR'));
+      res
+        .status(400)
+        .json(ApiResponse.error('No fields to update', 'VALIDATION_ERROR'));
       return;
     }
 
@@ -1620,7 +2135,14 @@ export class ClientController {
       const normalizedRaw = normalizeClientPatch(updateData);
       const sanitized = this.sanitizeProfilePatchFields(normalizedRaw);
       if (!sanitized.ok) {
-        res.status(400).json(ApiResponse.error((sanitized as { ok: false; message: string }).message, 'VALIDATION_ERROR'));
+        res
+          .status(400)
+          .json(
+            ApiResponse.error(
+              (sanitized as { ok: false; message: string }).message,
+              'VALIDATION_ERROR'
+            )
+          );
         return;
       }
       const normalized = sanitized.value;
@@ -1630,30 +2152,47 @@ export class ClientController {
 
       // Reject if any operational (non-PHI) fields are present
       if (Object.keys(operational).length > 0) {
-        logger.warn({
-          clientId: id,
-          rejectedKeys: Object.keys(operational),
-        }, '[Client] PHI endpoint received non-PHI fields');
-        res.status(400).json(ApiResponse.error(
-          `This endpoint only accepts PHI fields. Non-PHI fields not allowed: ${Object.keys(operational).join(', ')}`,
-          'VALIDATION_ERROR'
-        ));
+        logger.warn(
+          {
+            clientId: id,
+            rejectedKeys: Object.keys(operational),
+          },
+          '[Client] PHI endpoint received non-PHI fields'
+        );
+        res
+          .status(400)
+          .json(
+            ApiResponse.error(
+              `This endpoint only accepts PHI fields. Non-PHI fields not allowed: ${Object.keys(operational).join(', ')}`,
+              'VALIDATION_ERROR'
+            )
+          );
         return;
       }
 
       // Ensure we have PHI fields to update
       if (Object.keys(phi).length === 0) {
-        res.status(400).json(ApiResponse.error('No PHI fields to update', 'VALIDATION_ERROR'));
+        res
+          .status(400)
+          .json(
+            ApiResponse.error('No PHI fields to update', 'VALIDATION_ERROR')
+          );
         return;
       }
 
-      logger.info({
-        clientId: id,
-        phiKeyCount: Object.keys(phi).length,
-      }, '[Client] PHI-only update payload validated');
+      logger.info(
+        {
+          clientId: id,
+          phiKeyCount: Object.keys(phi).length,
+        },
+        '[Client] PHI-only update payload validated'
+      );
 
       // ── Step 2: Authorization check ──
-      const { canAccess, assignedClientIds } = await canAccessSensitive(req.user, id);
+      const { canAccess, assignedClientIds } = await canAccessSensitive(
+        req.user,
+        id
+      );
       const requester = {
         role: req.user?.role || '',
         userId: req.user?.id || '',
@@ -1661,15 +2200,28 @@ export class ClientController {
       };
 
       if (!canAccess) {
-        logger.warn({ clientId: id, role: req.user?.role }, '[Client] unauthorized PHI update attempt');
-        res.status(403).json(ApiResponse.error('Not authorized to update PHI fields', 'FORBIDDEN'));
+        logger.warn(
+          { clientId: id, role: req.user?.role },
+          '[Client] unauthorized PHI update attempt'
+        );
+        res
+          .status(403)
+          .json(
+            ApiResponse.error(
+              'Not authorized to update PHI fields',
+              'FORBIDDEN'
+            )
+          );
         return;
       }
 
       // ── Step 3: Verify client exists ──
-      const clientExists = await this.clientRepository.getClientById?.(id) ?? null;
+      const clientExists =
+        (await this.clientRepository.getClientById?.(id)) ?? null;
       if (!clientExists) {
-        res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
+        res
+          .status(404)
+          .json(ApiResponse.error('Client not found', 'NOT_FOUND'));
         return;
       }
 
@@ -1686,20 +2238,31 @@ export class ClientController {
             phone_number: phi.phone_number,
           });
         } catch {
-          logger.warn({ clientId: id }, '[Client] identity cache write failed (non-blocking)');
+          logger.warn(
+            { clientId: id },
+            '[Client] identity cache write failed (non-blocking)'
+          );
         }
       }
 
       // ── Step 6: Source-of-truth instrumentation ──
-      logger.info({
-        clientId: id,
-        sources: { sensitive: 'phiBroker' },
-        keys: { sensitive: Object.keys(phiWriteResult ?? {}) },
-      }, '[Client] PHI-only update response composition');
+      logger.info(
+        {
+          clientId: id,
+          sources: { sensitive: 'phiBroker' },
+          keys: { sensitive: Object.keys(phiWriteResult ?? {}) },
+        },
+        '[Client] PHI-only update response composition'
+      );
 
-      res.json(ApiResponse.success({ message: 'PHI fields updated successfully' }));
+      res.json(
+        ApiResponse.success({ message: 'PHI fields updated successfully' })
+      );
     } catch (error) {
-      logger.error({ errorMessage: (error as Error)?.message }, '[Client] PHI update error');
+      logger.error(
+        { errorMessage: (error as Error)?.message },
+        '[Client] PHI update error'
+      );
       const err = this.handleError(error as Error, res);
       if (!res.headersSent) {
         res.status(err.status).json(ApiResponse.error(err.message));
@@ -1710,14 +2273,24 @@ export class ClientController {
   async getClientBilling(req: AuthRequest, res: Response): Promise<void> {
     const readMode = process.env.SPLIT_DB_READ_MODE;
     if (readMode !== 'primary') {
-      res.status(501).json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
+      res
+        .status(501)
+        .json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
       return;
     }
 
     try {
-      const resolved = await this.resolveBillingTargetClientId(req, req.params.id);
+      const resolved = await this.resolveBillingTargetClientId(
+        req,
+        req.params.id
+      );
       if (!resolved.clientId) {
-        res.status(resolved.status || 400).json(resolved.body || ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
+        res
+          .status(resolved.status || 400)
+          .json(
+            resolved.body ||
+              ApiResponse.error('Missing client ID', 'VALIDATION_ERROR')
+          );
         return;
       }
 
@@ -1727,12 +2300,15 @@ export class ClientController {
         return;
       }
 
-      const billingRow = await this.clientRepository.getClientBilling?.(resolved.clientId)
-        ?? await this.clientRepository.getClientById?.(resolved.clientId)
-        ?? null;
+      const billingRow =
+        (await this.clientRepository.getClientBilling?.(resolved.clientId)) ??
+        (await this.clientRepository.getClientById?.(resolved.clientId)) ??
+        null;
 
       if (!billingRow) {
-        res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
+        res
+          .status(404)
+          .json(ApiResponse.error('Client not found', 'NOT_FOUND'));
         return;
       }
 
@@ -1748,14 +2324,24 @@ export class ClientController {
   async updateClientBilling(req: AuthRequest, res: Response): Promise<void> {
     const readMode = process.env.SPLIT_DB_READ_MODE;
     if (readMode !== 'primary') {
-      res.status(501).json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
+      res
+        .status(501)
+        .json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
       return;
     }
 
     try {
-      const resolved = await this.resolveBillingTargetClientId(req, req.params.id);
+      const resolved = await this.resolveBillingTargetClientId(
+        req,
+        req.params.id
+      );
       if (!resolved.clientId) {
-        res.status(resolved.status || 400).json(resolved.body || ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
+        res
+          .status(resolved.status || 400)
+          .json(
+            resolved.body ||
+              ApiResponse.error('Missing client ID', 'VALIDATION_ERROR')
+          );
         return;
       }
 
@@ -1768,42 +2354,64 @@ export class ClientController {
       const billingPatch = this.extractBillingPatch(req.body || {});
       const validated = this.validateBillingPayload(billingPatch);
       if (!validated.value) {
-        res.status(400).json(ApiResponse.error(validated.message || 'Invalid request body', 'VALIDATION_ERROR'));
+        res
+          .status(400)
+          .json(
+            ApiResponse.error(
+              validated.message || 'Invalid request body',
+              'VALIDATION_ERROR'
+            )
+          );
         return;
       }
 
       if (validated.value.payment_method !== 'Self-Pay') {
         try {
-          const hasInsuranceCard = await this.hasInsuranceCardDocument(resolved.clientId);
+          const hasInsuranceCard = await this.hasInsuranceCardDocument(
+            resolved.clientId
+          );
           if (!hasInsuranceCard) {
-            res.status(400).json(
-              ApiResponse.error(
-                'An insurance card upload is required before saving insurance billing',
-                'VALIDATION_ERROR'
-              )
-            );
+            res
+              .status(400)
+              .json(
+                ApiResponse.error(
+                  'An insurance card upload is required before saving insurance billing',
+                  'VALIDATION_ERROR'
+                )
+              );
             return;
           }
         } catch (error) {
           if (ClientController.isClientDocumentsTableMissing(error)) {
-            res.status(503).json(
-              ApiResponse.error(
-                'Client documents feature not available until client_documents migration is applied',
-                'SERVICE_UNAVAILABLE'
-              )
-            );
+            res
+              .status(503)
+              .json(
+                ApiResponse.error(
+                  'Client documents feature not available until client_documents migration is applied',
+                  'SERVICE_UNAVAILABLE'
+                )
+              );
             return;
           }
           throw error;
         }
       }
 
-      const updated = await this.clientRepository.updateClientBilling?.(resolved.clientId, validated.value)
-        ?? await this.clientRepository.updateClientOperational?.(resolved.clientId, validated.value)
-        ?? null;
+      const updated =
+        (await this.clientRepository.updateClientBilling?.(
+          resolved.clientId,
+          validated.value
+        )) ??
+        (await this.clientRepository.updateClientOperational?.(
+          resolved.clientId,
+          validated.value
+        )) ??
+        null;
 
       if (!updated) {
-        res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
+        res
+          .status(404)
+          .json(ApiResponse.error('Client not found', 'NOT_FOUND'));
         return;
       }
 
@@ -1830,12 +2438,16 @@ export class ClientController {
 
     // Require PRIMARY mode - shadow mode disabled
     if (readMode !== 'primary') {
-      res.status(501).json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
+      res
+        .status(501)
+        .json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
       return;
     }
 
     if (!id) {
-      res.status(400).json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
+      res
+        .status(400)
+        .json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
       return;
     }
 
@@ -1845,25 +2457,46 @@ export class ClientController {
       content,
       metadata,
       visible_to_client: visibleSnake,
-      visibleToClient
+      visibleToClient,
     } = req.body;
 
     // Validate request body
-    if (!activity_type || typeof activity_type !== 'string' || activity_type.trim() === '') {
-      res.status(400).json(ApiResponse.error('Invalid request: activity_type is required and must be a non-empty string', 'VALIDATION_ERROR'));
+    if (
+      !activity_type ||
+      typeof activity_type !== 'string' ||
+      activity_type.trim() === ''
+    ) {
+      res
+        .status(400)
+        .json(
+          ApiResponse.error(
+            'Invalid request: activity_type is required and must be a non-empty string',
+            'VALIDATION_ERROR'
+          )
+        );
       return;
     }
 
     if (!content || typeof content !== 'string' || content.trim() === '') {
-      res.status(400).json(ApiResponse.error('Invalid request: content is required and must be a non-empty string', 'VALIDATION_ERROR'));
+      res
+        .status(400)
+        .json(
+          ApiResponse.error(
+            'Invalid request: content is required and must be a non-empty string',
+            'VALIDATION_ERROR'
+          )
+        );
       return;
     }
 
     try {
       // Verify client exists (optional but preferred)
-      const clientExists = await this.clientRepository.getClientById?.(id) ?? null;
+      const clientExists =
+        (await this.clientRepository.getClientById?.(id)) ?? null;
       if (!clientExists) {
-        res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
+        res
+          .status(404)
+          .json(ApiResponse.error('Client not found', 'NOT_FOUND'));
         return;
       }
 
@@ -1873,7 +2506,8 @@ export class ClientController {
         visibleSnake === true ||
         visibleToClient === 'true' ||
         visibleSnake === 'true';
-      const creatorName = `${req.user?.firstname || ''} ${req.user?.lastname || ''}`.trim() ||
+      const creatorName =
+        `${req.user?.firstname || ''} ${req.user?.lastname || ''}`.trim() ||
         (req.user?.email || '').trim() ||
         'Staff member';
       const creatorRole = req.user?.role ? String(req.user.role) : 'staff';
@@ -1899,14 +2533,26 @@ export class ClientController {
       res.json(ApiResponse.success(dto));
     } catch (error) {
       // Graceful fallback: if client_activities table is missing, return 503 (not 500)
-      const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
+      const message = (
+        error instanceof Error ? error.message : String(error)
+      ).toLowerCase();
       const isTableMissing =
         message.includes('client_activities') &&
-        (message.includes('could not find') || message.includes('schema cache') ||
-         message.includes('does not exist'));
+        (message.includes('could not find') ||
+          message.includes('schema cache') ||
+          message.includes('does not exist'));
       if (isTableMissing) {
-        logger.warn('[Client] client_activities table missing — cannot create activity');
-        res.status(503).json(ApiResponse.error('Activities feature not available — table pending migration', 'SERVICE_UNAVAILABLE'));
+        logger.warn(
+          '[Client] client_activities table missing — cannot create activity'
+        );
+        res
+          .status(503)
+          .json(
+            ApiResponse.error(
+              'Activities feature not available — table pending migration',
+              'SERVICE_UNAVAILABLE'
+            )
+          );
         return;
       }
       const err = this.handleError(error as Error, res);
@@ -1929,38 +2575,58 @@ export class ClientController {
 
     // Require PRIMARY mode - shadow mode disabled
     if (readMode !== 'primary') {
-      res.status(501).json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
+      res
+        .status(501)
+        .json(ApiResponse.error('Shadow disabled', 'SHADOW_DISABLED'));
       return;
     }
 
     if (!id) {
-      res.status(400).json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
+      res
+        .status(400)
+        .json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
       return;
     }
 
     let targetClientId = id;
     if (req.user?.role === 'client') {
-      const ownClientId = await this.cloudSqlAssignmentService.getClientIdByAuthUserId(req.user.id);
+      const ownClientId =
+        await this.cloudSqlAssignmentService.getClientIdByAuthUserId(
+          req.user.id
+        );
       if (!ownClientId) {
-        res.status(404).json(ApiResponse.error('Client profile not found', 'NOT_FOUND'));
+        res
+          .status(404)
+          .json(ApiResponse.error('Client profile not found', 'NOT_FOUND'));
         return;
       }
       const sentAuthUserId = targetClientId === req.user.id;
       if (!sentAuthUserId && targetClientId !== ownClientId) {
-        res.status(403).json(ApiResponse.error('Forbidden: cannot access another client profile', 'FORBIDDEN'));
+        res
+          .status(403)
+          .json(
+            ApiResponse.error(
+              'Forbidden: cannot access another client profile',
+              'FORBIDDEN'
+            )
+          );
         return;
       }
       targetClientId = ownClientId;
     }
 
     try {
-      const clientExists = await this.clientRepository.getClientById?.(targetClientId) ?? null;
+      const clientExists =
+        (await this.clientRepository.getClientById?.(targetClientId)) ?? null;
       if (!clientExists) {
-        res.status(404).json(ApiResponse.error('Client not found', 'NOT_FOUND'));
+        res
+          .status(404)
+          .json(ApiResponse.error('Client not found', 'NOT_FOUND'));
         return;
       }
 
-      const activities = await this.clientUseCase.getClientActivities(targetClientId);
+      const activities =
+        await this.clientUseCase.getClientActivities(targetClientId);
       const forViewer =
         req.user?.role === 'client'
           ? activities.filter((a) =>
@@ -1976,15 +2642,20 @@ export class ClientController {
       res.json(ApiResponse.list(enriched, enriched.length));
     } catch (error) {
       // Graceful fallback: if client_activities table is missing in schema, return empty list (no 500)
-      const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
+      const message = (
+        error instanceof Error ? error.message : String(error)
+      ).toLowerCase();
       const isTableMissing =
-        (message.includes('client_activities') || message.includes('failed to fetch activities')) &&
+        (message.includes('client_activities') ||
+          message.includes('failed to fetch activities')) &&
         (message.includes('could not find the table') ||
           message.includes('schema cache') ||
-          message.includes("relation") ||
+          message.includes('relation') ||
           message.includes('does not exist'));
       if (isTableMissing) {
-        console.error('Error: Failed to fetch activities (table may be missing). Returning empty list.');
+        console.error(
+          'Error: Failed to fetch activities (table may be missing). Returning empty list.'
+        );
         res.json(ApiResponse.list([], 0));
         return;
       }
@@ -2005,8 +2676,16 @@ export class ClientController {
     try {
       const { id: clientId } = req.params;
       const { doulaId, role, services } = req.body;
-      const assignmentStart = req.body?.assignmentStart ?? req.body?.assignment_start ?? req.body?.requestedStart ?? req.body?.requested_start;
-      const assignmentEnd = req.body?.assignmentEnd ?? req.body?.assignment_end ?? req.body?.requestedEnd ?? req.body?.requested_end;
+      const assignmentStart =
+        req.body?.assignmentStart ??
+        req.body?.assignment_start ??
+        req.body?.requestedStart ??
+        req.body?.requested_start;
+      const assignmentEnd =
+        req.body?.assignmentEnd ??
+        req.body?.assignment_end ??
+        req.body?.requestedEnd ??
+        req.body?.requested_end;
 
       if (!clientId || !doulaId) {
         res.status(400).json({ error: 'Missing clientId or doulaId' });
@@ -2021,29 +2700,48 @@ export class ClientController {
         return;
       }
 
-      const normalizedRole = role === undefined ? undefined : normalizeDoulaAssignmentRole(role);
+      const normalizedRole =
+        role === undefined ? undefined : normalizeDoulaAssignmentRole(role);
       if (role !== undefined && !normalizedRole) {
-        res.status(400).json({ error: "Invalid role. Allowed values are 'primary' or 'backup'" });
+        res.status(400).json({
+          error: "Invalid role. Allowed values are 'primary' or 'backup'",
+        });
         return;
       }
 
-      const alreadyAssigned = await this.cloudSqlAssignmentService.assignmentExists(clientId, doulaId);
+      const alreadyAssigned =
+        await this.cloudSqlAssignmentService.assignmentExists(
+          clientId,
+          doulaId
+        );
       if (alreadyAssigned) {
-        res.status(409).json({ error: 'This doula is already assigned to this client' });
+        res
+          .status(409)
+          .json({ error: 'This doula is already assigned to this client' });
         return;
       }
 
-      const currentAvailability = await this.doulaAvailabilityService.getCurrentAvailabilityStatus(doulaId);
+      const currentAvailability =
+        await this.doulaAvailabilityService.getCurrentAvailabilityStatus(
+          doulaId
+        );
       if (currentAvailability.status === 'unavailable') {
-        const reason = currentAvailability.reason ? ` (${currentAvailability.reason})` : '';
+        const reason = currentAvailability.reason
+          ? ` (${currentAvailability.reason})`
+          : '';
         res.status(409).json({
           error: `Doula is currently unavailable${reason}. Unavailable from ${currentAvailability.startAt} to ${currentAvailability.endAt}.`,
         });
         return;
       }
 
-      if ((assignmentStart && !assignmentEnd) || (!assignmentStart && assignmentEnd)) {
-        res.status(400).json({ error: 'assignmentStart and assignmentEnd must be provided together' });
+      if (
+        (assignmentStart && !assignmentEnd) ||
+        (!assignmentStart && assignmentEnd)
+      ) {
+        res.status(400).json({
+          error: 'assignmentStart and assignmentEnd must be provided together',
+        });
         return;
       }
 
@@ -2073,12 +2771,18 @@ export class ClientController {
           services: assignment.services,
           assignedAt: assignment.assignedAt,
           role: assignment.role,
-          status: assignment.status
-        }
+          status: assignment.status,
+        },
       });
     } catch (error) {
-      const msg = (error instanceof Error ? error.message : String(error)).toLowerCase();
-      if (msg.includes('doula_assignments') && msg.includes('services') && msg.includes('does not exist')) {
+      const msg = (
+        error instanceof Error ? error.message : String(error)
+      ).toLowerCase();
+      if (
+        msg.includes('doula_assignments') &&
+        msg.includes('services') &&
+        msg.includes('does not exist')
+      ) {
         res.status(503).json({
           error:
             'Doula assignment services are not available yet. Run migration src/db/migrations/add_services_to_doula_assignments.sql',
@@ -2092,7 +2796,9 @@ export class ClientController {
         return;
       }
       if (ClientController.isTableMissing(error, 'assignments')) {
-        res.status(503).json({ error: 'Assignments feature not available — table pending migration' });
+        res.status(503).json({
+          error: 'Assignments feature not available — table pending migration',
+        });
         return;
       }
       const err = this.handleError(error as Error, res);
@@ -2117,7 +2823,10 @@ export class ClientController {
         return;
       }
 
-      const removed = await this.cloudSqlAssignmentService.unassignDoula(clientId, doulaId);
+      const removed = await this.cloudSqlAssignmentService.unassignDoula(
+        clientId,
+        doulaId
+      );
       if (!removed) {
         res.status(404).json({ error: 'Assignment not found' });
         return;
@@ -2125,7 +2834,7 @@ export class ClientController {
 
       res.json({
         success: true,
-        message: 'Doula unassigned successfully'
+        message: 'Doula unassigned successfully',
       });
     } catch (error) {
       const err = this.handleError(error as Error, res);
@@ -2153,26 +2862,36 @@ export class ClientController {
 
       // Clients can only read their own assigned doulas.
       if (req.user?.role === 'client') {
-        const ownClientId = await this.cloudSqlAssignmentService.getClientIdByAuthUserId(req.user.id);
+        const ownClientId =
+          await this.cloudSqlAssignmentService.getClientIdByAuthUserId(
+            req.user.id
+          );
         if (!ownClientId) {
           res.status(404).json({ error: 'Client profile not found' });
           return;
         }
         const sentAuthUserId = targetClientId === req.user.id;
         if (!sentAuthUserId && ownClientId !== targetClientId) {
-          res.status(403).json({ error: 'Forbidden: cannot access other client assignments' });
+          res.status(403).json({
+            error: 'Forbidden: cannot access other client assignments',
+          });
           return;
         }
         targetClientId = ownClientId;
       }
 
-      const doulas = await this.cloudSqlAssignmentService.getAssignedDoulas(targetClientId);
-      const availabilityByDoulaId = await this.doulaAvailabilityService.getAvailabilityStatusForDoulas(
-        doulas.map((doula) => doula.doulaId)
-      );
+      const doulas =
+        await this.cloudSqlAssignmentService.getAssignedDoulas(targetClientId);
+      const availabilityByDoulaId =
+        await this.doulaAvailabilityService.getAvailabilityStatusForDoulas(
+          doulas.map((doula) => doula.doulaId)
+        );
       const includeSchedulingLink =
         req.user?.role === 'admin' ||
-        (req.user?.role === 'client' && await this.doulaAvailabilityService.isClientInContractStage(targetClientId));
+        (req.user?.role === 'client' &&
+          (await this.doulaAvailabilityService.isClientInContractStage(
+            targetClientId
+          )));
       const enrichedDoulas = doulas.map((assignment) => {
         const availability = availabilityByDoulaId.get(assignment.doulaId) ?? {
           status: 'available' as const,
@@ -2185,14 +2904,16 @@ export class ClientController {
           availabilityStatus: availability,
           doula: {
             ...assignment.doula,
-            scheduling_url: includeSchedulingLink ? (assignment.doula.scheduling_url ?? null) : null,
+            scheduling_url: includeSchedulingLink
+              ? (assignment.doula.scheduling_url ?? null)
+              : null,
           },
         };
       });
 
       res.json({
         success: true,
-        doulas: enrichedDoulas
+        doulas: enrichedDoulas,
       });
     } catch (error) {
       if (ClientController.isTableMissing(error, 'assignments')) {
@@ -2204,7 +2925,10 @@ export class ClientController {
     }
   }
 
-  async createDoulaBookingRequest(req: AuthRequest, res: Response): Promise<void> {
+  async createDoulaBookingRequest(
+    req: AuthRequest,
+    res: Response
+  ): Promise<void> {
     try {
       const { id, doulaId } = req.params;
       let targetClientId = id;
@@ -2215,39 +2939,57 @@ export class ClientController {
       }
 
       if (req.user?.role === 'client') {
-        const ownClientId = await this.cloudSqlAssignmentService.getClientIdByAuthUserId(req.user.id);
+        const ownClientId =
+          await this.cloudSqlAssignmentService.getClientIdByAuthUserId(
+            req.user.id
+          );
         if (!ownClientId) {
           res.status(404).json({ error: 'Client profile not found' });
           return;
         }
         const sentAuthUserId = targetClientId === req.user.id;
         if (!sentAuthUserId && ownClientId !== targetClientId) {
-          res.status(403).json({ error: 'Forbidden: cannot create booking requests for another client' });
+          res.status(403).json({
+            error:
+              'Forbidden: cannot create booking requests for another client',
+          });
           return;
         }
         targetClientId = ownClientId;
       }
 
-      const isAssigned = await this.cloudSqlAssignmentService.assignmentExists(targetClientId, doulaId);
+      const isAssigned = await this.cloudSqlAssignmentService.assignmentExists(
+        targetClientId,
+        doulaId
+      );
       if (!isAssigned) {
-        res.status(404).json({ error: 'Assigned doula not found for this client' });
+        res
+          .status(404)
+          .json({ error: 'Assigned doula not found for this client' });
         return;
       }
 
-      const isInContractStage = await this.doulaAvailabilityService.isClientInContractStage(targetClientId);
+      const isInContractStage =
+        await this.doulaAvailabilityService.isClientInContractStage(
+          targetClientId
+        );
       if (!isInContractStage) {
-        res.status(403).json({ error: 'Booking is only available once the client is in the contract stage' });
+        res.status(403).json({
+          error:
+            'Booking is only available once the client is in the contract stage',
+        });
         return;
       }
 
-      const bookingRequest = await this.doulaAvailabilityService.createBookingRequest({
-        clientId: targetClientId,
-        doulaId,
-        requestedBy: req.user?.id ?? null,
-        startAt: req.body?.startAt ?? req.body?.start_at,
-        endAt: req.body?.endAt ?? req.body?.end_at,
-        notes: req.body?.notes ?? req.body?.note,
-      });
+      const bookingRequest =
+        await this.doulaAvailabilityService.createBookingRequest({
+          clientId: targetClientId,
+          doulaId,
+          requestedBy: req.user?.id ?? null,
+          startAt: req.body?.startAt ?? req.body?.start_at,
+          endAt: req.body?.endAt ?? req.body?.end_at,
+          notes: req.body?.notes ?? req.body?.note,
+        });
 
       res.status(201).json({
         success: true,
@@ -2269,27 +3011,33 @@ export class ClientController {
    * Used for graceful degradation when tables haven't been migrated yet.
    */
   private static isTableMissing(error: unknown, tableName: string): boolean {
-    const msg = (error instanceof Error ? error.message : String(error)).toLowerCase();
-    return msg.includes(tableName) &&
-      (msg.includes('could not find') || msg.includes('schema cache') ||
-       msg.includes('does not exist') || msg.includes('relation'));
+    const msg = (
+      error instanceof Error ? error.message : String(error)
+    ).toLowerCase();
+    return (
+      msg.includes(tableName) &&
+      (msg.includes('could not find') ||
+        msg.includes('schema cache') ||
+        msg.includes('does not exist') ||
+        msg.includes('relation'))
+    );
   }
 
   // Helper method to handle errors
   private handleError(
     error: Error,
     res: Response
-  ): { status: number, message: string } {
+  ): { status: number; message: string } {
     if (error instanceof ValidationError) {
-      return { status: 400, message: error.message};
+      return { status: 400, message: error.message };
     } else if (error instanceof ConflictError) {
-      return { status: 409, message: error.message};
+      return { status: 409, message: error.message };
     } else if (error instanceof AuthenticationError) {
-      return { status: 401, message: error.message};
+      return { status: 401, message: error.message };
     } else if (error instanceof NotFoundError) {
-      return { status: 404, message: error.message};
+      return { status: 404, message: error.message };
     } else if (error instanceof AuthorizationError) {
-      return { status: 403, message: error.message};
+      return { status: 403, message: error.message };
     } else {
       logger.error(
         toSafeProviderError('clients', 'request', error),

@@ -3,11 +3,10 @@
  * Production fails closed when secrets are missing. Non-production allows
  * unsigned traffic only when the corresponding secret env is unset (local/dev).
  */
-
 import { NextFunction, Request, RequestHandler, Response } from 'express';
 
-import { IS_PRODUCTION } from '../config/env';
 import { logger } from '../common/utils/logger';
+import { IS_PRODUCTION } from '../config/env';
 import {
   getRawBodyBuffer,
   isWebhookTimestampFresh,
@@ -27,11 +26,16 @@ function trimEnv(name: string): string {
 }
 
 function resolveSignNowSecret(): string {
-  return trimEnv('SIGNNOW_WEBHOOK_SECRET') || trimEnv('SIGNNOW_BASIC_AUTH_TOKEN');
+  return (
+    trimEnv('SIGNNOW_WEBHOOK_SECRET') || trimEnv('SIGNNOW_BASIC_AUTH_TOKEN')
+  );
 }
 
 function resolveQuickBooksVerifier(): string {
-  return trimEnv('QB_WEBHOOK_VERIFIER_TOKEN') || trimEnv('INTUIT_WEBHOOK_VERIFIER_TOKEN');
+  return (
+    trimEnv('QB_WEBHOOK_VERIFIER_TOKEN') ||
+    trimEnv('INTUIT_WEBHOOK_VERIFIER_TOKEN')
+  );
 }
 
 function mustEnforce(secret: string): boolean {
@@ -48,7 +52,7 @@ export const requireSignNowWebhookAuth: RequestHandler = (req, res, next) => {
     if (!secret) {
       logger.error(
         { service: 'signnow', operation: 'webhook_auth' },
-        'SignNow webhook secret not configured',
+        'SignNow webhook secret not configured'
       );
       unauthorized(res);
       return;
@@ -75,7 +79,11 @@ export const requireSignNowWebhookAuth: RequestHandler = (req, res, next) => {
   }
 };
 
-export const requireQuickBooksWebhookAuth: RequestHandler = (req, res, next) => {
+export const requireQuickBooksWebhookAuth: RequestHandler = (
+  req,
+  res,
+  next
+) => {
   try {
     const verifier = resolveQuickBooksVerifier();
     if (!mustEnforce(verifier)) {
@@ -85,7 +93,7 @@ export const requireQuickBooksWebhookAuth: RequestHandler = (req, res, next) => 
     if (!verifier) {
       logger.error(
         { service: 'quickbooks', operation: 'webhook_auth' },
-        'QuickBooks webhook verifier token not configured',
+        'QuickBooks webhook verifier token not configured'
       );
       unauthorized(res);
       return;

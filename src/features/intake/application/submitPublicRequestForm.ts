@@ -3,7 +3,9 @@ import { HomeType, RequestFormResponse } from '../../../types';
 import { normalizePublicIntakeSubmission } from '../domain/normalizePublicSubmission';
 import { IntakeLeadRepository } from './ports';
 
-export function mapIntakeResponseToRequestForm(response: RequestFormResponse): RequestForm {
+export function mapIntakeResponseToRequestForm(
+  response: RequestFormResponse
+): RequestForm {
   const requestForm = new RequestForm(
     response.firstname,
     response.lastname,
@@ -18,9 +20,9 @@ export function mapIntakeResponseToRequestForm(response: RequestFormResponse): R
     response.pronouns_other,
     response.children_expected,
     response.home_phone,
-    (Array.isArray(response.home_type) ? response.home_type[0] : response.home_type) as
-      | HomeType
-      | undefined,
+    (Array.isArray(response.home_type)
+      ? response.home_type[0]
+      : response.home_type) as HomeType | undefined,
     response.home_access,
     response.pets,
     response.relationship_status,
@@ -67,14 +69,18 @@ export function mapIntakeResponseToRequestForm(response: RequestFormResponse): R
     response.secondary_insurance_member_id,
     response.secondary_policy_number,
     response.self_pay_card_info,
-    response.demographics_multi,
+    response.demographics_multi
   );
 
   requestForm.id = response.id;
   requestForm.status = response.status;
   requestForm.user_id = response.user_id;
-  requestForm.created_at = response.created_at ? new Date(response.created_at) : undefined;
-  requestForm.updated_at = response.updated_at ? new Date(response.updated_at) : undefined;
+  requestForm.created_at = response.created_at
+    ? new Date(response.created_at)
+    : undefined;
+  requestForm.updated_at = response.updated_at
+    ? new Date(response.updated_at)
+    : undefined;
   return requestForm;
 }
 
@@ -83,7 +89,7 @@ export function mapIntakeResponseToRequestForm(response: RequestFormResponse): R
  */
 export async function submitPublicRequestForm(
   rawBody: unknown,
-  repository: IntakeLeadRepository,
+  repository: IntakeLeadRepository
 ): Promise<RequestForm> {
   const normalized = normalizePublicIntakeSubmission(rawBody);
   const response = await repository.saveLead(normalized);

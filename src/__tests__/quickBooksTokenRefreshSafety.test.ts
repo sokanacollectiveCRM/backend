@@ -1,3 +1,5 @@
+import { refreshQuickBooksToken } from '../utils/tokenUtils';
+
 const query = jest.fn();
 const release = jest.fn();
 const connect = jest.fn(async () => ({ query, release }));
@@ -5,8 +7,6 @@ const connect = jest.fn(async () => ({ query, release }));
 jest.mock('../db/cloudSqlPool', () => ({
   getPool: () => ({ connect, query: jest.fn() }),
 }));
-
-import { refreshQuickBooksToken } from '../utils/tokenUtils';
 
 describe('QuickBooks token refresh safety', () => {
   const previousAllow = process.env.QUICKBOOKS_ALLOW_TOKEN_WRITES;
@@ -18,7 +18,8 @@ describe('QuickBooks token refresh safety', () => {
   });
 
   afterAll(() => {
-    if (previousAllow === undefined) delete process.env.QUICKBOOKS_ALLOW_TOKEN_WRITES;
+    if (previousAllow === undefined)
+      delete process.env.QUICKBOOKS_ALLOW_TOKEN_WRITES;
     else process.env.QUICKBOOKS_ALLOW_TOKEN_WRITES = previousAllow;
   });
 
@@ -28,12 +29,14 @@ describe('QuickBooks token refresh safety', () => {
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({
-        rows: [{
-          realm_id: 'realm-1',
-          access_token: 'new-access',
-          refresh_token: 'new-refresh',
-          access_token_expires_at: future,
-        }],
+        rows: [
+          {
+            realm_id: 'realm-1',
+            access_token: 'new-access',
+            refresh_token: 'new-refresh',
+            access_token_expires_at: future,
+          },
+        ],
       })
       .mockResolvedValueOnce({ rows: [] });
 
@@ -50,12 +53,14 @@ describe('QuickBooks token refresh safety', () => {
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({
-        rows: [{
-          realm_id: 'realm-1',
-          access_token: 'expired-access',
-          refresh_token: 'current-refresh',
-          access_token_expires_at: new Date(0),
-        }],
+        rows: [
+          {
+            realm_id: 'realm-1',
+            access_token: 'expired-access',
+            refresh_token: 'current-refresh',
+            access_token_expires_at: new Date(0),
+          },
+        ],
       })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] });
@@ -71,7 +76,9 @@ describe('QuickBooks token refresh safety', () => {
     const healthUpdate = query.mock.calls[3];
     expect(healthUpdate[0]).toContain('last_refresh_failed_at');
     expect(healthUpdate[1]).toContain('reauthorization_required');
-    expect(query.mock.calls.some(([sql]) => String(sql).includes('DELETE'))).toBe(false);
+    expect(
+      query.mock.calls.some(([sql]) => String(sql).includes('DELETE'))
+    ).toBe(false);
     expect(release).toHaveBeenCalled();
   });
 

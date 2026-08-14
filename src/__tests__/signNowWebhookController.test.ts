@@ -1,16 +1,16 @@
+import { signNowCallback } from '../controllers/signNowWebhookController';
+import {
+  MemoryWebhookEventStore,
+  resetWebhookEventStoreForTests,
+  setWebhookEventStoreForTests,
+} from '../security/webhookEventStore';
+import { contractSignatureCompletionService } from '../services/contractSignatureCompletionService';
+
 jest.mock('../services/contractSignatureCompletionService', () => ({
   contractSignatureCompletionService: {
     finalizeSignedDocument: jest.fn(),
   },
 }));
-
-import { signNowCallback } from '../controllers/signNowWebhookController';
-import { contractSignatureCompletionService } from '../services/contractSignatureCompletionService';
-import {
-  MemoryWebhookEventStore,
-  setWebhookEventStoreForTests,
-  resetWebhookEventStoreForTests,
-} from '../security/webhookEventStore';
 
 describe('signNowCallback', () => {
   const createRes = () => {
@@ -30,7 +30,9 @@ describe('signNowCallback', () => {
   });
 
   it('processes signed/completed callbacks and finalizes the contract workflow', async () => {
-    (contractSignatureCompletionService.finalizeSignedDocument as jest.Mock).mockResolvedValue({
+    (
+      contractSignatureCompletionService.finalizeSignedDocument as jest.Mock
+    ).mockResolvedValue({
       contract_id: 'contract-1',
       deposit_invoice_created: true,
     });
@@ -46,7 +48,9 @@ describe('signNowCallback', () => {
 
     await signNowCallback(req, res, next);
 
-    expect(contractSignatureCompletionService.finalizeSignedDocument).toHaveBeenCalledWith('doc-1');
+    expect(
+      contractSignatureCompletionService.finalizeSignedDocument
+    ).toHaveBeenCalledWith('doc-1');
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -58,7 +62,9 @@ describe('signNowCallback', () => {
   });
 
   it('acknowledges duplicate deliveries without re-processing', async () => {
-    (contractSignatureCompletionService.finalizeSignedDocument as jest.Mock).mockResolvedValue({
+    (
+      contractSignatureCompletionService.finalizeSignedDocument as jest.Mock
+    ).mockResolvedValue({
       contract_id: 'contract-1',
     });
 
@@ -73,7 +79,9 @@ describe('signNowCallback', () => {
     await signNowCallback(req, res1, jest.fn());
     await signNowCallback(req, res2, jest.fn());
 
-    expect(contractSignatureCompletionService.finalizeSignedDocument).toHaveBeenCalledTimes(1);
+    expect(
+      contractSignatureCompletionService.finalizeSignedDocument
+    ).toHaveBeenCalledTimes(1);
     expect(res2.json).toHaveBeenCalledWith(
       expect.objectContaining({
         received: true,
@@ -95,7 +103,9 @@ describe('signNowCallback', () => {
 
     await signNowCallback(req, res, next);
 
-    expect(contractSignatureCompletionService.finalizeSignedDocument).not.toHaveBeenCalled();
+    expect(
+      contractSignatureCompletionService.finalizeSignedDocument
+    ).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({
       received: true,
@@ -117,6 +127,8 @@ describe('signNowCallback', () => {
     await signNowCallback(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Missing SignNow document id' });
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'Missing SignNow document id',
+    });
   });
 });

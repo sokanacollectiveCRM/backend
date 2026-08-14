@@ -1,6 +1,7 @@
 # Portal Readiness — Lean Test Plan
 
-Manual test plan for **portal eligibility / onboarding readiness** while aligning the CRM frontend. Optimized for repeat runs with minimal cost.
+Manual test plan for **portal eligibility / onboarding readiness** while
+aligning the CRM frontend. Optimized for repeat runs with minimal cost.
 
 **Do not start with QuickBooks.** Start with the backend API as the oracle.
 
@@ -17,14 +18,17 @@ Manual test plan for **portal eligibility / onboarding readiness** while alignin
 
 ## Prerequisites
 
-| Item | Notes |
-|------|--------|
-| Cloud SQL Proxy | `127.0.0.1:5433` → `sokana_private` (see `.cursor/skills/sokana-cloudsql-local-connect/SKILL.md`) |
-| Backend | `npm run dev` (default ~`http://localhost:5050`) |
-| Frontend CRM | Points at same API base URL |
-| Migration applied | `create_client_onboarding_readiness.sql` |
+| Item              | Notes                                                                                             |
+| ----------------- | ------------------------------------------------------------------------------------------------- |
+| Cloud SQL Proxy   | `127.0.0.1:5433` → `sokana_private` (see `.cursor/skills/sokana-cloudsql-local-connect/SKILL.md`) |
+| Backend           | `npm run dev` (default ~`http://localhost:5050`)                                                  |
+| Frontend CRM      | Points at same API base URL                                                                       |
+| Migration applied | `create_client_onboarding_readiness.sql`                                                          |
 
-**Legacy warning:** `scripts/make-client-eligible-for-portal.sql` targets Supabase `contracts` / `contract_payments`. This flow uses Cloud SQL `phi_contracts`, `payment_installments`, `payments`, and `client_onboarding_readiness`.
+**Legacy warning:** `scripts/make-client-eligible-for-portal.sql` targets
+Supabase `contracts` / `contract_payments`. This flow uses Cloud SQL
+`phi_contracts`, `payment_installments`, `payments`, and
+`client_onboarding_readiness`.
 
 ---
 
@@ -32,18 +36,19 @@ Manual test plan for **portal eligibility / onboarding readiness** while alignin
 
 **Default dev fixture (client login + Cloud SQL linked):**
 
-| Field | Value |
-|-------|--------|
-| Email | `jbony@icstars.org` |
-| Name | Jordan Bony |
-| Supabase role | **`client`** |
-| `CLIENT_ID` | `1d981375-beeb-46e7-bf22-5d7a750eb391` |
-| `CLIENT_AUTH_USER_ID` | `a4c3b92a-1e01-4f0c-b3da-c7e7a3506d2d` |
-| `payment_method` | `Medicaid` → billing path `medicaid` |
-| `qbo_customer_id` | `90` |
-| Staff `AUTH_TOKEN` | Log in as **admin** (`info@techluminateacademy.com`) for API/curl |
+| Field                 | Value                                                             |
+| --------------------- | ----------------------------------------------------------------- |
+| Email                 | `jbony@icstars.org`                                               |
+| Name                  | Jordan Bony                                                       |
+| Supabase role         | **`client`**                                                      |
+| `CLIENT_ID`           | `1d981375-beeb-46e7-bf22-5d7a750eb391`                            |
+| `CLIENT_AUTH_USER_ID` | `a4c3b92a-1e01-4f0c-b3da-c7e7a3506d2d`                            |
+| `payment_method`      | `Medicaid` → billing path `medicaid`                              |
+| `qbo_customer_id`     | `90`                                                              |
+| Staff `AUTH_TOKEN`    | Log in as **admin** (`info@techluminateacademy.com`) for API/curl |
 
-**Alternate lead-only fixture** (no Supabase auth): `jerry@techluminateacademy.com` / `0e705105-6d48-4b8d-b16d-24061e59b6db`
+**Alternate lead-only fixture** (no Supabase auth):
+`jerry@techluminateacademy.com` / `0e705105-6d48-4b8d-b16d-24061e59b6db`
 
 Record for your session:
 
@@ -52,7 +57,8 @@ Record for your session:
 - `API_BASE_URL` (probably `http://localhost:5050`)
 - `AUTH_TOKEN` (admin JWT for staff endpoints)
 
-Export variables (or copy `scripts/test/.env.test-readiness.example` → `.env.test-readiness`):
+Export variables (or copy `scripts/test/.env.test-readiness.example` →
+`.env.test-readiness`):
 
 ```bash
 export API_BASE_URL="http://localhost:5050"
@@ -68,7 +74,8 @@ chmod +x scripts/test/run-portal-readiness-scenario.sh
 ./scripts/test/run-portal-readiness-scenario.sh medicaid-eligible-no-card
 ```
 
-For Self-Pay missing-card testing on the same client (overwrites payment_method):
+For Self-Pay missing-card testing on the same client (overwrites
+payment_method):
 
 ```bash
 ./scripts/test/run-portal-readiness-scenario.sh selfpay-missing-card
@@ -109,7 +116,8 @@ curl -s "$API_BASE_URL/api/clients/$CLIENT_ID" \
 
 **Expected:** all fields should exist (some may be `null`).
 
-**If fields are missing:** stop — fix the backend API contract before frontend testing.
+**If fields are missing:** stop — fix the backend API contract before frontend
+testing.
 
 ### First command to run
 
@@ -125,7 +133,8 @@ curl -s "$API_BASE_URL/api/clients/$CLIENT_ID" \
   }'
 ```
 
-If this response is clean, continue with SQL scenarios. If not, the next move is backend contract work, not UI work.
+If this response is clean, continue with SQL scenarios. If not, the next move is
+backend contract work, not UI work.
 
 ---
 
@@ -133,11 +142,11 @@ If this response is clean, continue with SQL scenarios. If not, the next move is
 
 **Insurance / Self-Pay + signed contract + paid deposit + no card**
 
-| Field | Expected |
-|-------|----------|
-| `is_eligible` | `false` |
-| `primary_portal_blocker` | `missing_card_on_file` |
-| `allowed_actions.can_invite_to_portal` | `false` |
+| Field                                  | Expected               |
+| -------------------------------------- | ---------------------- |
+| `is_eligible`                          | `false`                |
+| `primary_portal_blocker`               | `missing_card_on_file` |
+| `allowed_actions.can_invite_to_portal` | `false`                |
 
 ---
 
@@ -145,9 +154,13 @@ If this response is clean, continue with SQL scenarios. If not, the next move is
 
 Schema notes:
 
-- Deposit gate reads `payment_installments` via `payment_schedules` → `phi_contracts`, **or** any row in `payments` with `client_id`.
-- Installment column is `payment_type` (not `type`); installments link to `schedule_id`, not `client_id`.
-- `client_payment_methods` uses `quickbooks_customer_id`, `provider_payment_method_reference`, `card_brand`, `last4`, `exp_month`, `exp_year`, `status`.
+- Deposit gate reads `payment_installments` via `payment_schedules` →
+  `phi_contracts`, **or** any row in `payments` with `client_id`.
+- Installment column is `payment_type` (not `type`); installments link to
+  `schedule_id`, not `client_id`.
+- `client_payment_methods` uses `quickbooks_customer_id`,
+  `provider_payment_method_reference`, `card_brand`, `last4`, `exp_month`,
+  `exp_year`, `status`.
 
 ### Option A — Run the prepared script (recommended)
 
@@ -156,17 +169,21 @@ export CLIENT_ID="your-real-uuid-here"
 ./scripts/test/run-portal-readiness-scenario.sh selfpay-missing-card
 ```
 
-**Do not** pass extra quotes: wrong `-v client_id="'$CLIENT_ID'"` produces `'''your-uuid'''` and fails. Use `-v client_id="$CLIENT_ID"` or the helper script above.
+**Do not** pass extra quotes: wrong `-v client_id="'$CLIENT_ID'"` produces
+`'''your-uuid'''` and fails. Use `-v client_id="$CLIENT_ID"` or the helper
+script above.
 
 ### Option B — Inline SQL (reference)
 
-See `scripts/test/scenario-selfpay-missing-card.sql` for the canonical version. It:
+See `scripts/test/scenario-selfpay-missing-card.sql` for the canonical version.
+It:
 
 1. Sets `phi_clients.payment_method = 'Self-Pay'`
 2. Ensures a signed `phi_contracts` row
 3. Ensures a paid deposit installment (or legacy `payments` row)
 4. Deletes `client_payment_methods`
-5. Clears `client_onboarding_readiness` / `client_onboarding_events` for a clean recompute
+5. Clears `client_onboarding_readiness` / `client_onboarding_events` for a clean
+   recompute
 
 ### Reset between scenarios
 
@@ -179,7 +196,9 @@ export CLIENT_ID="your-real-uuid-here"
 
 ## Step 5: Trigger recomputation
 
-**Current backend behavior:** `GET /api/clients/:id` calls `portalEligibilityService.getPortalEligibility()`, which recomputes and persists readiness on each detail fetch.
+**Current backend behavior:** `GET /api/clients/:id` calls
+`portalEligibilityService.getPortalEligibility()`, which recomputes and persists
+readiness on each detail fetch.
 
 ```bash
 curl -s "$API_BASE_URL/api/clients/$CLIENT_ID" \
@@ -213,7 +232,10 @@ curl -s "$API_BASE_URL/api/clients/$CLIENT_ID" \
 }
 ```
 
-If data looks stale after SQL + GET, confirm Cloud SQL proxy connectivity and that `CLIENT_ID` matches the rows you updated. List endpoint (`GET /api/clients`) also recomputes per client but is heavier for debugging — prefer detail GET.
+If data looks stale after SQL + GET, confirm Cloud SQL proxy connectivity and
+that `CLIENT_ID` matches the rows you updated. List endpoint
+(`GET /api/clients`) also recomputes per client but is heavier for debugging —
+prefer detail GET.
 
 ---
 
@@ -262,12 +284,13 @@ curl -s "$API_BASE_URL/api/clients/$CLIENT_ID" \
 
 Open the CRM and inspect the same `CLIENT_ID`.
 
-| Scenario | UI expectations |
-|----------|-----------------|
+| Scenario     | UI expectations                                                    |
+| ------------ | ------------------------------------------------------------------ |
 | Missing card | “Missing card on file” (or equivalent); portal invite **disabled** |
-| Eligible | Eligible state; portal invite **enabled** |
+| Eligible     | Eligible state; portal invite **enabled**                          |
 
-Confirm the network tab shows backend fields — not client-side reconstruction from legacy `contracts` / `payments` arrays.
+Confirm the network tab shows backend fields — not client-side reconstruction
+from legacy `contracts` / `payments` arrays.
 
 ---
 
@@ -275,18 +298,18 @@ Confirm the network tab shows backend fields — not client-side reconstruction 
 
 Do not test everything on day one. These prove the architecture:
 
-| Scenario | Expected |
-|----------|----------|
-| Self-Pay + signed + paid deposit + no card | Blocked: `missing_card_on_file` |
-| Self-Pay + signed + paid deposit + card | Eligible |
-| Medicaid + signed + paid deposit + no card | Eligible |
-| Self-Pay + unsigned + unpaid + no card | Blocked: `contract_unsigned` (deposit may add `deposit_unpaid`) |
-| Unknown payment method + signed + paid + card | Blocked: `billing_path_unknown` |
+| Scenario                                      | Expected                                                        |
+| --------------------------------------------- | --------------------------------------------------------------- |
+| Self-Pay + signed + paid deposit + no card    | Blocked: `missing_card_on_file`                                 |
+| Self-Pay + signed + paid deposit + card       | Eligible                                                        |
+| Medicaid + signed + paid deposit + no card    | Eligible                                                        |
+| Self-Pay + unsigned + unpaid + no card        | Blocked: `contract_unsigned` (deposit may add `deposit_unpaid`) |
+| Unknown payment method + signed + paid + card | Blocked: `billing_path_unknown`                                 |
 
 Insurance parity scenario to keep explicit:
 
-| Scenario | Expected |
-|----------|----------|
+| Scenario                                    | Expected                        |
+| ------------------------------------------- | ------------------------------- |
 | Insurance + signed + paid deposit + no card | Blocked: `missing_card_on_file` |
 
 Additional scenario scripts (add as needed under `scripts/test/`):
@@ -303,19 +326,20 @@ Additional scenario scripts (add as needed under `scripts/test/`):
 ./scripts/test/run-portal-readiness-matrix.sh
 ```
 
-Uses default fixture Jordan (`1d981375-beeb-46e7-bf22-5d7a750eb391`) and admin `info@techluminateacademy.com`.
+Uses default fixture Jordan (`1d981375-beeb-46e7-bf22-5d7a750eb391`) and admin
+`info@techluminateacademy.com`.
 
 ---
 
 ## Troubleshooting
 
-| Symptom | Cause | Fix |
-|---------|--------|-----|
+| Symptom                                             | Cause                                                                       | Fix                                                                    |
+| --------------------------------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | `invalid input syntax for type uuid: "'your-uuid'"` | Placeholder `CLIENT_ID` and/or `-v client_id="'$CLIENT_ID'"` double-quoting | Use a real UUID; run `./scripts/test/run-portal-readiness-scenario.sh` |
-| `Password for user app_user` prompt | `DB_PASSWORD` / `CLOUD_SQL_PASSWORD` not exported | `source .env` or use helper script |
-| `address already in use` on 5433 | Proxy already running | Reuse it: `lsof -i :5433` — or `kill <pid>` then restart proxy |
-| `zsh: command not found: #` | Pasted comment lines starting with `#` | Run commands one at a time; don't paste `#` comment lines into zsh |
-| `ECONNRESET` on migrate | Stale/broken proxy | Restart proxy after `gcloud auth application-default login` |
+| `Password for user app_user` prompt                 | `DB_PASSWORD` / `CLOUD_SQL_PASSWORD` not exported                           | `source .env` or use helper script                                     |
+| `address already in use` on 5433                    | Proxy already running                                                       | Reuse it: `lsof -i :5433` — or `kill <pid>` then restart proxy         |
+| `zsh: command not found: #`                         | Pasted comment lines starting with `#`                                      | Run commands one at a time; don't paste `#` comment lines into zsh     |
+| `ECONNRESET` on migrate                             | Stale/broken proxy                                                          | Restart proxy after `gcloud auth application-default login`            |
 
 ---
 
@@ -337,9 +361,12 @@ LIMIT 10;
 
 ## Exit criteria (frontend alignment PR)
 
-- [x] All 5 core matrix scenarios plus Insurance parity match API oracle via `GET /api/clients/:id` (run `./scripts/test/run-portal-readiness-matrix.sh`)
+- [x] All 5 core matrix scenarios plus Insurance parity match API oracle via
+      `GET /api/clients/:id` (run
+      `./scripts/test/run-portal-readiness-matrix.sh`)
 - [ ] UI buttons follow `allowed_actions` only
-- [ ] No duplicate eligibility logic in `portalStatus.ts` when `is_eligible` is present
+- [ ] No duplicate eligibility logic in `portalStatus.ts` when `is_eligible` is
+      present
 - [ ] Missing-card and eligible states visually distinct on client detail
 - [ ] One optional smoke: portal invite in staging only
 

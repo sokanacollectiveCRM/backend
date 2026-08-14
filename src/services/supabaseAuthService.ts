@@ -1,15 +1,13 @@
 import { SupabaseClient } from '@supabase/supabase-js';
+
 import { User } from '../entities/User';
 import { UserRepository } from '../repositories/interface/userRepository';
-import { AuthService } from '../services/interface/authService';
-import {
-  AuthenticationError,
-  AuthorizationError
-} from './../domains/errors';
 import {
   resolveAuthoritativeRole,
   toRoleEnum,
 } from '../security/resolveAuthoritativeRole';
+import { AuthService } from '../services/interface/authService';
+import { AuthenticationError, AuthorizationError } from './../domains/errors';
 import { CloudSqlTeamService } from './cloudSqlTeamService';
 
 const cloudSqlTeamService = new CloudSqlTeamService();
@@ -30,10 +28,13 @@ async function enrichStaffProfileFromCloudSql(user: User): Promise<User> {
     user.country = member.country ?? user.country;
     user.zip_code =
       member.zip_code != null && member.zip_code !== ''
-        ? (Number.isNaN(Number(member.zip_code)) ? user.zip_code : Number(member.zip_code))
+        ? Number.isNaN(Number(member.zip_code))
+          ? user.zip_code
+          : Number(member.zip_code)
         : user.zip_code;
     user.bio = member.bio ?? user.bio;
-    user.profile_picture = (member.profile_picture as any) ?? user.profile_picture;
+    user.profile_picture =
+      (member.profile_picture as any) ?? user.profile_picture;
     user.account_status = (member.account_status as any) ?? user.account_status;
     return user;
   } catch {
@@ -72,7 +73,7 @@ export class SupabaseAuthService implements AuthService {
 
   constructor(
     supabaseClient: SupabaseClient,
-    private userRepository: UserRepository,
+    private userRepository: UserRepository
   ) {
     this.supabaseClient = supabaseClient;
   }
@@ -101,7 +102,7 @@ export class SupabaseAuthService implements AuthService {
     if (!user) {
       // This shouldn’t happen, but just in case
       await this.supabaseClient.auth.admin.deleteUser(data.user.id);
-      throw new AuthorizationError("Signup not allowed — not approved.");
+      throw new AuthorizationError('Signup not allowed — not approved.');
     }
 
     user.firstname = firstname || null;
@@ -113,33 +114,43 @@ export class SupabaseAuthService implements AuthService {
       return user;
     } catch (error) {
       await this.supabaseClient.auth.admin.deleteUser(data.user.id);
-      throw new Error("Failed to update user profile during signup");
+      throw new Error('Failed to update user profile during signup');
     }
   }
 
   async login(
     email: string,
     password: string
-  ): Promise<{user: User, token: string}> {
-
-    let result: Awaited<ReturnType<typeof this.supabaseClient.auth.signInWithPassword>>;
+  ): Promise<{ user: User; token: string }> {
+    let result: Awaited<
+      ReturnType<typeof this.supabaseClient.auth.signInWithPassword>
+    >;
 
     try {
       result = await this.supabaseClient.auth.signInWithPassword({
         email,
-        password: password
+        password: password,
       });
     } catch (networkErr: unknown) {
-      const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);
-      const cause = networkErr instanceof Error && 'cause' in networkErr ? (networkErr.cause as { code?: string }) : undefined;
+      const msg =
+        networkErr instanceof Error ? networkErr.message : String(networkErr);
+      const cause =
+        networkErr instanceof Error && 'cause' in networkErr
+          ? (networkErr.cause as { code?: string })
+          : undefined;
       const isTimeoutOrNetwork =
         msg.includes('fetch failed') ||
         msg.includes('timeout') ||
         msg.includes('ECONNREFUSED') ||
         cause?.code === 'UND_ERR_CONNECT_TIMEOUT';
       if (isTimeoutOrNetwork) {
-        console.warn('[auth] Supabase unreachable', { email: email?.trim?.() || '(missing)', reason: msg });
-        throw new AuthenticationError('Authentication service temporarily unavailable. Please try again.');
+        console.warn('[auth] Supabase unreachable', {
+          email: email?.trim?.() || '(missing)',
+          reason: msg,
+        });
+        throw new AuthenticationError(
+          'Authentication service temporarily unavailable. Please try again.'
+        );
       }
       throw networkErr;
     }
@@ -147,12 +158,19 @@ export class SupabaseAuthService implements AuthService {
     const { data, error } = result;
 
     if (error) {
-      console.warn('[auth] Login failed', { email: email?.trim?.() || '(missing)', reason: error.message });
-      throw new AuthenticationError(error.message || 'Sign in failed from Supabase');
+      console.warn('[auth] Login failed', {
+        email: email?.trim?.() || '(missing)',
+        reason: error.message,
+      });
+      throw new AuthenticationError(
+        error.message || 'Sign in failed from Supabase'
+      );
     }
 
     if (!data.session) {
-      console.warn('[auth] Login failed: no session', { email: email?.trim?.() || '(missing)' });
+      console.warn('[auth] Login failed: no session', {
+        email: email?.trim?.() || '(missing)',
+      });
       throw new AuthenticationError('Invalid Credentials');
     }
 
@@ -176,18 +194,20 @@ export class SupabaseAuthService implements AuthService {
     return { user: await userFromAuthUser(authUser), token };
   }
 
-  async getMe(
-    token: string
-  ): Promise<User> {
-
-    const { data: {user}, error } = await this.supabaseClient.auth.getUser(token);
+  async getMe(token: string): Promise<User> {
+    const {
+      data: { user },
+      error,
+    } = await this.supabaseClient.auth.getUser(token);
 
     if (error || !user) {
       throw new Error('Authentication error: Invalid token');
     }
 
     try {
-      const user_profile = await this.userRepository.findByEmail(user.email ?? '');
+      const user_profile = await this.userRepository.findByEmail(
+        user.email ?? ''
+      );
       if (user_profile) {
         const authoritative = await resolveAuthoritativeRole({
           authUserId: user.id,
@@ -211,8 +231,11 @@ export class SupabaseAuthService implements AuthService {
   async verifyEmail(
     token_hash: string,
     type: string
-  ): Promise<{ access_token: string, refresh_token: string, expires_in: number }> {
-
+  ): Promise<{
+    access_token: string;
+    refresh_token: string;
+    expires_in: number;
+  }> {
     const { data, error } = await this.supabaseClient.auth.verifyOtp({
       token_hash,
       type: 'signup',
@@ -224,30 +247,25 @@ export class SupabaseAuthService implements AuthService {
 
     const access_token = data.session.access_token;
     const refresh_token = data.session.refresh_token;
-    const expires_in = data.session.expires_in
+    const expires_in = data.session.expires_in;
 
     return { access_token, refresh_token, expires_in };
   }
 
-  async requestPasswordReset(
-    email: string,
-    redirectTo: string
-  ): Promise<void> {
-    const { error } = await this.supabaseClient.auth.resetPasswordForEmail(email, {
-      redirectTo
-    });
+  async requestPasswordReset(email: string, redirectTo: string): Promise<void> {
+    const { error } = await this.supabaseClient.auth.resetPasswordForEmail(
+      email,
+      {
+        redirectTo,
+      }
+    );
 
     if (error) {
       throw new Error(error.message);
     }
   }
 
-  async resetPassword(
-    token: string,
-    newPassword: string
-  ): Promise<void> {
-
-  }
+  async resetPassword(token: string, newPassword: string): Promise<void> {}
 
   async getUserFromToken(accessToken: string): Promise<any> {
     const { data, error } = await this.supabaseClient.auth.getUser(accessToken);
@@ -277,11 +295,7 @@ export class SupabaseAuthService implements AuthService {
     return userFromAuthUser(data.user);
   }
 
-  async getGoogleAuthUrl(
-    redirectTo: string
-  ): Promise<string> {
-
-
+  async getGoogleAuthUrl(redirectTo: string): Promise<string> {
     const { data, error } = await this.supabaseClient.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -309,9 +323,11 @@ export class SupabaseAuthService implements AuthService {
     return data.session;
   }
 
-  async exchangeCodeForSession(code: string): Promise<{session: any, userData: any}> {
-
-    const { data, error } = await this.supabaseClient.auth.exchangeCodeForSession(code);
+  async exchangeCodeForSession(
+    code: string
+  ): Promise<{ session: any; userData: any }> {
+    const { data, error } =
+      await this.supabaseClient.auth.exchangeCodeForSession(code);
 
     if (error) {
       throw new Error(error.message);
@@ -319,7 +335,7 @@ export class SupabaseAuthService implements AuthService {
 
     return {
       session: data.session,
-      userData: data.user
+      userData: data.user,
     };
   }
 

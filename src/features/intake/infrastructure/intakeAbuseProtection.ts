@@ -2,34 +2,45 @@
  * Public intake abuse protection (P0): rate limits, idempotency, honeypot.
  * Memory store in tests; Cloud SQL in production (multi-instance safe).
  */
-
 import { createHash } from 'crypto';
 import { NextFunction, Request, RequestHandler, Response } from 'express';
 
-import { getPool } from '../../../db/cloudSqlPool';
 import { logger } from '../../../common/utils/logger';
+import { getPool } from '../../../db/cloudSqlPool';
 import { PUBLIC_INTAKE_SUCCESS_MESSAGE } from '../http/publicSubmissionContract';
 
-export type RateLimitResult = { allowed: true } | { allowed: false; retryAfterSec: number };
+export type RateLimitResult =
+  | { allowed: true }
+  | { allowed: false; retryAfterSec: number };
 export type IdempotencyLookup =
   | { kind: 'miss' }
   | { kind: 'hit'; status: number; body: unknown }
   | { kind: 'claimed' };
 
 export interface IntakeAbuseStore {
-  hitRateLimit(bucketKey: string, limit: number, windowMs: number, now?: Date): Promise<RateLimitResult>;
+  hitRateLimit(
+    bucketKey: string,
+    limit: number,
+    windowMs: number,
+    now?: Date
+  ): Promise<RateLimitResult>;
   lookupIdempotency(key: string, now?: Date): Promise<IdempotencyLookup>;
   claimIdempotency(
     key: string,
     ttlMs: number,
     status: number,
     body: unknown,
-    now?: Date,
+    now?: Date
   ): Promise<'stored' | 'conflict'>;
 }
 
 type RateRow = { windowStartedAt: number; hitCount: number };
-type IdemRow = { expiresAt: number; status: number; body: unknown; claimed: boolean };
+type IdemRow = {
+  expiresAt: number;
+  status: number;
+  body: unknown;
+  claimed: boolean;
+};
 
 export class MemoryIntakeAbuseStore implements IntakeAbuseStore {
   private readonly rates = new Map<string, RateRow>();
@@ -44,7 +55,7 @@ export class MemoryIntakeAbuseStore implements IntakeAbuseStore {
     bucketKey: string,
     limit: number,
     windowMs: number,
-    now: Date = new Date(),
+    now: Date = new Date()
   ): Promise<RateLimitResult> {
     const nowMs = now.getTime();
     const existing = this.rates.get(bucketKey);
@@ -55,7 +66,7 @@ export class MemoryIntakeAbuseStore implements IntakeAbuseStore {
     if (existing.hitCount >= limit) {
       const retryAfterSec = Math.max(
         1,
-        Math.ceil((existing.windowStartedAt + windowMs - nowMs) / 1000),
+        Math.ceil((existing.windowStartedAt + windowMs - nowMs) / 1000)
       );
       return { allowed: false, retryAfterSec };
     }
@@ -63,7 +74,10 @@ export class MemoryIntakeAbuseStore implements IntakeAbuseStore {
     return { allowed: true };
   }
 
-  async lookupIdempotency(key: string, now: Date = new Date()): Promise<IdempotencyLookup> {
+  async lookupIdempotency(
+    key: string,
+    now: Date = new Date()
+  ): Promise<IdempotencyLookup> {
     const row = this.idem.get(key);
     if (!row) return { kind: 'miss' };
     if (row.expiresAt <= now.getTime()) {
@@ -79,10 +93,11 @@ export class MemoryIntakeAbuseStore implements IntakeAbuseStore {
     ttlMs: number,
     status: number,
     body: unknown,
-    now: Date = new Date(),
+    now: Date = new Date()
   ): Promise<'stored' | 'conflict'> {
     const existing = await this.lookupIdempotency(key, now);
-    if (existing.kind === 'hit' || existing.kind === 'claimed') return 'conflict';
+    if (existing.kind === 'hit' || existing.kind === 'claimed')
+      return 'conflict';
     this.idem.set(key, {
       expiresAt: now.getTime() + ttlMs,
       status,
@@ -98,7 +113,7 @@ export class DbIntakeAbuseStore implements IntakeAbuseStore {
     bucketKey: string,
     limit: number,
     windowMs: number,
-    now: Date = new Date(),
+    now: Date = new Date()
   ): Promise<RateLimitResult> {
     const pool = getPool();
     const client = await pool.connect();
@@ -112,7 +127,7 @@ export class DbIntakeAbuseStore implements IntakeAbuseStore {
          FROM public.intake_rate_limits
          WHERE bucket_key = $1
          FOR UPDATE`,
-        [bucketKey],
+        [bucketKey]
       );
 
       const nowMs = now.getTime();
@@ -122,7 +137,7 @@ export class DbIntakeAbuseStore implements IntakeAbuseStore {
            VALUES ($1, $2, 1)
            ON CONFLICT (bucket_key)
            DO UPDATE SET window_started_at = EXCLUDED.window_started_at, hit_count = 1`,
-          [bucketKey, now.toISOString()],
+          [bucketKey, now.toISOString()]
         );
         await client.query('COMMIT');
         return { allowed: true };
@@ -132,7 +147,9 @@ export class DbIntakeAbuseStore implements IntakeAbuseStore {
         await client.query('COMMIT');
         const retryAfterSec = Math.max(
           1,
-          Math.ceil((rows[0].window_started_at.getTime() + windowMs - nowMs) / 1000),
+          Math.ceil(
+            (rows[0].window_started_at.getTime() + windowMs - nowMs) / 1000
+          )
         );
         return { allowed: false, retryAfterSec };
       }
@@ -141,7 +158,7 @@ export class DbIntakeAbuseStore implements IntakeAbuseStore {
         `UPDATE public.intake_rate_limits
          SET hit_count = hit_count + 1
          WHERE bucket_key = $1`,
-        [bucketKey],
+        [bucketKey]
       );
       await client.query('COMMIT');
       return { allowed: true };
@@ -153,7 +170,10 @@ export class DbIntakeAbuseStore implements IntakeAbuseStore {
     }
   }
 
-  async lookupIdempotency(key: string, now: Date = new Date()): Promise<IdempotencyLookup> {
+  async lookupIdempotency(
+    key: string,
+    now: Date = new Date()
+  ): Promise<IdempotencyLookup> {
     const pool = getPool();
     const { rows } = await pool.query<{
       expires_at: Date;
@@ -163,13 +183,14 @@ export class DbIntakeAbuseStore implements IntakeAbuseStore {
       `SELECT expires_at, response_status, response_body
        FROM public.intake_idempotency_keys
        WHERE idempotency_key = $1`,
-      [key],
+      [key]
     );
     if (!rows[0]) return { kind: 'miss' };
     if (rows[0].expires_at.getTime() <= now.getTime()) {
-      await pool.query(`DELETE FROM public.intake_idempotency_keys WHERE idempotency_key = $1`, [
-        key,
-      ]);
+      await pool.query(
+        `DELETE FROM public.intake_idempotency_keys WHERE idempotency_key = $1`,
+        [key]
+      );
       return { kind: 'miss' };
     }
     return {
@@ -184,7 +205,7 @@ export class DbIntakeAbuseStore implements IntakeAbuseStore {
     ttlMs: number,
     status: number,
     body: unknown,
-    now: Date = new Date(),
+    now: Date = new Date()
   ): Promise<'stored' | 'conflict'> {
     const pool = getPool();
     const expiresAt = new Date(now.getTime() + ttlMs);
@@ -194,7 +215,7 @@ export class DbIntakeAbuseStore implements IntakeAbuseStore {
        VALUES ($1, $2, $3, $4::jsonb)
        ON CONFLICT (idempotency_key) DO NOTHING
        RETURNING idempotency_key`,
-      [key, expiresAt.toISOString(), status, JSON.stringify(body)],
+      [key, expiresAt.toISOString(), status, JSON.stringify(body)]
     );
     return result.rowCount && result.rowCount > 0 ? 'stored' : 'conflict';
   }
@@ -233,7 +254,9 @@ export function setIntakeAbuseStoreForTests(next: IntakeAbuseStore): void {
 
 export function resetIntakeAbuseStoreForTests(): void {
   memoryStoreSingleton.clear();
-  store = shouldUseMemoryStore() ? memoryStoreSingleton : new DbIntakeAbuseStore();
+  store = shouldUseMemoryStore()
+    ? memoryStoreSingleton
+    : new DbIntakeAbuseStore();
 }
 
 /**
@@ -249,21 +272,44 @@ export function isIntakeAbuseEnforced(): boolean {
 
 export function getIntakeAbuseConfig() {
   return {
-    ipMax: Math.max(1, parseInt(process.env.INTAKE_RATE_LIMIT_IP_MAX || '10', 10)),
-    emailMax: Math.max(1, parseInt(process.env.INTAKE_RATE_LIMIT_EMAIL_MAX || '3', 10)),
-    windowMs: Math.max(1000, parseInt(process.env.INTAKE_RATE_LIMIT_WINDOW_MS || `${60 * 60 * 1000}`, 10)),
+    ipMax: Math.max(
+      1,
+      parseInt(process.env.INTAKE_RATE_LIMIT_IP_MAX || '10', 10)
+    ),
+    emailMax: Math.max(
+      1,
+      parseInt(process.env.INTAKE_RATE_LIMIT_EMAIL_MAX || '3', 10)
+    ),
+    windowMs: Math.max(
+      1000,
+      parseInt(
+        process.env.INTAKE_RATE_LIMIT_WINDOW_MS || `${60 * 60 * 1000}`,
+        10
+      )
+    ),
     idempotencyTtlMs: Math.max(
       60_000,
-      parseInt(process.env.INTAKE_IDEMPOTENCY_TTL_MS || `${24 * 60 * 60 * 1000}`, 10),
+      parseInt(
+        process.env.INTAKE_IDEMPOTENCY_TTL_MS || `${24 * 60 * 60 * 1000}`,
+        10
+      )
     ),
     softDedupeWindowMs: Math.max(
       1000,
-      parseInt(process.env.INTAKE_SOFT_DEDUPE_WINDOW_MS || `${5 * 60 * 1000}`, 10),
+      parseInt(
+        process.env.INTAKE_SOFT_DEDUPE_WINDOW_MS || `${5 * 60 * 1000}`,
+        10
+      )
     ),
   };
 }
 
-const HONEYPOT_FIELDS = ['website', 'company_url', 'fax_number', 'hp_field'] as const;
+const HONEYPOT_FIELDS = [
+  'website',
+  'company_url',
+  'fax_number',
+  'hp_field',
+] as const;
 
 export function isIntakeHoneypotTriggered(body: unknown): boolean {
   if (!body || typeof body !== 'object') return false;
@@ -308,10 +354,18 @@ export function buildSoftDedupeKey(body: unknown): string | null {
   const record = body as Record<string, unknown>;
   const email = normalizeIntakeEmail(body);
   if (!email) return null;
-  const first = typeof record.firstname === 'string' ? record.firstname.trim().toLowerCase() : '';
-  const last = typeof record.lastname === 'string' ? record.lastname.trim().toLowerCase() : '';
+  const first =
+    typeof record.firstname === 'string'
+      ? record.firstname.trim().toLowerCase()
+      : '';
+  const last =
+    typeof record.lastname === 'string'
+      ? record.lastname.trim().toLowerCase()
+      : '';
   const service =
-    typeof record.service_needed === 'string' ? record.service_needed.trim().toLowerCase() : '';
+    typeof record.service_needed === 'string'
+      ? record.service_needed.trim().toLowerCase()
+      : '';
   const digest = createHash('sha256')
     .update(`${email}|${first}|${last}|${service}`)
     .digest('hex')
@@ -331,12 +385,16 @@ function tooManyRequests(res: Response, retryAfterSec: number): void {
  * Early middleware: honeypot + IP rate limit.
  * Email rate limit / idempotency run in the controller helper (needs body email).
  */
-export const protectPublicIntakeEarly: RequestHandler = async (req, res, next) => {
+export const protectPublicIntakeEarly: RequestHandler = async (
+  req,
+  res,
+  next
+) => {
   try {
     if (isIntakeHoneypotTriggered(req.body)) {
       logger.info(
         { service: 'intake', operation: 'honeypot_block', path: req.path },
-        'Intake honeypot triggered',
+        'Intake honeypot triggered'
       );
       res.status(200).json({ message: PUBLIC_INTAKE_SUCCESS_MESSAGE });
       return;
@@ -348,7 +406,7 @@ export const protectPublicIntakeEarly: RequestHandler = async (req, res, next) =
       const ipResult = await getIntakeAbuseStore().hitRateLimit(
         `ip:${ip}`,
         config.ipMax,
-        config.windowMs,
+        config.windowMs
       );
       if (ipResult.allowed === false) {
         logger.info(
@@ -357,7 +415,7 @@ export const protectPublicIntakeEarly: RequestHandler = async (req, res, next) =
             operation: 'rate_limit_ip',
             retryAfterSec: ipResult.retryAfterSec,
           },
-          'Intake IP rate limited',
+          'Intake IP rate limited'
         );
         tooManyRequests(res, ipResult.retryAfterSec);
         return;
@@ -367,8 +425,12 @@ export const protectPublicIntakeEarly: RequestHandler = async (req, res, next) =
     next();
   } catch (error) {
     logger.error(
-      { service: 'intake', operation: 'abuse_early', err: error instanceof Error ? error.name : 'error' },
-      'Intake abuse early check failed open to validation path',
+      {
+        service: 'intake',
+        operation: 'abuse_early',
+        err: error instanceof Error ? error.name : 'error',
+      },
+      'Intake abuse early check failed open to validation path'
     );
     next();
   }
@@ -386,7 +448,7 @@ export type IntakeGuardDecision =
  */
 export async function evaluateIntakeSubmissionGuards(
   req: Request,
-  body: unknown,
+  body: unknown
 ): Promise<IntakeGuardDecision> {
   const config = getIntakeAbuseConfig();
   const abuseStore = getIntakeAbuseStore();
@@ -415,10 +477,13 @@ export async function evaluateIntakeSubmissionGuards(
       const emailResult = await abuseStore.hitRateLimit(
         `email:${email}`,
         config.emailMax,
-        config.windowMs,
+        config.windowMs
       );
       if (emailResult.allowed === false) {
-        return { action: 'rate_limited', retryAfterSec: emailResult.retryAfterSec };
+        return {
+          action: 'rate_limited',
+          retryAfterSec: emailResult.retryAfterSec,
+        };
       }
     }
   }
@@ -430,13 +495,18 @@ export async function finalizeIntakeIdempotency(
   req: Request,
   body: unknown,
   status: number,
-  responseBody: unknown,
+  responseBody: unknown
 ): Promise<void> {
   const config = getIntakeAbuseConfig();
   const abuseStore = getIntakeAbuseStore();
   const idemKey = readIdempotencyKey(req);
   if (idemKey) {
-    await abuseStore.claimIdempotency(idemKey, config.idempotencyTtlMs, status, responseBody);
+    await abuseStore.claimIdempotency(
+      idemKey,
+      config.idempotencyTtlMs,
+      status,
+      responseBody
+    );
   }
   if (isIntakeAbuseEnforced()) {
     const softKey = buildSoftDedupeKey(body);
@@ -445,13 +515,16 @@ export async function finalizeIntakeIdempotency(
         softKey,
         config.softDedupeWindowMs,
         status,
-        responseBody,
+        responseBody
       );
     }
   }
 }
 
-export function sendIntakeRateLimited(res: Response, retryAfterSec: number): void {
+export function sendIntakeRateLimited(
+  res: Response,
+  retryAfterSec: number
+): void {
   tooManyRequests(res, retryAfterSec);
 }
 

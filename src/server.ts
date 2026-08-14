@@ -1,41 +1,43 @@
-import 'dotenv/config';
-
 import cors from 'cors';
+import 'dotenv/config';
 import express, { Express, NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 
 import cookieParser from 'cookie-parser';
 
+import { logger } from './common/utils/logger';
+import {
+  createSafeRequestLogger,
+  installProductionConsoleGuard,
+} from './common/utils/safeLogging';
 import {
   FEATURE_QUICKBOOKS,
   IS_PRODUCTION,
   getAllowedOrigins,
 } from './config/env';
-import { logger } from './common/utils/logger';
-import { createSafeRequestLogger, installProductionConsoleGuard } from './common/utils/safeLogging';
-import { ApiErrorCode } from './security/errorCodes';
-import { deprecateAlias } from './security/routeDeprecationTelemetry';
-import { loginBodySchema } from './security/requestSchemas';
+import { authController } from './index';
 import { validateBody } from './middleware/validateRequest';
 import emailRoutes from './routes/EmailRoutes';
-import authRoutes from './routes/authRoutes';
 import adminRoutes from './routes/adminRoutes';
-import doulasRoutes from './routes/doulas';
-import clientRoutes from './routes/clientRoutes';
-import doulaRoutes from './routes/doulaRoutes';
-import contractRoutes from './routes/contractRoutes';
-import contractTemplateRoutes from './routes/contractTemplateRoutes';
-import contractSigningRoutes from './routes/contractSigningRoutes';
-import paymentRoutes from './routes/paymentRoutes';
-import invoiceRoutes from './routes/invoiceRoutes';
-import financialRoutes from './routes/financialRoutes';
+import authRoutes from './routes/authRoutes';
 import billingRoutes from './routes/billingRoutes';
-import pdfContractRoutes from './routes/pdfContractRoutes';
+import clientRoutes from './routes/clientRoutes';
+import contractRoutes from './routes/contractRoutes';
+import contractSigningRoutes from './routes/contractSigningRoutes';
+import contractTemplateRoutes from './routes/contractTemplateRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
+import doulaRoutes from './routes/doulaRoutes';
+import doulasRoutes from './routes/doulas';
+import financialRoutes from './routes/financialRoutes';
+import invoiceRoutes from './routes/invoiceRoutes';
+import paymentRoutes from './routes/paymentRoutes';
+import pdfContractRoutes from './routes/pdfContractRoutes';
 import requestRouter from './routes/requestRoute';
 import signNowRoutes from './routes/signNowRoutes';
 import userRoutes from './routes/specificUserRoutes';
-import { authController } from './index';
+import { ApiErrorCode } from './security/errorCodes';
+import { loginBodySchema } from './security/requestSchemas';
+import { deprecateAlias } from './security/routeDeprecationTelemetry';
 
 const app: Express = express();
 
@@ -50,7 +52,10 @@ const asMiddleware = (m: any) =>
 
 const allowedOriginsSet = new Set(getAllowedOrigins());
 const corsOptions = {
-  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+  origin: (
+    origin: string | undefined,
+    callback: (err: Error | null, allow?: boolean) => void
+  ) => {
     if (!origin) return callback(null, true);
     if (allowedOriginsSet.has(origin)) return callback(null, true);
     return callback(new Error('Not allowed by CORS'));
@@ -64,7 +69,13 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 if (!IS_PRODUCTION) {
-  logger.info({ allowedOrigins: getAllowedOrigins(), credentials: corsOptions.credentials }, 'CORS configuration');
+  logger.info(
+    {
+      allowedOrigins: getAllowedOrigins(),
+      credentials: corsOptions.credentials,
+    },
+    'CORS configuration'
+  );
 }
 
 app.use(cookieParser());
@@ -79,10 +90,11 @@ app.use(
           ? Buffer.from(buf)
           : Buffer.from(buf || '', (encoding as BufferEncoding) || 'utf8');
       } catch {
-        (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.alloc(0);
+        (req as express.Request & { rawBody?: Buffer }).rawBody =
+          Buffer.alloc(0);
       }
     },
-  }),
+  })
 );
 
 app.use(createSafeRequestLogger(logger));
@@ -99,7 +111,7 @@ app.post(
   '/login',
   deprecateAlias({ aliasKey: 'alias.login', successorPath: '/auth/login' }),
   validateBody(loginBodySchema),
-  (req, res) => authController.login(req, res),
+  (req, res) => authController.login(req, res)
 );
 app.use('/auth', asMiddleware(authRoutes));
 app.use('/api', asMiddleware(doulasRoutes));
@@ -112,13 +124,16 @@ app.use('/clients', asMiddleware(clientRoutes));
 app.use(
   '/client',
   deprecateAlias({ aliasKey: 'alias.client', successorPath: '/clients' }),
-  asMiddleware(clientRoutes),
+  asMiddleware(clientRoutes)
 );
 app.use('/api/clients', asMiddleware(clientRoutes));
 app.use(
   '/api/client',
-  deprecateAlias({ aliasKey: 'alias.api_client', successorPath: '/api/clients' }),
-  asMiddleware(clientRoutes),
+  deprecateAlias({
+    aliasKey: 'alias.api_client',
+    successorPath: '/api/clients',
+  }),
+  asMiddleware(clientRoutes)
 );
 
 if (FEATURE_QUICKBOOKS) {

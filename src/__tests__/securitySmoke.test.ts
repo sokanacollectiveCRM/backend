@@ -10,7 +10,6 @@
  * - no long-lived HTTP servers (avoids Jest open handles)
  * - documents the freeze inventory that future matrix tests must expand against
  */
-
 import {
   PILOT_CRITICAL_PROTECTED_PREFIXES,
   PILOT_CRITICAL_PUBLIC_PATHS,

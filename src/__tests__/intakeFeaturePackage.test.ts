@@ -1,12 +1,12 @@
+import { ValidationError } from '../domains/errors';
 import {
+  PUBLIC_INTAKE_SUCCESS_MESSAGE,
   diffIntakeShadowSlices,
   mapIntakeResponseToRequestForm,
   normalizePublicIntakeSubmission,
   pickIntakeShadowCompareSlice,
-  PUBLIC_INTAKE_SUCCESS_MESSAGE,
   submitPublicRequestForm,
 } from '../features/intake';
-import { ValidationError } from '../domains/errors';
 
 describe('PR 8 intake domain normalize', () => {
   const base = {
@@ -53,16 +53,20 @@ describe('PR 8 intake domain normalize', () => {
 
   it('rejects invalid email with legacy ValidationError message', () => {
     expect(() =>
-      normalizePublicIntakeSubmission({ ...base, email: 'bad@' }),
+      normalizePublicIntakeSubmission({ ...base, email: 'bad@' })
     ).toThrow(ValidationError);
     expect(() =>
-      normalizePublicIntakeSubmission({ ...base, email: 'bad@' }),
+      normalizePublicIntakeSubmission({ ...base, email: 'bad@' })
     ).toThrow(/Invalid email format/);
   });
 
   it('shadow compare slice is stable and PHI-light', () => {
-    const a = pickIntakeShadowCompareSlice(normalizePublicIntakeSubmission(base));
-    const b = pickIntakeShadowCompareSlice(normalizePublicIntakeSubmission(base));
+    const a = pickIntakeShadowCompareSlice(
+      normalizePublicIntakeSubmission(base)
+    );
+    const b = pickIntakeShadowCompareSlice(
+      normalizePublicIntakeSubmission(base)
+    );
     expect(diffIntakeShadowSlices(a, b)).toEqual([]);
     expect(JSON.stringify(a)).not.toMatch(/Analytical Eng|health_history/i);
   });
@@ -110,7 +114,7 @@ describe('PR 8 intake use case', () => {
             updated_at: new Date().toISOString(),
           } as any;
         },
-      },
+      }
     );
 
     expect(saved).toHaveLength(1);
@@ -136,6 +140,8 @@ describe('PR 8 intake use case', () => {
   });
 
   it('keeps public success message contract', () => {
-    expect(PUBLIC_INTAKE_SUCCESS_MESSAGE).toBe('Form data received, onto processing');
+    expect(PUBLIC_INTAKE_SUCCESS_MESSAGE).toBe(
+      'Form data received, onto processing'
+    );
   });
 });

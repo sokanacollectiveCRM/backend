@@ -1,6 +1,7 @@
+import crypto from 'crypto';
+
 import { getPool } from '../db/cloudSqlPool';
 import { getSupabaseAdmin } from '../supabase';
-import crypto from 'crypto';
 import { DoulaAvailabilityService } from './doulaAvailabilityService';
 
 export interface TeamMemberDto {
@@ -80,10 +81,15 @@ interface AdminRow {
 
 function toIso(value: Date | string): string {
   const d = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(d.getTime()) ? new Date(0).toISOString() : d.toISOString();
+  return Number.isNaN(d.getTime())
+    ? new Date(0).toISOString()
+    : d.toISOString();
 }
 
-function splitFullName(fullName: string): { firstname: string; lastname: string } {
+function splitFullName(fullName: string): {
+  firstname: string;
+  lastname: string;
+} {
   const trimmed = (fullName || '').trim();
   if (!trimmed) return { firstname: '', lastname: '' };
   const parts = trimmed.split(/\s+/);
@@ -188,7 +194,9 @@ export class CloudSqlTeamService {
         `
       );
       return this.withAvailabilitySummary(
-        rows.map((r) => r.role === 'admin' ? mapAdminRow(r as unknown as AdminRow) : mapRow(r))
+        rows.map((r) =>
+          r.role === 'admin' ? mapAdminRow(r as unknown as AdminRow) : mapRow(r)
+        )
       );
     } catch (error) {
       // Backward compatibility: if admins table doesn't exist yet, return doulas only.
@@ -264,7 +272,12 @@ export class CloudSqlTeamService {
       )
       RETURNING id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, scheduling_url, created_at, updated_at
       `,
-      [input.id ?? null, fullName, input.email.toLowerCase().trim(), input.phone_number ?? null]
+      [
+        input.id ?? null,
+        fullName,
+        input.email.toLowerCase().trim(),
+        input.phone_number ?? null,
+      ]
     );
     return mapRow(rows[0]);
   }
@@ -285,7 +298,14 @@ export class CloudSqlTeamService {
       VALUES (COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6, NOW(), NOW())
       RETURNING id, full_name, first_name, last_name, email, phone, created_at, updated_at
       `,
-      [input.id ?? null, fullName, firstName, lastName, input.email.toLowerCase().trim(), input.phone_number ?? null]
+      [
+        input.id ?? null,
+        fullName,
+        firstName,
+        lastName,
+        input.email.toLowerCase().trim(),
+        input.phone_number ?? null,
+      ]
     );
     return mapAdminRow(rows[0]);
   }
@@ -296,28 +316,38 @@ export class CloudSqlTeamService {
     email: string;
     role: TeamRole;
     phone_number?: string | null;
-  }): Promise<{ id: string; firstname: string; lastname: string; email: string; role: TeamRole; phone_number: string | null }> {
+  }): Promise<{
+    id: string;
+    firstname: string;
+    lastname: string;
+    email: string;
+    role: TeamRole;
+    phone_number: string | null;
+  }> {
     const supabaseAdmin = getSupabaseAdmin();
     const normalizedEmail = input.email.toLowerCase().trim();
     const normalizedRole = input.role;
     const tempPassword = crypto.randomBytes(18).toString('base64url');
 
-    const { data: createdAuth, error: createAuthError } = await supabaseAdmin.auth.admin.createUser({
-      email: normalizedEmail,
-      password: tempPassword,
-      email_confirm: true,
-      user_metadata: {
-        first_name: input.firstname.trim(),
-        last_name: input.lastname.trim(),
-        role: normalizedRole,
-      },
-      app_metadata: {
-        role: normalizedRole,
-      },
-    });
+    const { data: createdAuth, error: createAuthError } =
+      await supabaseAdmin.auth.admin.createUser({
+        email: normalizedEmail,
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: {
+          first_name: input.firstname.trim(),
+          last_name: input.lastname.trim(),
+          role: normalizedRole,
+        },
+        app_metadata: {
+          role: normalizedRole,
+        },
+      });
 
     if (createAuthError || !createdAuth.user) {
-      throw new Error(createAuthError?.message || 'Failed to create Supabase auth user');
+      throw new Error(
+        createAuthError?.message || 'Failed to create Supabase auth user'
+      );
     }
 
     const authUserId = createdAuth.user.id;
@@ -393,24 +423,42 @@ export class CloudSqlTeamService {
 
     const firstName = (input.firstname ?? existing.firstname ?? '').trim();
     const lastName = (input.lastname ?? existing.lastname ?? '').trim();
-    const fullName = input.fullName?.trim()
-      || `${firstName} ${lastName}`.trim()
-      || existing.fullName;
+    const fullName =
+      input.fullName?.trim() ||
+      `${firstName} ${lastName}`.trim() ||
+      existing.fullName;
     const email = input.email?.trim().toLowerCase() || existing.email;
-    const phone = input.phone ?? input.phone_number ?? existing.phone_number ?? null;
-    const address = input.address !== undefined ? input.address : (existing.address ?? null);
-    const city = input.city !== undefined ? input.city : (existing.city ?? null);
-    const state = input.state !== undefined ? input.state : (existing.state ?? null);
-    const country = input.country !== undefined ? input.country : (existing.country ?? null);
-    const zipCode = input.zip_code !== undefined ? input.zip_code : (existing.zip_code ?? null);
-    const accountStatus = input.account_status?.trim() || existing.account_status || 'approved';
+    const phone =
+      input.phone ?? input.phone_number ?? existing.phone_number ?? null;
+    const address =
+      input.address !== undefined ? input.address : (existing.address ?? null);
+    const city =
+      input.city !== undefined ? input.city : (existing.city ?? null);
+    const state =
+      input.state !== undefined ? input.state : (existing.state ?? null);
+    const country =
+      input.country !== undefined ? input.country : (existing.country ?? null);
+    const zipCode =
+      input.zip_code !== undefined
+        ? input.zip_code
+        : (existing.zip_code ?? null);
+    const accountStatus =
+      input.account_status?.trim() || existing.account_status || 'approved';
     const bio = input.bio !== undefined ? input.bio : (existing.bio ?? null);
     const profilePicture =
-      input.profile_picture !== undefined ? input.profile_picture : (existing.profile_picture ?? null);
-    const gender = input.gender !== undefined ? input.gender : (existing.gender ?? null);
-    const pronouns = input.pronouns !== undefined ? input.pronouns : (existing.pronouns ?? null);
+      input.profile_picture !== undefined
+        ? input.profile_picture
+        : (existing.profile_picture ?? null);
+    const gender =
+      input.gender !== undefined ? input.gender : (existing.gender ?? null);
+    const pronouns =
+      input.pronouns !== undefined
+        ? input.pronouns
+        : (existing.pronouns ?? null);
     const raceEthnicity =
-      input.race_ethnicity !== undefined ? input.race_ethnicity : (existing.race_ethnicity ?? null);
+      input.race_ethnicity !== undefined
+        ? input.race_ethnicity
+        : (existing.race_ethnicity ?? null);
     const languagesOtherThanEnglish =
       input.languages_other_than_english !== undefined
         ? input.languages_other_than_english
@@ -517,11 +565,18 @@ export class CloudSqlTeamService {
     return rows[0] ? mapRow(rows[0]) : null;
   }
 
-  private async withAvailabilitySummary(members: TeamMemberDto[]): Promise<TeamMemberDto[]> {
-    const doulaIds = members.filter((member) => member.role === 'doula').map((member) => member.id);
+  private async withAvailabilitySummary(
+    members: TeamMemberDto[]
+  ): Promise<TeamMemberDto[]> {
+    const doulaIds = members
+      .filter((member) => member.role === 'doula')
+      .map((member) => member.id);
     if (!doulaIds.length) return members;
 
-    const availabilityMap = await this.doulaAvailabilityService.getAvailabilityStatusForDoulas(doulaIds);
+    const availabilityMap =
+      await this.doulaAvailabilityService.getAvailabilityStatusForDoulas(
+        doulaIds
+      );
 
     return members.map((member) => {
       if (member.role !== 'doula') return member;
@@ -542,7 +597,10 @@ export class CloudSqlTeamService {
     });
   }
 
-  async updateDoulaProfilePicture(doulaId: string, profilePictureUrl: string): Promise<boolean> {
+  async updateDoulaProfilePicture(
+    doulaId: string,
+    profilePictureUrl: string
+  ): Promise<boolean> {
     const pool = getPool();
     const result = await pool.query(
       `

@@ -1,7 +1,15 @@
-import { Contract, ContractPayment, ContractSignNowIntegration, ContractTemplate } from '../entities/Contract';
+import {
+  Contract,
+  ContractPayment,
+  ContractSignNowIntegration,
+  ContractTemplate,
+} from '../entities/Contract';
 import supabase from '../supabase';
 import { CloudSqlTeamService } from './cloudSqlTeamService';
-import { CreatePaymentScheduleRequest, SimplePaymentService } from './simplePaymentService';
+import {
+  CreatePaymentScheduleRequest,
+  SimplePaymentService,
+} from './simplePaymentService';
 
 export interface CreateContractRequest {
   client_id: string; // Must reference client_info.id
@@ -16,7 +24,12 @@ export interface CreateContractRequest {
     total_amount: number;
     deposit_amount?: number;
     number_of_installments?: number;
-    payment_frequency?: 'one-time' | 'weekly' | 'bi-weekly' | 'monthly' | 'quarterly';
+    payment_frequency?:
+      | 'one-time'
+      | 'weekly'
+      | 'bi-weekly'
+      | 'monthly'
+      | 'quarterly';
     start_date?: string;
   };
 }
@@ -41,7 +54,9 @@ export interface ContractWithClient {
 export class ContractClientService {
   private readonly teamService = new CloudSqlTeamService();
 
-  private async resolveStaffName(userId: string): Promise<{ id: string; firstname: string; lastname: string }> {
+  private async resolveStaffName(
+    userId: string
+  ): Promise<{ id: string; firstname: string; lastname: string }> {
     const member = await this.teamService.getTeamMemberById(userId);
     if (!member) {
       throw new Error(`User not found: ${userId}`);
@@ -61,7 +76,9 @@ export class ContractClientService {
   /**
    * Get contract by SignNow document ID (backward compatibility)
    */
-  async getContractBySignNowId(signnowDocumentId: string): Promise<Contract | null> {
+  async getContractBySignNowId(
+    signnowDocumentId: string
+  ): Promise<Contract | null> {
     console.log('🔍 Getting contract by SignNow ID:', signnowDocumentId);
 
     const { data, error } = await supabase
@@ -90,11 +107,15 @@ export class ContractClientService {
     signnowDocumentId: string,
     signingUrl?: string
   ): Promise<Contract> {
-    console.log('📄 Updating contract with SignNow ID:', contractId, signnowDocumentId);
+    console.log(
+      '📄 Updating contract with SignNow ID:',
+      contractId,
+      signnowDocumentId
+    );
 
     const updateData: any = {
       signnow_document_id: signnowDocumentId,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     };
 
     const { data, error } = await supabase
@@ -111,7 +132,11 @@ export class ContractClientService {
 
     // Also create SignNow integration record
     if (signingUrl) {
-      await this.createSignNowIntegration(contractId, signnowDocumentId, signingUrl);
+      await this.createSignNowIntegration(
+        contractId,
+        signnowDocumentId,
+        signingUrl
+      );
     }
 
     console.log('✅ Contract updated with SignNow ID successfully');
@@ -146,7 +171,11 @@ export class ContractClientService {
     clientId: string,
     generatedByUserId: string
   ): Promise<Contract> {
-    console.log('🔗 Manually linking contract to client:', contractId, clientId);
+    console.log(
+      '🔗 Manually linking contract to client:',
+      contractId,
+      clientId
+    );
 
     // Verify client exists
     const { data: client, error: clientError } = await supabase
@@ -168,7 +197,7 @@ export class ContractClientService {
         client_id: clientId,
         generated_by: generatedByUserId,
         note: `Manually linked to client ${client.first_name} ${client.last_name} by ${user.firstname} ${user.lastname}`,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('id', contractId)
       .select()
@@ -226,7 +255,7 @@ export class ContractClientService {
         deposit: request.deposit,
         note: request.note,
         generated_by: request.generated_by,
-        status: 'draft'
+        status: 'draft',
       })
       .select()
       .single();
@@ -249,14 +278,19 @@ export class ContractClientService {
         deposit_amount: request.payment_schedule.deposit_amount,
         number_of_installments: request.payment_schedule.number_of_installments,
         payment_frequency: request.payment_schedule.payment_frequency,
-        start_date: request.payment_schedule.start_date
+        start_date: request.payment_schedule.start_date,
       };
 
       try {
-        const scheduleId = await this.paymentService.createPaymentSchedule(paymentScheduleRequest);
+        const scheduleId = await this.paymentService.createPaymentSchedule(
+          paymentScheduleRequest
+        );
         console.log('✅ Payment schedule created successfully:', scheduleId);
       } catch (paymentError) {
-        console.error('⚠️ Contract created but payment schedule failed:', paymentError);
+        console.error(
+          '⚠️ Contract created but payment schedule failed:',
+          paymentError
+        );
         // Don't fail the contract creation if payment schedule fails
       }
     }
@@ -267,12 +301,15 @@ export class ContractClientService {
   /**
    * Get contract with full client information
    */
-  async getContractWithClient(contractId: string): Promise<ContractWithClient | null> {
+  async getContractWithClient(
+    contractId: string
+  ): Promise<ContractWithClient | null> {
     console.log('🔍 Getting contract with client info:', contractId);
 
     const { data, error } = await supabase
       .from('contracts')
-      .select(`
+      .select(
+        `
         *,
         client_info:client_id (
           id,
@@ -293,7 +330,8 @@ export class ContractClientService {
           fee,
           deposit
         )
-      `)
+      `
+      )
       .eq('id', contractId)
       .single();
 
@@ -315,11 +353,11 @@ export class ContractClientService {
         status: data.status,
         generated_by: data.generated_by,
         created_at: data.created_at,
-        updated_at: data.updated_at
+        updated_at: data.updated_at,
       },
       client_info: data.client_info,
       generated_by_user: data.generated_by_user,
-      template: data.template
+      template: data.template,
     } as ContractWithClient;
   }
 
@@ -355,7 +393,7 @@ export class ContractClientService {
 
     const updateData: any = {
       status,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     };
 
     if (documentUrl) {
@@ -394,7 +432,7 @@ export class ContractClientService {
         contract_id: contractId,
         signnow_document_id: signnowDocumentId,
         signing_url: signingUrl,
-        status: 'pending'
+        status: 'pending',
       })
       .select()
       .single();
@@ -416,12 +454,17 @@ export class ContractClientService {
     status: ContractSignNowIntegration['status'],
     additionalData?: Partial<ContractSignNowIntegration>
   ): Promise<ContractSignNowIntegration> {
-    console.log('🔄 Updating SignNow status for contract:', contractId, 'to', status);
+    console.log(
+      '🔄 Updating SignNow status for contract:',
+      contractId,
+      'to',
+      status
+    );
 
     const updateData: any = {
       status,
       updated_at: new Date().toISOString(),
-      ...additionalData
+      ...additionalData,
     };
 
     // Set timestamp based on status
@@ -465,7 +508,12 @@ export class ContractClientService {
     amount: number,
     stripePaymentIntentId?: string
   ): Promise<ContractPayment> {
-    console.log('💳 Creating contract payment:', contractId, paymentType, amount);
+    console.log(
+      '💳 Creating contract payment:',
+      contractId,
+      paymentType,
+      amount
+    );
 
     const { data, error } = await supabase
       .from('contract_payments')
@@ -474,7 +522,7 @@ export class ContractClientService {
         payment_type: paymentType,
         amount: amount,
         stripe_payment_intent_id: stripePaymentIntentId,
-        status: 'pending'
+        status: 'pending',
       })
       .select()
       .single();
@@ -538,7 +586,12 @@ export class ContractClientService {
     stripePaymentIntentId?: string,
     notes?: string
   ) {
-    return this.paymentService.updatePaymentStatus(paymentId, status, stripePaymentIntentId, notes);
+    return this.paymentService.updatePaymentStatus(
+      paymentId,
+      status,
+      stripePaymentIntentId,
+      notes
+    );
   }
 
   /**
