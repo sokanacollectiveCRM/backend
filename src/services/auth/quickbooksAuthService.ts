@@ -1,35 +1,40 @@
 // src/features/quickbooks/services/auth/quickbooksAuthService.ts
+import { URL } from 'url';
 
 import OAuthClient from 'intuit-oauth';
-import { URL } from 'url';
+
+import { consumeOAuthState } from '../../security/oauthStateStore';
 import {
-    deleteTokens,
-    getTokens,
-    saveTokens,
-    TokenStore
+  TokenStore,
+  deleteTokens,
+  getTokens,
+  saveTokens,
 } from '../../utils/tokenUtils';
 
 const {
-  QB_CLIENT_ID     = '',
+  QB_CLIENT_ID = '',
   QB_CLIENT_SECRET = '',
-  QB_REDIRECT_URI  = '',
-  QBO_ENV          = 'production'
+  QB_REDIRECT_URI = '',
+  QBO_ENV = 'production',
 } = process.env;
 
 // Validate required environment variables
 if (!QB_CLIENT_ID || !QB_CLIENT_SECRET || !QB_REDIRECT_URI) {
-  console.error('⚠️ [QB Auth Service] Missing QuickBooks environment variables:', {
-    hasClientId: !!QB_CLIENT_ID,
-    hasClientSecret: !!QB_CLIENT_SECRET,
-    hasRedirectUri: !!QB_REDIRECT_URI
-  });
+  console.error(
+    '⚠️ [QB Auth Service] Missing QuickBooks environment variables:',
+    {
+      hasClientId: !!QB_CLIENT_ID,
+      hasClientSecret: !!QB_CLIENT_SECRET,
+      hasRedirectUri: !!QB_REDIRECT_URI,
+    }
+  );
 }
 
 const oauthClient = new OAuthClient({
-  clientId:     QB_CLIENT_ID,
+  clientId: QB_CLIENT_ID,
   clientSecret: QB_CLIENT_SECRET,
-  environment:  QBO_ENV === 'sandbox' ? 'sandbox' : 'production',
-  redirectUri:  QB_REDIRECT_URI
+  environment: QBO_ENV === 'sandbox' ? 'sandbox' : 'production',
+  redirectUri: QB_REDIRECT_URI,
 });
 
 /**
@@ -38,13 +43,15 @@ const oauthClient = new OAuthClient({
 export function generateConsentUrl(state: string): string {
   // Validate configuration before generating URL
   if (!QB_CLIENT_ID || !QB_CLIENT_SECRET || !QB_REDIRECT_URI) {
-    throw new Error('QuickBooks OAuth configuration is incomplete. Missing required environment variables.');
+    throw new Error(
+      'QuickBooks OAuth configuration is incomplete. Missing required environment variables.'
+    );
   }
 
   try {
     const url = oauthClient.authorizeUri({
-      scope: [ OAuthClient.scopes.Accounting ],
-      state
+      scope: [OAuthClient.scopes.Accounting],
+      state,
     });
 
     if (!url) {
@@ -54,7 +61,9 @@ export function generateConsentUrl(state: string): string {
     return url;
   } catch (error: any) {
     console.error('❌ [QB Auth Service] Error generating consent URL:', error);
-    throw new Error(`Failed to generate QuickBooks authorization URL: ${error?.message || 'Unknown error'}`);
+    throw new Error(
+      `Failed to generate QuickBooks authorization URL: ${error?.message || 'Unknown error'}`
+    );
   }
 }
 
@@ -68,17 +77,24 @@ export function generateConsentUrl(state: string): string {
 export async function handleAuthCallback(
   callbackUrl: string
 ): Promise<Omit<TokenStore, 'userId'>> {
+  const callback = new URL(callbackUrl);
+  const state = callback.searchParams.get('state');
+  const stateOk = await consumeOAuthState(state);
+  if (!stateOk) {
+    throw new Error('Invalid or expired QuickBooks OAuth state');
+  }
+
   // Exchange code for tokens
   const authResponse = await oauthClient.createToken(callbackUrl);
   const json = authResponse.getJson() as {
-    access_token:  string;
+    access_token: string;
     refresh_token: string;
-    expires_in:    number;
-    realmId?:      string;
+    expires_in: number;
+    realmId?: string;
   };
 
   // Intuit sometimes returns realmId in JSON or URL query
-  const realmId = json.realmId ?? new URL(callbackUrl).searchParams.get('realmId');
+  const realmId = json.realmId ?? callback.searchParams.get('realmId');
 
   if (!realmId) {
     throw new Error('Missing realmId in QuickBooks callback');
@@ -87,9 +103,9 @@ export async function handleAuthCallback(
   // Build TokenStore
   const tokens: TokenStore = {
     realmId,
-    accessToken:  json.access_token,
+    accessToken: json.access_token,
     refreshToken: json.refresh_token,
-    expiresAt:    new Date(Date.now() + json.expires_in * 1000).toISOString()
+    expiresAt: new Date(Date.now() + json.expires_in * 1000).toISOString(),
   };
 
   // Persist tokens
@@ -129,7 +145,9 @@ export async function isConnected(): Promise<boolean> {
     // If refresh failed, tokens are likely invalid and should be cleaned up
     // This will be handled by the refresh function, but we return false here
     if (!refreshSuccessful) {
-      console.log('⚠️ [QB Auth] Token refresh failed. User needs to reconnect.');
+      console.log(
+        '⚠️ [QB Auth] Token refresh failed. User needs to reconnect.'
+      );
     }
 
     return refreshSuccessful;

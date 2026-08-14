@@ -1,4 +1,7 @@
 import { RequestHandler } from 'express';
+
+import { SAFE_INTERNAL_ERROR_MESSAGE } from '../common/utils/safeLogging';
+import { claimWebhookEvent } from '../security/webhookEventStore';
 import { quickbooksInvoiceWebhookService } from '../services/quickbooksInvoiceWebhookService';
 
 function extractInvoiceId(payload: Record<string, unknown>): string | null {
@@ -28,8 +31,13 @@ function extractInvoiceId(payload: Record<string, unknown>): string | null {
       if (Array.isArray(innerEntities)) {
         for (const inner of innerEntities) {
           const id = (inner as Record<string, unknown>).id;
-          const name = String((inner as Record<string, unknown>).name || '').toLowerCase();
-          if (name.includes('invoice') && (typeof id === 'string' || typeof id === 'number')) {
+          const name = String(
+            (inner as Record<string, unknown>).name || ''
+          ).toLowerCase();
+          if (
+            name.includes('invoice') &&
+            (typeof id === 'string' || typeof id === 'number')
+          ) {
             return String(id);
           }
         }
@@ -50,12 +58,41 @@ function extractTotal(payload: Record<string, unknown>): number | null {
   return typeof total === 'number' ? total : null;
 }
 
-export const quickBooksInvoicePaidWebhook: RequestHandler = async (req, res) => {
+function buildQuickBooksEventKey(
+  req: {
+    get?: (name: string) => string | undefined;
+    headers?: Record<string, unknown>;
+  },
+  _payload: Record<string, unknown>,
+  qboInvoiceId: string
+): string {
+  const intuitTid =
+    (typeof req.get === 'function' ? req.get('intuit-t-id') : undefined) ??
+    (req.headers?.['intuit-t-id'] as string | undefined);
+  if (typeof intuitTid === 'string' && intuitTid.trim()) {
+    return `qbo:tid:${intuitTid.trim()}`;
+  }
+  return `qbo:invoice:${qboInvoiceId}:paid`;
+}
+
+export const quickBooksInvoicePaidWebhook: RequestHandler = async (
+  req,
+  res
+) => {
   try {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const qboInvoiceId = extractInvoiceId(body);
     if (!qboInvoiceId) {
       res.status(400).json({ error: 'Missing QuickBooks invoice id' });
+      return;
+    }
+
+    const claim = await claimWebhookEvent(
+      'quickbooks',
+      buildQuickBooksEventKey(req, body, qboInvoiceId)
+    );
+    if (claim === 'duplicate') {
+      res.status(200).json({ received: true, duplicate: true });
       return;
     }
 
@@ -74,8 +111,7 @@ export const quickBooksInvoicePaidWebhook: RequestHandler = async (req, res) => 
     });
 
     res.status(200).json({ received: true });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Webhook processing failed';
-    res.status(500).json({ error: message });
+  } catch {
+    res.status(500).json({ error: SAFE_INTERNAL_ERROR_MESSAGE });
   }
 };

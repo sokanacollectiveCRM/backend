@@ -18,9 +18,12 @@ export const IS_PRODUCTION = NODE_ENV === 'production';
 // ---------------------------------------------------------------------------
 // Feature flags (explicit opt-in; default false for optional integrations)
 // ---------------------------------------------------------------------------
-export const FEATURE_STRIPE = raw.FEATURE_STRIPE === 'true' || raw.FEATURE_STRIPE === '1';
-export const FEATURE_QUICKBOOKS = raw.FEATURE_QUICKBOOKS === 'true' || raw.FEATURE_QUICKBOOKS === '1';
-export const FEATURE_EMAIL = raw.FEATURE_EMAIL === 'true' || raw.FEATURE_EMAIL === '1';
+export const FEATURE_STRIPE =
+  raw.FEATURE_STRIPE === 'true' || raw.FEATURE_STRIPE === '1';
+export const FEATURE_QUICKBOOKS =
+  raw.FEATURE_QUICKBOOKS === 'true' || raw.FEATURE_QUICKBOOKS === '1';
+export const FEATURE_EMAIL =
+  raw.FEATURE_EMAIL === 'true' || raw.FEATURE_EMAIL === '1';
 export const ENABLE_DEBUG_ENDPOINTS =
   raw.ENABLE_DEBUG_ENDPOINTS === 'true' && !IS_PRODUCTION;
 
@@ -38,7 +41,10 @@ export function requireEnv(name: string): string {
 // ---------------------------------------------------------------------------
 // Optional (returns undefined if missing)
 // ---------------------------------------------------------------------------
-export function optionalEnv(name: string, defaultValue?: string): string | undefined {
+export function optionalEnv(
+  name: string,
+  defaultValue?: string
+): string | undefined {
   const v = raw[name];
   if (v === undefined || v === '' || String(v).trim() === '') {
     return defaultValue;
@@ -49,7 +55,10 @@ export function optionalEnv(name: string, defaultValue?: string): string | undef
 // ---------------------------------------------------------------------------
 // Require only when feature is enabled
 // ---------------------------------------------------------------------------
-export function requireEnvIfEnabled(feature: boolean, name: string): string | undefined {
+export function requireEnvIfEnabled(
+  feature: boolean,
+  name: string
+): string | undefined {
   if (!feature) return undefined;
   return requireEnv(name);
 }
@@ -74,7 +83,11 @@ export const phiBroker = {
     return optionalEnv('PHI_BROKER_URL') ?? '';
   },
   get secret(): string {
-    return optionalEnv('PHI_BROKER_SECRET') ?? optionalEnv('PHI_BROKER_SHARED_SECRET') ?? '';
+    return (
+      optionalEnv('PHI_BROKER_SECRET') ??
+      optionalEnv('PHI_BROKER_SHARED_SECRET') ??
+      ''
+    );
   },
 };
 
@@ -89,18 +102,61 @@ export const stripe = {
   },
 };
 
+/** SignNow event-subscription HMAC secret (X-SignNow-Signature). */
+export const signNowWebhook = {
+  get secret(): string {
+    return (
+      optionalEnv('SIGNNOW_WEBHOOK_SECRET') ??
+      optionalEnv('SIGNNOW_BASIC_AUTH_TOKEN') ??
+      ''
+    );
+  },
+};
+
+/** Intuit webhook verifier token (intuit-signature HMAC). */
+export const quickBooksWebhook = {
+  get verifierToken(): string {
+    return (
+      optionalEnv('QB_WEBHOOK_VERIFIER_TOKEN') ??
+      optionalEnv('INTUIT_WEBHOOK_VERIFIER_TOKEN') ??
+      ''
+    );
+  },
+};
+
 export const contractNotifications = {
   get fromEmail(): string {
-    return optionalEnv('CONTRACT_NOTIFICATION_FROM_EMAIL') ?? 'hello@sokanacollective.com';
+    return (
+      optionalEnv('CONTRACT_NOTIFICATION_FROM_EMAIL') ??
+      'hello@sokanacollective.com'
+    );
   },
   get billingEmail(): string {
-    return optionalEnv('BILLING_NOTIFICATION_EMAIL') ?? 'billing@sokanacollective.com';
+    return (
+      optionalEnv('BILLING_NOTIFICATION_EMAIL') ??
+      'billing@sokanacollective.com'
+    );
   },
   get billingViewPathTemplate(): string {
-    return optionalEnv('BILLING_CONTRACT_VIEW_PATH_TEMPLATE') ?? '/billing/contracts/:contractId';
+    return (
+      optionalEnv('BILLING_CONTRACT_VIEW_PATH_TEMPLATE') ??
+      '/billing/contracts/:contractId'
+    );
   },
   get frontendUrl(): string {
     return optionalEnv('FRONTEND_URL') ?? 'http://localhost:3001';
+  },
+};
+
+/** PR 8 intake feature-package cutover / shadow window. */
+export const intakeFeature = {
+  get useFeaturePackage(): boolean {
+    const raw = optionalEnv('INTAKE_USE_FEATURE_PACKAGE');
+    return raw === 'true' || raw === '1';
+  },
+  get shadowCompare(): boolean {
+    const raw = optionalEnv('INTAKE_SHADOW_COMPARE');
+    return raw === 'true' || raw === '1';
   },
 };
 
@@ -130,8 +186,12 @@ export function getAllowedOrigins(): string[] {
       ];
   const explicit = [...fromOrigin, ...legacy, ...dev];
   // Production fallback: allow known deploy URLs when no env vars set
-  const prodDefaults = IS_PRODUCTION && explicit.length === 0
-    ? ['https://sokanacrm.vercel.app', 'https://crmbackend-six-wine.vercel.app']
-    : [];
+  const prodDefaults =
+    IS_PRODUCTION && explicit.length === 0
+      ? [
+          'https://sokanacrm.vercel.app',
+          'https://crmbackend-six-wine.vercel.app',
+        ]
+      : [];
   return [...new Set([...explicit, ...prodDefaults])];
 }

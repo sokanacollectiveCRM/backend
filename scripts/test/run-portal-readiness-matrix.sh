@@ -131,32 +131,32 @@ echo "Portal readiness matrix — CLIENT_ID=$CLIENT_ID admin=$ADMIN_EMAIL"
 run_case \
   "1/5 Self-Pay + signed + paid deposit + no card" \
   "selfpay-missing-card" \
-  '{"billing_path":"self_pay","is_eligible":false,"primary_portal_blocker":"missing_card_on_file","card_on_file":false,"allowed_actions":{"can_invite_to_portal":false,"can_send_verification_invoice":true,"can_mark_contract_signed":false,"can_mark_deposit_paid":false}}'
+  '{"billing_path":"self_pay","is_eligible":false,"primary_portal_blocker":"missing_card_on_file","card_on_file":false,"allowed_actions":{"can_invite_to_portal":false,"can_mark_contract_signed":false,"can_mark_deposit_paid":false}}'
 
 run_case \
   "2/5 Self-Pay + signed + paid deposit + card" \
   "selfpay-eligible-with-card" \
-  '{"billing_path":"self_pay","is_eligible":true,"primary_portal_blocker":null,"card_on_file":true,"allowed_actions":{"can_invite_to_portal":true,"can_send_verification_invoice":false,"can_mark_contract_signed":false,"can_mark_deposit_paid":false}}'
+  '{"billing_path":"self_pay","is_eligible":true,"primary_portal_blocker":null,"card_on_file":true,"allowed_actions":{"can_invite_to_portal":true,"can_mark_contract_signed":false,"can_mark_deposit_paid":false}}'
 
 run_case \
   "3/5 Medicaid + signed + paid deposit + no card" \
   "medicaid-eligible-no-card" \
-  '{"billing_path":"medicaid","is_eligible":true,"primary_portal_blocker":null,"card_on_file":false,"allowed_actions":{"can_invite_to_portal":true,"can_send_verification_invoice":false,"can_mark_contract_signed":false,"can_mark_deposit_paid":false}}'
+  '{"billing_path":"medicaid","is_eligible":true,"primary_portal_blocker":null,"card_on_file":false,"allowed_actions":{"can_invite_to_portal":true,"can_mark_contract_signed":false,"can_mark_deposit_paid":false}}'
 
 run_case \
   "4/5 Self-Pay + unsigned + unpaid + no card" \
   "unsigned-contract" \
-  '{"billing_path":"self_pay","is_eligible":false,"primary_portal_blocker":"contract_unsigned","card_on_file":false,"allowed_actions":{"can_invite_to_portal":false,"can_send_verification_invoice":false,"can_mark_contract_signed":true,"can_mark_deposit_paid":false}}'
+  '{"billing_path":"self_pay","is_eligible":false,"primary_portal_blocker":"contract_unsigned","card_on_file":false,"allowed_actions":{"can_invite_to_portal":false,"can_mark_contract_signed":true,"can_mark_deposit_paid":false}}'
 
 run_case \
   "5/5 Unknown payment method + signed + paid + card" \
   "billing-path-unknown" \
-  '{"billing_path":"unknown","is_eligible":false,"primary_portal_blocker":"billing_path_unknown","card_on_file":true,"allowed_actions":{"can_invite_to_portal":false,"can_send_verification_invoice":false,"can_mark_contract_signed":false,"can_mark_deposit_paid":false}}'
+  '{"billing_path":"unknown","is_eligible":false,"primary_portal_blocker":"billing_path_unknown","card_on_file":true,"allowed_actions":{"can_invite_to_portal":false,"can_mark_contract_signed":false,"can_mark_deposit_paid":false}}'
 
 run_case \
   "Insurance parity Insurance + signed + paid deposit + no card" \
   "insurance-missing-card" \
-  '{"billing_path":"insurance","is_eligible":false,"portal_blockers":["missing_card_on_file"],"primary_portal_blocker":"missing_card_on_file","payment_authorization_required":true,"payment_authorization_satisfied":false,"card_on_file":false,"allowed_actions":{"can_invite_to_portal":false,"can_send_verification_invoice":true,"can_mark_contract_signed":false,"can_mark_deposit_paid":false}}'
+  '{"billing_path":"insurance","is_eligible":false,"portal_blockers":["missing_card_on_file"],"primary_portal_blocker":"missing_card_on_file","payment_authorization_required":true,"payment_authorization_satisfied":false,"card_on_file":false,"allowed_actions":{"can_invite_to_portal":false,"can_mark_contract_signed":false,"can_mark_deposit_paid":false}}'
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

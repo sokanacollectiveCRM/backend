@@ -1,4 +1,11 @@
 import { Request, Response } from 'express';
+
+import { logger } from '../common/utils/logger';
+import {
+  SAFE_INTERNAL_ERROR_MESSAGE,
+  toSafeClientErrorBody,
+  toSafeProviderError,
+} from '../common/utils/safeLogging';
 import { NodemailerService } from '../services/emailService';
 
 export class EmailController {
@@ -15,27 +22,24 @@ export class EmailController {
       if (!email || !name || !signupUrl) {
         res.status(400).json({
           success: false,
-          error: 'Missing required fields: email, name, or signupUrl'
+          error: 'Missing required fields: email, name, or signupUrl',
         });
         return;
       }
 
-      await this.emailService.sendClientApprovalEmail(
-        email,
-        name,
-        signupUrl
-      );
+      await this.emailService.sendClientApprovalEmail(email, name, signupUrl);
 
       res.status(200).json({
         success: true,
-        message: `Approval email sent to ${email}`
+        message: `Approval email sent to ${email}`,
       });
     } catch (error) {
-      console.error('Error sending approval email:', error);
-      res.status(500).json({
-        success: false,
-        error: error.message || 'Failed to send email'
-      });
+      logger.error(
+        toSafeProviderError('email', 'client_approval', error),
+        'Error sending approval email'
+      );
+      // Security bug fix (PR 3): do not return raw SMTP/provider messages.
+      res.status(500).json(toSafeClientErrorBody('Failed to send email'));
     }
   }
 
@@ -44,10 +48,9 @@ export class EmailController {
       const { email, firstname, lastname, role } = req.body;
 
       if (!email || !firstname || !lastname || !role) {
-        console.log('Missing required fields:', { email, firstname, lastname, role });
         res.status(400).json({
           success: false,
-          error: 'Missing required fields: email, firstname, lastname, or role'
+          error: 'Missing required fields: email, firstname, lastname, or role',
         });
         return;
       }
@@ -61,24 +64,30 @@ export class EmailController {
 
       res.status(200).json({
         success: true,
-        message: `Invite email sent to ${email}`
+        message: `Invite email sent to ${email}`,
       });
     } catch (error) {
-      console.error('Error sending team invite email:', error);
-      console.error('Error details:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      });
-      res.status(500).json({
-        success: false,
-        error: error.message || 'Failed to send email'
-      });
+      logger.error(
+        toSafeProviderError('email', 'team_invite', error),
+        'Error sending team invite email'
+      );
+      // Security bug fix (PR 3): remove stack / raw SMTP messages from client response.
+      res.status(500).json(toSafeClientErrorBody(SAFE_INTERNAL_ERROR_MESSAGE));
     }
   }
 
-  async sendDoulaInvite(email: string, firstname: string, lastname: string, inviteToken?: string): Promise<void> {
-    await this.emailService.sendDoulaInviteEmail(email, firstname, lastname, inviteToken);
+  async sendDoulaInvite(
+    email: string,
+    firstname: string,
+    lastname: string,
+    inviteToken?: string
+  ): Promise<void> {
+    await this.emailService.sendDoulaInviteEmail(
+      email,
+      firstname,
+      lastname,
+      inviteToken
+    );
   }
 
   async sendDoulaMatchNotification(

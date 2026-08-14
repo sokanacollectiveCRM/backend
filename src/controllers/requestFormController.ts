@@ -1,5 +1,12 @@
 import { Request, Response } from 'express';
 
+import { PUBLIC_INTAKE_SUCCESS_MESSAGE } from '../features/intake';
+import {
+  evaluateIntakeSubmissionGuards,
+  finalizeIntakeIdempotency,
+  sendIntakeRateLimited,
+  sendIntakeSoftDedupe,
+} from '../features/intake/infrastructure/intakeAbuseProtection';
 import { RequestFormService } from '../services/RequestFormService';
 import { NodemailerService } from '../services/emailService';
 import { AuthRequest, RequestFormData, RequestStatus } from '../types';
@@ -199,6 +206,21 @@ export class RequestFormController {
         return;
       }
       const formData = req.body;
+
+      const guard = await evaluateIntakeSubmissionGuards(req, formData);
+      if (guard.action === 'rate_limited') {
+        sendIntakeRateLimited(res, guard.retryAfterSec);
+        return;
+      }
+      if (guard.action === 'replay') {
+        res.status(guard.status).json(guard.body);
+        return;
+      }
+      if (guard.action === 'soft_dedupe') {
+        sendIntakeSoftDedupe(res);
+        return;
+      }
+
       const savedForm = await this.service.newForm(formData);
       console.log('📬 New lead saved with client_info ID:', savedForm.id); // Added log for linked client ID
       const profileLink = `${process.env.FRONTEND_URL}/admin/clients/${savedForm.id}`; // Added profile link to email
@@ -235,9 +257,11 @@ Partner Work Phone: ${savedForm.work_phone || 'Not provided'}
 
 REFERRAL:
 Source: ${savedForm.referral_source || 'Not specified'}
-${savedForm.referral_source === 'Other' && savedForm.referral_source_other
-          ? `Other (details): ${savedForm.referral_source_other}\n`
-          : ''}Referral Name: ${savedForm.referral_name || 'Not provided'}
+${
+  savedForm.referral_source === 'Other' && savedForm.referral_source_other
+    ? `Other (details): ${savedForm.referral_source_other}\n`
+    : ''
+}Referral Name: ${savedForm.referral_name || 'Not provided'}
 Referral Email: ${savedForm.referral_email || 'Not provided'}
 
 HEALTH HISTORY:
@@ -327,9 +351,12 @@ View Client Profile: ${profileLink}`;
                         <h2 style="color: #333; background-color: #e8f5e8; padding: 10px; border-radius: 5px;">📞 Referral</h2>
                         <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
                           <tr><td style="font-weight: bold; padding: 8px; width: 30%; background-color: #f5f5f5;">Source:</td><td style="padding: 8px;">${savedForm.referral_source || 'Not specified'}</td></tr>
-                          ${savedForm.referral_source === 'Other' && savedForm.referral_source_other
-                            ? `<tr><td style="font-weight: bold; padding: 8px; background-color: #f5f5f5;">Other (details):</td><td style="padding: 8px;">${String(savedForm.referral_source_other).replace(/</g, '&lt;')}</td></tr>`
-                            : ''}
+                          ${
+                            savedForm.referral_source === 'Other' &&
+                            savedForm.referral_source_other
+                              ? `<tr><td style="font-weight: bold; padding: 8px; background-color: #f5f5f5;">Other (details):</td><td style="padding: 8px;">${String(savedForm.referral_source_other).replace(/</g, '&lt;')}</td></tr>`
+                              : ''
+                          }
                           <tr><td style="font-weight: bold; padding: 8px; background-color: #f5f5f5;">Referral Name:</td><td style="padding: 8px;">${savedForm.referral_name || 'Not provided'}</td></tr>
                           <tr><td style="font-weight: bold; padding: 8px; background-color: #f5f5f5;">Referral Email:</td><td style="padding: 8px;">${savedForm.referral_email || 'Not provided'}</td></tr>
                         </table>
@@ -466,7 +493,10 @@ The Sokana Collective Team`;
         // Do not block form submission if confirmation email fails
       }
 
-      res.status(200).json({ message: 'Form data received, onto processing' });
+      res.status(200).json({ message: PUBLIC_INTAKE_SUCCESS_MESSAGE });
+      await finalizeIntakeIdempotency(req, formData, 200, {
+        message: PUBLIC_INTAKE_SUCCESS_MESSAGE,
+      });
     } catch (error) {
       console.error('Error processing form data:', error);
       res.status(400).json({ error: error.message });

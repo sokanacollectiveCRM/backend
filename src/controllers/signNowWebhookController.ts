@@ -1,12 +1,11 @@
 import { RequestHandler } from 'express';
 
+import { SAFE_INTERNAL_ERROR_MESSAGE } from '../common/utils/safeLogging';
+import { claimWebhookEvent } from '../security/webhookEventStore';
 import { contractSignatureCompletionService } from '../services/contractSignatureCompletionService';
 
 function extractDocumentId(payload: Record<string, unknown>): string | null {
-  const direct =
-    payload.document_id ??
-    payload.documentId ??
-    payload.id;
+  const direct = payload.document_id ?? payload.documentId ?? payload.id;
 
   if (typeof direct === 'string' || typeof direct === 'number') {
     const normalized = String(direct).trim();
@@ -15,7 +14,10 @@ function extractDocumentId(payload: Record<string, unknown>): string | null {
 
   const document = payload.document as Record<string, unknown> | undefined;
   const nestedDocumentId = document?.id ?? document?.document_id;
-  if (typeof nestedDocumentId === 'string' || typeof nestedDocumentId === 'number') {
+  if (
+    typeof nestedDocumentId === 'string' ||
+    typeof nestedDocumentId === 'number'
+  ) {
     return String(nestedDocumentId).trim() || null;
   }
 
@@ -29,6 +31,12 @@ function extractDocumentId(payload: Record<string, unknown>): string | null {
 
   if (typeof nested === 'string' || typeof nested === 'number') {
     return String(nested).trim() || null;
+  }
+
+  const meta = payload.meta as Record<string, unknown> | undefined;
+  const metaDoc = meta?.document_id;
+  if (typeof metaDoc === 'string' || typeof metaDoc === 'number') {
+    return String(metaDoc).trim() || null;
   }
 
   return null;
@@ -60,6 +68,18 @@ function shouldProcessCompletion(payload: Record<string, unknown>): boolean {
   );
 }
 
+function buildSignNowEventKey(
+  payload: Record<string, unknown>,
+  documentId: string
+): string {
+  const event =
+    (typeof payload.event === 'string' && payload.event) ||
+    (typeof payload.event_type === 'string' && payload.event_type) ||
+    (typeof payload.type === 'string' && payload.type) ||
+    'complete';
+  return `signnow:${documentId}:${String(event).toLowerCase()}`;
+}
+
 export const signNowCallback: RequestHandler = async (req, res) => {
   try {
     const body = (req.body ?? {}) as Record<string, unknown>;
@@ -80,16 +100,31 @@ export const signNowCallback: RequestHandler = async (req, res) => {
       return;
     }
 
-    const result = await contractSignatureCompletionService.finalizeSignedDocument(documentId);
+    const claim = await claimWebhookEvent(
+      'signnow',
+      buildSignNowEventKey(body, documentId)
+    );
+    if (claim === 'duplicate') {
+      res.status(200).json({
+        received: true,
+        processed: false,
+        reason: 'duplicate',
+        documentId,
+      });
+      return;
+    }
+
+    const result =
+      await contractSignatureCompletionService.finalizeSignedDocument(
+        documentId
+      );
     res.status(200).json({
       received: true,
       processed: true,
       documentId,
       result,
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'SignNow callback processing failed';
-    res.status(500).json({ error: message });
+  } catch {
+    res.status(500).json({ error: SAFE_INTERNAL_ERROR_MESSAGE });
   }
 };
-

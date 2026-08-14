@@ -1,10 +1,20 @@
 import express from 'express';
 import request from 'supertest';
+
 import { RequestFormController } from '../controllers/requestFormController';
 import { RequestFormRepository } from '../repositories/requestFormRepository';
-import { NodemailerService } from '../services/emailService';
 import { RequestFormService } from '../services/RequestFormService';
-import { ClientAgeRange, HomeType, IncomeLevel, Pronouns, ProviderType, RelationshipStatus, ServiceTypes, STATE } from '../types';
+import { NodemailerService } from '../services/emailService';
+import {
+  ClientAgeRange,
+  HomeType,
+  IncomeLevel,
+  Pronouns,
+  ProviderType,
+  RelationshipStatus,
+  STATE,
+  ServiceTypes,
+} from '../types';
 
 // Mock modules at the top level
 jest.mock('nodemailer', () => ({
@@ -118,7 +128,10 @@ describe('Request Endpoint Tests', () => {
     past_pregnancy_experience: 'Emergency C-section',
 
     // Step 9: Services Interested
-    services_interested: [ServiceTypes.LABOR_SUPPORT, ServiceTypes.POSTPARTUM_SUPPORT],
+    services_interested: [
+      ServiceTypes.LABOR_SUPPORT,
+      ServiceTypes.POSTPARTUM_SUPPORT,
+    ],
     service_support_details: 'Need help with breastfeeding',
 
     // Step 10: Client Demographics
@@ -126,7 +139,7 @@ describe('Request Endpoint Tests', () => {
     primary_language: 'English',
     client_age_range: ClientAgeRange.AGE_25_34,
     insurance: 'Blue Cross Blue Shield',
-    demographics_multi: ['First-time parent', 'LGBTQ+']
+    demographics_multi: ['First-time parent', 'LGBTQ+'],
   };
 
   beforeEach(() => {
@@ -144,8 +157,9 @@ describe('Request Endpoint Tests', () => {
     app.use(express.json());
 
     // Mount the request route
-    app.post('/requestService/requestSubmission',
-      (req, res) => requestFormController.createForm(req, res));
+    app.post('/requestService/requestSubmission', (req, res) =>
+      requestFormController.createForm(req, res)
+    );
   });
 
   describe('POST /requestService/requestSubmission', () => {
@@ -159,16 +173,18 @@ describe('Request Endpoint Tests', () => {
         .expect(200);
 
       expect(response.body).toEqual({
-        message: 'Form data received, onto processing'
+        message: 'Form data received, onto processing',
       });
 
       // Check that the service was called with the form data
-      expect(requestFormService.newForm).toHaveBeenCalledWith(expect.objectContaining({
-        firstname: 'Jane',
-        lastname: 'Doe',
-        email: 'jane.doe@example.com',
-        service_needed: ServiceTypes.LABOR_SUPPORT
-      }));
+      expect(requestFormService.newForm).toHaveBeenCalledWith(
+        expect.objectContaining({
+          firstname: 'Jane',
+          lastname: 'Doe',
+          email: 'jane.doe@example.com',
+          service_needed: ServiceTypes.LABOR_SUPPORT,
+        })
+      );
     });
 
     it('should handle missing request body', async () => {
@@ -190,9 +206,9 @@ describe('Request Endpoint Tests', () => {
 
     it('should handle service errors gracefully', async () => {
       // Mock service to throw an error
-      jest.spyOn(requestFormService, 'newForm').mockRejectedValue(
-        new Error('Database connection failed')
-      );
+      jest
+        .spyOn(requestFormService, 'newForm')
+        .mockRejectedValue(new Error('Database connection failed'));
 
       const response = await request(app)
         .post('/requestService/requestSubmission')
@@ -208,9 +224,9 @@ describe('Request Endpoint Tests', () => {
 
       // Mock email service to throw error
       const nodemailer = require('nodemailer');
-      nodemailer.createTransport().sendMail.mockRejectedValue(
-        new Error('Email service unavailable')
-      );
+      nodemailer
+        .createTransport()
+        .sendMail.mockRejectedValue(new Error('Email service unavailable'));
 
       const response = await request(app)
         .post('/requestService/requestSubmission')
@@ -260,7 +276,7 @@ describe('Request Endpoint Tests', () => {
 
       const nodemailer = require('nodemailer');
       const mockSendMail = jest.fn().mockResolvedValue({
-        messageId: 'test-message-id'
+        messageId: 'test-message-id',
       });
       nodemailer.createTransport().sendMail = mockSendMail;
 
@@ -272,7 +288,7 @@ describe('Request Endpoint Tests', () => {
       expect(mockSendMail).toHaveBeenCalledWith(
         expect.objectContaining({
           to: 'hello@sokanacollective.com',
-          subject: 'New Lead Submitted via Request Form'
+          subject: 'New Lead Submitted via Request Form',
         })
       );
     });
@@ -282,7 +298,7 @@ describe('Request Endpoint Tests', () => {
 
       const nodemailer = require('nodemailer');
       const mockSendMail = jest.fn().mockResolvedValue({
-        messageId: 'test-message-id'
+        messageId: 'test-message-id',
       });
       nodemailer.createTransport().sendMail = mockSendMail;
 
@@ -313,7 +329,7 @@ describe('Request Endpoint Tests', () => {
 
       const nodemailer = require('nodemailer');
       const mockSendMail = jest.fn().mockResolvedValue({
-        messageId: 'test-message-id'
+        messageId: 'test-message-id',
       });
       nodemailer.createTransport().sendMail = mockSendMail;
 
@@ -328,14 +344,24 @@ describe('Request Endpoint Tests', () => {
       // Check the confirmation email (second call)
       const confirmationEmailCall = mockSendMail.mock.calls[1][0];
       expect(confirmationEmailCall.to).toBe('jane.doe@example.com');
-      expect(confirmationEmailCall.subject).toBe('Request Received - We\'re Working on Your Match');
+      expect(confirmationEmailCall.subject).toBe(
+        "Request Received - We're Working on Your Match"
+      );
       expect(confirmationEmailCall.text).toContain('Dear Jane Doe');
-      expect(confirmationEmailCall.text).toContain('Thank you for submitting your request for doula services');
-      expect(confirmationEmailCall.text).toContain('Thank you for submitting your request for doula services');
-      expect(confirmationEmailCall.text).toContain('We have received your information and are working on finding the perfect match for you');
+      expect(confirmationEmailCall.text).toContain(
+        'Thank you for submitting your request for doula services'
+      );
+      expect(confirmationEmailCall.text).toContain(
+        'Thank you for submitting your request for doula services'
+      );
+      expect(confirmationEmailCall.text).toContain(
+        'We have received your information and are working on finding the perfect match for you'
+      );
       expect(confirmationEmailCall.html).toContain('Request Received');
       expect(confirmationEmailCall.html).toContain('Dear Jane Doe');
-      expect(confirmationEmailCall.html).toContain('Thank you for submitting your request for doula services');
+      expect(confirmationEmailCall.html).toContain(
+        'Thank you for submitting your request for doula services'
+      );
     });
   });
 
@@ -344,7 +370,7 @@ describe('Request Endpoint Tests', () => {
       const longTextData = {
         ...mockFormData,
         health_notes: 'A'.repeat(1000),
-        service_specifics: 'B'.repeat(1000)
+        service_specifics: 'B'.repeat(1000),
       };
 
       jest.spyOn(requestFormService, 'newForm').mockResolvedValue(longTextData);
@@ -361,12 +387,14 @@ describe('Request Endpoint Tests', () => {
       const specialCharData = {
         ...mockFormData,
         firstname: 'José',
-        lastname: 'O\'Connor',
+        lastname: "O'Connor",
         address: '123 Main St, Apt #4',
-        health_notes: 'Allergies: Peanuts, Shellfish, Latex'
+        health_notes: 'Allergies: Peanuts, Shellfish, Latex',
       };
 
-      jest.spyOn(requestFormService, 'newForm').mockResolvedValue(specialCharData);
+      jest
+        .spyOn(requestFormService, 'newForm')
+        .mockResolvedValue(specialCharData);
 
       const response = await request(app)
         .post('/requestService/requestSubmission')
@@ -380,10 +408,12 @@ describe('Request Endpoint Tests', () => {
       const emptyArrayData = {
         ...mockFormData,
         services_interested: [],
-        demographics_multi: []
+        demographics_multi: [],
       };
 
-      jest.spyOn(requestFormService, 'newForm').mockResolvedValue(emptyArrayData);
+      jest
+        .spyOn(requestFormService, 'newForm')
+        .mockResolvedValue(emptyArrayData);
 
       const response = await request(app)
         .post('/requestService/requestSubmission')
@@ -405,7 +435,7 @@ describe('Request Endpoint Tests', () => {
         address: '123 Main St',
         city: 'Anytown',
         state: STATE.CA,
-        zip_code: '90210'
+        zip_code: '90210',
       };
 
       await expect(requestFormService.newForm(invalidData)).rejects.toThrow(
@@ -416,29 +446,29 @@ describe('Request Endpoint Tests', () => {
     it('should validate email format correctly', async () => {
       const invalidEmailData = {
         ...mockFormData,
-        email: 'invalid-email'
+        email: 'invalid-email',
       };
 
-      await expect(requestFormService.newForm(invalidEmailData)).rejects.toThrow(
-        'Valid email is required'
-      );
+      await expect(
+        requestFormService.newForm(invalidEmailData)
+      ).rejects.toThrow('Valid email is required');
     });
 
     it('should validate phone number format correctly', async () => {
       const invalidPhoneData = {
         ...mockFormData,
-        phone_number: 'invalid-phone'
+        phone_number: 'invalid-phone',
       };
 
-      await expect(requestFormService.newForm(invalidPhoneData)).rejects.toThrow(
-        'Invalid phone number format'
-      );
+      await expect(
+        requestFormService.newForm(invalidPhoneData)
+      ).rejects.toThrow('Invalid phone number format');
     });
 
     it('should validate zip code format correctly', async () => {
       const invalidZipData = {
         ...mockFormData,
-        zip_code: 'invalid-zip'
+        zip_code: 'invalid-zip',
       };
 
       await expect(requestFormService.newForm(invalidZipData)).rejects.toThrow(
@@ -452,28 +482,34 @@ describe('Request Endpoint Tests', () => {
         address: '', // Missing address
         city: 'Anytown',
         state: STATE.CA,
-        zip_code: '90210'
+        zip_code: '90210',
       };
 
-      await expect(requestFormService.newForm(incompleteAddressData)).rejects.toThrow(
-        'Complete address is required'
-      );
+      await expect(
+        requestFormService.newForm(incompleteAddressData)
+      ).rejects.toThrow('Complete address is required');
     });
 
     it('should validate service_needed is provided', async () => {
       const missingServiceData = {
         ...mockFormData,
-        service_needed: undefined
+        service_needed: undefined,
       };
 
-      await expect(requestFormService.newForm(missingServiceData)).rejects.toThrow(
-        'Missing required field: service_needed'
-      );
+      await expect(
+        requestFormService.newForm(missingServiceData)
+      ).rejects.toThrow('Missing required field: service_needed');
     });
 
     it('should require referral_source on intake', async () => {
-      const { referral_source: _rs, referral_source_other: _ro, ...rest } = mockFormData as any;
-      await expect(requestFormService.newForm(rest)).rejects.toThrow('referral_source is required');
+      const {
+        referral_source: _rs,
+        referral_source_other: _ro,
+        ...rest
+      } = mockFormData as any;
+      await expect(requestFormService.newForm(rest)).rejects.toThrow(
+        'referral_source is required'
+      );
     });
 
     it('should require referral_source_other when referral_source is Other', async () => {
@@ -482,12 +518,16 @@ describe('Request Endpoint Tests', () => {
         referral_source: 'Other',
         referral_source_other: '   ',
       };
-      await expect(requestFormService.newForm(bad)).rejects.toThrow('Please describe how you heard about Sokana.');
+      await expect(requestFormService.newForm(bad)).rejects.toThrow(
+        'Please describe how you heard about Sokana.'
+      );
     });
 
     it('should reject invalid referral_source', async () => {
       const bad = { ...mockFormData, referral_source: 'Friend' };
-      await expect(requestFormService.newForm(bad)).rejects.toThrow('referral_source must be one of:');
+      await expect(requestFormService.newForm(bad)).rejects.toThrow(
+        'referral_source must be one of:'
+      );
     });
 
     it('should accept Other with referral_source_other', async () => {
@@ -512,7 +552,9 @@ describe('Request Endpoint Tests', () => {
 
     it('should successfully process valid form data', async () => {
       // Mock the repository to return success
-      jest.spyOn(requestFormRepository, 'saveData').mockResolvedValue(mockFormData as any);
+      jest
+        .spyOn(requestFormRepository, 'saveData')
+        .mockResolvedValue(mockFormData as any);
 
       const result = await requestFormService.newForm(mockFormData);
 
@@ -558,7 +600,9 @@ describe('Request Endpoint Tests', () => {
         self_pay_card_info: null,
       };
 
-      jest.spyOn(requestFormRepository, 'saveData').mockResolvedValue(payload as any);
+      jest
+        .spyOn(requestFormRepository, 'saveData')
+        .mockResolvedValue(payload as any);
 
       await expect(requestFormService.newForm(payload)).resolves.toBeDefined();
       expect(requestFormRepository.saveData).toHaveBeenCalledWith(
@@ -581,7 +625,9 @@ describe('Request Endpoint Tests', () => {
         insurance_plan_type: 'Medicaid',
         policy_number: '',
       };
-      await expect(requestFormService.newForm(payload)).rejects.toThrow(/Medicaid/i);
+      await expect(requestFormService.newForm(payload)).rejects.toThrow(
+        /Medicaid/i
+      );
     });
 
     it('should accept self-pay sliding scale submissions and null out insurance fields', async () => {
@@ -596,7 +642,9 @@ describe('Request Endpoint Tests', () => {
         self_pay_card_info: 'Visa ending 4242',
       };
 
-      jest.spyOn(requestFormRepository, 'saveData').mockResolvedValue(payload as any);
+      jest
+        .spyOn(requestFormRepository, 'saveData')
+        .mockResolvedValue(payload as any);
 
       await expect(requestFormService.newForm(payload)).resolves.toBeDefined();
       expect(requestFormRepository.saveData).toHaveBeenCalledWith(
@@ -617,7 +665,9 @@ describe('Request Endpoint Tests', () => {
     });
 
     it('should map CRM Private/Commercial Insurance to Commercial Insurance before save', async () => {
-      jest.spyOn(requestFormRepository, 'saveData').mockResolvedValue(mockFormData as any);
+      jest
+        .spyOn(requestFormRepository, 'saveData')
+        .mockResolvedValue(mockFormData as any);
       const payload = {
         ...mockFormData,
         payment_method: 'Private/Commercial Insurance',
@@ -640,15 +690,24 @@ describe('Request Endpoint Tests', () => {
       ['Home', '123 Oak St, Springfield, IL 62704'],
       ['Birth Center', 'Sunrise Birth Center'],
       ['Other', 'Community birth suite'],
-    ])('should accept birth_location %s with place name', async (birth_location, birth_hospital) => {
-      jest.spyOn(requestFormRepository, 'saveData').mockResolvedValue(mockFormData as any);
-      await expect(
-        requestFormService.newForm({ ...mockFormData, birth_location, birth_hospital })
-      ).resolves.toBeDefined();
-      expect(requestFormRepository.saveData).toHaveBeenCalledWith(
-        expect.objectContaining({ birth_location, birth_hospital })
-      );
-    });
+    ])(
+      'should accept birth_location %s with place name',
+      async (birth_location, birth_hospital) => {
+        jest
+          .spyOn(requestFormRepository, 'saveData')
+          .mockResolvedValue(mockFormData as any);
+        await expect(
+          requestFormService.newForm({
+            ...mockFormData,
+            birth_location,
+            birth_hospital,
+          })
+        ).resolves.toBeDefined();
+        expect(requestFormRepository.saveData).toHaveBeenCalledWith(
+          expect.objectContaining({ birth_location, birth_hospital })
+        );
+      }
+    );
 
     it('should map CRM Family Doctor provider label to Family Physician', async () => {
       jest.spyOn(requestFormRepository, 'saveData').mockResolvedValue({
@@ -684,7 +743,9 @@ describe('Request Endpoint Tests', () => {
         insurance_plan_type: 'PPO',
       };
 
-      jest.spyOn(requestFormRepository, 'saveData').mockResolvedValue(payload as any);
+      jest
+        .spyOn(requestFormRepository, 'saveData')
+        .mockResolvedValue(payload as any);
 
       await expect(requestFormService.newForm(payload)).resolves.toBeDefined();
       expect(requestFormRepository.saveData).toHaveBeenCalledWith(
@@ -708,13 +769,15 @@ describe('Request Endpoint Tests', () => {
       const repository = new RequestFormRepository({} as any);
       const result = await repository.saveData(mockFormData);
 
-      expect(result).toEqual(expect.objectContaining({
-        firstname: 'Jane',
-        lastname: 'Doe',
-        email: 'jane.doe@example.com',
-        payment_method: 'Private/Commercial Insurance',
-        insurance_provider: 'Blue Cross Blue Shield',
-      }));
+      expect(result).toEqual(
+        expect.objectContaining({
+          firstname: 'Jane',
+          lastname: 'Doe',
+          email: 'jane.doe@example.com',
+          payment_method: 'Private/Commercial Insurance',
+          insurance_provider: 'Blue Cross Blue Shield',
+        })
+      );
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO phi_clients'),
         expect.arrayContaining([
@@ -812,23 +875,25 @@ describe('Request Endpoint Tests', () => {
         self_pay_card_info: 'Visa ending 4242',
       });
 
-      expect(result).toEqual(expect.objectContaining({
-        payment_method: 'Self-Pay',
-        insurance: null,
-        insurance_provider: null,
-        insurance_member_id: null,
-        insurance_policy_holder_name: null,
-        insurance_policy_holder_dob: null,
-        insurance_policy_holder_relationship: null,
-        insurance_plan_type: null,
-        policy_number: null,
-        insurance_phone_number: null,
-        has_secondary_insurance: false,
-        secondary_insurance_provider: null,
-        secondary_insurance_member_id: null,
-        secondary_policy_number: null,
-        self_pay_card_info: 'Visa ending 4242',
-      }));
+      expect(result).toEqual(
+        expect.objectContaining({
+          payment_method: 'Self-Pay',
+          insurance: null,
+          insurance_provider: null,
+          insurance_member_id: null,
+          insurance_policy_holder_name: null,
+          insurance_policy_holder_dob: null,
+          insurance_policy_holder_relationship: null,
+          insurance_plan_type: null,
+          policy_number: null,
+          insurance_phone_number: null,
+          has_secondary_insurance: false,
+          secondary_insurance_provider: null,
+          secondary_insurance_member_id: null,
+          secondary_policy_number: null,
+          self_pay_card_info: 'Visa ending 4242',
+        })
+      );
 
       const [, params] = mockQuery.mock.calls[0];
       expect(params[42]).toBe('Google');
@@ -861,7 +926,7 @@ describe('Request Endpoint Tests', () => {
   describe('Email Service Tests', () => {
     it('should send email with correct configuration', async () => {
       const mockTransporter = {
-        sendMail: jest.fn().mockResolvedValue({ messageId: 'test-id' })
+        sendMail: jest.fn().mockResolvedValue({ messageId: 'test-id' }),
       };
 
       const emailService = new NodemailerService();
@@ -879,39 +944,69 @@ describe('Request Endpoint Tests', () => {
         to: 'test@example.com',
         subject: 'Test Subject',
         text: 'Test text content',
-        html: '<p>Test HTML content</p>'
+        html: '<p>Test HTML content</p>',
       });
     });
 
     it('should handle email sending errors', async () => {
       const mockTransporter = {
-        sendMail: jest.fn().mockRejectedValue(new Error('SMTP error'))
+        sendMail: jest.fn().mockRejectedValue(new Error('SMTP error')),
       };
 
       const emailService = new NodemailerService();
       (emailService as any).transporter = mockTransporter;
 
-      await expect(emailService.sendEmail(
-        'test@example.com',
-        'Test Subject',
-        'Test content'
-      )).rejects.toThrow('Failed to send email: SMTP error');
+      await expect(
+        emailService.sendEmail(
+          'test@example.com',
+          'Test Subject',
+          'Test content'
+        )
+      ).rejects.toThrow('Failed to send email');
     });
   });
 });
 
 describe('DELETE /clients/delete', () => {
-  let app: express.Application;
+  type TestResponse = {
+    statusCode: number;
+    body: unknown;
+    status: (code: number) => TestResponse;
+    json: (payload: unknown) => TestResponse;
+    send: () => TestResponse;
+  };
+
   let mockDeleteClient: jest.Mock;
+  let handler: (
+    req: { body: Record<string, unknown> },
+    res: TestResponse
+  ) => void;
+
+  const createResponse = (): TestResponse => {
+    const res: TestResponse = {
+      statusCode: 200,
+      body: undefined,
+      status(code: number) {
+        this.statusCode = code;
+        return this;
+      },
+      json(payload: unknown) {
+        this.body = payload;
+        return this;
+      },
+      send() {
+        return this;
+      },
+    };
+    return res;
+  };
 
   beforeEach(() => {
     mockDeleteClient = jest.fn();
 
-    app = express();
-    app.use(express.json());
-
-    // Create a simple route that mimics the controller behavior
-    app.delete('/clients/delete', (req, res) => {
+    // Exercise the same controller branch logic without opening an HTTP server
+    // (supertest + Express leave an open handle that keeps Jest from exiting cleanly).
+    handler = (req, res) => {
       const { id } = req.body;
 
       if (!id) {
@@ -923,39 +1018,36 @@ describe('DELETE /clients/delete', () => {
         mockDeleteClient(id);
         res.status(204).send();
       } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: (error as Error).message });
       }
-    });
+    };
   });
 
-  it('should delete a client when given a valid ID', async () => {
-    const response = await request(app)
-      .delete('/clients/delete')
-      .send({ id: 'test-client-id' })
-      .expect(204);
+  it('should delete a client when given a valid ID', () => {
+    const res = createResponse();
+    handler({ body: { id: 'test-client-id' } }, res);
 
+    expect(res.statusCode).toBe(204);
     expect(mockDeleteClient).toHaveBeenCalledWith('test-client-id');
   });
 
-  it('should return 400 if no ID is provided', async () => {
-    const response = await request(app)
-      .delete('/clients/delete')
-      .send({})
-      .expect(400);
+  it('should return 400 if no ID is provided', () => {
+    const res = createResponse();
+    handler({ body: {} }, res);
 
-    expect(response.body.error).toBe('Missing client ID');
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ error: 'Missing client ID' });
   });
 
-  it('should handle repository errors gracefully', async () => {
+  it('should handle repository errors gracefully', () => {
     mockDeleteClient.mockImplementation(() => {
       throw new Error('DB error');
     });
 
-    const response = await request(app)
-      .delete('/clients/delete')
-      .send({ id: 'test-client-id' })
-      .expect(500);
+    const res = createResponse();
+    handler({ body: { id: 'test-client-id' } }, res);
 
-    expect(response.body.error).toBe('DB error');
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toEqual({ error: 'DB error' });
   });
 });

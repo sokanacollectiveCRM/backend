@@ -1,10 +1,13 @@
 import express, { Router } from 'express';
+
+import { protectPublicIntakeEarly } from '../features/intake/infrastructure/intakeAbuseProtection';
 import { requestFormController } from '../index';
 
 const requestRouter: Router = express.Router();
 
-// Updated endpoint to handle all 10-step form fields
-requestRouter.post('/requestSubmission', 
-  (req, res) => requestFormController.createForm(req, res));
+// Public intake — honeypot + IP rate limit before controller (P0 abuse protection).
+requestRouter.post('/requestSubmission', protectPublicIntakeEarly, (req, res) =>
+  requestFormController.createForm(req, res)
+);
 
 export default requestRouter;

@@ -11,8 +11,12 @@ export type SafeProviderError = {
   retryable: boolean;
 };
 
+/** Stable client-facing message for unexpected 5xx failures (PR 3). */
+export const SAFE_INTERNAL_ERROR_MESSAGE = 'Internal Server Error';
+
 const safeStatus = (error: unknown): number | undefined => {
-  const value = (error as { response?: { status?: unknown }; status?: unknown }) || {};
+  const value =
+    (error as { response?: { status?: unknown }; status?: unknown }) || {};
   const candidate = value.response?.status ?? value.status;
   return typeof candidate === 'number' && candidate >= 400 && candidate <= 599
     ? candidate
@@ -23,7 +27,7 @@ export const toSafeProviderError = (
   service: string,
   operation: string,
   error: unknown,
-  correlationId?: string,
+  correlationId?: string
 ): SafeProviderError => {
   const status = safeStatus(error);
   return {
@@ -32,36 +36,59 @@ export const toSafeProviderError = (
     errorCode: status ? `PROVIDER_HTTP_${status}` : 'PROVIDER_FAILURE',
     ...(status ? { status } : {}),
     ...(correlationId ? { correlationId } : {}),
-    retryable: status === 408 || status === 429 || (status !== undefined && status >= 500),
+    retryable:
+      status === 408 ||
+      status === 429 ||
+      (status !== undefined && status >= 500),
   };
 };
 
+/**
+ * Client-visible error JSON for unexpected failures.
+ * Never includes stack, provider payloads, or raw Error.message from infrastructure.
+ */
+export const toSafeClientErrorBody = (
+  message: string = SAFE_INTERNAL_ERROR_MESSAGE
+): { success: false; error: string; code: string } => ({
+  success: false,
+  error: message,
+  code: 'INTERNAL_ERROR',
+});
+
 const safeRequestId = (value: unknown): string =>
-  typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value) ? value : randomUUID();
+  typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value)
+    ? value
+    : randomUUID();
 
 const generalizedRoute = (req: Request): string => {
   const routePath = req.route?.path;
-  if (typeof routePath === 'string') return `${req.baseUrl || ''}${routePath}` || '/';
+  if (typeof routePath === 'string')
+    return `${req.baseUrl || ''}${routePath}` || '/';
   return 'unmatched';
 };
 
 /** Request logging is intentionally implemented as an allowlist, not serializers/redaction. */
-export const createSafeRequestLogger = (requestLogger: Logger): RequestHandler =>
+export const createSafeRequestLogger =
+  (requestLogger: Logger): RequestHandler =>
   (req: Request, res: Response, next: NextFunction): void => {
     const startedAt = process.hrtime.bigint();
     const correlationId = safeRequestId(req.get('x-request-id'));
     res.setHeader('x-request-id', correlationId);
 
     res.once('finish', () => {
-      const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
-      requestLogger.info({
-        service: 'backend-http',
-        correlationId,
-        method: req.method,
-        route: generalizedRoute(req),
-        status: res.statusCode,
-        durationMs: Math.round(durationMs * 100) / 100,
-      }, 'HTTP request completed');
+      const durationMs =
+        Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+      requestLogger.info(
+        {
+          service: 'backend-http',
+          correlationId,
+          method: req.method,
+          route: generalizedRoute(req),
+          status: res.statusCode,
+          durationMs: Math.round(durationMs * 100) / 100,
+        },
+        'HTTP request completed'
+      );
     });
     next();
   };

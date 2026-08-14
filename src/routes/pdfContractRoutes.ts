@@ -1,5 +1,10 @@
 import express, { Request, Response } from 'express';
 
+import { logger } from '../common/utils/logger';
+import { toSafeProviderError } from '../common/utils/safeLogging';
+import authMiddleware from '../middleware/authMiddleware';
+import authorizeRoles from '../middleware/authorizeRoles';
+import { SignNowService } from '../services/signNowService';
 import {
   getAvailableContractTemplates,
   processContractWithPdfTemplate,
@@ -7,6 +12,11 @@ import {
 } from '../utils/pdfContractProcessor';
 
 const router = express.Router();
+
+const requireAdmin = (req: any, res: any, next: any) =>
+  authorizeRoles(req, res, next, ['admin']);
+router.use(authMiddleware);
+router.use(requireAdmin);
 
 interface PdfContractRequest extends Request {
   body: {
@@ -68,9 +78,17 @@ router.post(
         return;
       }
 
-      // For now, we'll use a placeholder token. In production, you'd get this from authentication
-      const signNowToken =
-        '42d2a44df392aa3418c4e4486316dd2429b27e7b690834c68cd0e407144';
+      // Prefer runtime auth via SignNowService; never embed tokens in source.
+      const signNowService = new SignNowService();
+      await signNowService.testAuthentication();
+      const signNowToken = signNowService.apiToken;
+      if (!signNowToken) {
+        res.status(503).json({
+          success: false,
+          error: 'SignNow is not configured',
+        });
+        return;
+      }
 
       // Process the contract
       const result = await processContractWithPdfTemplate(
@@ -90,10 +108,13 @@ router.post(
         data: result,
       });
     } catch (error: any) {
-      console.error('Error processing PDF contract:', error);
+      logger.error(
+        toSafeProviderError('signnow', 'pdf_process', error),
+        'Error processing PDF contract'
+      );
       res.status(500).json({
         success: false,
-        error: error.message || 'Failed to process contract',
+        error: 'Failed to process contract',
       });
     }
   }
@@ -119,7 +140,7 @@ router.get('/templates', async (req: Request, res: Response): Promise<void> => {
     console.error('Error getting templates:', error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to get templates',
+      error: 'Failed to get templates',
     });
   }
 });
@@ -156,7 +177,7 @@ router.post('/validate', async (req: Request, res: Response): Promise<void> => {
     console.error('Error validating contract data:', error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to validate contract data',
+      error: 'Failed to validate contract data',
     });
   }
 });
@@ -182,9 +203,17 @@ router.post('/test', async (req: Request, res: Response): Promise<void> => {
       client_signed_date: new Date().toLocaleDateString(),
     };
 
-    // For testing, we'll use a placeholder token
-    const signNowToken =
-      '42d2a44df392aa3418c4e4486316dd2429b27e7b690834c68cd0e407144';
+    // Prefer runtime auth via SignNowService; never embed tokens in source.
+    const signNowService = new SignNowService();
+    await signNowService.testAuthentication();
+    const signNowToken = signNowService.apiToken;
+    if (!signNowToken) {
+      res.status(503).json({
+        success: false,
+        error: 'SignNow is not configured',
+      });
+      return;
+    }
 
     // Process the test contract
     const result = await processContractWithPdfTemplate(
@@ -198,18 +227,15 @@ router.post('/test', async (req: Request, res: Response): Promise<void> => {
       data: result,
     });
   } catch (error: any) {
-    console.error('Error processing test contract:', error);
+    logger.error(
+      toSafeProviderError('signnow', 'pdf_test', error),
+      'Error processing test contract'
+    );
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to process test contract',
+      error: 'Failed to process test contract',
     });
   }
 });
 
 export default router;
-
-
-
-
-
-

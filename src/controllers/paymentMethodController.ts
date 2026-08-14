@@ -80,11 +80,10 @@ function respondWithError(res: Response, error: unknown): void {
     return;
   }
 
-  const message =
-    error instanceof Error ? error.message : 'Internal server error';
+  // Security bug fix (PR 3): unexpected failures must not return raw Error.message.
   res.status(500).json({
     success: false,
-    error: message,
+    error: 'Internal server error',
     code: 'internal_server_error',
   });
 }

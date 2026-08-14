@@ -1,29 +1,34 @@
 // src/features/quickbooks/controller/quickbooksController.ts
 import { RequestHandler } from 'express';
-import {
-    disconnectQuickBooks,
-    generateConsentUrl,
-    handleAuthCallback,
-    isConnected
-} from '../services/auth/quickbooksAuthService';
-import createCustomerService, { CreateCustomerParams } from '../services/customer/createCustomer';
-import createInvoiceService from '../services/invoice/createInvoice';
-// ← 1) Import your invoiceable-customers logic
-import getInvoiceableCustomers from '../services/customer/getInvoiceableCustomers';
-import getCustomersFromQuickBooks from '../services/customer/getCustomersFromQuickBooks';
-import { getQuickBooksCompanyInfo } from '../services/customer/getQuickBooksCompanyInfo';
-import { refreshCustomerQuickBooksSyncStatus } from '../services/customer/refreshCustomerQuickBooksSyncStatus';
-import { listInvoicesFromCloudSql } from '../repositories/cloudSqlInvoiceRepository';
-import { getQuickBooksConnectionHealth } from '../utils/tokenUtils';
+
 import { logger } from '../common/utils/logger';
 import { toSafeProviderError } from '../common/utils/safeLogging';
+import { listInvoicesFromCloudSql } from '../repositories/cloudSqlInvoiceRepository';
+import { createOAuthState } from '../security/oauthStateStore';
+import {
+  disconnectQuickBooks,
+  generateConsentUrl,
+  handleAuthCallback,
+  isConnected,
+} from '../services/auth/quickbooksAuthService';
+import createCustomerService, {
+  CreateCustomerParams,
+} from '../services/customer/createCustomer';
+import getCustomersFromQuickBooks from '../services/customer/getCustomersFromQuickBooks';
+// ← 1) Import your invoiceable-customers logic
+import getInvoiceableCustomers from '../services/customer/getInvoiceableCustomers';
+import { getQuickBooksCompanyInfo } from '../services/customer/getQuickBooksCompanyInfo';
+import { refreshCustomerQuickBooksSyncStatus } from '../services/customer/refreshCustomerQuickBooksSyncStatus';
+import createInvoiceService from '../services/invoice/createInvoice';
+import { getQuickBooksConnectionHealth } from '../utils/tokenUtils';
+
 // Ensure you have SUPABASE_JWT_SECRET in your env
-const JWT_SECRET = process.env.SUPABASE_JWT_SECRET!
+const JWT_SECRET = process.env.SUPABASE_JWT_SECRET!;
 
 /**
  * JSON endpoint: return the Intuit consent URL for AJAX calls.
  */
-export const quickBooksAuthUrl: RequestHandler = (_req, res, next) => {
+export const quickBooksAuthUrl: RequestHandler = async (_req, res) => {
   try {
     // Validate required environment variables
     const { QB_CLIENT_ID, QB_CLIENT_SECRET, QB_REDIRECT_URI } = process.env;
@@ -32,22 +37,23 @@ export const quickBooksAuthUrl: RequestHandler = (_req, res, next) => {
       console.error('❌ [QB Auth] Missing required environment variables:', {
         hasClientId: !!QB_CLIENT_ID,
         hasClientSecret: !!QB_CLIENT_SECRET,
-        hasRedirectUri: !!QB_REDIRECT_URI
+        hasRedirectUri: !!QB_REDIRECT_URI,
       });
       res.status(500).json({
-        error: 'QuickBooks configuration is incomplete. Please check server environment variables.',
-        details: 'Missing QB_CLIENT_ID, QB_CLIENT_SECRET, or QB_REDIRECT_URI'
+        error:
+          'QuickBooks configuration is incomplete. Please check server environment variables.',
+        details: 'Missing QB_CLIENT_ID, QB_CLIENT_SECRET, or QB_REDIRECT_URI',
       });
       return;
     }
 
-    const state = Math.random().toString(36).substring(2)
-    const url = generateConsentUrl(state)
+    const state = await createOAuthState();
+    const url = generateConsentUrl(state);
 
     if (!url) {
       console.error('❌ [QB Auth] Failed to generate consent URL');
       res.status(500).json({
-        error: 'Could not generate QuickBooks authorization URL'
+        error: 'Could not generate QuickBooks authorization URL',
       });
       return;
     }
@@ -55,62 +61,84 @@ export const quickBooksAuthUrl: RequestHandler = (_req, res, next) => {
     console.log('✅ [QB Auth] Generated auth URL successfully');
     res.json({ url });
   } catch (err: any) {
-    logger.error(toSafeProviderError('quickbooks', 'generate_consent_url', err), 'QuickBooks operation failed');
+    logger.error(
+      toSafeProviderError('quickbooks', 'generate_consent_url', err),
+      'QuickBooks operation failed'
+    );
+    // Security bug fix (PR 3): drop raw err.message from client JSON.
     res.status(500).json({
       error: 'Could not fetch QuickBooks auth URL',
-      details: err?.message || 'Unknown error occurred'
     });
   }
-}
+};
 
 /**
  * Redirect endpoint: used by window.open to start OAuth directly.
  */
-export const connectQuickBooks: RequestHandler = (req, res, next) => {
+export const connectQuickBooks: RequestHandler = async (_req, res, next) => {
   try {
-    const state = Math.random().toString(36).substring(2)
-    const url   = generateConsentUrl(state)
-    res.redirect(url)
+    const state = await createOAuthState();
+    const url = generateConsentUrl(state);
+    res.redirect(url);
   } catch (err) {
-    next(err)
+    next(err);
   }
-}
+};
 
 /**
  * OAuth callback: exchange code for tokens, persist them, then redirect to dashboard.
  */
-export const handleQuickBooksCallback: RequestHandler = async (req, res, next) => {
+export const handleQuickBooksCallback: RequestHandler = async (
+  req,
+  res,
+  next
+) => {
   try {
-    const fullUrl = `${req.protocol}://${req.get('host')}${req.originalUrl}`
-    logger.info({ service: 'quickbooks', operation: 'oauth_callback' }, 'QuickBooks callback received');
+    const fullUrl = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+    logger.info(
+      { service: 'quickbooks', operation: 'oauth_callback' },
+      'QuickBooks callback received'
+    );
 
-    await handleAuthCallback(fullUrl)
+    await handleAuthCallback(fullUrl);
     console.log('✅ [QB Callback] QuickBooks connected successfully');
 
     // Get frontend URL and redirect path (default: QuickBooks integration page)
-    const frontendUrl = process.env.FRONTEND_URL || process.env.FRONTEND_URL_DEV || 'http://localhost:3001';
-    const successPath = process.env.QUICKBOOKS_SUCCESS_REDIRECT_PATH || '/integrations/quickbooks';
+    const frontendUrl =
+      process.env.FRONTEND_URL ||
+      process.env.FRONTEND_URL_DEV ||
+      'http://localhost:3001';
+    const successPath =
+      process.env.QUICKBOOKS_SUCCESS_REDIRECT_PATH ||
+      '/integrations/quickbooks';
     const redirectUrl = `${frontendUrl}${successPath.startsWith('/') ? successPath : `/${successPath}`}?quickbooks=connected`;
 
     // Use HTTP redirect so the browser navigates immediately (no reliance on JavaScript)
     res.redirect(302, redirectUrl);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Connection failed';
-    logger.error(toSafeProviderError('quickbooks', 'oauth_callback', err), 'QuickBooks operation failed');
-    const frontendUrl = process.env.FRONTEND_URL || process.env.FRONTEND_URL_DEV || 'http://localhost:3001';
-    const errorPath = process.env.QUICKBOOKS_SUCCESS_REDIRECT_PATH || '/integrations/quickbooks';
-    const errorRedirectUrl = `${frontendUrl}${errorPath.startsWith('/') ? errorPath : `/${errorPath}`}?quickbooks=error&message=${encodeURIComponent(message)}`;
+    logger.error(
+      toSafeProviderError('quickbooks', 'oauth_callback', err),
+      'QuickBooks operation failed'
+    );
+    const frontendUrl =
+      process.env.FRONTEND_URL ||
+      process.env.FRONTEND_URL_DEV ||
+      'http://localhost:3001';
+    const errorPath =
+      process.env.QUICKBOOKS_SUCCESS_REDIRECT_PATH ||
+      '/integrations/quickbooks';
+    // Security bug fix (PR 3): do not put raw provider/error messages in redirect query or HTML.
+    const errorRedirectUrl = `${frontendUrl}${errorPath.startsWith('/') ? errorPath : `/${errorPath}`}?quickbooks=error`;
 
     res.send(`
       <html><body>
         <script>window.location.href = '${errorRedirectUrl}';</script>
         <p><strong>Error connecting QuickBooks.</strong></p>
-        <p>${message}</p>
         <p>Redirecting to app… If not, <a href="${errorRedirectUrl}">click here</a>.</p>
       </body></html>
-    `)
+    `);
   }
-}
+};
 
 /**
  * Create an invoice
@@ -122,19 +150,23 @@ export const createInvoice: RequestHandler = async (req, res, next) => {
   } catch (err) {
     next(err);
   }
-}
+};
 
 /**
  * Get invoiceable customers
  */
-export const getInvoiceableCustomersController: RequestHandler = async (_req, res, next) => {
+export const getInvoiceableCustomersController: RequestHandler = async (
+  _req,
+  res,
+  next
+) => {
   try {
     const customers = await getInvoiceableCustomers();
     res.json(customers);
   } catch (err: any) {
     next(err);
   }
-}
+};
 
 /**
  * Create a customer
@@ -142,12 +174,12 @@ export const getInvoiceableCustomersController: RequestHandler = async (_req, re
 export const createCustomer: RequestHandler = async (req, res, next) => {
   try {
     const params: CreateCustomerParams = req.body;
-    const result = await createCustomerService(params)
-    res.status(201).json(result)
+    const result = await createCustomerService(params);
+    res.status(201).json(result);
   } catch (err) {
-    next(err)
+    next(err);
   }
-}
+};
 
 /**
  * Get QuickBooks connection status
@@ -166,26 +198,36 @@ export const quickBooksStatus: RequestHandler = async (req, res, next) => {
       const company = await getQuickBooksCompanyInfo();
       res.json({ connected: true, company });
     } catch (companyError) {
-      logger.warn(toSafeProviderError('quickbooks', 'company_details', companyError), 'QuickBooks operation failed');
-      res.json({ connected: true, company: null, companyDetailsUnavailable: true });
+      logger.warn(
+        toSafeProviderError('quickbooks', 'company_details', companyError),
+        'QuickBooks operation failed'
+      );
+      res.json({
+        connected: true,
+        company: null,
+        companyDetailsUnavailable: true,
+      });
     }
   } catch (err) {
-    logger.error(toSafeProviderError('quickbooks', 'connection_status', err), 'QuickBooks operation failed');
+    logger.error(
+      toSafeProviderError('quickbooks', 'connection_status', err),
+      'QuickBooks operation failed'
+    );
     next(err);
   }
-}
+};
 
 /**
  * Disconnect QuickBooks
  */
 export const quickBooksDisconnect: RequestHandler = async (req, res, next) => {
   try {
-    await disconnectQuickBooks()
-    res.json({ disconnected: true })
+    await disconnectQuickBooks();
+    res.json({ disconnected: true });
   } catch (err) {
-    next(err)
+    next(err);
   }
-}
+};
 
 /**
  * GET /quickbooks/invoices
@@ -196,15 +238,19 @@ export const getInvoices: RequestHandler = async (_req, res, next) => {
     const data = await listInvoicesFromCloudSql(500);
     res.json(data);
   } catch (err) {
-    next(err)
+    next(err);
   }
-}
+};
 
 /**
  * GET /quickbooks/customers
  * Returns all customers from QuickBooks Online
  */
-export const getQuickBooksCustomers: RequestHandler = async (req, res, next) => {
+export const getQuickBooksCustomers: RequestHandler = async (
+  req,
+  res,
+  next
+) => {
   try {
     console.log('📋 [QB Customers] Fetching customers from QuickBooks...');
 
@@ -218,21 +264,30 @@ export const getQuickBooksCustomers: RequestHandler = async (req, res, next) => 
     console.log(`✅ [QB Customers] Returning ${customers.length} customers`);
     res.json(customers);
   } catch (err: any) {
-    logger.error(toSafeProviderError('quickbooks', 'list_customers', err), 'QuickBooks operation failed');
+    logger.error(
+      toSafeProviderError('quickbooks', 'list_customers', err),
+      'QuickBooks operation failed'
+    );
     res.status(500).json({
       error: 'Failed to fetch customers from QuickBooks',
-      message: err.message || 'Unknown error'
+      message: err.message || 'Unknown error',
     });
   }
-}
+};
 
 /**
  * POST /quickbooks/customers/:clientId/sync-status/refresh
  * Performs an on-demand comparison of the CRM customer with QuickBooks.
  */
-export const refreshQuickBooksCustomerSyncStatus: RequestHandler = async (req, res, next) => {
+export const refreshQuickBooksCustomerSyncStatus: RequestHandler = async (
+  req,
+  res,
+  next
+) => {
   try {
-    const result = await refreshCustomerQuickBooksSyncStatus(req.params.clientId);
+    const result = await refreshCustomerQuickBooksSyncStatus(
+      req.params.clientId
+    );
     if (!result) {
       res.status(404).json({ error: 'Customer not found' });
       return;
@@ -241,4 +296,4 @@ export const refreshQuickBooksCustomerSyncStatus: RequestHandler = async (req, r
   } catch (err) {
     next(err);
   }
-}
+};

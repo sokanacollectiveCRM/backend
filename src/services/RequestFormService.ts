@@ -1,104 +1,105 @@
-import { ValidationError } from "../domains/errors";
-import {
-  parseIntakeReferral,
-} from '../constants/referralSource';
-import {
-  normalizeIntakeHomeTypes,
-  parseIntakeClientAgeYears,
-  parseIntakeHomePeopleCount,
-  parseIntakePaymentMethod,
-  parseIntakeProviderType,
-  validateIntakeBirthPlace,
-} from '../intake/requestSubmissionDto';
-import {
-  parseInsurancePolicyHolderDob,
-  validatePrimaryInsuranceWhenRequired,
-} from "../billing/expandedInsuranceBilling";
+import { logger } from '../common/utils/logger';
+import { parseIntakeReferral } from '../constants/referralSource';
+import { ValidationError } from '../domains/errors';
 import { RequestForm } from '../entities/RequestForm';
-import { RequestFormRepository } from "../repositories/requestFormRepository";
 import {
-    HomeType,
-    RequestFormData,
-    RequestFormResponse,
-    RequestStatus
-} from "../types";
+  LegacyRequestFormRepositoryAdapter,
+  diffIntakeShadowSlices,
+  mapIntakeResponseToRequestForm,
+  normalizePublicIntakeSubmission,
+  pickIntakeShadowCompareSlice,
+  submitPublicRequestForm,
+} from '../features/intake';
+import { RequestFormRepository } from '../repositories/requestFormRepository';
+import { RequestFormData, RequestFormResponse, RequestStatus } from '../types';
+
+function intakeUseFeaturePackage(): boolean {
+  const raw = process.env.INTAKE_USE_FEATURE_PACKAGE;
+  return raw === 'true' || raw === '1';
+}
+
+function intakeShadowCompare(): boolean {
+  const raw = process.env.INTAKE_SHADOW_COMPARE;
+  return raw === 'true' || raw === '1';
+}
 
 export class RequestFormService {
   private repository: RequestFormRepository;
+  private intakeAdapter: LegacyRequestFormRepositoryAdapter;
 
   constructor(requestFormRepository: RequestFormRepository) {
     this.repository = requestFormRepository;
-  }
-
-  private trimNullableString(value: unknown): string | null | undefined {
-    if (value === undefined) return undefined;
-    if (value === null) return null;
-    if (typeof value !== 'string') return undefined;
-    const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : null;
-  }
-
-  private normalizeOptionalBoolean(value: unknown): boolean | null | undefined {
-    if (value === undefined) return undefined;
-    if (value === null) return null;
-    if (typeof value === 'boolean') return value;
-    if (typeof value === 'string') {
-      const normalized = value.trim().toLowerCase();
-      if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
-      if (['false', '0', 'no', 'off'].includes(normalized)) return false;
-    }
-    return undefined;
+    this.intakeAdapter = new LegacyRequestFormRepositoryAdapter(
+      requestFormRepository
+    );
   }
 
   async createRequest(formData: RequestFormData): Promise<RequestFormResponse> {
     // Validate required fields
     if (!formData.firstname || !formData.lastname) {
-      throw new ValidationError("Missing required fields: first name and last name");
+      throw new ValidationError(
+        'Missing required fields: first name and last name'
+      );
     }
 
     if (!formData.service_needed) {
-      throw new ValidationError("Missing required field: service_needed");
+      throw new ValidationError('Missing required field: service_needed');
     }
 
     if (!formData.email || !formData.email.includes('@')) {
-      throw new ValidationError("Valid email is required");
+      throw new ValidationError('Valid email is required');
     }
 
     if (!formData.phone_number) {
-      throw new ValidationError("Phone number is required");
+      throw new ValidationError('Phone number is required');
     }
 
-    if (!formData.address || !formData.city || !formData.state || !formData.zip_code) {
-      throw new ValidationError("Complete address is required");
+    if (
+      !formData.address ||
+      !formData.city ||
+      !formData.state ||
+      !formData.zip_code
+    ) {
+      throw new ValidationError('Complete address is required');
     }
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
-      throw new ValidationError("Invalid email format");
+      throw new ValidationError('Invalid email format');
     }
 
     // Validate phone number format (basic validation)
     const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
     if (!phoneRegex.test(formData.phone_number.replace(/[\s\-\(\)]/g, ''))) {
-      throw new ValidationError("Invalid phone number format");
+      throw new ValidationError('Invalid phone number format');
     }
 
     // Validate zip code format
     const zipRegex = /^\d{5}(-\d{4})?$/;
     if (!zipRegex.test(formData.zip_code)) {
-      throw new ValidationError("Invalid zip code format");
+      throw new ValidationError('Invalid zip code format');
     }
 
-    const referralTouched = ['referral_source', 'referral_name', 'referral_email', 'referral_source_other'].some(
+    const referralTouched = [
+      'referral_source',
+      'referral_name',
+      'referral_email',
+      'referral_source_other',
+    ].some(
       (k) => (formData as unknown as Record<string, unknown>)[k] !== undefined
     );
     if (referralTouched) {
-      const r = parseIntakeReferral(formData as unknown as Record<string, unknown>);
+      const r = parseIntakeReferral(
+        formData as unknown as Record<string, unknown>
+      );
       (formData as RequestFormData).referral_source = r.referral_source;
-      (formData as RequestFormData).referral_name = r.referral_name ?? undefined;
-      (formData as RequestFormData).referral_email = r.referral_email ?? undefined;
-      (formData as RequestFormData).referral_source_other = r.referral_source_other ?? undefined;
+      (formData as RequestFormData).referral_name =
+        r.referral_name ?? undefined;
+      (formData as RequestFormData).referral_email =
+        r.referral_email ?? undefined;
+      (formData as RequestFormData).referral_source_other =
+        r.referral_source_other ?? undefined;
     }
 
     // Save to repository (no userId)
@@ -109,7 +110,10 @@ export class RequestFormService {
     return await this.repository.getUserRequests(userId);
   }
 
-  async getRequestById(requestId: string, userId: string): Promise<RequestFormResponse | null> {
+  async getRequestById(
+    requestId: string,
+    userId: string
+  ): Promise<RequestFormResponse | null> {
     return await this.repository.getRequestById(requestId, userId);
   }
 
@@ -117,310 +121,131 @@ export class RequestFormService {
     return await this.repository.getAllRequests();
   }
 
-  async getRequestByIdAdmin(requestId: string): Promise<RequestFormResponse | null> {
+  async getRequestByIdAdmin(
+    requestId: string
+  ): Promise<RequestFormResponse | null> {
     return await this.repository.getRequestByIdAdmin(requestId);
   }
 
-  async updateRequestStatus(requestId: string, status: RequestStatus): Promise<RequestFormResponse> {
+  async updateRequestStatus(
+    requestId: string,
+    status: RequestStatus
+  ): Promise<RequestFormResponse> {
     // Validate status
     const validStatuses = Object.values(RequestStatus);
     if (!validStatuses.includes(status)) {
-      throw new ValidationError("Invalid status value");
+      throw new ValidationError('Invalid status value');
     }
 
     return await this.repository.updateRequestStatus(requestId, status);
   }
 
-  // Updated method to handle all 10-step form fields
+  /**
+   * Public CRM intake path.
+   * - Default: domain normalize + legacy repository write (façade parity).
+   * - `INTAKE_USE_FEATURE_PACKAGE=true`: application use case write path.
+   * - `INTAKE_SHADOW_COMPARE=true`: compare normalize slices (no PHI dump) while serving active write path.
+   */
   async newForm(formData: any): Promise<RequestForm> {
     try {
-      // Validate required fields
-      if (!formData.firstname || !formData.lastname) {
-        throw new ValidationError("Missing required fields: first name and last name");
-      }
+      const normalized = normalizePublicIntakeSubmission(formData);
 
-      if (!formData.service_needed) {
-        throw new ValidationError("Missing required field: service_needed");
-      }
+      if (intakeShadowCompare()) {
+        try {
+          const stubResponse = {
+            id: 'shadow-compare',
+            firstname: normalized.firstname,
+            lastname: normalized.lastname,
+            email: normalized.email,
+            phone_number: normalized.phone_number,
+            service_needed: normalized.service_needed,
+            address: normalized.address,
+            city: normalized.city,
+            state: normalized.state,
+            zip_code: normalized.zip_code,
+            payment_method: normalized.payment_method,
+            birth_location: normalized.birth_location,
+            birth_hospital: normalized.birth_hospital,
+            provider_type: normalized.provider_type,
+            referral_source: normalized.referral_source,
+            status: 'pending',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          } as any;
 
-      if (!formData.email || !formData.email.includes('@')) {
-        throw new ValidationError("Valid email is required");
-      }
+          const viaLegacyMap = mapIntakeResponseToRequestForm(stubResponse);
+          const viaUseCase = await submitPublicRequestForm(formData, {
+            saveLead: async () => stubResponse,
+          });
 
-      if (!formData.phone_number) {
-        throw new ValidationError("Phone number is required");
-      }
+          const diffs = diffIntakeShadowSlices(
+            pickIntakeShadowCompareSlice({
+              ...normalized,
+              firstname: viaLegacyMap.firstname,
+              lastname: viaLegacyMap.lastname,
+              email: viaLegacyMap.email,
+              payment_method: viaLegacyMap.payment_method,
+              birth_location: viaLegacyMap.birth_location,
+              birth_hospital: viaLegacyMap.birth_hospital,
+              provider_type: viaLegacyMap.provider_type,
+              referral_source: viaLegacyMap.referral_source,
+              intake_age_years: normalized.intake_age_years,
+              home_adults_count: normalized.home_adults_count,
+              home_youth_count: normalized.home_youth_count,
+              has_secondary_insurance: normalized.has_secondary_insurance,
+              service_needed: viaLegacyMap.service_needed,
+            } as any),
+            pickIntakeShadowCompareSlice({
+              ...normalized,
+              firstname: viaUseCase.firstname,
+              lastname: viaUseCase.lastname,
+              email: viaUseCase.email,
+              payment_method: viaUseCase.payment_method,
+              birth_location: viaUseCase.birth_location,
+              birth_hospital: viaUseCase.birth_hospital,
+              provider_type: viaUseCase.provider_type,
+              referral_source: viaUseCase.referral_source,
+              intake_age_years: normalized.intake_age_years,
+              home_adults_count: normalized.home_adults_count,
+              home_youth_count: normalized.home_youth_count,
+              has_secondary_insurance: normalized.has_secondary_insurance,
+              service_needed: viaUseCase.service_needed,
+            } as any)
+          );
 
-      if (!formData.address || !formData.city || !formData.state || !formData.zip_code) {
-        throw new ValidationError("Complete address is required");
-      }
-
-      // Validate email format
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(formData.email)) {
-        throw new ValidationError("Invalid email format");
-      }
-
-      // Validate phone number format (basic validation)
-      const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
-      if (!phoneRegex.test(formData.phone_number.replace(/[\s\-\(\)]/g, ''))) {
-        throw new ValidationError("Invalid phone number format");
-      }
-
-      // Validate zip code format
-      const zipRegex = /^\d{5}(-\d{4})?$/;
-      if (!zipRegex.test(formData.zip_code)) {
-        throw new ValidationError("Invalid zip code format");
-      }
-
-      const referral = parseIntakeReferral(formData as unknown as Record<string, unknown>);
-
-      const ageResult = parseIntakeClientAgeYears(formData.age);
-      if (ageResult.ok === false) {
-        throw new ValidationError(ageResult.message);
-      }
-
-      const providerResult = parseIntakeProviderType(formData.provider_type);
-      if (providerResult.ok === false) {
-        throw new ValidationError(providerResult.message);
-      }
-
-      const homeAdults = parseIntakeHomePeopleCount(formData.home_adults_count, 'home_adults_count');
-      if (homeAdults.ok === false) {
-        throw new ValidationError(homeAdults.message);
-      }
-      const homeYouth = parseIntakeHomePeopleCount(formData.home_youth_count, 'home_youth_count');
-      if (homeYouth.ok === false) {
-        throw new ValidationError(homeYouth.message);
-      }
-      const homeTypes = normalizeIntakeHomeTypes(formData.home_types ?? formData.home_type);
-      const homeTypeOther = this.trimNullableString(formData.home_type_other);
-
-      const birthPlace = validateIntakeBirthPlace(formData.birth_location, formData.birth_hospital);
-      if (birthPlace.ok === false) {
-        throw new ValidationError(birthPlace.message);
-      }
-
-      const paymentResult = parseIntakePaymentMethod(formData.payment_method);
-      if (paymentResult.ok === false) {
-        throw new ValidationError(paymentResult.message);
-      }
-      const paymentMethod = paymentResult.value;
-      const requiresInsurance = paymentResult.requiresInsurance;
-
-      const insuranceProvider = this.trimNullableString(formData.insurance_provider);
-      const insuranceMemberId = this.trimNullableString(formData.insurance_member_id);
-      const policyNumber = this.trimNullableString(formData.policy_number);
-      const insurancePhoneNumber = this.trimNullableString(formData.insurance_phone_number);
-      const hasSecondaryInsurance = this.normalizeOptionalBoolean(formData.has_secondary_insurance);
-      const secondaryInsuranceProvider = this.trimNullableString(formData.secondary_insurance_provider);
-      const secondaryInsuranceMemberId = this.trimNullableString(formData.secondary_insurance_member_id);
-      const secondaryPolicyNumber = this.trimNullableString(formData.secondary_policy_number);
-      const selfPayCardInfo = this.trimNullableString(formData.self_pay_card_info);
-      const insurancePolicyHolderName = this.trimNullableString(formData.insurance_policy_holder_name);
-      const parsedHolderDob = parseInsurancePolicyHolderDob(formData.insurance_policy_holder_dob);
-      if (parsedHolderDob.ok === false) {
-        throw new ValidationError(parsedHolderDob.message);
-      }
-      const insurancePolicyHolderDob = parsedHolderDob.value;
-      const insurancePolicyHolderRelationship = this.trimNullableString(
-        formData.insurance_policy_holder_relationship
-      );
-      const insurancePlanType = this.trimNullableString(formData.insurance_plan_type);
-
-      if (requiresInsurance) {
-        const primaryCheck = validatePrimaryInsuranceWhenRequired({
-          insuranceProvider,
-          insuranceMemberId,
-          insurancePolicyHolderName,
-          insurancePolicyHolderDob,
-          insurancePolicyHolderRelationship,
-          insurancePlanType,
-          hasSecondaryInsurance,
-          secondaryInsuranceProvider,
-          secondaryInsuranceMemberId,
-          secondaryPolicyNumber,
-        });
-        if (primaryCheck.ok === false) {
-          throw new ValidationError(primaryCheck.message);
+          logger.info(
+            {
+              service: 'intake',
+              operation: 'shadow_compare',
+              diffCount: diffs.length,
+              diffKeys: diffs,
+              useFeaturePackage: intakeUseFeaturePackage(),
+            },
+            'Intake shadow compare completed'
+          );
+        } catch (shadowError) {
+          logger.warn(
+            {
+              service: 'intake',
+              operation: 'shadow_compare',
+              errorCode:
+                shadowError instanceof Error
+                  ? shadowError.name
+                  : 'SHADOW_FAILURE',
+            },
+            'Intake shadow compare failed'
+          );
         }
       }
 
-      // Convert to RequestFormData format
-      const newFormData: RequestFormData = {
-        // Step 1: Client Details
-        firstname: formData.firstname,
-        lastname: formData.lastname,
-        email: formData.email,
-        phone_number: formData.phone_number,
-        preferred_contact_method: formData.preferred_contact_method,  // Add this field
-        preferred_name: formData.preferred_name,                       // Add this field
-        pronouns: formData.pronouns,
-        pronouns_other: formData.pronouns_other,
-        intake_age_years: ageResult.value,
+      if (intakeUseFeaturePackage()) {
+        return submitPublicRequestForm(formData, this.intakeAdapter);
+      }
 
-        // Step 2: Home Details
-        address: formData.address,
-        city: formData.city,
-        state: formData.state,
-        zip_code: formData.zip_code,
-        home_phone: formData.home_phone,
-        home_types: homeTypes ?? undefined,
-        home_type_other: homeTypeOther ?? undefined,
-        home_access: this.trimNullableString(formData.home_access) ?? undefined,
-        home_adults_count: homeAdults.value,
-        home_youth_count: homeYouth.value,
-        pets: formData.pets,
-
-        // Step 3: Family Members
-        relationship_status: formData.relationship_status,
-        first_name: formData.first_name,
-        last_name: formData.last_name,
-        middle_name: formData.middle_name,
-        mobile_phone: formData.mobile_phone,
-        work_phone: formData.work_phone,
-
-        // Step 4: Referral
-        referral_source: referral.referral_source,
-        referral_name: referral.referral_name ?? undefined,
-        referral_email: referral.referral_email ?? undefined,
-        referral_source_other: referral.referral_source_other ?? undefined,
-
-        // Step 5: Health History
-        health_history: formData.health_history,
-        allergies: formData.allergies,
-        health_notes: formData.health_notes,
-
-        // Step 6: Payment Info
-        payment_method: paymentMethod,
-        insurance_provider: requiresInsurance ? insuranceProvider ?? null : null,
-        insurance_member_id: requiresInsurance ? insuranceMemberId ?? null : null,
-        insurance_policy_holder_name: requiresInsurance ? insurancePolicyHolderName ?? null : null,
-        insurance_policy_holder_dob: requiresInsurance ? insurancePolicyHolderDob ?? null : null,
-        insurance_policy_holder_relationship: requiresInsurance
-          ? insurancePolicyHolderRelationship ?? null
-          : null,
-        insurance_plan_type: requiresInsurance ? insurancePlanType ?? null : null,
-        policy_number: requiresInsurance ? policyNumber ?? null : null,
-        insurance_phone_number: requiresInsurance ? insurancePhoneNumber ?? null : null,
-        has_secondary_insurance: requiresInsurance ? (hasSecondaryInsurance ?? null) : false,
-        secondary_insurance_provider:
-          requiresInsurance && hasSecondaryInsurance === true ? secondaryInsuranceProvider ?? null : null,
-        secondary_insurance_member_id:
-          requiresInsurance && hasSecondaryInsurance === true ? secondaryInsuranceMemberId ?? null : null,
-        secondary_policy_number:
-          requiresInsurance && hasSecondaryInsurance === true ? secondaryPolicyNumber ?? null : null,
-        self_pay_card_info: !requiresInsurance ? selfPayCardInfo ?? null : null,
-        annual_income: formData.annual_income,
-        service_needed: formData.service_needed,
-        service_specifics: formData.service_specifics,
-
-        // Step 7: Pregnancy/Baby
-        due_date: formData.due_date,
-        birth_location: birthPlace.birth_location,
-        birth_hospital: birthPlace.birth_hospital,
-        number_of_babies: formData.number_of_babies,
-        baby_name: formData.baby_name,
-        provider_type: providerResult.value,
-        pregnancy_number: formData.pregnancy_number,
-
-        // Step 8: Past Pregnancies
-        had_previous_pregnancies: formData.had_previous_pregnancies,
-        previous_pregnancies_count: formData.previous_pregnancies_count,
-        living_children_count: formData.living_children_count,
-        past_pregnancy_experience: formData.past_pregnancy_experience,
-
-        // Step 9: Services Interested
-        services_interested: formData.services_interested,
-        service_support_details: formData.service_support_details,
-
-        // Step 10: Client Demographics
-        race_ethnicity: formData.race_ethnicity,
-        primary_language: formData.primary_language,
-        client_age_range: formData.client_age_range,
-        insurance: requiresInsurance ? formData.insurance ?? null : null,
-        demographics_multi: formData.demographics_multi
-      };
-
-      // Save to repository (no userId)
-      const response = await this.repository.saveData(newFormData);
-
-      // Return the complete RequestForm with all fields
-      const requestForm = new RequestForm(
-        response.firstname,
-        response.lastname,
-        response.email,
-        response.phone_number,
-        response.service_needed,
-        response.address,
-        response.city,
-        response.state,
-        response.zip_code,
-        response.pronouns,
-        response.pronouns_other,
-        response.children_expected,
-        response.home_phone,
-        (Array.isArray(response.home_type) ? response.home_type[0] : response.home_type) as
-          | HomeType
-          | undefined,
-        response.home_access,
-        response.pets,
-        response.relationship_status,
-        response.first_name,
-        response.last_name,
-        response.middle_name,
-        response.mobile_phone,
-        response.work_phone,
-        response.referral_source,
-        response.referral_name,
-        response.referral_email,
-        response.referral_source_other,
-        response.health_history,
-        response.allergies,
-        response.health_notes,
-        response.annual_income,
-        response.service_specifics,
-        response.due_date ? new Date(response.due_date) : undefined,
-        response.birth_location,
-        response.birth_hospital,
-        response.number_of_babies,
-        response.baby_name,
-        response.provider_type,
-        response.pregnancy_number,
-        response.hospital,
-        response.baby_sex,
-        response.had_previous_pregnancies,
-        response.previous_pregnancies_count,
-        response.living_children_count,
-        response.past_pregnancy_experience,
-        response.services_interested,
-        response.service_support_details,
-        response.race_ethnicity,
-        response.primary_language,
-        response.client_age_range,
-        response.insurance,
-        response.payment_method,
-        response.insurance_provider,
-        response.insurance_member_id,
-        response.policy_number,
-        response.insurance_phone_number,
-        response.has_secondary_insurance,
-        response.secondary_insurance_provider,
-        response.secondary_insurance_member_id,
-        response.secondary_policy_number,
-        response.self_pay_card_info,
-        response.demographics_multi
-      );
-
-      requestForm.id = response.id; // Added: persist Supabase record id
-      requestForm.status = response.status;
-      requestForm.user_id = response.user_id;
-      requestForm.created_at = response.created_at ? new Date(response.created_at) : undefined;
-      requestForm.updated_at = response.updated_at ? new Date(response.updated_at) : undefined;
-
-      return requestForm;
+      const response = await this.repository.saveData(normalized);
+      return mapIntakeResponseToRequestForm(response);
     } catch (error) {
-      console.error("Error in newForm:", error);
+      console.error('Error in newForm:', error);
       throw error;
     }
   }

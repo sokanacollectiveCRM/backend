@@ -1,4 +1,6 @@
 import nodemailer from 'nodemailer';
+
+import { logger } from '../common/utils/logger';
 import { contractNotifications } from '../config/env';
 import { getLimitedBillingViewUrl } from '../utils/billingViewUrl';
 import { EmailService } from './interface/emailServiceInterface';
@@ -18,20 +20,25 @@ export class NodemailerService implements EmailService {
   constructor() {
     const effectiveHost = process.env.EMAIL_HOST || 'smtp.gmail.com';
     const effectivePort = parseInt(process.env.EMAIL_PORT || '465', 10);
-    const effectiveSecure = process.env.EMAIL_SECURE ? process.env.EMAIL_SECURE === 'true' : true;
-    const effectiveUser = process.env.EMAIL_USER || 'hello@sokanacollective.com';
-    const effectivePass = (process.env.EMAIL_PASSWORD || '').trim().replace(/\s+/g, '');
+    const effectiveSecure = process.env.EMAIL_SECURE
+      ? process.env.EMAIL_SECURE === 'true'
+      : true;
+    const effectiveUser =
+      process.env.EMAIL_USER || 'hello@sokanacollective.com';
+    const effectivePass = (process.env.EMAIL_PASSWORD || '')
+      .trim()
+      .replace(/\s+/g, '');
 
-    // Log the effective config (mask the password) for debugging
-    // eslint-disable-next-line no-console
-    console.log('Email config:', {
-      host: effectiveHost,
-      port: effectivePort,
-      secure: effectiveSecure,
-      user: effectiveUser,
-      passwordPreview: effectivePass ? `${effectivePass.slice(0, 2)}***${effectivePass.slice(-2)}` : '<empty>',
-      passwordLength: effectivePass.length
-    });
+    // Security: never log password previews or secrets; host/port only.
+    logger.info(
+      {
+        service: 'email',
+        operation: 'smtp_config',
+        host: effectiveHost,
+        port: effectivePort,
+      },
+      'Email transport configured'
+    );
 
     this.transporter = nodemailer.createTransport({
       host: effectiveHost,
@@ -58,7 +65,7 @@ export class NodemailerService implements EmailService {
         to,
         subject,
         text,
-        html: html ? 'HTML content available' : 'No HTML content'
+        html: html ? 'HTML content available' : 'No HTML content',
       });
       return;
     }
@@ -75,16 +82,21 @@ export class NodemailerService implements EmailService {
         html: html || undefined,
       };
 
-      const info = await this.transporter.sendMail(mailOptions);
-      // eslint-disable-next-line no-console
-      console.log('Email sent successfully:', {
-        messageId: info.messageId,
-        to: mailOptions.to,
-        subject: mailOptions.subject
-      });
+      await this.transporter.sendMail(mailOptions);
+      logger.info(
+        { service: 'email', operation: 'send', status: 200 },
+        'Email sent successfully'
+      );
     } catch (error) {
-      console.error('Failed to send email:', error);
-      throw new Error(`Failed to send email: ${error.message}`);
+      logger.error(
+        {
+          service: 'email',
+          operation: 'send',
+          errorCode: 'EMAIL_SEND_FAILURE',
+        },
+        'Failed to send email'
+      );
+      throw new Error('Failed to send email');
     }
   }
 
@@ -126,7 +138,9 @@ Payment Schedule Link: ${paymentScheduleLink}`;
             <li style="margin: 10px 0;"><strong>Contract Total:</strong> ${input.contractTotal}</li>
             <li style="margin: 10px 0;"><strong>Deposit Amount:</strong> ${input.depositAmount ?? 'N/A'}</li>
             <li style="margin: 10px 0;"><strong>Installments:</strong> ${
-              typeof input.installmentCount === 'number' ? input.installmentCount : 'N/A'
+              typeof input.installmentCount === 'number'
+                ? input.installmentCount
+                : 'N/A'
             }</li>
           </ul>
         </div>
@@ -173,7 +187,9 @@ Payment Schedule Link: ${paymentScheduleLink}`;
     const subject = `Invoice ${invoiceNumber} from Sokana CRM`;
 
     // Use custom text content if provided, otherwise use default
-    const text = customText || `Dear ${customerName},
+    const text =
+      customText ||
+      `Dear ${customerName},
 
 Please find attached invoice ${invoiceNumber} for ${amount}.
 
@@ -190,7 +206,9 @@ Best regards,
 The Sokana Team`;
 
     // Use custom HTML content if provided, otherwise use default
-    const html = customHtml || `
+    const html =
+      customHtml ||
+      `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #333;">Invoice ${invoiceNumber}</h2>
         <p>Dear ${customerName},</p>
@@ -231,9 +249,9 @@ The Sokana Team`;
         attachments: [
           {
             filename: `invoice-${invoiceNumber}.pdf`,
-            content: `Buffer with ${invoicePdfBuffer.length} bytes`
-          }
-        ]
+            content: `Buffer with ${invoicePdfBuffer.length} bytes`,
+          },
+        ],
       });
       return;
     }
@@ -249,9 +267,9 @@ The Sokana Team`;
           {
             filename: `invoice-${invoiceNumber}.pdf`,
             content: invoicePdfBuffer,
-            contentType: 'application/pdf'
-          }
-        ]
+            contentType: 'application/pdf',
+          },
+        ],
       };
 
       const info = await this.transporter.sendMail(mailOptions);
@@ -262,7 +280,11 @@ The Sokana Team`;
     }
   }
 
-  async sendClientApprovalEmail(to: string, name: string, signupUrl: string): Promise<void> {
+  async sendClientApprovalEmail(
+    to: string,
+    name: string,
+    signupUrl: string
+  ): Promise<void> {
     const subject = 'Your Sokana CRM Account Request Has Been Approved';
     const text = `Dear ${name},\n\nYour request for Sokana services has been approved! You can now create an account using the following link: ${signupUrl}\n\nBest regards,\nThe Sokana Team`;
     const html = `
@@ -283,7 +305,12 @@ The Sokana Team`;
     await this.sendEmail(to, subject, text, html);
   }
 
-  async sendTeamInviteEmail(to: string, firstname: string, lastname: string, role: string): Promise<void> {
+  async sendTeamInviteEmail(
+    to: string,
+    firstname: string,
+    lastname: string,
+    role: string
+  ): Promise<void> {
     const signupUrl = `${process.env.FRONTEND_URL}/signup`;
     const subject = 'Welcome to the Sokana CRM Team!';
     const text = `Dear ${firstname} ${lastname},\n\nYou have been invited to join the Sokana CRM team as a ${role}. Please fill out the sign up form to create an account and make sure to use this same email address.${signupUrl}\n\nBest regards,\nThe Sokana Team`;
@@ -305,7 +332,11 @@ The Sokana Team`;
     await this.sendEmail(to, subject, text, html);
   }
 
-  async sendPortalInviteEmail(to: string, clientName: string, setPasswordUrl: string): Promise<void> {
+  async sendPortalInviteEmail(
+    to: string,
+    clientName: string,
+    setPasswordUrl: string
+  ): Promise<void> {
     const subject = 'Welcome to Your Sokana Client Portal';
     const text = `Dear ${clientName},\n\nYou have been invited to access your Sokana client portal. Please set your password using the following link:\n\n${setPasswordUrl}\n\nThis link will expire in 24 hours.\n\nIf you did not request this invitation, please ignore this email.\n\nBest regards,\nThe Sokana Team`;
     const html = `
@@ -325,7 +356,12 @@ The Sokana Team`;
     await this.sendEmail(to, subject, text, html);
   }
 
-  async sendDoulaInviteEmail(to: string, firstname: string, lastname: string, inviteToken?: string): Promise<void> {
+  async sendDoulaInviteEmail(
+    to: string,
+    firstname: string,
+    lastname: string,
+    inviteToken?: string
+  ): Promise<void> {
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
     const signupUrl = inviteToken
       ? `${baseUrl}/signup?role=doula&email=${encodeURIComponent(to)}&invite_token=${inviteToken}`

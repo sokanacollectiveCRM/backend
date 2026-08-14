@@ -2,8 +2,25 @@
 # The trigger MUST use this file: Configuration type = "Cloud Build configuration file",
 # Location = "cloudbuild.yaml". If the trigger uses Autodetect/Dockerfile/Buildpack
 # instead, Cloud Build uses a default image name (gcr.io/...) and you get push errors.
+#
+# Deployment gate (PR 2.1): npm ci / build / tests / security-smoke must pass before
+# buildpack, push, and Cloud Run update. A failed gate skips all later steps.
 steps:
-  - name: gcr.io/k8s-skaffold/pack
+  - id: test-gate
+    name: node:20
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        npm ci
+        npm run build
+        npm test -- --runInBand
+        npm run test:security-smoke
+
+  - id: buildpack
+    name: gcr.io/k8s-skaffold/pack
+    waitFor: ['test-gate']
     args:
       - build
       - us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/backend/sokana-private-api:$COMMIT_SHA
@@ -16,12 +33,16 @@ steps:
     env:
       - GOOGLE_ENTRYPOINT=node dist/cloudrun.js
 
-  - name: gcr.io/cloud-builders/docker
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    waitFor: ['buildpack']
     args:
       - push
       - us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/backend/sokana-private-api:$COMMIT_SHA
 
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    waitFor: ['push']
     entrypoint: gcloud
     args:
       - run

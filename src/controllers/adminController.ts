@@ -1,16 +1,21 @@
+import * as crypto from 'crypto';
 import { Response } from 'express';
-import { AuthRequest } from '../types';
-import { EmailController } from './emailController';
-import { UserRepository } from '../repositories/interface/userRepository';
+
+import {
+  ASSIGNMENT_SERVICE_CATALOG,
+  normalizeAssignmentServices,
+} from '../constants/assignmentServices';
 import { ClientRepository } from '../repositories/interface/clientRepository';
+import { UserRepository } from '../repositories/interface/userRepository';
 import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
-import { ACCOUNT_STATUS, CLIENT_STATUS, ROLE } from '../types';
 import {
   CloudSqlDoulaAssignmentService,
   normalizeDoulaAssignmentRole,
 } from '../services/cloudSqlDoulaAssignmentService';
-import { ASSIGNMENT_SERVICE_CATALOG, normalizeAssignmentServices } from '../constants/assignmentServices';
-import * as crypto from 'crypto';
+import { CloudSqlTeamService } from '../services/cloudSqlTeamService';
+import { AuthRequest } from '../types';
+import { ACCOUNT_STATUS, CLIENT_STATUS, ROLE } from '../types';
+import { EmailController } from './emailController';
 
 export class AdminController {
   private emailController: EmailController;
@@ -18,6 +23,7 @@ export class AdminController {
   private clientRepository: ClientRepository;
   private assignmentRepository: SupabaseAssignmentRepository;
   private cloudSqlAssignmentService: CloudSqlDoulaAssignmentService;
+  private cloudSqlTeamService = new CloudSqlTeamService();
 
   constructor(
     userRepository: UserRepository,
@@ -39,11 +45,10 @@ export class AdminController {
     try {
       const { email, firstname, lastname } = req.body;
 
-      // Validate required fields
       if (!email || !firstname || !lastname) {
         res.status(400).json({
           success: false,
-          error: 'Missing required fields: email, firstname, and lastname are required'
+          error: 'email, firstname, and lastname are required',
         });
         return;
       }
@@ -53,68 +58,49 @@ export class AdminController {
       if (!emailRegex.test(email)) {
         res.status(400).json({
           success: false,
-          error: 'Invalid email format'
+          error: 'Invalid email format',
         });
         return;
       }
 
-      // Check if user already exists
-      const existingUser = await this.userRepository.findByEmail(email);
+      const normalizedEmail = String(email).trim().toLowerCase();
+      const team = await this.cloudSqlTeamService.listTeamMembers();
+      const existing = team.find(
+        (m) => m.email.toLowerCase() === normalizedEmail
+      );
 
-      if (existingUser) {
-        // If user exists but is not pending, they may have already signed up
-        if (existingUser.account_status !== ACCOUNT_STATUS.PENDING) {
-          res.status(400).json({
-            success: false,
-            error: 'A user with this email already exists and has completed signup'
-          });
-          return;
-        }
-        // If user exists and is pending, we can still send the invite
-        // (maybe they didn't receive the first email)
-      } else {
-        // Create user record with pending status
+      if (existing && existing.role !== 'doula') {
+        res.status(400).json({
+          success: false,
+          error: 'A non-doula team member with this email already exists',
+        });
+        return;
+      }
+
+      if (!existing) {
         try {
-          const newUser = await this.userRepository.addMember(firstname, lastname, email, ROLE.DOULA);
-          console.log(`✅ Created user record for ${email} with ID: ${newUser.id}, status: ${newUser.account_status}`);
-
-          // Verify the user was created correctly
-          const verifyUser = await this.userRepository.findByEmail(email);
-          if (!verifyUser) {
-            console.error(`❌ User creation verification failed: ${email} not found after creation`);
-            res.status(500).json({
-              success: false,
-              error: 'User record was created but could not be verified. Please try again.'
-            });
-            return;
-          }
-
-          if (verifyUser.account_status !== ACCOUNT_STATUS.PENDING) {
-            console.warn(`⚠️  User ${email} created but account_status is ${verifyUser.account_status}, expected 'pending'`);
-          }
+          await this.cloudSqlTeamService.addTeamMember({
+            firstname: String(firstname).trim(),
+            lastname: String(lastname).trim(),
+            email: normalizedEmail,
+            role: 'doula',
+          });
         } catch (error: any) {
-          // If addMember fails, check if it's because user already exists (race condition)
-          console.error(`Error creating user for ${email}:`, error);
-          const userCheck = await this.userRepository.findByEmail(email);
-          if (!userCheck) {
-            // User doesn't exist and creation failed - rethrow the error
-            console.error('Failed to create user record:', error);
+          const message = error?.message || 'Failed to create doula';
+          const lower = message.toLowerCase();
+          if (
+            !(
+              lower.includes('already') ||
+              lower.includes('exists') ||
+              lower.includes('duplicate')
+            )
+          ) {
             res.status(500).json({
               success: false,
-              error: `Failed to create user record: ${error.message}`
+              error: message,
             });
             return;
           }
-          // User exists now (race condition), check their status
-          console.log(`User ${email} already exists (race condition), status: ${userCheck.account_status}`);
-          if (userCheck.account_status !== ACCOUNT_STATUS.PENDING) {
-            res.status(400).json({
-              success: false,
-              error: 'A user with this email already exists and has completed signup'
-            });
-            return;
-          }
-          // User exists and is pending, continue with invite
         }
       }
 
@@ -122,23 +108,22 @@ export class AdminController {
       const inviteToken = crypto.randomBytes(32).toString('hex');
 
       // Send invitation email
-      await this.emailController.sendDoulaInvite(email, firstname, lastname, inviteToken);
+      await this.emailController.sendDoulaInvite(
+        email,
+        firstname,
+        lastname,
+        inviteToken
+      );
 
       res.status(200).json({
         success: true,
         message: `Invitation email sent to ${email}`,
-        data: {
-          email,
-          firstname,
-          lastname,
-          inviteToken // Return token for potential tracking
-        }
       });
     } catch (error: any) {
-      console.error('Error inviting doula:', error);
+      console.error('inviteDoula error:', error);
       res.status(500).json({
         success: false,
-        error: error.message || 'Failed to send invitation email'
+        error: error?.message || 'Failed to invite doula',
       });
     }
   }
@@ -155,16 +140,17 @@ export class AdminController {
       if (!clientId || !doulaId) {
         res.status(400).json({
           success: false,
-          error: 'Missing required fields: clientId and doulaId are required'
+          error: 'Missing required fields: clientId and doulaId are required',
         });
         return;
       }
 
-      const normalizedRole = role === undefined ? undefined : normalizeDoulaAssignmentRole(role);
+      const normalizedRole =
+        role === undefined ? undefined : normalizeDoulaAssignmentRole(role);
       if (role !== undefined && !normalizedRole) {
         res.status(400).json({
           success: false,
-          error: "Invalid role. Allowed values are 'primary' or 'backup'"
+          error: "Invalid role. Allowed values are 'primary' or 'backup'",
         });
         return;
       }
@@ -173,7 +159,7 @@ export class AdminController {
       if (!normalizedServices) {
         res.status(400).json({
           success: false,
-          error: `services is required and must include one or more values from: ${ASSIGNMENT_SERVICE_CATALOG.join(', ')}`
+          error: `services is required and must include one or more values from: ${ASSIGNMENT_SERVICE_CATALOG.join(', ')}`,
         });
         return;
       }
@@ -183,7 +169,7 @@ export class AdminController {
       if (!client) {
         res.status(404).json({
           success: false,
-          error: 'Client not found'
+          error: 'Client not found',
         });
         return;
       }
@@ -192,7 +178,7 @@ export class AdminController {
       if (client.status !== CLIENT_STATUS.MATCHING) {
         res.status(400).json({
           success: false,
-          error: `Client is not in matching phase. Current status: ${client.status}. Only clients with status 'matching' can be assigned to doulas.`
+          error: `Client is not in matching phase. Current status: ${client.status}. Only clients with status 'matching' can be assigned to doulas.`,
         });
         return;
       }
@@ -202,18 +188,22 @@ export class AdminController {
       if (!doula) {
         res.status(404).json({
           success: false,
-          error: 'Doula not found'
+          error: 'Doula not found',
         });
         return;
       }
 
       // Check if assignment already exists
-      const alreadyAssigned = await this.cloudSqlAssignmentService.assignmentExists(clientId, doulaId);
+      const alreadyAssigned =
+        await this.cloudSqlAssignmentService.assignmentExists(
+          clientId,
+          doulaId
+        );
 
       if (alreadyAssigned) {
         res.status(400).json({
           success: false,
-          error: 'This doula is already assigned to this client'
+          error: 'This doula is already assigned to this client',
         });
         return;
       }
@@ -240,7 +230,8 @@ export class AdminController {
           if (name1) return name1;
 
           // Try first_name/last_name as fallback
-          const name2 = `${user.first_name || ''} ${user.last_name || ''}`.trim();
+          const name2 =
+            `${user.first_name || ''} ${user.last_name || ''}`.trim();
           if (name2) return name2;
 
           // Try preferred_name if available
@@ -270,13 +261,17 @@ export class AdminController {
           doula.email || ''
         );
 
-        console.log(`📧 Sent match notification emails to doula (${doula.email || 'no-email'}) and client (${client.user.email})`);
+        console.log(
+          `📧 Sent match notification emails to doula (${doula.email || 'no-email'}) and client (${client.user.email})`
+        );
       } catch (emailError) {
         console.error('Failed to send match notification emails:', emailError);
         // Don't fail the request if email fails
       }
 
-      console.log(`✅ Admin ${adminId} matched doula ${doulaId} with client ${clientId}`);
+      console.log(
+        `✅ Admin ${adminId} matched doula ${doulaId} with client ${clientId}`
+      );
 
       res.status(201).json({
         success: true,
@@ -291,25 +286,25 @@ export class AdminController {
             assignedBy: assignment.assignedBy,
             notes: notes || assignment.notes,
             role: assignment.role,
-            status: assignment.status
+            status: assignment.status,
           },
           client: {
             id: client.id,
             name: `${client.user.firstname} ${client.user.lastname}`,
-            status: client.status
+            status: client.status,
           },
           doula: {
             id: doula.id,
             name: doula.fullName,
-            email: doula.email
-          }
-        }
+            email: doula.email,
+          },
+        },
       });
     } catch (error: any) {
       console.error('Error matching doula with client:', error);
       res.status(500).json({
         success: false,
-        error: error.message || 'Failed to match doula with client'
+        error: error.message || 'Failed to match doula with client',
       });
     }
   }
@@ -320,18 +315,24 @@ export class AdminController {
    */
   async getMatchingClients(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const clients = await this.clientRepository.findClientsByStatus(CLIENT_STATUS.MATCHING);
+      const clients = await this.clientRepository.findClientsByStatus(
+        CLIENT_STATUS.MATCHING
+      );
 
       res.status(200).json({
         success: true,
         count: clients.length,
-        data: clients.map(client => ({
+        data: clients.map((client) => ({
           id: client.id,
           firstname: client.user.firstname || '',
           lastname: client.user.lastname || '',
           email: client.user.email || '',
           phone: client.phoneNumber || client.user.phone_number || '',
-          dueDate: client.due_date ? (client.due_date instanceof Date ? client.due_date.toISOString().split('T')[0] : client.due_date) : '',
+          dueDate: client.due_date
+            ? client.due_date instanceof Date
+              ? client.due_date.toISOString().split('T')[0]
+              : client.due_date
+            : '',
           status: client.status,
           address: client.user.address || '',
           city: client.user.city || '',
@@ -348,14 +349,14 @@ export class AdminController {
           serviceSpecifics: client.service_specifics || '',
           childrenExpected: client.childrenExpected || '',
           // Include full user object for detailed views
-          user: client.user
-        }))
+          user: client.user,
+        })),
       });
     } catch (error: any) {
       console.error('Error fetching matching clients:', error);
       res.status(500).json({
         success: false,
-        error: error.message || 'Failed to fetch matching clients'
+        error: error.message || 'Failed to fetch matching clients',
       });
     }
   }
