@@ -1,5 +1,6 @@
 import { NextFunction, Response } from 'express';
 import type { AuthRequest } from '../types';
+import { ApiErrorCode } from '../security/errorCodes';
 
 // authorizeRoles
 //
@@ -14,21 +15,30 @@ const authorizeRoles = async (
 ): Promise<void> => {
   try {
     if (!req.user || !req.user.email) {
-      res.status(401).json({ error: 'Unauthorized: No user found' })
-      return   // ← stop here!
+      res.status(401).json({
+        error: 'Unauthorized: No user found',
+        code: ApiErrorCode.UNAUTHENTICATED,
+      });
+      return;
     }
 
-    const role = String(req.user.role || '').toLowerCase()
-    const allowed = allowedRoles.map((r) => String(r).toLowerCase())
+    const role = String(req.user.role || '').toLowerCase();
+    const allowed = allowedRoles.map((r) => String(r).toLowerCase());
     if (!allowed.includes(role)) {
-      res.status(403).json({ error: 'Forbidden: Insufficient permissions' })
-      return   // ← and stop here!
+      res.status(403).json({
+        error: 'Forbidden: Insufficient permissions',
+        code: ApiErrorCode.FORBIDDEN,
+      });
+      return;
     }
 
-    next()
+    next();
   } catch {
-    res.status(500).json({ error: 'Internal server error' })
+    res.status(500).json({
+      error: 'Internal server error',
+      code: ApiErrorCode.INTERNAL_ERROR,
+    });
   }
-}
+};
 
-export default authorizeRoles
+export default authorizeRoles;

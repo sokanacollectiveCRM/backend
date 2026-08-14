@@ -7,6 +7,8 @@ export interface TokenStore {
   accessToken: string;
   refreshToken: string;
   expiresAt: string;
+  /** When true, Intuit requires reconnect — do not attempt refresh. */
+  needsReauthorization?: boolean;
 }
 
 export interface QuickBooksConnectionHealth {
@@ -16,6 +18,17 @@ export interface QuickBooksConnectionHealth {
 }
 
 const QB_ENVIRONMENT = process.env.QUICKBOOKS_ENVIRONMENT || 'production';
+
+/**
+ * Local laptops share Cloud SQL with prod. Never rotate/save/delete the client's
+ * production QuickBooks token row unless explicitly allowed (Cloud Run sets K_SERVICE).
+ */
+export function allowQuickBooksTokenWrites(): boolean {
+  const raw = (process.env.QUICKBOOKS_ALLOW_TOKEN_WRITES || '').trim().toLowerCase();
+  if (raw === 'true' || raw === '1' || raw === 'yes') return true;
+  if (raw === 'false' || raw === '0' || raw === 'no') return false;
+  return Boolean(process.env.K_SERVICE);
+}
 
 /**
  * Load the QuickBooks OAuth tokens from Cloud SQL.
@@ -29,8 +42,9 @@ export async function getTokenFromDatabase(): Promise<TokenStore | null> {
     access_token: string;
     refresh_token: string;
     access_token_expires_at: Date | null;
+    connection_status: string | null;
   }>(
-    `SELECT realm_id, access_token, refresh_token, access_token_expires_at
+    `SELECT realm_id, access_token, refresh_token, access_token_expires_at, connection_status
      FROM public.quickbooks_tokens
      WHERE environment = $1
      ORDER BY updated_at DESC
@@ -53,12 +67,16 @@ export async function getTokenFromDatabase(): Promise<TokenStore | null> {
     accessToken: row.access_token,
     refreshToken: row.refresh_token,
     expiresAt,
+    needsReauthorization: row.connection_status === 'reauthorization_required',
   };
 
   console.log('✅ [QB] Tokens loaded successfully');
   console.log('📅 [QB] Token expires at:', tokens.expiresAt);
   console.log('⏰ [QB] Current time:', new Date().toISOString());
   console.log('🔍 [QB] Token expired?', new Date(tokens.expiresAt) <= new Date());
+  if (tokens.needsReauthorization) {
+    console.log('⚠️ [QB] connection_status=reauthorization_required; skip refresh until reconnect');
+  }
 
   return tokens;
 }
@@ -68,6 +86,12 @@ export async function getTokenFromDatabase(): Promise<TokenStore | null> {
  * Returns the new access token or null if refresh fails.
  */
 export async function refreshQuickBooksToken(): Promise<TokenStore | null> {
+  if (!allowQuickBooksTokenWrites()) {
+    console.warn(
+      '⚠️ [QB] Token refresh blocked outside Cloud Run (set QUICKBOOKS_ALLOW_TOKEN_WRITES=true only for an intentional local sandbox).',
+    );
+    return null;
+  }
   console.log('🔄 [QB] Starting token refresh...');
   const client = await getPool().connect();
   try {
@@ -210,6 +234,16 @@ export async function getValidAccessToken(): Promise<string | null> {
 
   // Check if token is expired or will expire in the next minute
   if (new Date(tokens.expiresAt) <= new Date(Date.now() + 60000)) {
+    if (tokens.needsReauthorization) {
+      console.log('❌ [QB] Skipping refresh; reconnect QuickBooks OAuth required');
+      return null;
+    }
+    if (!allowQuickBooksTokenWrites()) {
+      console.warn(
+        '⚠️ [QB] Expired token; local/dev will not refresh the shared prod connection',
+      );
+      return null;
+    }
     console.log('🔄 [QB] Token expired or expiring soon, refreshing...');
     const refreshed = await refreshQuickBooksToken();
     return refreshed ? refreshed.accessToken : null;
@@ -223,6 +257,10 @@ export async function getValidAccessToken(): Promise<string | null> {
  * Save QuickBooks tokens to Cloud SQL (upsert by realm_id + environment).
  */
 export async function saveTokensToDatabase(tokens: TokenStore): Promise<void> {
+  if (!allowQuickBooksTokenWrites()) {
+    console.warn('⚠️ [QB] saveTokensToDatabase blocked outside Cloud Run / explicit allow');
+    throw new Error('QuickBooks token writes are disabled in this environment');
+  }
   console.log('💾 [QB] Saving tokens to Cloud SQL...');
 
   const pool = getPool();
@@ -248,6 +286,10 @@ export async function saveTokensToDatabase(tokens: TokenStore): Promise<void> {
 
 /** Delete QuickBooks tokens from Cloud SQL (all rows for current environment). */
 export async function deleteTokens(): Promise<void> {
+  if (!allowQuickBooksTokenWrites()) {
+    console.warn('⚠️ [QB] deleteTokens blocked outside Cloud Run / explicit allow');
+    throw new Error('QuickBooks token writes are disabled in this environment');
+  }
   console.log('🗑️ [QB] Deleting tokens from Cloud SQL...');
 
   const pool = getPool();

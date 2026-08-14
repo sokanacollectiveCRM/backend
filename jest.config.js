@@ -17,4 +17,7 @@ module.exports = {
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
   testTimeout: 10000,
+  // Email/SMTP test doubles can leave handles; CI test-gate must exit.
+  forceExit: true,
+  detectOpenHandles: false,
 };

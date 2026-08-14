@@ -25,6 +25,17 @@ export class UserController {
     try {
       const targetUserId = req.params.id;
 
+      // Staff profiles are in Cloud SQL; Supabase public.users is gone.
+      const member = await this.cloudSqlTeamService.getTeamMemberById(targetUserId);
+      if (member) {
+        res.status(200).json({
+          ...member,
+          phone: member.phone_number,
+          fullName: member.fullName,
+        });
+        return;
+      }
+
       const user = await this.userUseCase.getUserById(targetUserId);
       res.status(200).json(user.toJSON());
     } catch (error) {
@@ -34,8 +45,8 @@ export class UserController {
 
   async getAllUsers(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const users = await this.userUseCase.getAllUsers();
-      res.status(200).json(users.map(user => user.toJSON()));
+      const users = await this.cloudSqlTeamService.listTeamMembers();
+      res.status(200).json(users);
     } catch (error) {
       this.handleError(error, res);
     }
@@ -59,8 +70,8 @@ export class UserController {
           firstname: d.firstname,
           lastname: d.lastname,
           email: d.email,
-          profile_picture: null,
-          bio: null,
+          profile_picture: d.profile_picture ?? null,
+          bio: d.bio ?? null,
           phone_number: d.phone_number,
           scheduling_url: d.scheduling_url ?? null,
         }))
@@ -200,8 +211,8 @@ export class UserController {
 
   async updateUser(req: UpdateRequest, res: Response): Promise<void> {
     try {
-      const user = req.user
-      const updateData = req.body;
+      const user = req.user;
+      const updateData = { ...(req.body || {}) } as Record<string, unknown>;
       const profilePicture = req.file;
 
       // upload profile picture to supabase storage so we can grab it later
@@ -210,12 +221,77 @@ export class UserController {
         updateData.profile_picture = imageUrl;
       }
 
-      // Here we will handle which fields to update
-      const updatedUser = await this.userUseCase.updateUser(user, updateData);
+      const role = String(user.role || '').toLowerCase();
 
-      res.status(200).json(updatedUser.toJSON());
+      // Staff profiles live in Cloud SQL (admins/doulas). Supabase public.users is gone.
+      if (role === 'admin' || role === 'doula') {
+        const updated = await this.cloudSqlTeamService.updateTeamMember(user.id, {
+          firstname: typeof updateData.firstname === 'string' ? updateData.firstname : undefined,
+          lastname: typeof updateData.lastname === 'string' ? updateData.lastname : undefined,
+          email: typeof updateData.email === 'string' ? updateData.email : undefined,
+          phone_number:
+            typeof updateData.phone_number === 'string'
+              ? updateData.phone_number
+              : typeof updateData.phone === 'string'
+                ? updateData.phone
+                : undefined,
+          address: typeof updateData.address === 'string' ? updateData.address : undefined,
+          city: typeof updateData.city === 'string' ? updateData.city : undefined,
+          state: typeof updateData.state === 'string' ? updateData.state : undefined,
+          country: typeof updateData.country === 'string' ? updateData.country : undefined,
+          zip_code:
+            updateData.zip_code === null ||
+            typeof updateData.zip_code === 'string' ||
+            typeof updateData.zip_code === 'number'
+              ? (updateData.zip_code as string | null)
+              : undefined,
+          bio: typeof updateData.bio === 'string' ? updateData.bio : undefined,
+          gender: typeof updateData.gender === 'string' ? updateData.gender : undefined,
+          pronouns: typeof updateData.pronouns === 'string' ? updateData.pronouns : undefined,
+          race_ethnicity: Array.isArray(updateData.race_ethnicity)
+            ? (updateData.race_ethnicity as string[])
+            : undefined,
+          languages_other_than_english: Array.isArray(updateData.languages_other_than_english)
+            ? (updateData.languages_other_than_english as string[])
+            : undefined,
+          race_ethnicity_other:
+            typeof updateData.race_ethnicity_other === 'string'
+              ? updateData.race_ethnicity_other
+              : undefined,
+          other_demographic_details:
+            typeof updateData.other_demographic_details === 'string'
+              ? updateData.other_demographic_details
+              : undefined,
+          scheduling_url:
+            typeof updateData.scheduling_url === 'string' ? updateData.scheduling_url : undefined,
+          profile_picture:
+            typeof updateData.profile_picture === 'string' &&
+            updateData.profile_picture.trim().length > 0
+              ? updateData.profile_picture.trim()
+              : undefined,
+        });
+
+        if (!updated) {
+          res.status(404).json({ error: 'Profile not found in Cloud SQL team tables' });
+          return;
+        }
+
+        res.status(200).json({
+          ...updated,
+          phone: updated.phone_number,
+          role: updated.role,
+        });
+        return;
+      }
+
+      // Client self-update no longer uses Supabase public.users (table removed).
+      res.status(400).json({
+        error:
+          'This account type cannot be updated via /users/update. Use the client portal profile endpoints or team admin tools.',
+      });
     } catch(error) {
-      res.status(400).json({ error: error.message});
+      const message = error instanceof Error ? error.message : 'Failed to update user';
+      res.status(400).json({ error: message });
     }
   }
 

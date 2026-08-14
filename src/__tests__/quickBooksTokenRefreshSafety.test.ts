@@ -9,9 +9,17 @@ jest.mock('../db/cloudSqlPool', () => ({
 import { refreshQuickBooksToken } from '../utils/tokenUtils';
 
 describe('QuickBooks token refresh safety', () => {
+  const previousAllow = process.env.QUICKBOOKS_ALLOW_TOKEN_WRITES;
+
   beforeEach(() => {
     jest.clearAllMocks();
     global.fetch = jest.fn();
+    process.env.QUICKBOOKS_ALLOW_TOKEN_WRITES = 'true';
+  });
+
+  afterAll(() => {
+    if (previousAllow === undefined) delete process.env.QUICKBOOKS_ALLOW_TOKEN_WRITES;
+    else process.env.QUICKBOOKS_ALLOW_TOKEN_WRITES = previousAllow;
   });
 
   it('reuses a token refreshed by another instance after acquiring the lock', async () => {
@@ -65,5 +73,14 @@ describe('QuickBooks token refresh safety', () => {
     expect(healthUpdate[1]).toContain('reauthorization_required');
     expect(query.mock.calls.some(([sql]) => String(sql).includes('DELETE'))).toBe(false);
     expect(release).toHaveBeenCalled();
+  });
+
+  it('does not mutate tokens when writes are disabled for local/dev', async () => {
+    process.env.QUICKBOOKS_ALLOW_TOKEN_WRITES = 'false';
+    delete process.env.K_SERVICE;
+    const result = await refreshQuickBooksToken();
+    expect(result).toBeNull();
+    expect(connect).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 });

@@ -89,6 +89,24 @@ export const stripe = {
   },
 };
 
+/** SignNow event-subscription HMAC secret (X-SignNow-Signature). */
+export const signNowWebhook = {
+  get secret(): string {
+    return optionalEnv('SIGNNOW_WEBHOOK_SECRET') ?? optionalEnv('SIGNNOW_BASIC_AUTH_TOKEN') ?? '';
+  },
+};
+
+/** Intuit webhook verifier token (intuit-signature HMAC). */
+export const quickBooksWebhook = {
+  get verifierToken(): string {
+    return (
+      optionalEnv('QB_WEBHOOK_VERIFIER_TOKEN') ??
+      optionalEnv('INTUIT_WEBHOOK_VERIFIER_TOKEN') ??
+      ''
+    );
+  },
+};
+
 export const contractNotifications = {
   get fromEmail(): string {
     return optionalEnv('CONTRACT_NOTIFICATION_FROM_EMAIL') ?? 'hello@sokanacollective.com';
@@ -101,6 +119,18 @@ export const contractNotifications = {
   },
   get frontendUrl(): string {
     return optionalEnv('FRONTEND_URL') ?? 'http://localhost:3001';
+  },
+};
+
+/** PR 8 intake feature-package cutover / shadow window. */
+export const intakeFeature = {
+  get useFeaturePackage(): boolean {
+    const raw = optionalEnv('INTAKE_USE_FEATURE_PACKAGE');
+    return raw === 'true' || raw === '1';
+  },
+  get shadowCompare(): boolean {
+    const raw = optionalEnv('INTAKE_SHADOW_COMPARE');
+    return raw === 'true' || raw === '1';
   },
 };
 

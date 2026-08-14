@@ -6,6 +6,11 @@ jest.mock('../services/contractSignatureCompletionService', () => ({
 
 import { signNowCallback } from '../controllers/signNowWebhookController';
 import { contractSignatureCompletionService } from '../services/contractSignatureCompletionService';
+import {
+  MemoryWebhookEventStore,
+  setWebhookEventStoreForTests,
+  resetWebhookEventStoreForTests,
+} from '../security/webhookEventStore';
 
 describe('signNowCallback', () => {
   const createRes = () => {
@@ -17,6 +22,11 @@ describe('signNowCallback', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    setWebhookEventStoreForTests(new MemoryWebhookEventStore());
+  });
+
+  afterEach(() => {
+    resetWebhookEventStoreForTests();
   });
 
   it('processes signed/completed callbacks and finalizes the contract workflow', async () => {
@@ -43,6 +53,32 @@ describe('signNowCallback', () => {
         received: true,
         processed: true,
         documentId: 'doc-1',
+      })
+    );
+  });
+
+  it('acknowledges duplicate deliveries without re-processing', async () => {
+    (contractSignatureCompletionService.finalizeSignedDocument as jest.Mock).mockResolvedValue({
+      contract_id: 'contract-1',
+    });
+
+    const req: any = {
+      body: {
+        event: 'document.completed',
+        document_id: 'doc-dup',
+      },
+    };
+    const res1 = createRes();
+    const res2 = createRes();
+    await signNowCallback(req, res1, jest.fn());
+    await signNowCallback(req, res2, jest.fn());
+
+    expect(contractSignatureCompletionService.finalizeSignedDocument).toHaveBeenCalledTimes(1);
+    expect(res2.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        received: true,
+        processed: false,
+        reason: 'duplicate',
       })
     );
   });

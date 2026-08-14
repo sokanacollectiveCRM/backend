@@ -8,7 +8,6 @@ import {
   ValidationError
 } from '../domains/errors';
 import { getSessionToken } from '../middleware/authMiddleware';
-import supabase from '../supabase';
 import {
   AuthRequest,
   LoginBody,
@@ -20,10 +19,14 @@ import {
 import { AuthUseCase } from '../usecase/authUseCase.js';
 import { logger } from '../common/utils/logger';
 import { toSafeProviderError } from '../common/utils/safeLogging';
+import { recordAuthTransport } from '../security/authTransportTelemetry';
+import { clearSessionCookies, setSessionCookie } from '../security/sessionCookies';
+import { CloudSqlTeamService } from '../services/cloudSqlTeamService';
 
 
 export class AuthController {
   private authUseCase: AuthUseCase;
+  private cloudSqlTeamService = new CloudSqlTeamService();
 
   constructor(authUseCase: AuthUseCase) {
     this.authUseCase = authUseCase;
@@ -71,14 +74,9 @@ export class AuthController {
       const { email, password } = req.body;
       // call useCase to grab the user and token
       const result = await this.authUseCase.login(email, password);
-      const isProd = process.env.NODE_ENV === 'production';
-      res.cookie('sb-access-token', result.token, {
-        httpOnly: true,
-        secure: isProd, // false for localhost (HTTP), true for prod (HTTPS)
-        sameSite: isProd ? 'none' : 'lax', // 'none' for cross-origin prod; 'lax' for local
-        maxAge: 3600000,
-        path: '/',
-      });
+      setSessionCookie(res, result.token);
+      // Dual-support: keep JSON token for now; measure before retiring.
+      recordAuthTransport('legacy.login_json_token_returned', { path: req.path });
       res.status(200).json({
         message: 'Login successful',
         user: result.user.toJSON(),
@@ -106,6 +104,7 @@ export class AuthController {
         logger.warn({ context: 'AuthController.getMe' }, 'No token found in request');
         res.status(401).json({
           error: 'No session token provided',
+          code: 'UNAUTHENTICATED',
           hint: 'Provide Cookie or X-Session-Token header'
         });
         return;
@@ -122,30 +121,13 @@ export class AuthController {
         return
       }
 
-      // 1) Get your app user
+      // App-managed / Cloud SQL authoritative role (PR 6) — no user_metadata override.
       const appUser = await this.authUseCase.getMe(token)
       if (!appUser) {
         res.status(404).json({ error: 'User not found' })
         return
       }
-      const base = appUser.toJSON()
-
-      // 2) Fetch Supabase user metadata
-      const { data: sbUser, error } = await supabase.auth.getUser(token)
-      let finalRole = (base as any).role  // fallback to the DB role
-
-      if (!error && sbUser.user) {
-        const meta = (sbUser.user.user_metadata as any) || {}
-        if (typeof meta.role === 'string') {
-          finalRole = meta.role
-        }
-      }
-
-      // 3) Merge and return
-      res.json({
-        ...(base as any),
-        role: finalRole
-      })
+      res.json(appUser.toJSON())
     } catch (err: any) {
       const errorInfo = this.handleError(err, res)
       res.status(errorInfo.status).json({ error: errorInfo.message })
@@ -167,14 +149,7 @@ export class AuthController {
     _req: Request,
     res: Response
   ): Promise<void> {
-    const isProd = process.env.NODE_ENV === 'production';
-    res.clearCookie('sb-access-token', {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: isProd ? 'none' : 'lax',
-      path: '/',
-    });
-    res.clearCookie('session');
+    clearSessionCookies(res);
     await this.authUseCase.logout();
     logger.info({ context: 'AuthController.logout' }, 'Logged out');
     res.json({ message: 'Logged out successfully' });
@@ -219,8 +194,9 @@ export class AuthController {
     res: Response
   ): Promise<void> {
     try {
-      const users = await this.authUseCase.getAllUsers();
-      res.status(200).json(users.map(user => user.toJSON()));
+      // Staff directory lives in Cloud SQL (admins/doulas). Supabase public.users is gone.
+      const users = await this.cloudSqlTeamService.listTeamMembers();
+      res.status(200).json(users);
     }
     catch (getAllUsersError) {
       const error = this.handleError(getAllUsersError, res);
@@ -270,15 +246,9 @@ export class AuthController {
 
       // call useCase to retrieve current session and user
       const data = await this.authUseCase.handleOAuthCallback(code);
-      // create our cookie
+      // Canonical session cookie (PR 6): sb-access-token, not legacy `session`.
       logger.info({ context: 'AuthController.handleOAuthCallback' }, 'Creating session cookie');
-      res.cookie('session', data.session.access_token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 3600 * 1000,
-        path: '/',
-      });
+      setSessionCookie(res, data.session.access_token);
       // Redirect to home page
       res.redirect(`${process.env.FRONTEND_URL}`);
     } catch (error) {
@@ -305,17 +275,14 @@ export class AuthController {
 
       if (!access_token) {
         res.status(401).json({ error: 'No access token provided' });
+        return;
       }
+
+      recordAuthTransport('legacy.body_access_token', { path: req.path, method: req.method });
 
       const user = await this.authUseCase.handleToken(access_token);
 
-      res.cookie('session', access_token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 3600 * 1000,
-        path: '/',
-      });
+      setSessionCookie(res, access_token);
 
       res.json({ success: true , user: user.toJSON()});
     } catch (handleTokenError) {
@@ -430,7 +397,8 @@ export class AuthController {
     } else if (error instanceof AuthorizationError) {
       return { status: 403, message: error.message};
     } else {
-      return { status: 500, message: error.message};
+      // Security bug fix (PR 3): unexpected auth failures must not return raw Error.message.
+      return { status: 500, message: 'Internal Server Error' };
     }
   }
 }

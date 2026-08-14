@@ -1,4 +1,6 @@
 import { Response } from 'express';
+import { logger } from '../common/utils/logger';
+import { SAFE_INTERNAL_ERROR_MESSAGE, toSafeProviderError } from '../common/utils/safeLogging';
 import {
     AuthenticationError,
     AuthorizationError,
@@ -30,7 +32,6 @@ import {
   normalizeDoulaAssignmentRole,
 } from '../services/cloudSqlDoulaAssignmentService';
 import { ASSIGNMENT_SERVICE_CATALOG, normalizeAssignmentServices } from '../constants/assignmentServices';
-import { logger } from '../common/utils/logger';
 import { normalizeStaffReferralOperationalPatch } from '../constants/referralSource';
 import {
   parseInsurancePolicyHolderDob,
@@ -2007,10 +2008,6 @@ export class ClientController {
       const assignmentStart = req.body?.assignmentStart ?? req.body?.assignment_start ?? req.body?.requestedStart ?? req.body?.requested_start;
       const assignmentEnd = req.body?.assignmentEnd ?? req.body?.assignment_end ?? req.body?.requestedEnd ?? req.body?.requested_end;
 
-      // #region agent log
-      fetch('http://127.0.0.1:7707/ingest/a673d138-3b5f-48fc-88e2-e0e1aadca9bb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0cc71c'},body:JSON.stringify({sessionId:'0cc71c',location:'clientController.ts:assignDoula',message:'assignDoula request body',data:{clientId,doulaId,role,servicesReceived:services,servicesType:typeof services,servicesIsArray:Array.isArray(services)},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
-      // #endregion
-
       if (!clientId || !doulaId) {
         res.status(400).json({ error: 'Missing clientId or doulaId' });
         return;
@@ -2018,9 +2015,6 @@ export class ClientController {
 
       const normalizedServices = normalizeAssignmentServices(services);
       if (!normalizedServices) {
-        // #region agent log
-        fetch('http://127.0.0.1:7707/ingest/a673d138-3b5f-48fc-88e2-e0e1aadca9bb',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0cc71c'},body:JSON.stringify({sessionId:'0cc71c',location:'clientController.ts:assignDoula',message:'services validation failed',data:{services,normalizedServices},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
-        // #endregion
         res.status(400).json({
           error: `services is required and must contain one or more valid values: ${ASSIGNMENT_SERVICE_CATALOG.join(', ')}`,
         });
@@ -2286,8 +2280,6 @@ export class ClientController {
     error: Error,
     res: Response
   ): { status: number, message: string } {
-    console.error('Error:', error.message);
-
     if (error instanceof ValidationError) {
       return { status: 400, message: error.message};
     } else if (error instanceof ConflictError) {
@@ -2299,7 +2291,12 @@ export class ClientController {
     } else if (error instanceof AuthorizationError) {
       return { status: 403, message: error.message};
     } else {
-      return { status: 500, message: error.message};
+      logger.error(
+        toSafeProviderError('clients', 'request', error),
+        'Client controller unexpected failure'
+      );
+      // Security bug fix (PR 3): never return raw infrastructure/SQL/provider messages on 500.
+      return { status: 500, message: SAFE_INTERNAL_ERROR_MESSAGE };
     }
   }
 

@@ -2,27 +2,69 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { User } from '../entities/User';
 import { UserRepository } from '../repositories/interface/userRepository';
 import { AuthService } from '../services/interface/authService';
-import { ROLE } from '../types';
 import {
   AuthenticationError,
   AuthorizationError
 } from './../domains/errors';
+import {
+  resolveAuthoritativeRole,
+  toRoleEnum,
+} from '../security/resolveAuthoritativeRole';
+import { CloudSqlTeamService } from './cloudSqlTeamService';
+
+const cloudSqlTeamService = new CloudSqlTeamService();
+
+async function enrichStaffProfileFromCloudSql(user: User): Promise<User> {
+  try {
+    const member = await cloudSqlTeamService.getTeamMemberById(user.id);
+    if (!member) return user;
+    user.firstname = member.firstname || user.firstname;
+    user.lastname = member.lastname || user.lastname;
+    user.first_name = member.firstname || user.first_name;
+    user.last_name = member.lastname || user.last_name;
+    if (member.email) user.email = member.email;
+    user.phone_number = member.phone_number ?? user.phone_number;
+    user.address = member.address ?? user.address;
+    user.city = member.city ?? user.city;
+    user.state = (member.state as any) ?? user.state;
+    user.country = member.country ?? user.country;
+    user.zip_code =
+      member.zip_code != null && member.zip_code !== ''
+        ? (Number.isNaN(Number(member.zip_code)) ? user.zip_code : Number(member.zip_code))
+        : user.zip_code;
+    user.bio = member.bio ?? user.bio;
+    user.profile_picture = (member.profile_picture as any) ?? user.profile_picture;
+    user.account_status = (member.account_status as any) ?? user.account_status;
+    return user;
+  } catch {
+    return user;
+  }
+}
 
 /** Build app User from Supabase auth user when public.users is missing or has no row. */
-function userFromAuthUser(authUser: { id: string; email?: string; user_metadata?: Record<string, unknown>; app_metadata?: Record<string, unknown> }): User {
+async function userFromAuthUser(authUser: {
+  id: string;
+  email?: string;
+  user_metadata?: Record<string, unknown>;
+  app_metadata?: Record<string, unknown>;
+}): Promise<User> {
   const meta = authUser.user_metadata || {};
-  const appMeta = authUser.app_metadata || {};
-  const role = (meta.role as string) || (appMeta.role as string) || 'client';
-  const validRole = ['admin', 'doula', 'client', 'billing'].includes(role) ? (role as ROLE) : ROLE.CLIENT;
-  return new User({
+  // PR 6: never grant staff from user_metadata / app_metadata.
+  const role = await resolveAuthoritativeRole({
+    authUserId: authUser.id,
+    email: authUser.email ?? null,
+    appManagedRole: null,
+  });
+  const user = new User({
     id: authUser.id,
     email: authUser.email || '',
     firstname: (meta.first_name as string) || (meta.firstname as string) || '',
     lastname: (meta.last_name as string) || (meta.lastname as string) || '',
     first_name: (meta.first_name as string) || (meta.firstname as string) || '',
     last_name: (meta.last_name as string) || (meta.lastname as string) || '',
-    role: validRole,
+    role: toRoleEnum(role),
   });
+  return enrichStaffProfileFromCloudSql(user);
 }
 
 export class SupabaseAuthService implements AuthService {
@@ -120,12 +162,18 @@ export class SupabaseAuthService implements AuthService {
     try {
       const user = await this.userRepository.findByEmail(email);
       if (user) {
-        return { user, token };
+        const authoritative = await resolveAuthoritativeRole({
+          authUserId: authUser.id,
+          email: authUser.email ?? user.email ?? email,
+          appManagedRole: user.role ?? null,
+        });
+        user.role = toRoleEnum(authoritative);
+        return { user: await enrichStaffProfileFromCloudSql(user), token };
       }
     } catch {
-      // public.users missing or no row — use Supabase Auth as source of truth
+      // public.users missing or no row — use Cloud SQL / default client
     }
-    return { user: userFromAuthUser(authUser), token };
+    return { user: await userFromAuthUser(authUser), token };
   }
 
   async getMe(
@@ -141,7 +189,13 @@ export class SupabaseAuthService implements AuthService {
     try {
       const user_profile = await this.userRepository.findByEmail(user.email ?? '');
       if (user_profile) {
-        return user_profile;
+        const authoritative = await resolveAuthoritativeRole({
+          authUserId: user.id,
+          email: user.email ?? user_profile.email ?? null,
+          appManagedRole: user_profile.role ?? null,
+        });
+        user_profile.role = toRoleEnum(authoritative);
+        return enrichStaffProfileFromCloudSql(user_profile);
       }
     } catch {
       // public.users missing or no row
@@ -209,13 +263,18 @@ export class SupabaseAuthService implements AuthService {
     try {
       const user = await this.userRepository.findByEmail(data.user.email ?? '');
       if (user) {
-        return user;
+        const authoritative = await resolveAuthoritativeRole({
+          authUserId: data.user.id,
+          email: data.user.email ?? user.email ?? null,
+          appManagedRole: user.role ?? null,
+        });
+        user.role = toRoleEnum(authoritative);
+        return enrichStaffProfileFromCloudSql(user);
       }
     } catch {
       // public.users missing or no row
     }
-    const fallbackUser = userFromAuthUser(data.user);
-    return fallbackUser;
+    return userFromAuthUser(data.user);
   }
 
   async getGoogleAuthUrl(

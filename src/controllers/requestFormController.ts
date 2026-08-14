@@ -3,6 +3,13 @@ import { Request, Response } from 'express';
 import { RequestFormService } from '../services/RequestFormService';
 import { NodemailerService } from '../services/emailService';
 import { AuthRequest, RequestFormData, RequestStatus } from '../types';
+import { PUBLIC_INTAKE_SUCCESS_MESSAGE } from '../features/intake';
+import {
+  evaluateIntakeSubmissionGuards,
+  finalizeIntakeIdempotency,
+  sendIntakeRateLimited,
+  sendIntakeSoftDedupe,
+} from '../features/intake/infrastructure/intakeAbuseProtection';
 
 const notificationEmail = 'hello@sokanacollective.com';
 const emailService = new NodemailerService();
@@ -199,6 +206,21 @@ export class RequestFormController {
         return;
       }
       const formData = req.body;
+
+      const guard = await evaluateIntakeSubmissionGuards(req, formData);
+      if (guard.action === 'rate_limited') {
+        sendIntakeRateLimited(res, guard.retryAfterSec);
+        return;
+      }
+      if (guard.action === 'replay') {
+        res.status(guard.status).json(guard.body);
+        return;
+      }
+      if (guard.action === 'soft_dedupe') {
+        sendIntakeSoftDedupe(res);
+        return;
+      }
+
       const savedForm = await this.service.newForm(formData);
       console.log('📬 New lead saved with client_info ID:', savedForm.id); // Added log for linked client ID
       const profileLink = `${process.env.FRONTEND_URL}/admin/clients/${savedForm.id}`; // Added profile link to email
@@ -466,7 +488,10 @@ The Sokana Collective Team`;
         // Do not block form submission if confirmation email fails
       }
 
-      res.status(200).json({ message: 'Form data received, onto processing' });
+      res.status(200).json({ message: PUBLIC_INTAKE_SUCCESS_MESSAGE });
+      await finalizeIntakeIdempotency(req, formData, 200, {
+        message: PUBLIC_INTAKE_SUCCESS_MESSAGE,
+      });
     } catch (error) {
       console.error('Error processing form data:', error);
       res.status(400).json({ error: error.message });

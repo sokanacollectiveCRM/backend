@@ -1,5 +1,10 @@
 import { Request, Response, Router } from 'express';
+import { logger } from '../common/utils/logger';
+import { toSafeProviderError } from '../common/utils/safeLogging';
+import authMiddleware from '../middleware/authMiddleware';
+import authorizeRoles from '../middleware/authorizeRoles';
 import { signNowCallback } from '../controllers/signNowWebhookController';
+import { requireSignNowWebhookAuth } from '../security/webhookAuth';
 import { signNowService } from '../services/signNowService';
 
 const router = Router();
@@ -21,22 +26,29 @@ interface SignNowRequest extends Request {
   };
 }
 
+const requireAdmin = (req: any, res: any, next: any) =>
+  authorizeRoles(req, res, next, ['admin']);
+
+// Provider webhook — no CRM session; HMAC via SIGNNOW_WEBHOOK_SECRET (PR 5).
+router.post('/callback', requireSignNowWebhookAuth, signNowCallback);
+
+// Security bug fix (PR 4): SignNow tooling / invitations require admin session.
+router.use(authMiddleware);
+router.use(requireAdmin);
+
 // Test authentication
 router.post('/test-auth', async (_req: Request, res: Response): Promise<void> => {
   try {
     const result = await signNowService.testAuthentication();
     res.json(result);
   } catch (error) {
-    console.error('Test auth failed:', error);
+    logger.error(toSafeProviderError('signnow', 'test_auth', error), 'Test auth failed');
     res.status(500).json({
       success: false,
-      error: error instanceof Error ? error.message : 'Authentication test failed'
+      error: 'Authentication test failed',
     });
   }
 });
-
-// SignNow webhook callback for document completion
-router.post('/callback', signNowCallback);
 
 // Test template access
 router.post('/test-template', async (_req: Request, res: Response): Promise<void> => {
@@ -45,10 +57,10 @@ router.post('/test-template', async (_req: Request, res: Response): Promise<void
     const result = await signNowService.testTemplate(templateId);
     res.json(result);
   } catch (error) {
-    console.error('Test template failed:', error);
+    logger.error(toSafeProviderError('signnow', 'test_template', error), 'Test template failed');
     res.status(500).json({
       success: false,
-      error: error instanceof Error ? error.message : 'Template test failed'
+      error: 'Template test failed',
     });
   }
 });
@@ -59,10 +71,10 @@ router.post('/list-templates', async (_req: Request, res: Response): Promise<voi
     const result = await signNowService.listTemplates();
     res.json(result);
   } catch (error) {
-    console.error('List templates failed:', error);
+    logger.error(toSafeProviderError('signnow', 'list_templates', error), 'List templates failed');
     res.status(500).json({
       success: false,
-      error: error instanceof Error ? error.message : 'List templates failed'
+      error: 'List templates failed',
     });
   }
 });
@@ -74,10 +86,10 @@ router.post('/template-fields', async (_req: Request, res: Response): Promise<vo
     const result = await signNowService.getTemplateFields(templateId);
     res.json(result);
   } catch (error) {
-    console.error('Get template fields failed:', error);
+    logger.error(toSafeProviderError('signnow', 'template_fields', error), 'Get template fields failed');
     res.status(500).json({
       success: false,
-      error: error instanceof Error ? error.message : 'Get template fields failed'
+      error: 'Get template fields failed',
     });
   }
 });
@@ -89,10 +101,10 @@ router.post('/postpartum-template-fields', async (_req: Request, res: Response):
     const result = await signNowService.getTemplateFields(templateId);
     res.json(result);
   } catch (error) {
-    console.error('Get Postpartum template fields failed:', error);
+    logger.error(toSafeProviderError('signnow', 'postpartum_template_fields', error), 'Get Postpartum template fields failed');
     res.status(500).json({
       success: false,
-      error: error instanceof Error ? error.message : 'Get Postpartum template fields failed'
+      error: 'Get Postpartum template fields failed',
     });
   }
 });
@@ -102,26 +114,24 @@ router.post('/debug-clone-fields', async (_req: Request, res: Response): Promise
   try {
     const templateId = 'f1d8f4d8b2c849f88644b7276b4b466ec6df8620';
 
-    // Clone the template
     const cloneResult = await signNowService.createPrefilledDocFromTemplate(
       templateId,
       'Debug Field Test Document',
       []
     );
 
-    // Inspect the fields
     const fieldsInfo = await signNowService.inspectDocumentFields(cloneResult.documentId);
 
     res.json({
       success: true,
       documentId: cloneResult.documentId,
-      fields: fieldsInfo.fields
+      fields: fieldsInfo.fields,
     });
   } catch (error) {
-    console.error('Debug clone fields failed:', error);
+    logger.error(toSafeProviderError('signnow', 'debug_clone_fields', error), 'Debug clone fields failed');
     res.status(500).json({
       success: false,
-      error: error instanceof Error ? error.message : 'Debug clone fields failed'
+      error: 'Debug clone fields failed',
     });
   }
 });
@@ -134,7 +144,7 @@ router.post('/send-client-partner', async (req: SignNowRequest, res: Response): 
     if (!client || !client.email || !client.name) {
       res.status(400).json({
         success: false,
-        error: 'client {name,email} are required'
+        error: 'client {name,email} are required',
       });
       return;
     }
@@ -148,47 +158,23 @@ router.post('/send-client-partner', async (req: SignNowRequest, res: Response): 
 
     res.json(result);
   } catch (error: any) {
-    // ✅ Always log the full error object with depth
-    console.error('SignNow raw error:', JSON.stringify(error, null, 2));
+    logger.error(toSafeProviderError('signnow', 'send_client_partner', error), 'SignNow invite failed');
 
-    if (error.response?.data?.errors) {
-      // Pretty-print the errors array
-      console.error(
-        'SignNow error details:',
-        JSON.stringify(error.response.data.errors, null, 2)
-      );
-    } else if (error.response?.data) {
-      // Log entire response data if no "errors" array
-      console.error('SignNow error response data:', error.response.data);
-    } else {
-      console.error('SignNow error message:', error.message);
-    }
-
-    // Handle specific cases (daily limit example)
     if (error?.response?.data?.errors) {
       const dailyLimitError = error.response.data.errors.find((e: any) => e.code === 65639);
       if (dailyLimitError) {
         res.status(429).json({
           success: false,
-          error: 'Daily invite limit exceeded. Please try again tomorrow.'
+          error: 'Daily invite limit exceeded. Please try again tomorrow.',
         });
         return;
       }
     }
 
-    // Send back meaningful error to client
-    if (error.response?.data?.errors) {
-      res.status(error.response.status || 500).json({
-        success: false,
-        error: error.response.data.errors[0]?.message || 'SignNow API error',
-        details: error.response.data.errors
-      });
-    } else {
-      res.status(500).json({
-        success: false,
-        error: error.message || 'Failed to send contract'
-      });
-    }
+    res.status(500).json({
+      success: false,
+      error: 'Failed to send contract',
+    });
   }
 });
 

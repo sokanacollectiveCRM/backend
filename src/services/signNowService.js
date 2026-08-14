@@ -24,8 +24,8 @@ class SignNowService {
     this.username = process.env.SIGNNOW_USERNAME;
     this.password = process.env.SIGNNOW_PASSWORD;
 
-    // Use the API token directly
-        this.apiToken = '42d2a44df392aa3418c4e4486316dd2429b27e7b690834c68cd0e407144';
+    // Never hardcode tokens in source; authenticate at runtime or use env.
+    this.apiToken = process.env.SIGNNOW_API_TOKEN || null;
 
     // Template ID for contract
     this.templateId = process.env.SIGNNOW_TEMPLATE_ID || '3cc4323f75af4986b9a142513185d2b13d300759';
@@ -45,8 +45,7 @@ class SignNowService {
         password: this.password
       });
 
-      console.log('📝 Request params:', params.toString());
-
+      // Never log auth params (contains password + client_secret).
       const { data } = await axios.post(
         `${this.baseURL}/oauth2/token`,
         params.toString(),

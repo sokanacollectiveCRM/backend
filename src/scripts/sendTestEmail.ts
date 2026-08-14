@@ -54,18 +54,14 @@ async function main(): Promise<void> {
     auth: { user: USER, pass: PASS },
   });
 
-  // Log effective settings (mask the password)
+  // Log effective settings without secrets.
   // eslint-disable-next-line no-console
   console.log('SMTP config:', {
     host: HOST,
     port: PORT,
     secure: SECURE,
-    user: USER,
     from: FROM,
-    to,
-    subject,
-    text,
-    passwordPreview: PASS ? `${PASS.slice(0, 2)}***${PASS.slice(-2)}` : '<empty>'
+    configured: Boolean(USER && PASS),
   });
 
   const mailOptions = {

@@ -11,6 +11,9 @@ export type SafeProviderError = {
   retryable: boolean;
 };
 
+/** Stable client-facing message for unexpected 5xx failures (PR 3). */
+export const SAFE_INTERNAL_ERROR_MESSAGE = 'Internal Server Error';
+
 const safeStatus = (error: unknown): number | undefined => {
   const value = (error as { response?: { status?: unknown }; status?: unknown }) || {};
   const candidate = value.response?.status ?? value.status;
@@ -35,6 +38,18 @@ export const toSafeProviderError = (
     retryable: status === 408 || status === 429 || (status !== undefined && status >= 500),
   };
 };
+
+/**
+ * Client-visible error JSON for unexpected failures.
+ * Never includes stack, provider payloads, or raw Error.message from infrastructure.
+ */
+export const toSafeClientErrorBody = (
+  message: string = SAFE_INTERNAL_ERROR_MESSAGE,
+): { success: false; error: string; code: string } => ({
+  success: false,
+  error: message,
+  code: 'INTERNAL_ERROR',
+});
 
 const safeRequestId = (value: unknown): string =>
   typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value) ? value : randomUUID();

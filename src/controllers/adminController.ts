@@ -9,6 +9,7 @@ import {
   CloudSqlDoulaAssignmentService,
   normalizeDoulaAssignmentRole,
 } from '../services/cloudSqlDoulaAssignmentService';
+import { CloudSqlTeamService } from '../services/cloudSqlTeamService';
 import { ASSIGNMENT_SERVICE_CATALOG, normalizeAssignmentServices } from '../constants/assignmentServices';
 import * as crypto from 'crypto';
 
@@ -18,6 +19,7 @@ export class AdminController {
   private clientRepository: ClientRepository;
   private assignmentRepository: SupabaseAssignmentRepository;
   private cloudSqlAssignmentService: CloudSqlDoulaAssignmentService;
+  private cloudSqlTeamService = new CloudSqlTeamService();
 
   constructor(
     userRepository: UserRepository,
@@ -39,11 +41,10 @@ export class AdminController {
     try {
       const { email, firstname, lastname } = req.body;
 
-      // Validate required fields
       if (!email || !firstname || !lastname) {
         res.status(400).json({
           success: false,
-          error: 'Missing required fields: email, firstname, and lastname are required'
+          error: 'email, firstname, and lastname are required'
         });
         return;
       }
@@ -58,63 +59,36 @@ export class AdminController {
         return;
       }
 
-      // Check if user already exists
-      const existingUser = await this.userRepository.findByEmail(email);
+      const normalizedEmail = String(email).trim().toLowerCase();
+      const team = await this.cloudSqlTeamService.listTeamMembers();
+      const existing = team.find((m) => m.email.toLowerCase() === normalizedEmail);
 
-      if (existingUser) {
-        // If user exists but is not pending, they may have already signed up
-        if (existingUser.account_status !== ACCOUNT_STATUS.PENDING) {
-          res.status(400).json({
-            success: false,
-            error: 'A user with this email already exists and has completed signup'
-          });
-          return;
-        }
-        // If user exists and is pending, we can still send the invite
-        // (maybe they didn't receive the first email)
-      } else {
-        // Create user record with pending status
+      if (existing && existing.role !== 'doula') {
+        res.status(400).json({
+          success: false,
+          error: 'A non-doula team member with this email already exists'
+        });
+        return;
+      }
+
+      if (!existing) {
         try {
-          const newUser = await this.userRepository.addMember(firstname, lastname, email, ROLE.DOULA);
-          console.log(`✅ Created user record for ${email} with ID: ${newUser.id}, status: ${newUser.account_status}`);
-
-          // Verify the user was created correctly
-          const verifyUser = await this.userRepository.findByEmail(email);
-          if (!verifyUser) {
-            console.error(`❌ User creation verification failed: ${email} not found after creation`);
-            res.status(500).json({
-              success: false,
-              error: 'User record was created but could not be verified. Please try again.'
-            });
-            return;
-          }
-
-          if (verifyUser.account_status !== ACCOUNT_STATUS.PENDING) {
-            console.warn(`⚠️  User ${email} created but account_status is ${verifyUser.account_status}, expected 'pending'`);
-          }
+          await this.cloudSqlTeamService.addTeamMember({
+            firstname: String(firstname).trim(),
+            lastname: String(lastname).trim(),
+            email: normalizedEmail,
+            role: 'doula',
+          });
         } catch (error: any) {
-          // If addMember fails, check if it's because user already exists (race condition)
-          console.error(`Error creating user for ${email}:`, error);
-          const userCheck = await this.userRepository.findByEmail(email);
-          if (!userCheck) {
-            // User doesn't exist and creation failed - rethrow the error
-            console.error('Failed to create user record:', error);
+          const message = error?.message || 'Failed to create doula';
+          const lower = message.toLowerCase();
+          if (!(lower.includes('already') || lower.includes('exists') || lower.includes('duplicate'))) {
             res.status(500).json({
               success: false,
-              error: `Failed to create user record: ${error.message}`
+              error: message,
             });
             return;
           }
-          // User exists now (race condition), check their status
-          console.log(`User ${email} already exists (race condition), status: ${userCheck.account_status}`);
-          if (userCheck.account_status !== ACCOUNT_STATUS.PENDING) {
-            res.status(400).json({
-              success: false,
-              error: 'A user with this email already exists and has completed signup'
-            });
-            return;
-          }
-          // User exists and is pending, continue with invite
         }
       }
 
@@ -127,18 +101,12 @@ export class AdminController {
       res.status(200).json({
         success: true,
         message: `Invitation email sent to ${email}`,
-        data: {
-          email,
-          firstname,
-          lastname,
-          inviteToken // Return token for potential tracking
-        }
       });
     } catch (error: any) {
-      console.error('Error inviting doula:', error);
+      console.error('inviteDoula error:', error);
       res.status(500).json({
         success: false,
-        error: error.message || 'Failed to send invitation email'
+        error: error?.message || 'Failed to invite doula',
       });
     }
   }

@@ -138,7 +138,6 @@ If this response is clean, continue with SQL scenarios. If not, the next move is
 | `is_eligible` | `false` |
 | `primary_portal_blocker` | `missing_card_on_file` |
 | `allowed_actions.can_invite_to_portal` | `false` |
-| `allowed_actions.can_send_verification_invoice` | `true` |
 
 ---
 
@@ -208,7 +207,6 @@ curl -s "$API_BASE_URL/api/clients/$CLIENT_ID" \
   "card_on_file": false,
   "allowed_actions": {
     "can_invite_to_portal": false,
-    "can_send_verification_invoice": true,
     "can_mark_contract_signed": false,
     "can_mark_deposit_paid": false
   }
@@ -219,52 +217,9 @@ If data looks stale after SQL + GET, confirm Cloud SQL proxy connectivity and th
 
 ---
 
-## Step 6: Test the staff action
+## Step 6: Test card-on-file unlock
 
-When blocked by `missing_card_on_file`:
-
-```bash
-curl -s -X POST \
-  "$API_BASE_URL/api/clients/$CLIENT_ID/billing/send-verification-invoice" \
-  -H "Authorization: Bearer $AUTH_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{}' | jq '.'
-```
-
-**Expected:**
-
-```json
-{
-  "success": true,
-  "data": {
-    "verification_invoice_id": "some-qbo-id",
-    "payment_link": "optional-link"
-  }
-}
-```
-
-(Wrap shape depends on `ApiResponse.success` — inspect full JSON if nested under `data`.)
-
-Re-fetch:
-
-```bash
-curl -s "$API_BASE_URL/api/clients/$CLIENT_ID" \
-  -H "Authorization: Bearer $AUTH_TOKEN" | jq '{
-    verification_invoice_id,
-    verification_invoice_sent_at,
-    allowed_actions
-  }'
-```
-
-You should see `verification_invoice_id` and `verification_invoice_sent_at` populated.
-
-**Note:** This step calls real QuickBooks unless you mock/stub QBO in dev. For UI-only iteration, skip Step 6 until API-only scenarios pass.
-
----
-
-## Step 7: Test card-on-file unlock (no real QBO charge)
-
-### 7a. Insert stored payment method metadata
+### Insert stored payment method metadata
 
 Use the client’s real `qbo_customer_id` when available:
 
@@ -272,24 +227,7 @@ Use the client’s real `qbo_customer_id` when available:
 ./scripts/test/run-portal-readiness-scenario.sh add-card
 ```
 
-### 7b. Simulate verification invoice paid webhook
-
-Use the `verification_invoice_id` from Step 6, or a test id if you set one on the readiness row:
-
-```bash
-curl -s -X POST \
-  "$API_BASE_URL/api/quickbooks/webhooks/invoice-paid" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"qbo_invoice_id\": \"verification_invoice_test_123\",
-    \"client_id\": \"$CLIENT_ID\",
-    \"balance\": 0
-  }" | jq '.'
-```
-
-If testing the verification flow end-to-end, replace `qbo_invoice_id` with the id returned from Step 6 and ensure `client_onboarding_readiness.verification_invoice_id` matches.
-
-### 7c. Re-fetch
+### Re-fetch
 
 ```bash
 curl -s "$API_BASE_URL/api/clients/$CLIENT_ID" \
@@ -303,7 +241,7 @@ curl -s "$API_BASE_URL/api/clients/$CLIENT_ID" \
   }'
 ```
 
-**Expected after card + verification webhook:**
+**Expected after adding the card:**
 
 ```json
 {
@@ -313,22 +251,21 @@ curl -s "$API_BASE_URL/api/clients/$CLIENT_ID" \
   "payment_authorization_satisfied": true,
   "card_on_file": true,
   "allowed_actions": {
-    "can_invite_to_portal": true,
-    "can_send_verification_invoice": false
+    "can_invite_to_portal": true
   }
 }
 ```
 
 ---
 
-## Step 8: Check the frontend
+## Step 7: Check the frontend
 
 Open the CRM and inspect the same `CLIENT_ID`.
 
 | Scenario | UI expectations |
 |----------|-----------------|
-| Missing card | “Missing card on file” (or equivalent); portal invite **disabled**; send $1 verification invoice **visible** |
-| Eligible | Eligible state; portal invite **enabled**; verification invoice action **hidden** |
+| Missing card | “Missing card on file” (or equivalent); portal invite **disabled** |
+| Eligible | Eligible state; portal invite **enabled** |
 
 Confirm the network tab shows backend fields — not client-side reconstruction from legacy `contracts` / `payments` arrays.
 
@@ -350,7 +287,7 @@ Insurance parity scenario to keep explicit:
 
 | Scenario | Expected |
 |----------|----------|
-| Insurance + signed + paid deposit + no card | Blocked: `missing_card_on_file`; verification invoice allowed |
+| Insurance + signed + paid deposit + no card | Blocked: `missing_card_on_file` |
 
 Additional scenario scripts (add as needed under `scripts/test/`):
 
@@ -404,7 +341,7 @@ LIMIT 10;
 - [ ] UI buttons follow `allowed_actions` only
 - [ ] No duplicate eligibility logic in `portalStatus.ts` when `is_eligible` is present
 - [ ] Missing-card and eligible states visually distinct on client detail
-- [ ] One optional smoke: real verification invoice + portal invite in staging only
+- [ ] One optional smoke: portal invite in staging only
 
 ---
 
@@ -414,4 +351,3 @@ LIMIT 10;
 - Service: `src/services/portalEligibilityService.ts`
 - Webhook: `POST /api/quickbooks/webhooks/invoice-paid`
 - Unit tests: `src/__tests__/portalEligibility*.test.ts`
-- **Playwright UI prompt:** `docs/PORTAL_READINESS_PLAYWRIGHT_PROMPT.md` (stubbed CRM tests for invite allowed/blocked + verification invoice visibility)

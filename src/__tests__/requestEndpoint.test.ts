@@ -895,23 +895,48 @@ describe('Request Endpoint Tests', () => {
         'test@example.com',
         'Test Subject',
         'Test content'
-      )).rejects.toThrow('Failed to send email: SMTP error');
+      )).rejects.toThrow('Failed to send email');
     });
   });
 });
 
 describe('DELETE /clients/delete', () => {
-  let app: express.Application;
+  type TestResponse = {
+    statusCode: number;
+    body: unknown;
+    status: (code: number) => TestResponse;
+    json: (payload: unknown) => TestResponse;
+    send: () => TestResponse;
+  };
+
   let mockDeleteClient: jest.Mock;
+  let handler: (req: { body: Record<string, unknown> }, res: TestResponse) => void;
+
+  const createResponse = (): TestResponse => {
+    const res: TestResponse = {
+      statusCode: 200,
+      body: undefined,
+      status(code: number) {
+        this.statusCode = code;
+        return this;
+      },
+      json(payload: unknown) {
+        this.body = payload;
+        return this;
+      },
+      send() {
+        return this;
+      },
+    };
+    return res;
+  };
 
   beforeEach(() => {
     mockDeleteClient = jest.fn();
 
-    app = express();
-    app.use(express.json());
-
-    // Create a simple route that mimics the controller behavior
-    app.delete('/clients/delete', (req, res) => {
+    // Exercise the same controller branch logic without opening an HTTP server
+    // (supertest + Express leave an open handle that keeps Jest from exiting cleanly).
+    handler = (req, res) => {
       const { id } = req.body;
 
       if (!id) {
@@ -923,39 +948,36 @@ describe('DELETE /clients/delete', () => {
         mockDeleteClient(id);
         res.status(204).send();
       } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: (error as Error).message });
       }
-    });
+    };
   });
 
-  it('should delete a client when given a valid ID', async () => {
-    const response = await request(app)
-      .delete('/clients/delete')
-      .send({ id: 'test-client-id' })
-      .expect(204);
+  it('should delete a client when given a valid ID', () => {
+    const res = createResponse();
+    handler({ body: { id: 'test-client-id' } }, res);
 
+    expect(res.statusCode).toBe(204);
     expect(mockDeleteClient).toHaveBeenCalledWith('test-client-id');
   });
 
-  it('should return 400 if no ID is provided', async () => {
-    const response = await request(app)
-      .delete('/clients/delete')
-      .send({})
-      .expect(400);
+  it('should return 400 if no ID is provided', () => {
+    const res = createResponse();
+    handler({ body: {} }, res);
 
-    expect(response.body.error).toBe('Missing client ID');
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ error: 'Missing client ID' });
   });
 
-  it('should handle repository errors gracefully', async () => {
+  it('should handle repository errors gracefully', () => {
     mockDeleteClient.mockImplementation(() => {
       throw new Error('DB error');
     });
 
-    const response = await request(app)
-      .delete('/clients/delete')
-      .send({ id: 'test-client-id' })
-      .expect(500);
+    const res = createResponse();
+    handler({ body: { id: 'test-client-id' } }, res);
 
-    expect(response.body.error).toBe('DB error');
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toEqual({ error: 'DB error' });
   });
 });

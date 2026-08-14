@@ -1,6 +1,8 @@
 import express, { Router } from 'express';
 import { authController } from '../index';
 import authMiddleware from '../middleware/authMiddleware';
+import { validateBody } from '../middleware/validateRequest';
+import { loginBodySchema } from '../security/requestSchemas';
 
 
 const authRoutes: Router = express.Router();
@@ -8,8 +10,8 @@ const authRoutes: Router = express.Router();
 // Signup route
 authRoutes.post('/signup', (req, res) => authController.signup(req, res));
 
-// Login route
-authRoutes.post('/login', (req, res) => authController.login(req, res));
+// Login route — Zod body validation (PR 7); success shape unchanged.
+authRoutes.post('/login', validateBody(loginBodySchema), (req, res) => authController.login(req, res));
 
 // Get current user route
 authRoutes.get('/me', (req, res) => authController.getMe(req, res));

@@ -1,4 +1,4 @@
-// src/features/quickbooks/routes/quickbooksRoutes.ts
+// src/routes/quickbooksRoutes.ts
 import { Router } from 'express'
 import {
   connectQuickBooks,
@@ -14,17 +14,30 @@ import {
   refreshQuickBooksCustomerSyncStatus
 } from '../controllers/quickbooksController'
 import authMiddleware from '../middleware/authMiddleware'
+import authorizeRoles from '../middleware/authorizeRoles'
 import { quickBooksInvoicePaidWebhook } from '../controllers/quickbooksWebhookController'
+import { requireQuickBooksWebhookAuth } from '../security/webhookAuth'
 import { simulatePaymentController } from '../services/payments/paymentsController'
 
 const router = Router()
 
-// 1️⃣ Public OAuth endpoints (no auth required for redirect/callback)
+const requireBillingStaff = (req: any, res: any, next: any) =>
+  authorizeRoles(req, res, next, ['admin', 'billing'])
+
+const requireAdmin = (req: any, res: any, next: any) =>
+  authorizeRoles(req, res, next, ['admin'])
+
+// 1️⃣ Public OAuth endpoints (no user-session auth)
 router.get('/auth', connectQuickBooks)
 router.get('/callback', handleQuickBooksCallback)
 
-// 2️⃣ Now apply auth + admin guard to the rest
+// Provider webhook — no CRM session; Intuit HMAC via QB_WEBHOOK_VERIFIER_TOKEN (PR 5).
+// Security bug fix (PR 4): was registered after authMiddleware and required user cookies.
+router.post('/webhooks/invoice-paid', requireQuickBooksWebhookAuth, quickBooksInvoicePaidWebhook)
+
+// 2️⃣ Session auth + staff roles for CRM QuickBooks operations
 router.use(authMiddleware)
+router.use(requireBillingStaff)
 
 // 3️⃣ Protected AJAX endpoints
 router.get('/auth/url', quickBooksAuthUrl)
@@ -36,9 +49,8 @@ router.post('/customers/:clientId/sync-status/refresh', refreshQuickBooksCustome
 router.post('/customer', createCustomer)
 router.post('/disconnect', quickBooksDisconnect)
 router.post('/invoice', createInvoice)
-router.post('/webhooks/invoice-paid', quickBooksInvoicePaidWebhook)
 
-// Simulate payment endpoint
-router.post('/simulate-payment', simulatePaymentController)
+// Simulate payment — admin only
+router.post('/simulate-payment', requireAdmin, simulatePaymentController)
 
 export default router

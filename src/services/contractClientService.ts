@@ -1,5 +1,6 @@
 import { Contract, ContractPayment, ContractSignNowIntegration, ContractTemplate } from '../entities/Contract';
 import supabase from '../supabase';
+import { CloudSqlTeamService } from './cloudSqlTeamService';
 import { CreatePaymentScheduleRequest, SimplePaymentService } from './simplePaymentService';
 
 export interface CreateContractRequest {
@@ -8,7 +9,7 @@ export interface CreateContractRequest {
   fee?: string;
   deposit?: string;
   note?: string;
-  generated_by: string; // Must reference users.id
+  generated_by: string; // Staff id (Cloud SQL admins/doulas / auth user id)
   // Payment schedule options
   payment_schedule?: {
     schedule_name: string;
@@ -38,6 +39,19 @@ export interface ContractWithClient {
 }
 
 export class ContractClientService {
+  private readonly teamService = new CloudSqlTeamService();
+
+  private async resolveStaffName(userId: string): Promise<{ id: string; firstname: string; lastname: string }> {
+    const member = await this.teamService.getTeamMemberById(userId);
+    if (!member) {
+      throw new Error(`User not found: ${userId}`);
+    }
+    return {
+      id: member.id,
+      firstname: member.firstname,
+      lastname: member.lastname,
+    };
+  }
   private paymentService: SimplePaymentService;
 
   constructor() {
@@ -145,16 +159,8 @@ export class ContractClientService {
       throw new Error(`Client not found: ${clientId}`);
     }
 
-    // Verify user exists
-    const { data: user, error: userError } = await supabase
-      .from('users')
-      .select('id, firstname, lastname')
-      .eq('id', generatedByUserId)
-      .single();
-
-    if (userError || !user) {
-      throw new Error(`User not found: ${generatedByUserId}`);
-    }
+    // Verify staff exists in Cloud SQL team tables (admins/doulas).
+    const user = await this.resolveStaffName(generatedByUserId);
 
     const { data, error } = await supabase
       .from('contracts')
@@ -194,16 +200,8 @@ export class ContractClientService {
       throw new Error(`Client not found: ${request.client_id}`);
     }
 
-    // Verify user exists
-    const { data: user, error: userError } = await supabase
-      .from('users')
-      .select('id, firstname, lastname')
-      .eq('id', request.generated_by)
-      .single();
-
-    if (userError || !user) {
-      throw new Error(`User not found: ${request.generated_by}`);
-    }
+    // Verify staff exists in Cloud SQL team tables (admins/doulas).
+    await this.resolveStaffName(request.generated_by);
 
     // Get template info if provided
     let template_name: string | undefined;

@@ -1,9 +1,21 @@
 import { Request, Response, Router } from 'express';
+import authMiddleware from '../middleware/authMiddleware';
+import authorizeRoles from '../middleware/authorizeRoles';
+import { logger } from '../common/utils/logger';
+import {
+  toSafeClientErrorBody,
+  toSafeProviderError,
+} from '../common/utils/safeLogging';
 import { calculatePostpartumContract, formatForSignNow, ValidationError } from '../services/postpartum/calculateContract';
 import { signNowService } from '../services/signNowService';
 import { PostpartumContractInput } from '../types/postpartum';
 
 const router = Router();
+
+const requireAdmin = (req: any, res: any, next: any) => authorizeRoles(req, res, next, ['admin']);
+router.use(authMiddleware);
+router.use(requireAdmin);
+
 
 router.post('/postpartum/calculate', async (req, res) => {
   try {
@@ -23,9 +35,9 @@ router.post('/postpartum/calculate', async (req, res) => {
         error: error.message
       });
     } else {
-      console.error('Contract calculation failed:', error);
-    res.status(500).json({
-      success: false,
+      logger.error(toSafeProviderError('contracts', 'postpartum_calculate', error), 'Contract calculation failed');
+      res.status(500).json({
+        success: false,
         error: 'Failed to calculate contract amounts'
       });
     }
@@ -49,9 +61,10 @@ router.post('/postpartum/send-client-invite', async (req: Request, res: Response
         success: false,
         error: 'Missing required fields: documentId, client.email, client.name'
       });
+      return;
     }
 
-    console.log('📤 Sending client signing invitation...');
+    logger.info({ service: 'signnow', operation: 'send_client_invite' }, 'Sending client signing invitation');
 
     // Send invitation to client as Recipient 1 (signer)
     const result = await signNowService.createInvitationClientPartner(
@@ -73,18 +86,10 @@ router.post('/postpartum/send-client-invite', async (req: Request, res: Response
       signnow: result
     });
 
-  } catch (error) {
-    console.error('Failed to send client invitation:', {
-      error: error.message,
-      response: error.response?.data,
-      stack: error.stack,
-      config: error.config
-    });
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to send client invitation',
-      details: error.response?.data
-    });
+  } catch (error: unknown) {
+    logger.error(toSafeProviderError('signnow', 'send_client_invite', error), 'Failed to send client invitation');
+    // Security bug fix (PR 3): remove stack / provider response details from client body.
+    res.status(500).json(toSafeClientErrorBody('Failed to send client invitation'));
   }
 });
 

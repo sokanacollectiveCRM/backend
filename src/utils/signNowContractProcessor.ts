@@ -66,26 +66,21 @@ export async function processContractWithSignNow(
     const { contractId, clientEmail, clientName, ...data } = contractData;
 
     console.log(`🔄 Starting SignNow contract workflow for ${contractId}`);
-    console.log(`👤 Client: ${clientName}`);
-    console.log(`📧 Email: ${clientEmail}`);
 
     // Step 1: Generate contract DOCX (no email)
     console.log('📄 Step 1: Generating contract document...');
     let docxPath: string | Buffer;
     try {
-      console.log('About to call generateContractDocx with:', { data, contractId });
-      console.log('Data object keys:', Object.keys(data));
-      console.log('Data object values:', Object.values(data));
+      console.log('Generating contract DOCX', {
+        contractId,
+        fieldCount: Object.keys(data).length,
+      });
       docxPath = await generateContractDocx(data, contractId);
       console.log(`✅ Contract generated: ${typeof docxPath === 'string' ? docxPath : 'Buffer'}`);
     } catch (error) {
-      console.error('Error in contract generation:', error);
-      console.error('Error details:', {
+      console.error('Error in contract generation:', {
         message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined,
         contractId,
-        clientName,
-        clientEmail
       });
       throw error;
     }
@@ -130,10 +125,8 @@ export async function processContractWithSignNow(
       documentId = uploadResult.documentId;
       console.log(`✅ Document uploaded to SignNow: ${documentId}`);
     } catch (error) {
-      console.error('Error in SignNow upload:', error);
-      console.error('Error details:', {
+      console.error('Error in SignNow upload:', {
         message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
       });
       throw error;
     }
@@ -144,10 +137,8 @@ export async function processContractWithSignNow(
       await signNowService.addSignatureFields(documentId, clientName, contractData, fileToUpload);
       console.log('✅ Signature fields added successfully');
     } catch (error) {
-      console.error('Error in signature fields addition:', error);
-      console.error('Error details:', {
+      console.error('Error in signature fields addition:', {
         message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
       });
       throw error;
     }
@@ -162,7 +153,7 @@ export async function processContractWithSignNow(
       );
       if (rows.length === 0) {
         throw new Error(
-          `Client not found with email ${clientEmail}. The client must exist in the system before sending a contract.`
+          'Client not found. The client must exist in the system before sending a contract.'
         );
       }
       clientId = rows[0].id;
@@ -279,7 +270,6 @@ export async function processContractWithSignNow(
       console.error('Error in SignNow invitation:', error);
       console.error('Error details:', {
         message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
       });
       throw error;
     }
@@ -319,7 +309,6 @@ export async function processContractWithSignNow(
     console.error('❌ SignNow contract processing failed:', error);
     console.error('Error details:', {
       message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
       contractId: contractData.contractId
     });
 

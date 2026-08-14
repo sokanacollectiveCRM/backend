@@ -63,8 +63,17 @@ interface DoulaRow {
 interface AdminRow {
   id: string;
   full_name: string;
+  first_name?: string | null;
+  last_name?: string | null;
   email: string | null;
   phone: string | null;
+  bio?: string | null;
+  profile_picture?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  zip_code?: string | null;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -134,21 +143,25 @@ function mapRow(row: DoulaRow): TeamMemberDto {
 }
 
 function mapAdminRow(row: AdminRow): TeamMemberDto {
-  const { firstname, lastname } = splitFullName(row.full_name);
+  const split = splitFullName(row.full_name);
+  const firstname = (row.first_name || '').trim() || split.firstname;
+  const lastname = (row.last_name || '').trim() || split.lastname;
   return {
     id: row.id,
     firstname,
     lastname,
-    fullName: row.full_name,
+    fullName: row.full_name || `${firstname} ${lastname}`.trim(),
     email: row.email ?? '',
     role: 'admin',
     account_status: 'approved',
     phone_number: row.phone ?? null,
-    address: null,
-    city: null,
-    state: null,
-    country: null,
-    zip_code: null,
+    address: row.address ?? null,
+    city: row.city ?? null,
+    state: row.state ?? null,
+    country: row.country ?? null,
+    zip_code: row.zip_code ?? null,
+    bio: row.bio ?? null,
+    profile_picture: row.profile_picture ?? null,
     availability_status: null,
     availability_note: null,
     unavailable_from: null,
@@ -166,10 +179,10 @@ export class CloudSqlTeamService {
     try {
       const { rows } = await pool.query<DoulaRow & { role: 'admin' | 'doula' }>(
         `
-        SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, 'doula'::text AS role, created_at, updated_at
+        SELECT id, full_name, NULL::text AS first_name, NULL::text AS last_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, 'doula'::text AS role, created_at, updated_at
         FROM public.doulas
         UNION ALL
-        SELECT id, full_name, email, phone, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'admin'::text AS role, created_at, updated_at
+        SELECT id, full_name, first_name, last_name, email, phone, 'approved'::text, address, city, state, country, zip_code, bio, profile_picture, NULL::text[], NULL::text, 'admin'::text AS role, created_at, updated_at
         FROM public.admins
         ORDER BY full_name ASC
         `
@@ -216,7 +229,7 @@ export class CloudSqlTeamService {
     try {
       const { rows: adminRows } = await pool.query<AdminRow>(
         `
-        SELECT id, full_name, email, phone, created_at, updated_at
+        SELECT id, full_name, first_name, last_name, email, phone, bio, profile_picture, address, city, state, country, zip_code, created_at, updated_at
         FROM public.admins
         WHERE id = $1::uuid
         LIMIT 1
@@ -263,14 +276,16 @@ export class CloudSqlTeamService {
     email: string;
     phone_number?: string | null;
   }): Promise<TeamMemberDto> {
-    const fullName = `${input.firstname} ${input.lastname}`.trim();
+    const firstName = input.firstname.trim();
+    const lastName = input.lastname.trim();
+    const fullName = `${firstName} ${lastName}`.trim();
     const { rows } = await getPool().query<AdminRow>(
       `
-      INSERT INTO public.admins (id, full_name, email, phone, created_at, updated_at)
-      VALUES (COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, NOW(), NOW())
-      RETURNING id, full_name, email, phone, created_at, updated_at
+      INSERT INTO public.admins (id, full_name, first_name, last_name, email, phone, created_at, updated_at)
+      VALUES (COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6, NOW(), NOW())
+      RETURNING id, full_name, first_name, last_name, email, phone, created_at, updated_at
       `,
-      [input.id ?? null, fullName, input.email.toLowerCase().trim(), input.phone_number ?? null]
+      [input.id ?? null, fullName, firstName, lastName, input.email.toLowerCase().trim(), input.phone_number ?? null]
     );
     return mapAdminRow(rows[0]);
   }
@@ -370,13 +385,17 @@ export class CloudSqlTeamService {
       race_ethnicity_other?: string | null;
       other_demographic_details?: string | null;
       scheduling_url?: string | null;
+      profile_picture?: string | null;
     }
   ): Promise<TeamMemberDto | null> {
     const existing = await this.getTeamMemberById(id);
     if (!existing) return null;
 
+    const firstName = (input.firstname ?? existing.firstname ?? '').trim();
+    const lastName = (input.lastname ?? existing.lastname ?? '').trim();
     const fullName = input.fullName?.trim()
-      || `${input.firstname ?? existing.firstname} ${input.lastname ?? existing.lastname}`.trim();
+      || `${firstName} ${lastName}`.trim()
+      || existing.fullName;
     const email = input.email?.trim().toLowerCase() || existing.email;
     const phone = input.phone ?? input.phone_number ?? existing.phone_number ?? null;
     const address = input.address !== undefined ? input.address : (existing.address ?? null);
@@ -386,6 +405,8 @@ export class CloudSqlTeamService {
     const zipCode = input.zip_code !== undefined ? input.zip_code : (existing.zip_code ?? null);
     const accountStatus = input.account_status?.trim() || existing.account_status || 'approved';
     const bio = input.bio !== undefined ? input.bio : (existing.bio ?? null);
+    const profilePicture =
+      input.profile_picture !== undefined ? input.profile_picture : (existing.profile_picture ?? null);
     const gender = input.gender !== undefined ? input.gender : (existing.gender ?? null);
     const pronouns = input.pronouns !== undefined ? input.pronouns : (existing.pronouns ?? null);
     const raceEthnicity =
@@ -412,13 +433,36 @@ export class CloudSqlTeamService {
         `
         UPDATE public.admins
         SET full_name = $1,
-            email = $2,
-            phone = $3,
+            first_name = $2,
+            last_name = $3,
+            email = $4,
+            phone = $5,
+            bio = $6,
+            profile_picture = $7,
+            address = $8,
+            city = $9,
+            state = $10,
+            country = $11,
+            zip_code = $12,
             updated_at = NOW()
-        WHERE id = $4::uuid
-        RETURNING id, full_name, email, phone, created_at, updated_at
+        WHERE id = $13::uuid
+        RETURNING id, full_name, first_name, last_name, email, phone, bio, profile_picture, address, city, state, country, zip_code, created_at, updated_at
         `,
-        [fullName, email, phone, id]
+        [
+          fullName,
+          firstName,
+          lastName,
+          email,
+          phone,
+          bio,
+          profilePicture,
+          address,
+          city,
+          state,
+          country,
+          zipCode,
+          id,
+        ]
       );
       return rows[0] ? mapAdminRow(rows[0]) : null;
     }

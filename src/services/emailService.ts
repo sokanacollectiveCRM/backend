@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { logger } from '../common/utils/logger';
 import { contractNotifications } from '../config/env';
 import { getLimitedBillingViewUrl } from '../utils/billingViewUrl';
 import { EmailService } from './interface/emailServiceInterface';
@@ -22,16 +23,16 @@ export class NodemailerService implements EmailService {
     const effectiveUser = process.env.EMAIL_USER || 'hello@sokanacollective.com';
     const effectivePass = (process.env.EMAIL_PASSWORD || '').trim().replace(/\s+/g, '');
 
-    // Log the effective config (mask the password) for debugging
-    // eslint-disable-next-line no-console
-    console.log('Email config:', {
-      host: effectiveHost,
-      port: effectivePort,
-      secure: effectiveSecure,
-      user: effectiveUser,
-      passwordPreview: effectivePass ? `${effectivePass.slice(0, 2)}***${effectivePass.slice(-2)}` : '<empty>',
-      passwordLength: effectivePass.length
-    });
+    // Security: never log password previews or secrets; host/port only.
+    logger.info(
+      {
+        service: 'email',
+        operation: 'smtp_config',
+        host: effectiveHost,
+        port: effectivePort,
+      },
+      'Email transport configured'
+    );
 
     this.transporter = nodemailer.createTransport({
       host: effectiveHost,
@@ -75,16 +76,17 @@ export class NodemailerService implements EmailService {
         html: html || undefined,
       };
 
-      const info = await this.transporter.sendMail(mailOptions);
-      // eslint-disable-next-line no-console
-      console.log('Email sent successfully:', {
-        messageId: info.messageId,
-        to: mailOptions.to,
-        subject: mailOptions.subject
-      });
+      await this.transporter.sendMail(mailOptions);
+      logger.info(
+        { service: 'email', operation: 'send', status: 200 },
+        'Email sent successfully'
+      );
     } catch (error) {
-      console.error('Failed to send email:', error);
-      throw new Error(`Failed to send email: ${error.message}`);
+      logger.error(
+        { service: 'email', operation: 'send', errorCode: 'EMAIL_SEND_FAILURE' },
+        'Failed to send email'
+      );
+      throw new Error('Failed to send email');
     }
   }
 

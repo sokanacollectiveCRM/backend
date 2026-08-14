@@ -8,6 +8,7 @@ import {
     saveTokens,
     TokenStore
 } from '../../utils/tokenUtils';
+import { consumeOAuthState } from '../../security/oauthStateStore';
 
 const {
   QB_CLIENT_ID     = '',
@@ -68,6 +69,13 @@ export function generateConsentUrl(state: string): string {
 export async function handleAuthCallback(
   callbackUrl: string
 ): Promise<Omit<TokenStore, 'userId'>> {
+  const callback = new URL(callbackUrl);
+  const state = callback.searchParams.get('state');
+  const stateOk = await consumeOAuthState(state);
+  if (!stateOk) {
+    throw new Error('Invalid or expired QuickBooks OAuth state');
+  }
+
   // Exchange code for tokens
   const authResponse = await oauthClient.createToken(callbackUrl);
   const json = authResponse.getJson() as {
@@ -78,7 +86,7 @@ export async function handleAuthCallback(
   };
 
   // Intuit sometimes returns realmId in JSON or URL query
-  const realmId = json.realmId ?? new URL(callbackUrl).searchParams.get('realmId');
+  const realmId = json.realmId ?? callback.searchParams.get('realmId');
 
   if (!realmId) {
     throw new Error('Missing realmId in QuickBooks callback');

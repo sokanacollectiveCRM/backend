@@ -32,9 +32,13 @@ Use this checklist at the top of every new preflight entry:
 
 ## Auth + Request Transport
 
-- `src/main.tsx` globally wraps `window.fetch` to include credentials for non-Supabase URLs.
-- `src/common/contexts/UserContext.tsx` handles backend auth state via `/auth/me`, `/auth/login`, `/auth/logout`.
-- Protected routing: `src/common/components/routes/ProtectedRoutes.tsx`.
+Frontend P0 (2026-08-14) is **done and aligned with the backend**. The SPA is not a security boundary; the API still rejects unauthorized calls. Full write-up: `docs/SECURITY_P0_HARDENING_SUMMARY.md` → “Frontend P0”.
+
+- Role and session: `/auth/me` (not Supabase `user_metadata`). `StaffCrmRoute` / `ClientPortalRoute`. `403` ≠ logout.
+- CRM calls: `fetchWithAuth` (cookie + `Authorization` / `X-Session-Token` from sessionStorage). No global `window.fetch` patch. Signed storage blob downloads: raw `fetch` + `credentials: 'omit'`.
+- Public intake: honeypot, `Idempotency-Key`, 429/`Retry-After`, `credentials: 'omit'`; test-data fill only in `DEV` or `VITE_ENABLE_REQUEST_TEST_DATA`. No `skip_email_notifications`. Contract verification not in localStorage.
+- Host: Cloud Run `sokana-front-end`. API URL baked via Cloud Build `_VITE_APP_BACKEND_URL`. Vercel is being decommissioned; `vercel.json` headers do not protect production — put CSP/HSTS on the Cloud Run frontend container.
+- Not P0: iOS third-party cookie / header-token reliability; XSS vs sessionStorage token; `AuthCallback` body `access_token`; Supabase `sb-auth` in localStorage; mobile layout (UX).
 
 ## Known Response Wrappers To Support
 
@@ -1122,3 +1126,347 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
   - Customers page soft-fails when QB disconnected / invoiceable route 404.
 - **Context Updated**: yes
 - **Implementation Started After Gate**: yes (PR ship)
+
+## Preflight Update 2026-08-10 (architecture boundary todos)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Capture architecture assessment as open frontend + backend handoff todos (no implementation).
+- **Handoff inbox**: after this task → `open_handoff_tasks_found`:
+  - `2026-08-10-backend-architecture-boundary-refactor.md`
+  - frontend `2026-08-10-frontend-architecture-boundary-refactor.md`
+- **Repos Scanned**: both (assessment + handoff conventions only)
+- **Files Scanned**:
+  - Backend: `.cursor/handoffs/README.md`, `todo.md`, `docs/Backend_Architecture_Boundary_Assessment.docx` (referenced)
+  - Frontend: `.cursor/handoffs/README.md`, `.cursor/skills/sokana-cross-repo-handoff/SKILL.md`
+- **Contract Findings**: FE still has global fetch patch + multi-credential HTTP; BE has alias surface + partial composition root; auth transport dual-support required before cutover.
+- **Drift Risk**: Independent BE/FE auth or QB-sync ownership changes without dual-support will break pilot flows.
+- **Required Compatibility**: Preserve routes/responses; dual-support cookies/headers during token migration; FE QB sync removal only after BE idempotent ownership.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: no (todo/handoff creation only)
+
+## Preflight Update 2026-08-11 (PR 1 feature-package guardrails)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Document backend feature-package guardrails only (`src/features/README.md`); no production moves or API changes.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  - `2026-08-10-backend-architecture-boundary-refactor.md` (architecture-assessment→backend; this task)
+  - frontend companion: `2026-08-10-frontend-architecture-boundary-refactor.md` (out of scope)
+- **Repos Scanned**: both (docs/architecture only; no contract edits)
+- **Files Scanned**:
+  - Backend: `.cursor/handoffs/open/2026-08-10-backend-architecture-boundary-refactor.md`, `src/features/` (existing `invoices`, `quickbooks` only), `src/controllers/requestFormController.ts`, `src/routes/requestRoute.ts`, `src/services/RequestFormService.ts`
+  - Frontend: `src/features/` package list (incl. `request`), companion handoff path only
+- **Contract Findings**: No request/response contract changes in this PR. Public request intake remains on legacy controllers/routes/services until a later structural slice.
+- **Drift Risk**: None for this PR (documentation + handoff status only).
+- **Required Compatibility**: Preserve all existing routes and payloads; do not create empty feature packages or move imports yet.
+- **Compatibility assumptions**: Frontend continues to call current intake/portal endpoints unchanged; backend package layout docs do not imply runtime relocation.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes (docs/handoff only)
+
+## Preflight Update 2026-08-11 (PR 2 baseline and CI)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Baseline + CI gate only (route inventory, Jest open-handle fix, GH Actions test gate, security-smoke scaffold); no API/security/behavior changes.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  - `2026-08-10-backend-architecture-boundary-refactor.md` (this task)
+  - frontend companion remains open (out of scope)
+- **Repos Scanned**: both (contracts referenced for freeze docs only)
+- **Files Scanned**:
+  - Backend: `src/server.ts`, `src/routes/*.ts`, `jest.config.js`, `.github/workflows/lint.yaml`, `cloudbuild.yaml`, `src/__tests__/requestEndpoint.test.ts`
+  - Frontend: feature package list / companion handoff only (no FE edits)
+- **Contract Findings**: Inventory frozen in `docs/ROUTE_RESPONSE_CONTRACT_INVENTORY.md`; wrappers remain mixed (`ApiResponse`, `{success,…}`, `{data,meta}`, portal `{ok}`).
+- **Drift Risk**: None from this PR if CI/docs-only; FE still depends on existing aliases and cookie auth.
+- **Required Compatibility**: Preserve routes, status codes, response fields, `/health` semantics, Cloud Run single service.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-11 (PR 2.1 deployment gate alignment)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Enforce Cloud Build deploy-path test gate + align lint workflow to Node 20; no API/auth/runtime changes.
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`
+- **Repos Scanned**: backend only (CI/deploy config)
+- **Files Scanned**: `cloudbuild.yaml`, `.github/workflows/lint.yaml`, `.github/workflows/test.yml`, `package.json` engines
+- **Contract Findings**: No request/response changes.
+- **Drift Risk**: None for FE contracts; deploy now blocked when the test gate fails.
+- **Required Compatibility**: Preserve Cloud Run service `sokana-private-api`, region, Artifact Registry image path, entrypoint `node dist/cloudrun.js`.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-12 (PR 3 immediate containment)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Remove localhost telemetry; redact sensitive logs; sanitize API error bodies; add containment regression tests. No auth/route/folder migration.
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`
+- **Repos Scanned**: backend (controllers/routes/services logging + error paths); FE companion not modified
+- **Contract Findings**: Success bodies unchanged. Some 500 error bodies intentionally sanitized (security bug fixes).
+- **Drift Risk**: FE that displayed raw `error.details` / provider messages on contract-signing/SignNow failures will now see generic messages.
+- **Required Compatibility**: Preserve success JSON/status codes; endpoint auth remains PR 4.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-12 (PR 4 endpoint authorization)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Authorization matrix + protect previously anonymous payment/signing/QB/email routes; ownership policies; auth-matrix tests. No webhook signatures / no folder moves.
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`
+- **Repos Scanned**: both (FE callers for createContract / signNow / paymentsApi)
+- **Files Scanned**: FE `createContract.ts`, `signNowService.ts`, `paymentsApi.ts`; BE route modules listed in matrix
+- **Contract Findings**: Success bodies unchanged. Newly denied anonymous calls return existing 401/403 shapes. QB invoice-paid webhook no longer requires CRM session.
+- **Drift Risk**: Unauthenticated scripts hitting signing/payment tooling will now get 401 (intentional security fix).
+- **Required Compatibility**: Preserve public URLs/aliases; FE admin cookie auth required for contract generation / SignNow send (already used).
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-12 (PR4 auth matrix audit)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Produce complete Express route auth matrix (authenticated vs unauthenticated) with PR4 hardening plan; no implementation edits yet.
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`
+- **Repos Scanned**: both (backend route files + FE callers for contract-signing/payments/QB customers)
+- **Files Scanned**:
+  - backend: `src/server.ts`, all listed `src/routes/*.ts`
+  - frontend: `src/common/utils/createContract.ts`, `src/services/signNowService.ts`, `src/api/financial/paymentsApi.ts`, `src/api/quickbooks/auth/customer.ts`
+- **Contract Findings**: FE already sends credentials via global fetch wrapper; contract-signing + SignNow send + QB customers calls assume session cookies work once auth is added.
+- **Drift Risk**: Adding `authMiddleware`+`authorizeRoles` to currently-open payment/contract/SignNow/QB-customer routes will 401 unauthenticated callers; FE admin contract flows must remain logged-in.
+- **Required Compatibility**: Keep public: health, login/signup/OAuth, requestSubmission, SignNow `/callback`, QB `/auth`+`/callback`. Prefer moving QB webhook registration before `authMiddleware` in PR4.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: no (audit-only)
+
+## Preflight Update 2026-08-14 (PR 5 webhooks and OAuth)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Provider webhook signature + replay/idempotency; cryptographically secure single-use QB OAuth state. Keep public URLs.
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`
+- **Repos Scanned**: both
+- **Files Scanned**:
+  - backend: SignNow/QB webhook controllers + routes, `quickbooksAuthService`, `quickbooksController`, `server.ts` body parser
+  - frontend: `useQuickBooksIntegration.ts`, `api/quickbooks/auth/route.ts` (expects `{ url }` from `/quickbooks/auth/url` or `/auth`; does not parse OAuth state)
+- **Contract Findings**: FE OAuth success contract remains `{ url: string }`. Callback is browser redirect (not FE JSON). Webhooks are provider→backend only (no FE callers).
+- **Drift Risk**: Unsigned webhook POSTs return 401 when secrets are configured / in production. Invalid/reused OAuth `state` fails callback (redirect to `?quickbooks=error`). Requires Cloud SQL tables `webhook_events` + `oauth_states` and env `SIGNNOW_WEBHOOK_SECRET` / `QB_WEBHOOK_VERIFIER_TOKEN`.
+- **Required Compatibility**: Preserve paths `POST /api/signnow/callback`, `POST /quickbooks/webhooks/invoice-paid` (+ `/api` alias), `GET /quickbooks/auth`, `/callback`, `/auth/url`.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-14 (PR 6 auth exploration)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Explore authentication for PR 6 (authoritative roles, cookie stability, dual-support token transport + legacy telemetry). Exploration only — no implementation.
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`
+- **Repos Scanned**: both
+- **Files Scanned**:
+  - backend: `src/middleware/authMiddleware.ts`, `authorizeRoles.ts`, `authController.ts`, `supabaseAuthService.ts`, `usecase/authUseCase.ts`, `repositories/supabaseUserRepository.ts`, `services/cloudSqlTeamService.ts`, `services/portalInviteService.ts`, `security/authorizationPolicies.ts`, `server.ts`, `routes/authRoutes.ts`, `controllers/debugController.ts`
+  - frontend: `src/api/http.ts`, `src/api/config.ts`, `src/api/authToken.ts`, `src/common/contexts/UserContext.tsx`, `src/common/components/routes/ProtectedRoutes.tsx`, `src/common/auth/roles.ts`, `src/features/auth/AuthCallback.tsx`, `src/main.tsx`, `ClientProfileTab.tsx` (Bearer + X-Session-Token)
+- **Contract Findings**:
+  - FE default `VITE_AUTH_MODE=cookie`; `getRequestAuth` always attaches Bearer + `X-Session-Token` when Supabase session exists, and uses `credentials: 'include'` in cookie mode.
+  - Global `main.tsx` fetch patch forces `credentials: 'include'` for non-Supabase URLs.
+  - Login cookie mode expects `Set-Cookie: sb-access-token` + optional JSON `token`; `/auth/me` drives `user.role` for sidebar/route guards.
+  - OAuth callback posts JSON `{ access_token }` to `POST /auth/callback` (legacy body token path).
+  - No FE usage of query-string session tokens for API auth; hash `#access_token=` used only for Supabase recovery/set-password flows.
+- **Drift Risk**: If `/auth/me` stops preferring `user_metadata.role`, FE admin/doula/billing nav depends on DB/Cloud SQL role being correct. Cookie name split (`sb-access-token` vs `session`) can strand OAuth users.
+- **Required Compatibility**: Keep cookie + Bearer + X-Session-Token dual-support; keep login JSON `token` field until telemetry proves unused; do not fail-closed clients on missing staff row.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: no (exploration-only)
+
+## Preflight Update 2026-08-14 (PR 6 authentication compatibility)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Authoritative DB/app-managed roles (no staff from `user_metadata`); standardize `sb-access-token` cookies; dual-support header/cookie (+ legacy `session` cookie); measure legacy token transports without retiring them.
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`
+- **Repos Scanned**: both (reuse PR 6 exploration scan)
+- **Contract Findings**: FE still expects `/auth/me` `{ …, role }` and login `{ user, token }` + `Set-Cookie`. Role source changes from metadata override to Cloud SQL / `public.users` only.
+- **Drift Risk**: Users whose only staff signal was forged/stale `user_metadata.role` lose staff access (intentional). OAuth/`POST /auth/callback` now sets `sb-access-token` (also clears legacy `session`).
+- **Required Compatibility**: Preserve cookie + Bearer + `X-Session-Token`; keep JSON `token` on login; keep body `access_token` on POST callback; temporarily still accept legacy `session` cookie with telemetry.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-14 (PR 7 HTTP contracts exploration)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Explore PR 7 (canonical envelope + Zod + alias deprecation telemetry). Exploration only — no implementation.
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`
+- **Repos Scanned**: both
+- **Files Scanned**:
+  - backend: `src/middleware/authMiddleware.ts`, `authorizeRoles.ts`, `validateRequest.ts`, `common/utils/safeLogging.ts`, `security/authorizationPolicies.ts`, `utils/responseBuilder.ts`, `controllers/authController.ts`, `server.ts`, `routes/authRoutes.ts`, `routes/paymentMethodRoutes.ts`, `docs/ROUTE_RESPONSE_CONTRACT_INVENTORY.md`
+  - frontend: `src/api/http.ts`, `src/api/config.ts`, `src/common/contexts/UserContext.tsx`, `src/features/auth/Login.tsx`, `src/api/doulas/doulaService.ts`, `src/api/admin/adminService.ts`
+- **Contract Findings**:
+  - Canonical FE `ApiResponse`: `{ success: true, data }` / `{ success: false, error, code? }`. `normalizeError` prefers `error` then `message`.
+  - `requestCanonical` requires boolean `success` on OK responses; login uses raw `fetch` and only reads `data.error` on failure — do not wrap login success in `{ success, data }` without FE change.
+  - Auth middleware errors are `{ error }` (no `success: false`); safe 5xx often `{ success: false, error }`.
+  - Default `VITE_USE_LEGACY_API` is off → most `get/post` use canonical parser; many services still use `fetchWithAuth` + `error.error || error.message`.
+- **Drift Risk**: Adding `code` is safe additive; removing `error` string or forcing `success` wrapper on `/auth/login` / `/auth/me` / `/health` breaks FE. Alias Deprecation headers must not change JSON bodies.
+- **Required Compatibility**: Preserve existing status codes and top-level `error` / `message` / `success` fields; additive `code` / `success: false` only; keep `/login` and `/client(s)` aliases live with telemetry.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: no (exploration-only)
+
+## Preflight Update 2026-08-14 (PR 7 HTTP contracts)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Introduce canonical error codes + Zod validation incrementally; deprecation headers/telemetry on legacy aliases; preserve fields/status codes; no intake move (PR 8).
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`
+- **Repos Scanned**: both (reuse PR 7 exploration)
+- **Contract Findings**: Login success stays `{ message, user, token }`; validation failures become `{ success: false, error, code: 'VALIDATION_ERROR', details? }` with string `error` preserved for UserContext. Alias JSON bodies unchanged; Deprecation/Sunset/Link headers additive.
+- **Drift Risk**: Low if `error` string retained. FE may ignore new headers.
+- **Required Compatibility**: Keep `/health`, `/auth/login`, `/auth/me` unwrapped success shapes; do not remove aliases.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-14 (PR 8 intake characterization)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Characterize public request intake for PR 8 structural migration into `src/features/intake` (exploration only — no code move).
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md` (direction `architecture-assessment->backend`, not `frontend->backend`)
+- **Repos Scanned**: both
+- **Files Scanned**:
+  - backend: `src/server.ts`, `src/routes/requestRoute.ts`, `src/controllers/requestFormController.ts`, `src/services/RequestFormService.ts`, `src/repositories/requestFormRepository.ts`, `src/intake/requestSubmissionDto.ts`, `src/constants/referralSource.ts`, `src/billing/expandedInsuranceBilling.ts`, `src/index.ts`, `src/__tests__/requestEndpoint.test.ts`, `src/__tests__/requestSubmissionFlow.test.ts`, `src/__tests__/requestSubmissionDto.test.ts`, `docs/ROUTE_RESPONSE_CONTRACT_INVENTORY.md`
+  - frontend: `src/features/request/RequestForm.tsx`, `src/features/request/useRequestForm.ts`, `src/features/request/contexts/RequestFormContext.tsx`, `src/api/__tests__/requestSubmission.test.ts`, e2e helpers under `e2e/helpers/requestForm.ts`
+- **Contract Findings**:
+  - Public URL: `POST {apiBaseUrl}/requestService/requestSubmission` (no `/api` prefix, no auth).
+  - FE success check: `response.ok && !responseData.error`; toast is FE-owned (`Request Form Submitted Successfully!`), not the BE message string.
+  - BE happy path: `200 { message: "Form data received, onto processing" }` — no id/data payload.
+  - BE validation/service failures: `400 { error: string }` (not canonical `{ success: false, … }` envelope).
+  - FE also sends `skip_email_notifications` / `submission_source`; backend currently ignores both (emails always attempt after save).
+- **Drift Risk**: Changing status codes, wrapping success in `{ success, data }`, renaming `error`/`message`, or requiring auth would break CRM submit. Returning client id is additive-safe if FE ignores unknown fields.
+- **Required Compatibility**: Preserve public path, `200` + `{ message }`, `400` + `{ error }` string for PR 8 façade.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: no (characterization only)
+
+## Preflight Update 2026-08-14 (PR 8 intake structural slice)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Migrate request intake into `src/features/intake` behind existing route/controller façade; domain validation/normalization; use case + ports; shadow-compare flag; preserve URL and response shapes.
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`
+- **Repos Scanned**: both (reuse characterization)
+- **Contract Findings**: Unchanged public contract. Legacy `src/intake/requestSubmissionDto.ts` becomes a re-export shim.
+- **Drift Risk**: Low if normalize parity holds; `INTAKE_USE_FEATURE_PACKAGE=true` flips write path to use case.
+- **Required Compatibility**: `POST /requestService/requestSubmission` → `200 { message: "Form data received, onto processing" }` / `400 { error }`.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-14 (intake abuse protection)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Rate limit + idempotency + abuse protection on public `POST /requestService/requestSubmission`.
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md` (`no_open_handoff_tasks` for `frontend->backend`)
+- **Repos Scanned**: both
+- **Files Scanned**: BE `requestRoute.ts`, `requestFormController.createForm`, `intakeAbuseProtection.ts`; FE `RequestForm.tsx` (checks `ok && !error`; no Idempotency-Key today)
+- **Contract Findings**: Happy path message unchanged. New `429 { error, code: RATE_LIMITED }` for rate limits (FE already toasts `error`). Honeypot bots get fake `200` success. Optional `Idempotency-Key` header; soft email dedupe covers double-submit without FE changes. Jest disables rate/soft-dedupe unless `INTAKE_ABUSE_ENFORCE=true`.
+- **Drift Risk**: Legitimate multi-submit from same email within window may get soft-deduped 200 without a second lead (intentional).
+- **Required Compatibility**: Preserve `200 { message }` success string; keep path public/unauthenticated.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-14 (security summary doc)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Document P0 security completion + GCP encryption guidance
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`; `no_open_handoff_tasks` for `frontend->backend`
+- **Repos Scanned**: backend
+- **Files Scanned**: handoff P0 checklist; existing `docs/ENDPOINT_AUTHORIZATION_MATRIX.md`, `PRODUCTION_CLOUD_SQL_VERCEL.md`
+- **Contract Findings**: Docs-only; no FE API change
+- **Context Updated**: yes (`docs/SECURITY_P0_HARDENING_SUMMARY.md`)
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-14 (PR to main — test gate + deploy)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Run automated tests and open a PR to `main` for Cloud Run deploy
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`; `no_open_handoff_tasks` for `frontend->backend`
+- **Repos Scanned**: backend CI (`test.yml`, `cloudbuild.yaml`)
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Document Cloud SQL/Cloud Run at-rest and in-transit encryption and how P0 ties into starting HIPAA
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`; `no_open_handoff_tasks` for `frontend->backend`
+- **Repos Scanned**: `SECURITY_P0_HARDENING_SUMMARY.md`; live `gcloud sql` / `gcloud run` describe (no secrets copied into docs)
+- **Context Updated**: yes
+- **Implementation Started After Gate**: n/a (docs only)
+
+## Preflight Update 2026-08-14 (record FE P0 status in security summary)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Document frontend P0 as aligned-with-backend, Cloud Run host, not a finished security program
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`; `no_open_handoff_tasks` for `frontend->backend`
+- **Repos Scanned**: both (user status + `SECURITY_P0_HARDENING_SUMMARY.md`, epic handoff)
+- **Context Updated**: yes
+- **Implementation Started After Gate**: n/a (docs only)
+
+## Preflight Update 2026-08-14 (FE security medium closed — sync)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Record frontend medium-risk security closures against backend intake/auth contracts
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`; `no_open_handoff_tasks` for `frontend->backend`
+- **Repos Scanned**: both (user report + BE `intakeAbuseProtection.ts`, `authController.handleToken`)
+- **Contract Findings**: Honeypot field names match BE exactly. Fake 200 + `RATE_LIMITED`/`Retry-After`/`Idempotency-Key` header match. Body `access_token` still dual-supported on BE (`legacy.body_access_token` telemetry) — keep until unused.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: n/a (sync only)
+
+## Preflight Update 2026-08-14 (FE security P0 closed — sync)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Record frontend high-risk security closures against backend auth/intake contracts
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`; `no_open_handoff_tasks` for `frontend->backend`
+- **Repos Scanned**: both (user report + BE intake/auth notes)
+- **Contract Findings**: FE now trusts `/auth/me` for role; aligns with BE authoritative role. Intake no longer pretends it can skip emails. BE already has honeypot/rate-limit on submit; FE honeypot field still a medium follow-up.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: n/a (sync only)
+
+## Preflight Update 2026-08-14 (Account state dropdown blank)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Fix Account State dropdown not showing saved state while city/address do
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`; `no_open_handoff_tasks` for `frontend->backend`
+- **Repos Scanned**: both
+- **Files Scanned**: FE `UpdateAccount.tsx`, `50States.tsx`; BE Cloud SQL `admins.state` for jerry@techluminateacademy.com
+- **Contract Findings**: Backend returns `state: "Illinois"` correctly. UI bug: Select used `defaultValue` (not controlled after `/auth/me` reset) and SelectItem values were full names while form defaults used abbreviations.
+- **Compatibility Assumptions**: Persist/display state as USPS codes (`IL`); accept legacy full names on read.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-14 (admin first/last name split)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Fix Account form spilling multi-word first name into last name after save
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`; `no_open_handoff_tasks` for `frontend->backend`
+- **Repos Scanned**: both
+- **Files Scanned**: FE `UpdateAccount.tsx`, `saveUser`; BE `cloudSqlTeamService.ts`, `userController.ts` `/users/update`, migration `add_admin_first_last_name.sql`
+- **Contract Findings**: FE sends separate `firstname`/`lastname`. Admins previously only stored `full_name` and re-split on first whitespace on read → multi-word first names corrupted last name. Fix: persist `admins.first_name`/`last_name` and prefer those on read.
+- **Compatibility Assumptions**: Account UI continues to use `user.firstname`/`user.lastname` from `/auth/me` and `/users/update` response; no FE contract change required.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-14 (admin role client portal)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Diagnose admin login landing on Client Portal for jerrybony5@gmail.com
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`; `no_open_handoff_tasks` for `frontend->backend`
+- **Repos Scanned**: both
+- **Files Scanned**: BE `resolveAuthoritativeRole.ts`, `supabaseAuthService.ts`; FE client portal screenshot / ProtectedRoutes
+- **Contract Findings**: PR 6 ignores Supabase metadata for staff. User had `user_metadata`/`app_metadata` admin but no Cloud SQL `admins` row → defaulted to `client`. Added to `public.admins`.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes

@@ -17,13 +17,14 @@ import { listInvoicesFromCloudSql } from '../repositories/cloudSqlInvoiceReposit
 import { getQuickBooksConnectionHealth } from '../utils/tokenUtils';
 import { logger } from '../common/utils/logger';
 import { toSafeProviderError } from '../common/utils/safeLogging';
+import { createOAuthState } from '../security/oauthStateStore';
 // Ensure you have SUPABASE_JWT_SECRET in your env
 const JWT_SECRET = process.env.SUPABASE_JWT_SECRET!
 
 /**
  * JSON endpoint: return the Intuit consent URL for AJAX calls.
  */
-export const quickBooksAuthUrl: RequestHandler = (_req, res, next) => {
+export const quickBooksAuthUrl: RequestHandler = async (_req, res) => {
   try {
     // Validate required environment variables
     const { QB_CLIENT_ID, QB_CLIENT_SECRET, QB_REDIRECT_URI } = process.env;
@@ -41,8 +42,8 @@ export const quickBooksAuthUrl: RequestHandler = (_req, res, next) => {
       return;
     }
 
-    const state = Math.random().toString(36).substring(2)
-    const url = generateConsentUrl(state)
+    const state = await createOAuthState();
+    const url = generateConsentUrl(state);
 
     if (!url) {
       console.error('❌ [QB Auth] Failed to generate consent URL');
@@ -56,9 +57,9 @@ export const quickBooksAuthUrl: RequestHandler = (_req, res, next) => {
     res.json({ url });
   } catch (err: any) {
     logger.error(toSafeProviderError('quickbooks', 'generate_consent_url', err), 'QuickBooks operation failed');
+    // Security bug fix (PR 3): drop raw err.message from client JSON.
     res.status(500).json({
       error: 'Could not fetch QuickBooks auth URL',
-      details: err?.message || 'Unknown error occurred'
     });
   }
 }
@@ -66,13 +67,13 @@ export const quickBooksAuthUrl: RequestHandler = (_req, res, next) => {
 /**
  * Redirect endpoint: used by window.open to start OAuth directly.
  */
-export const connectQuickBooks: RequestHandler = (req, res, next) => {
+export const connectQuickBooks: RequestHandler = async (_req, res, next) => {
   try {
-    const state = Math.random().toString(36).substring(2)
-    const url   = generateConsentUrl(state)
-    res.redirect(url)
+    const state = await createOAuthState();
+    const url = generateConsentUrl(state);
+    res.redirect(url);
   } catch (err) {
-    next(err)
+    next(err);
   }
 }
 
@@ -95,17 +96,16 @@ export const handleQuickBooksCallback: RequestHandler = async (req, res, next) =
     // Use HTTP redirect so the browser navigates immediately (no reliance on JavaScript)
     res.redirect(302, redirectUrl);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Connection failed';
     logger.error(toSafeProviderError('quickbooks', 'oauth_callback', err), 'QuickBooks operation failed');
     const frontendUrl = process.env.FRONTEND_URL || process.env.FRONTEND_URL_DEV || 'http://localhost:3001';
     const errorPath = process.env.QUICKBOOKS_SUCCESS_REDIRECT_PATH || '/integrations/quickbooks';
-    const errorRedirectUrl = `${frontendUrl}${errorPath.startsWith('/') ? errorPath : `/${errorPath}`}?quickbooks=error&message=${encodeURIComponent(message)}`;
+    // Security bug fix (PR 3): do not put raw provider/error messages in redirect query or HTML.
+    const errorRedirectUrl = `${frontendUrl}${errorPath.startsWith('/') ? errorPath : `/${errorPath}`}?quickbooks=error`;
 
     res.send(`
       <html><body>
         <script>window.location.href = '${errorRedirectUrl}';</script>
         <p><strong>Error connecting QuickBooks.</strong></p>
-        <p>${message}</p>
         <p>Redirecting to app… If not, <a href="${errorRedirectUrl}">click here</a>.</p>
       </body></html>
     `)

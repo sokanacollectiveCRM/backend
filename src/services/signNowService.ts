@@ -275,8 +275,8 @@ export class SignNowService {
       };
 
       console.log(
-        'Sending PUT request with payload:',
-        JSON.stringify(payload, null, 2)
+        'Sending PUT request with field count:',
+        fieldValues.length
       );
 
       // Use PUT endpoint to update fields
@@ -286,7 +286,7 @@ export class SignNowService {
         { headers: this.getAuthHeaders() }
       );
 
-      console.log('Document fields updated successfully:', response.data);
+      console.log('Document fields updated successfully');
 
       // Get document info after update to verify
       console.log('Getting document details after update...');
@@ -301,7 +301,6 @@ export class SignNowService {
         docResponseAfter.data.fields?.map((f) => ({
           name: f.json_attributes?.name,
           id: f.id,
-          value: f.data,
         }))
       );
 
@@ -311,10 +310,9 @@ export class SignNowService {
       };
     } catch (error) {
       console.error('Error updating document fields:', {
-        status: error.response?.status,
-        data: error.response?.data,
+        status: (error as any).response?.status,
         url: `${this.baseURL}/document/${documentId}`,
-        payload: fieldValues,
+        fieldCount: fieldValues.length,
       });
       throw error;
     }
@@ -350,8 +348,6 @@ export class SignNowService {
         password: this.password,
       });
 
-      console.log('📝 Request params:', params.toString());
-
       const { data } = await axios.post(
         `${this.baseURL}/oauth2/token`,
         params.toString(),
@@ -366,19 +362,9 @@ export class SignNowService {
       this.apiToken = data.access_token;
       return data;
     } catch (error) {
-      console.error('Authentication error details:', {
-        status: error.response?.status,
-        data: error.response?.data,
-        headers: error.response?.headers,
-        config: {
-          url: error.config?.url,
-          method: error.config?.method,
-          headers: error.config?.headers,
-          data: error.config?.data?.replace(
-            /(client_secret=)[^&]+/,
-            '$1[REDACTED]'
-          ),
-        },
+      // Never log client_secret, password, or raw provider auth payloads.
+      console.error('SignNow authentication failed', {
+        status: (error as any).response?.status,
       });
       throw error;
     }
@@ -404,7 +390,7 @@ export class SignNowService {
       // Get a fresh token
       await this.authenticate();
 
-      console.log('Prefilling template:', { documentId, fields });
+      console.log('Prefilling template:', { documentId, fieldCount: Object.keys(fields || {}).length });
 
       // Clone the template first
       const cloneResult = await this.cloneTemplate(
@@ -509,21 +495,13 @@ export class SignNowService {
 
       return response.data.fields || [];
     } catch (error: any) {
-      // Log detailed error information
-      const errorDetails = {
+      console.error('❌ SignNow API Error:', {
         status: error.response?.status,
         statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message,
         url: `${this.baseURL}/document/${documentId}`,
-        token: this.apiToken ? `${this.apiToken.slice(0, 8)}...` : 'undefined',
-      };
+      });
 
-      console.error('❌ SignNow API Error:', errorDetails);
-
-      throw new Error(
-        `Failed to get document fields: ${error.response?.status} - ${JSON.stringify(error.response?.data || error.message)}`
-      );
+      throw new Error('Failed to get document fields');
     }
   }
 
@@ -535,9 +513,7 @@ export class SignNowService {
   ) {
     console.log('Creating invitation:', {
       documentId,
-      client,
-      partner,
-      options,
+      hasPartner: Boolean(partner),
     });
     try {
       if (!client || !client.email || !client.name) {
@@ -570,10 +546,7 @@ export class SignNowService {
         decline_redirect_uri: options.declineUrl || `${baseUrl}/`,
       };
 
-      console.log('📤 Sending field invitation:', invitePayload);
-      console.log('🔗 Redirect URLs:');
-      console.log('  Success:', invitePayload.redirect_uri);
-      console.log('  Decline:', invitePayload.decline_redirect_uri);
+      console.log('📤 Sending field invitation for document', documentId);
 
       const { data } = await axios.post(
         `${this.baseURL}/document/${documentId}/invite`,
@@ -585,12 +558,9 @@ export class SignNowService {
       return { success: true, invite: data, type: 'field_invite' };
     } catch (error) {
       console.error('❌ Error creating invitation:', {
-        status: error.response?.status,
-        data: error.response?.data,
+        status: (error as any).response?.status,
         url: `${this.baseURL}/document/${documentId}/invite`,
         method: 'POST',
-        token: this.apiToken ? `${this.apiToken.slice(0, 8)}...` : 'undefined',
-        headers: this.getAuthHeaders(),
       });
 
       // Log the detailed errors from SignNow

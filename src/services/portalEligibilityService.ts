@@ -200,17 +200,41 @@ export class PortalEligibilityService {
   ): Promise<Map<string, PortalEligibilitySnapshot>> {
     const uniqueIds = [...new Set(clientIds.filter(Boolean))];
     const map = new Map<string, PortalEligibilitySnapshot>();
+    if (!uniqueIds.length) return map;
 
-    await Promise.all(
-      uniqueIds.map(async (clientId) => {
-        try {
-          const snapshot = await this.computeAndPersist(clientId);
-          map.set(clientId, snapshot);
-        } catch {
-          // Skip clients that fail readiness computation in list views.
-        }
-      })
-    );
+    // List views must stay cheap: one cached readiness query, no per-client
+    // recompute / QuickBooks card checks (those run on invite/detail paths).
+    const rows = await clientOnboardingReadinessRepository.getByClientIds(uniqueIds);
+    for (const clientId of uniqueIds) {
+      const row = rows.get(clientId);
+      if (row) {
+        const snapshot = mapReadinessRow(row);
+        snapshot.allowed_actions = computeAllowedActions(snapshot);
+        map.set(clientId, snapshot);
+        continue;
+      }
+      map.set(clientId, {
+        contract_signed: false,
+        deposit_paid: false,
+        billing_path: 'unknown',
+        is_eligible: false,
+        portal_blockers: ['billing_path_unknown'],
+        primary_portal_blocker: 'billing_path_unknown',
+        payment_authorization_required: false,
+        payment_authorization_satisfied: false,
+        card_on_file: false,
+        qb_customer_id: null,
+        qb_stored_payment_method_id: null,
+        verification_invoice_id: null,
+        verification_invoice_sent_at: null,
+        verification_invoice_paid_at: null,
+        allowed_actions: {
+          can_invite_to_portal: false,
+          can_mark_contract_signed: true,
+          can_mark_deposit_paid: false,
+        },
+      });
+    }
 
     return map;
   }

@@ -1,9 +1,24 @@
 import crypto from 'crypto';
 import { Request, Response, Router } from 'express';
+import authMiddleware from '../middleware/authMiddleware';
+import authorizeRoles from '../middleware/authorizeRoles';
+import { logger } from '../common/utils/logger';
+import {
+  SAFE_INTERNAL_ERROR_MESSAGE,
+  toSafeClientErrorBody,
+  toSafeProviderError,
+} from '../common/utils/safeLogging';
 import { SignNowService } from '../services/signNowService';
 import { checkSignNowDocumentStatus, processContractWithSignNow, type SignNowContractData } from '../utils/signNowContractProcessor';
 
 const router = Router();
+
+const requireAdmin = (req: any, res: any, next: any) => authorizeRoles(req, res, next, ['admin']);
+
+// Security bug fix (PR 4): contract signing tooling requires admin session.
+router.use(authMiddleware);
+router.use(requireAdmin);
+
 
 interface ContractSigningRequest extends Request {
   body: SignNowContractData;
@@ -15,7 +30,7 @@ interface ContractSigningRequest extends Request {
  */
 router.get('/test-auth', async (req: Request, res: Response): Promise<void> => {
   try {
-    console.log('🔐 Testing SignNow authentication...');
+    logger.info({ service: 'signnow', operation: 'test_auth' }, 'Testing SignNow authentication');
     const signNowService = new SignNowService();
     const result = await signNowService.testAuthentication();
 
@@ -24,13 +39,10 @@ router.get('/test-auth', async (req: Request, res: Response): Promise<void> => {
       message: 'SignNow authentication successful',
       data: result
     });
-  } catch (error: any) {
-    console.error('❌ SignNow authentication failed:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message || 'SignNow authentication failed',
-      details: error.response?.data || error.stack
-    });
+  } catch (error: unknown) {
+    logger.error(toSafeProviderError('signnow', 'test_auth', error), 'SignNow authentication failed');
+    // Security bug fix (PR 3): remove stack / provider payload from client response.
+    res.status(500).json(toSafeClientErrorBody('SignNow authentication failed'));
   }
 });
 
@@ -51,7 +63,10 @@ router.post('/generate-and-send', async (req: ContractSigningRequest, res: Respo
       return;
     }
 
-    console.log(`🚀 Starting SignNow-only workflow for contract ${contractData.contractId}`);
+    logger.info(
+      { service: 'signnow', operation: 'generate_and_send' },
+      'Starting SignNow contract workflow'
+    );
 
     // Process contract with SignNow (no nodemailer)
     const result = await processContractWithSignNow(contractData);
@@ -65,18 +80,15 @@ router.post('/generate-and-send', async (req: ContractSigningRequest, res: Respo
     } else {
       res.status(500).json({
         success: false,
-        error: result.emailDelivery.message,
+        error: 'Contract generation or delivery failed',
         data: result
       });
     }
 
-  } catch (error: any) {
-    console.error('❌ SignNow workflow failed:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message || 'SignNow workflow failed',
-      details: error.stack
-    });
+  } catch (error: unknown) {
+    logger.error(toSafeProviderError('signnow', 'generate_and_send', error), 'SignNow workflow failed');
+    // Security bug fix (PR 3): remove stack from client response.
+    res.status(500).json(toSafeClientErrorBody('SignNow workflow failed'));
   }
 });
 
@@ -103,11 +115,11 @@ router.post('/get-field-coordinates', async (req: Request, res: Response): Promi
       message: 'Field coordinates retrieved successfully'
     });
 
-  } catch (error: any) {
-    console.error('Error getting field coordinates:', error);
+  } catch (error: unknown) {
+    logger.error(toSafeProviderError('signnow', 'get_field_coordinates', error), 'Field coordinates lookup failed');
+    // Security bug fix (PR 3): remove raw error.message details from client response.
     res.status(500).json({
       error: 'Failed to get field coordinates',
-      details: error.message
     });
   }
 });
@@ -154,24 +166,24 @@ router.post('/generate-contract', async (req: ContractSigningRequest, res: Respo
       ...(contractData.overnightFee && { overnightFee: contractData.overnightFee })
     };
 
-    console.log(`🚀 Starting complete contract workflow for ${contractId}`);
+    logger.info(
+      { service: 'signnow', operation: 'generate_contract' },
+      'Starting complete contract workflow'
+    );
     const result = await processContractWithSignNow(finalContractData);
 
     res.json({
       success: result.success,
       message: result.success
         ? `Contract generated and sent via SignNow to ${result.clientEmail}`
-        : `Contract generation failed: ${result.emailDelivery.message}`,
+        : 'Contract generation failed',
       data: result
     });
 
-  } catch (error: any) {
-    console.error('❌ Contract generation workflow failed:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Contract generation workflow failed',
-      details: error.response?.data || error.stack
-    });
+  } catch (error: unknown) {
+    logger.error(toSafeProviderError('signnow', 'generate_contract', error), 'Contract generation workflow failed');
+    // Security bug fix (PR 3): remove stack / provider payload from client response.
+    res.status(500).json(toSafeClientErrorBody('Contract generation workflow failed'));
   }
 });
 
@@ -187,15 +199,15 @@ router.get('/status/:documentId', async (req: Request, res: Response): Promise<v
     if (result.success) {
       res.json(result);
     } else {
-      res.status(500).json(result);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to check document status',
+      });
     }
 
-  } catch (error: any) {
-    console.error('❌ Failed to check document status:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to check document status'
-    });
+  } catch (error: unknown) {
+    logger.error(toSafeProviderError('signnow', 'document_status', error), 'Document status check failed');
+    res.status(500).json(toSafeClientErrorBody('Failed to check document status'));
   }
 });
 
