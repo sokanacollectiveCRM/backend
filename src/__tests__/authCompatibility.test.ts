@@ -145,10 +145,12 @@ describe('PR 6 cookie helpers and transport telemetry', () => {
 
   it('sets canonical cookie and clears legacy session cookie', () => {
     const cookies: Record<string, unknown> = {};
+    const cookieOptions: Record<string, unknown> = {};
     const cleared: string[] = [];
     const res: any = {
-      cookie: (name: string, value: string) => {
+      cookie: (name: string, value: string, options?: unknown) => {
         cookies[name] = value;
+        cookieOptions[name] = options;
       },
       clearCookie: (name: string) => {
         cleared.push(name);
@@ -158,6 +160,11 @@ describe('PR 6 cookie helpers and transport telemetry', () => {
 
     setSessionCookie(res, 'tok-123');
     expect(cookies[SESSION_COOKIE]).toBe('tok-123');
+    expect(cookieOptions[SESSION_COOKIE]).toMatchObject({
+      httpOnly: true,
+      path: '/',
+      sameSite: 'lax',
+    });
     expect(cleared).toContain(LEGACY_SESSION_COOKIE);
 
     clearSessionCookies(res);

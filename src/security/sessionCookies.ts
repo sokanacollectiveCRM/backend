@@ -22,6 +22,10 @@ export function sessionCookieOptions(
     sameSite: IS_PRODUCTION ? 'none' : 'lax',
     maxAge: SESSION_MAX_AGE_MS,
     path: '/',
+    // CHIPS: Chrome rejects unpartitioned third-party cookies. Safari still
+    // blocks third-party cookies entirely; clients must also send the JSON
+    // login token as Authorization / X-Session-Token.
+    ...(IS_PRODUCTION ? { partitioned: true } : {}),
     ...overrides,
   };
 }
@@ -39,4 +43,14 @@ export function clearSessionCookies(res: Response): void {
   const clearOpts = sessionCookieOptions({ maxAge: undefined });
   res.clearCookie(SESSION_COOKIE, clearOpts);
   res.clearCookie(LEGACY_SESSION_COOKIE, clearOpts);
+  // Also drop pre-CHIPS cookies (same name, no Partitioned) so logout still
+  // clears sessions issued before the partitioned flag was added.
+  if (IS_PRODUCTION) {
+    const unpartitionedClear = sessionCookieOptions({
+      maxAge: undefined,
+      partitioned: false,
+    });
+    res.clearCookie(SESSION_COOKIE, unpartitionedClear);
+    res.clearCookie(LEGACY_SESSION_COOKIE, unpartitionedClear);
+  }
 }
