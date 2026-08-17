@@ -48,9 +48,14 @@ write-up: `docs/SECURITY_P0_HARDENING_SUMMARY.md` → “Frontend P0”.
 - Host: Cloud Run `sokana-front-end`. API URL baked via Cloud Build
   `_VITE_APP_BACKEND_URL`. Vercel is being decommissioned; `vercel.json` headers
   do not protect production — put CSP/HSTS on the Cloud Run frontend container.
-- Not P0: iOS third-party cookie / header-token reliability; XSS vs
-  sessionStorage token; `AuthCallback` body `access_token`; Supabase `sb-auth`
-  in localStorage; mobile layout (UX).
+- Mobile login: frontend and API are different sites (`*.run.app`). Safari/Chrome
+  on phones often drop the `sb-access-token` cookie even with
+  `SameSite=None; Secure`. After `POST /auth/login`, store JSON `token` in
+  sessionStorage and send `Authorization` + `X-Session-Token` on `/auth/me`.
+  Cookie remains httpOnly for desktop; header token is the mobile fallback.
+- Remaining (not this fix): XSS vs sessionStorage token; Google OAuth callback
+  that only sets a cookie then redirects; Supabase `sb-auth` in localStorage;
+  mobile layout (UX).
 
 ## Known Response Wrappers To Support
 
@@ -2119,3 +2124,62 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
   to `client`. Added to `public.admins`.
 - **Context Updated**: yes
 - **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-17 (HIPAA technical PHI inventory)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Read-only HIPAA PHI/data-flow inventory across backend + frontend (no application code changes)
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`; `no_open_handoff_tasks` for `frontend->backend`
+- **Repos Scanned**: both
+- **Files Scanned**: FE `src/features/request/useRequestForm.ts`, `src/api/dto/client.dto.ts`, `src/config/phi.ts`, `src/common/auth/roles.ts`, `src/Routes.tsx`, `src/common/contexts/UserContext.tsx`, `src/api/sessionAccessToken.ts`, `src/features/client-dashboard/`; BE `src/constants/phiFields.ts`, `src/security/authorizationPolicies.ts`, `src/controllers/clientController.ts`, `src/controllers/requestFormController.ts`, `src/repositories/requestFormRepository.ts`, `src/services/emailService.ts`, `src/services/customer/buildCustomerPayload.ts`, `src/utils/sensitiveAccess.ts`, `docs/ENDPOINT_AUTHORIZATION_MATRIX.md`
+- **Contract Findings**: Public intake schema in `useRequestForm.ts` matches Cloud SQL `phi_clients` insert in `requestFormRepository.ts`. Frontend `PHI_KEYS` treats name/email/phone as PHI; backend `PHI_FIELDS` / `ClientMapper` treat those as operational identifiers. Client portal vs staff CRM is frontend-routed (`StaffCrmRoute` / `ClientPortalRoute`) and backend-enforced via `/auth/me` roles.
+- **Drift Risk**: Inventory is read-only. No API contract change.
+- **Required Compatibility**: No implementation this task.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: no (read-only)
+
+## Preflight Update 2026-08-17 (mobile login session verification)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Production mobile login fails after success:
+  "Signed in, but the session could not be verified"
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`;
+  `no_open_handoff_tasks` for `frontend->backend`
+- **Repos Scanned**: both
+- **Files Scanned**: FE `UserContext.tsx`, `http.ts`, `sessionAccessToken.ts`,
+  `Login.tsx`, `AuthCallback.tsx`, `config.ts`; BE `authController.ts`,
+  `sessionCookies.ts`, `server.ts` CORS, `authMiddleware.ts`
+- **Contract Findings**: Cookie-mode login `POST /auth/login` returns
+  `{ message, user, token }` and `Set-Cookie: sb-access-token`. Frontend
+  immediately calls `GET /auth/me` via `fetchWithAuth`. `getRequestAuth()`
+  already sends `Authorization` + `X-Session-Token` from sessionStorage, but
+  `login()` never stored the JSON token. Desktop still sends the cookie;
+  Safari/Chrome on phones treat frontend (`*.run.app`) → API (`*.run.app`) as
+  third-party and drop the cookie, so `/auth/me` returns 401.
+- **Drift Risk**: Mobile login stays broken if frontend ships without storing
+  `token`, or if backend stops returning JSON `token`.
+- **Required Compatibility**: Keep JSON `token` on login; frontend must store
+  it and send header auth on `/auth/me`. Cookie `SameSite=None; Secure;
+  Partitioned` remains the desktop path.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-17 (deploy mobile session fix)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: PR + merge to `main` so Cloud Build deploys the mobile
+  session verification fix (frontend token storage + backend partitioned cookies)
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`;
+  `no_open_handoff_tasks` for `frontend->backend`
+- **Repos Scanned**: both (deploy path only)
+- **Files Scanned**: BE `cloudbuild.yaml`; FE `frontend-crm/cloudbuild.yaml`
+- **Contract Findings**: Unchanged from mobile login preflight. Frontend must
+  ship for phones to work; backend `Partitioned` cookie is Chrome-only help.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
