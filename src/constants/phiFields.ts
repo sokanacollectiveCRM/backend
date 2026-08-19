@@ -173,6 +173,27 @@ const FIELD_ALIAS_MAP: Record<string, string> = {
   portalStatus: 'portal_status',
   portalstatus: 'portal_status',
   referralSourceOther: 'referral_source_other',
+  paymentMethod: 'payment_method',
+  paymentmethod: 'payment_method',
+  pregnancyNumber: 'pregnancy_number',
+  pregnancynumber: 'pregnancy_number',
+  babyName: 'baby_name',
+  babyname: 'baby_name',
+  raceEthnicity: 'race_ethnicity',
+  raceethnicity: 'race_ethnicity',
+  clientAgeRange: 'client_age_range',
+  clientagerange: 'client_age_range',
+  annualIncome: 'annual_income',
+  annualincome: 'annual_income',
+  hasSecondaryInsurance: 'has_secondary_insurance',
+  hassecondaryinsurance: 'has_secondary_insurance',
+  insuranceProvider: 'insurance_provider',
+  insuranceMemberId: 'insurance_member_id',
+  policyNumber: 'policy_number',
+  insurancePhoneNumber: 'insurance_phone_number',
+  secondaryInsuranceProvider: 'secondary_insurance_provider',
+  secondaryInsuranceMemberId: 'secondary_insurance_member_id',
+  secondaryPolicyNumber: 'secondary_policy_number',
 };
 
 /**
@@ -185,7 +206,9 @@ const FIELD_ALIAS_MAP: Record<string, string> = {
  *
  * Must be called BEFORE splitClientPatch.
  */
-export function normalizeClientPatch(raw: Record<string, any>): Record<string, any> {
+export function normalizeClientPatch(
+  raw: Record<string, any>
+): Record<string, any> {
   const out: Record<string, any> = {};
 
   // 1) Flatten nested `user` object (frontend sometimes nests profile fields)
@@ -261,7 +284,10 @@ function shouldStripKey(key: string): boolean {
  * Recursively strip PHI from a value (object, array, or primitive).
  * Strips at every nesting level (e.g. user.health_history, user.email).
  */
-function stripPhiRecursive(value: unknown): { result: unknown; phiKeysFound: string[] } {
+function stripPhiRecursive(value: unknown): {
+  result: unknown;
+  phiKeysFound: string[];
+} {
   const phiKeysFound: string[] = [];
 
   if (value === null || value === undefined) {
@@ -300,7 +326,9 @@ function stripPhiRecursive(value: unknown): { result: unknown; phiKeysFound: str
  * Defensive strip: remove any PHI fields from a row (recursively for nested objects).
  * Use on data coming from Supabase before returning on list/operational-only endpoints.
  */
-export function stripPhiFromOperational(row: Record<string, any>): Record<string, any> {
+export function stripPhiFromOperational(
+  row: Record<string, any>
+): Record<string, any> {
   const { result } = stripPhiRecursive(row);
   return result as Record<string, any>;
 }
@@ -309,9 +337,11 @@ export function stripPhiFromOperational(row: Record<string, any>): Record<string
  * Strip PHI from a row (recursively) and return both the clean object and whether any PHI was present.
  * Use for response-level assert: if hadPhi, log security warning (never log values).
  */
-export function stripPhiAndDetect(
-  row: Record<string, any>
-): { stripped: Record<string, any>; hadPhi: boolean; phiKeysFound: string[] } {
+export function stripPhiAndDetect(row: Record<string, any>): {
+  stripped: Record<string, any>;
+  hadPhi: boolean;
+  phiKeysFound: string[];
+} {
   const { result, phiKeysFound } = stripPhiRecursive(row);
   return {
     stripped: result as Record<string, any>,
