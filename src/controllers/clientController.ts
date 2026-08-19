@@ -48,7 +48,8 @@ import {
 } from '../services/cloudSqlDoulaAssignmentService';
 import { syncMatchedClientToQuickBooks } from '../services/customer/syncMatchedClientToQuickBooks';
 import { DoulaAvailabilityService } from '../services/doulaAvailabilityService';
-import { fetchClientPhi, updateClientPhi } from '../services/phiBrokerService';
+import { fetchClientPhi, PhiBrokerError, updateClientPhi } from '../services/phiBrokerService';
+import type { PhiRequester } from '../services/phiBrokerService';
 import {
   PortalEligibilityService,
   portalEligibilityService,
@@ -323,6 +324,73 @@ export class ClientController {
       normalized.insurance_policy_holder_relationship;
     normalized.insurancePlanType = normalized.insurance_plan_type;
     return normalized;
+  }
+
+  /** Merge home/intake profile fields stored on phi_clients (Cloud SQL). */
+  private mergeHomeIntakeFields(
+    target: Record<string, unknown>,
+    user: Record<string, unknown> | null | undefined
+  ): void {
+    if (!user) return;
+    const homeTypes = user.home_types ?? user.home_type;
+    if (homeTypes !== undefined && homeTypes !== null) {
+      target.home_type = homeTypes;
+      target.home_types = user.home_types ?? homeTypes;
+    }
+    if (user.home_type_other !== undefined && user.home_type_other !== null) {
+      target.home_type_other = user.home_type_other;
+    }
+    if (user.home_access !== undefined && user.home_access !== null) {
+      target.home_access = user.home_access;
+    }
+    if (user.pets !== undefined && user.pets !== null) {
+      target.pets = user.pets;
+    }
+    if (user.home_adults_count !== undefined && user.home_adults_count !== null) {
+      target.home_adults_count = user.home_adults_count;
+    }
+    if (user.home_youth_count !== undefined && user.home_youth_count !== null) {
+      target.home_youth_count = user.home_youth_count;
+    }
+  }
+
+  /**
+   * Write PHI fields via broker when available; in primary mode fall back to
+   * Cloud SQL direct write (local dev + production private-IP path).
+   */
+  private async writePhiFieldsWithFallback(
+    clientId: string,
+    requester: PhiRequester,
+    phi: Record<string, any>
+  ): Promise<Record<string, any>> {
+    try {
+      return await updateClientPhi(clientId, requester, phi);
+    } catch (error) {
+      const canDirectWrite =
+        process.env.SPLIT_DB_READ_MODE === 'primary' &&
+        typeof this.clientRepository.updateClientOperational === 'function';
+
+      if (!canDirectWrite || !(error instanceof PhiBrokerError)) {
+        throw error;
+      }
+
+      logger.warn(
+        {
+          clientId,
+          errorMessage: error.message,
+        },
+        '[Client] PHI broker write failed — falling back to Cloud SQL direct write'
+      );
+
+      const result = await this.clientRepository.updateClientOperational!(
+        clientId,
+        phi
+      );
+      if (!result) {
+        throw new NotFoundError('Client not found');
+      }
+      return phi;
+    }
   }
 
   private validateBillingPayload(input: Record<string, any>): {
@@ -1276,6 +1344,7 @@ export class ClientController {
         if ((u as any)?.zip_code != null) merged.zipCode = (u as any).zip_code;
         if ((u as any)?.country != null) merged.country = (u as any).country;
         if ((u as any)?.bio != null) merged.bio = (u as any).bio;
+        this.mergeHomeIntakeFields(merged, u as unknown as Record<string, unknown>);
         logger.info(
           { clientId: targetClientId, source: 'cloud_sql', phi: 'included' },
           '[Client] detail response'
@@ -1695,7 +1764,11 @@ export class ClientController {
       // ── Step 3b: Write PHI fields to sokana-private (via broker) ──
       let phiWriteResult = null;
       if (Object.keys(phi).length > 0) {
-        phiWriteResult = await updateClientPhi(targetClientId, requester, phi);
+        phiWriteResult = await this.writePhiFieldsWithFallback(
+          targetClientId,
+          requester,
+          phi
+        );
 
         // DEBT: Write-through cache — keep Supabase identity fields in sync so list
         // endpoint shows current names. Broker stays authoritative.
@@ -1841,6 +1914,10 @@ export class ClientController {
           if (u?.zip_code != null) response.zipCode = u.zip_code;
           if (u?.country != null) response.country = u.country;
           if (u?.bio != null) response.bio = u.bio;
+          this.mergeHomeIntakeFields(
+            response,
+            u as unknown as Record<string, unknown>
+          );
         } catch {
           logger.warn(
             { clientId: targetClientId },
@@ -1853,6 +1930,12 @@ export class ClientController {
           const freshPhi =
             phiWriteResult ?? (await fetchClientPhi(targetClientId, requester));
           response = { ...dto, ...freshPhi };
+          const fullClient =
+            await this.clientRepository.findClientDetailedById(targetClientId);
+          this.mergeHomeIntakeFields(
+            response,
+            fullClient.user as unknown as Record<string, unknown>
+          );
         } catch {
           // PHI fetch failed — return operational only, don't block update response
           logger.warn(
@@ -2226,7 +2309,11 @@ export class ClientController {
       }
 
       // ── Step 4: Write PHI fields to sokana-private (via broker) ──
-      const phiWriteResult = await updateClientPhi(id, requester, phi);
+      const phiWriteResult = await this.writePhiFieldsWithFallback(
+        id,
+        requester,
+        phi
+      );
 
       // ── Step 5: Write-through cache — keep identity fields in sync ──
       if (phi.first_name || phi.last_name || phi.email || phi.phone_number) {

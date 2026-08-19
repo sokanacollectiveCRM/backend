@@ -12,6 +12,9 @@ import { ClientRepository, ClientOperationalRow } from './interface/clientReposi
 import { ROLE } from '../types';
 import { queryCloudSql } from '../db/cloudSqlPool';
 import { NotFoundError } from '../domains/errors';
+import {
+  normalizeIntakeHomeTypes,
+} from '../features/intake/domain/requestSubmissionDto';
 
 // Columns available before any optional migrations.
 const OPERATIONAL_COLUMNS_LEGACY = `
@@ -469,10 +472,34 @@ export class CloudSqlClientRepository implements ClientRepository {
       'referral_name',
       'referral_email',
       'referral_source_other',
+      'home_type',
+      'home_types',
+      'home_type_other',
+      'home_access',
+      'home_adults_count',
+      'home_youth_count',
+      'pets',
+      'pronouns',
+      'pronouns_other',
+      'preferred_contact_method',
+      'preferred_name',
+      'intake_age_years',
+      'services_interested',
+      'service_support_details',
+      'birth_hospital',
+      'birth_location',
+      'provider_type',
     ]);
     const columnValues = new Map<string, any>();
     for (const [k, v] of Object.entries(fields)) {
       if (!allowed.has(k) || v === undefined) continue;
+      if (k === 'home_type' || k === 'home_types') {
+        const normalized = normalizeIntakeHomeTypes(v);
+        const single =
+          normalized && normalized.length > 0 ? [normalized[0]] : null;
+        columnValues.set('home_types', single);
+        continue;
+      }
       let col = k;
       if (k === 'phone_number') col = 'phone';
       if (k === 'phone') col = 'phone';

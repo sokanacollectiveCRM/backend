@@ -403,6 +403,42 @@ describe('PUT /clients/:id/phi', () => {
     });
   });
 
+  describe('Broker fallback', () => {
+    it('falls back to Cloud SQL when PHI broker is unavailable in primary mode', async () => {
+      (mockClientRepository as any).updateClientOperational = jest
+        .fn()
+        .mockResolvedValue({ id: clientId });
+      (phiBrokerService.updateClientPhi as jest.Mock).mockRejectedValue(
+        new phiBrokerService.PhiBrokerError('Failed to connect to PHI Broker for update')
+      );
+      mockRequest.body = {
+        first_name: 'Jane',
+        phone_number: '555-1234',
+      };
+
+      await clientController.updateClientPhi(
+        mockRequest as AuthRequest,
+        mockResponse as Response
+      );
+
+      expect(mockClientRepository.updateClientOperational).toHaveBeenCalledWith(
+        clientId,
+        expect.objectContaining({
+          first_name: 'Jane',
+          phone_number: '555-1234',
+        })
+      );
+      expect(mockResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          data: expect.objectContaining({
+            message: 'PHI fields updated successfully',
+          }),
+        })
+      );
+    });
+  });
+
   describe('Environment Mode', () => {
     it('should reject when not in PRIMARY mode', async () => {
       process.env.SPLIT_DB_READ_MODE = 'shadow';
