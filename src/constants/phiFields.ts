@@ -206,7 +206,9 @@ const FIELD_ALIAS_MAP: Record<string, string> = {
  *
  * Must be called BEFORE splitClientPatch.
  */
-export function normalizeClientPatch(raw: Record<string, any>): Record<string, any> {
+export function normalizeClientPatch(
+  raw: Record<string, any>
+): Record<string, any> {
   const out: Record<string, any> = {};
 
   // 1) Flatten nested `user` object (frontend sometimes nests profile fields)
@@ -282,7 +284,10 @@ function shouldStripKey(key: string): boolean {
  * Recursively strip PHI from a value (object, array, or primitive).
  * Strips at every nesting level (e.g. user.health_history, user.email).
  */
-function stripPhiRecursive(value: unknown): { result: unknown; phiKeysFound: string[] } {
+function stripPhiRecursive(value: unknown): {
+  result: unknown;
+  phiKeysFound: string[];
+} {
   const phiKeysFound: string[] = [];
 
   if (value === null || value === undefined) {
@@ -321,7 +326,9 @@ function stripPhiRecursive(value: unknown): { result: unknown; phiKeysFound: str
  * Defensive strip: remove any PHI fields from a row (recursively for nested objects).
  * Use on data coming from Supabase before returning on list/operational-only endpoints.
  */
-export function stripPhiFromOperational(row: Record<string, any>): Record<string, any> {
+export function stripPhiFromOperational(
+  row: Record<string, any>
+): Record<string, any> {
   const { result } = stripPhiRecursive(row);
   return result as Record<string, any>;
 }
@@ -330,9 +337,11 @@ export function stripPhiFromOperational(row: Record<string, any>): Record<string
  * Strip PHI from a row (recursively) and return both the clean object and whether any PHI was present.
  * Use for response-level assert: if hadPhi, log security warning (never log values).
  */
-export function stripPhiAndDetect(
-  row: Record<string, any>
-): { stripped: Record<string, any>; hadPhi: boolean; phiKeysFound: string[] } {
+export function stripPhiAndDetect(row: Record<string, any>): {
+  stripped: Record<string, any>;
+  hadPhi: boolean;
+  phiKeysFound: string[];
+} {
   const { result, phiKeysFound } = stripPhiRecursive(row);
   return {
     stripped: result as Record<string, any>,

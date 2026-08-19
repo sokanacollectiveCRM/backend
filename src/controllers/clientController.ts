@@ -48,7 +48,11 @@ import {
 } from '../services/cloudSqlDoulaAssignmentService';
 import { syncMatchedClientToQuickBooks } from '../services/customer/syncMatchedClientToQuickBooks';
 import { DoulaAvailabilityService } from '../services/doulaAvailabilityService';
-import { fetchClientPhi, PhiBrokerError, updateClientPhi } from '../services/phiBrokerService';
+import {
+  PhiBrokerError,
+  fetchClientPhi,
+  updateClientPhi,
+} from '../services/phiBrokerService';
 import type { PhiRequester } from '../services/phiBrokerService';
 import {
   PortalEligibilityService,
@@ -346,7 +350,10 @@ export class ClientController {
     if (user.pets !== undefined && user.pets !== null) {
       target.pets = user.pets;
     }
-    if (user.home_adults_count !== undefined && user.home_adults_count !== null) {
+    if (
+      user.home_adults_count !== undefined &&
+      user.home_adults_count !== null
+    ) {
       target.home_adults_count = user.home_adults_count;
     }
     if (user.home_youth_count !== undefined && user.home_youth_count !== null) {
@@ -1344,7 +1351,10 @@ export class ClientController {
         if ((u as any)?.zip_code != null) merged.zipCode = (u as any).zip_code;
         if ((u as any)?.country != null) merged.country = (u as any).country;
         if ((u as any)?.bio != null) merged.bio = (u as any).bio;
-        this.mergeHomeIntakeFields(merged, u as unknown as Record<string, unknown>);
+        this.mergeHomeIntakeFields(
+          merged,
+          u as unknown as Record<string, unknown>
+        );
         logger.info(
           { clientId: targetClientId, source: 'cloud_sql', phi: 'included' },
           '[Client] detail response'

@@ -5,16 +5,16 @@
  * Schema: sokana_private — phi_clients + assignments (see docs/CLOUD_SQL_SOKANA_PRIVATE_SCHEMA.md).
  * Column mapping: phi_clients.phone → phone_number in app.
  */
-
-import { Client } from '../entities/Client';
-import { User } from '../entities/User';
-import { ClientRepository, ClientOperationalRow } from './interface/clientRepository';
-import { ROLE } from '../types';
 import { queryCloudSql } from '../db/cloudSqlPool';
 import { NotFoundError } from '../domains/errors';
+import { Client } from '../entities/Client';
+import { User } from '../entities/User';
+import { normalizeIntakeHomeTypes } from '../features/intake/domain/requestSubmissionDto';
+import { ROLE } from '../types';
 import {
-  normalizeIntakeHomeTypes,
-} from '../features/intake/domain/requestSubmissionDto';
+  ClientOperationalRow,
+  ClientRepository,
+} from './interface/clientRepository';
 
 // Columns available before any optional migrations.
 const OPERATIONAL_COLUMNS_LEGACY = `
@@ -58,7 +58,9 @@ const OPERATIONAL_COLUMNS_ALT_PHONE = `${OPERATIONAL_COLUMNS_BASE_ALT_PHONE},
 function isBirthOutcomesColumnMissing(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const code = String((error as { code?: string }).code || '');
-  const message = String((error as { message?: string }).message || '').toLowerCase();
+  const message = String(
+    (error as { message?: string }).message || ''
+  ).toLowerCase();
   return (
     code === '42703' &&
     (message.includes('birth_outcomes_induction') ||
@@ -70,7 +72,9 @@ function isBirthOutcomesColumnMissing(error: unknown): boolean {
 function isLifecycleColumnMissing(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const code = String((error as { code?: string }).code || '');
-  const message = String((error as { message?: string }).message || '').toLowerCase();
+  const message = String(
+    (error as { message?: string }).message || ''
+  ).toLowerCase();
   return (
     code === '42703' &&
     (message.includes('qbo_customer_id') || message.includes('matched_at'))
@@ -80,22 +84,30 @@ function isLifecycleColumnMissing(error: unknown): boolean {
 function isQuickBooksSyncColumnMissing(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const code = String((error as { code?: string }).code || '');
-  const message = String((error as { message?: string }).message || '').toLowerCase();
+  const message = String(
+    (error as { message?: string }).message || ''
+  ).toLowerCase();
   return code === '42703' && message.includes('quickbooks_');
 }
 
 function isPhoneColumnMissing(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const code = String((error as { code?: string }).code || '');
-  const message = String((error as { message?: string }).message || '').toLowerCase();
+  const message = String(
+    (error as { message?: string }).message || ''
+  ).toLowerCase();
   return code === '42703' && message.includes('column "phone" does not exist');
 }
 
 function isPhoneNumberColumnMissing(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const code = String((error as { code?: string }).code || '');
-  const message = String((error as { message?: string }).message || '').toLowerCase();
-  return code === '42703' && message.includes('column "phone_number" does not exist');
+  const message = String(
+    (error as { message?: string }).message || ''
+  ).toLowerCase();
+  return (
+    code === '42703' && message.includes('column "phone_number" does not exist')
+  );
 }
 
 const BILLING_COLUMNS = `
@@ -136,7 +148,8 @@ function mapRowToClient(row: Record<string, any>): Client {
     insurance_member_id: row.insurance_member_id,
     insurance_policy_holder_name: row.insurance_policy_holder_name,
     insurance_policy_holder_dob: row.insurance_policy_holder_dob,
-    insurance_policy_holder_relationship: row.insurance_policy_holder_relationship,
+    insurance_policy_holder_relationship:
+      row.insurance_policy_holder_relationship,
     insurance_plan_type: row.insurance_plan_type,
     policy_number: row.policy_number,
     insurance_phone_number: row.insurance_phone_number,
@@ -202,9 +215,15 @@ function mapRowToClient(row: Record<string, any>): Client {
     row.client_number ?? undefined
   );
   client.qboCustomerId = row.qbo_customer_id ?? undefined;
-  client.quickbooksSyncStatus = row.quickbooks_sync_status ?? (row.qbo_customer_id ? 'link_stale' : 'not_linked');
-  client.quickbooksLastCheckedAt = row.quickbooks_last_checked_at ? new Date(row.quickbooks_last_checked_at) : undefined;
-  client.quickbooksLastSyncedAt = row.quickbooks_last_synced_at ? new Date(row.quickbooks_last_synced_at) : undefined;
+  client.quickbooksSyncStatus =
+    row.quickbooks_sync_status ??
+    (row.qbo_customer_id ? 'link_stale' : 'not_linked');
+  client.quickbooksLastCheckedAt = row.quickbooks_last_checked_at
+    ? new Date(row.quickbooks_last_checked_at)
+    : undefined;
+  client.quickbooksLastSyncedAt = row.quickbooks_last_synced_at
+    ? new Date(row.quickbooks_last_synced_at)
+    : undefined;
   client.quickbooksSyncError = row.quickbooks_sync_error ?? undefined;
   return client;
 }
@@ -226,13 +245,47 @@ async function queryWithColumnFallback(
 ): Promise<{ rows: Record<string, any>[] }> {
   const tiers = [
     { cols: OPERATIONAL_COLUMNS, check: () => true },
-    { cols: OPERATIONAL_COLUMNS_ALT_PHONE, check: (err: unknown) => isPhoneColumnMissing(err) || isBirthOutcomesColumnMissing(err) || isQuickBooksSyncColumnMissing(err) },
-    { cols: OPERATIONAL_COLUMNS_BASE, check: (err: unknown) => isBirthOutcomesColumnMissing(err) || isPhoneNumberColumnMissing(err) || isQuickBooksSyncColumnMissing(err) },
-    { cols: OPERATIONAL_COLUMNS_BASE_ALT_PHONE, check: (err: unknown) => isBirthOutcomesColumnMissing(err) || isPhoneColumnMissing(err) || isQuickBooksSyncColumnMissing(err) },
-    { cols: OPERATIONAL_COLUMNS_LIFECYCLE, check: (err: unknown) => isQuickBooksSyncColumnMissing(err) || isPhoneNumberColumnMissing(err) },
-    { cols: OPERATIONAL_COLUMNS_LIFECYCLE_ALT_PHONE, check: (err: unknown) => isQuickBooksSyncColumnMissing(err) || isPhoneColumnMissing(err) },
-    { cols: OPERATIONAL_COLUMNS_LEGACY, check: (err: unknown) => isLifecycleColumnMissing(err) || isPhoneNumberColumnMissing(err) },
-    { cols: OPERATIONAL_COLUMNS_LEGACY_ALT_PHONE, check: (err: unknown) => isLifecycleColumnMissing(err) || isPhoneColumnMissing(err) },
+    {
+      cols: OPERATIONAL_COLUMNS_ALT_PHONE,
+      check: (err: unknown) =>
+        isPhoneColumnMissing(err) ||
+        isBirthOutcomesColumnMissing(err) ||
+        isQuickBooksSyncColumnMissing(err),
+    },
+    {
+      cols: OPERATIONAL_COLUMNS_BASE,
+      check: (err: unknown) =>
+        isBirthOutcomesColumnMissing(err) ||
+        isPhoneNumberColumnMissing(err) ||
+        isQuickBooksSyncColumnMissing(err),
+    },
+    {
+      cols: OPERATIONAL_COLUMNS_BASE_ALT_PHONE,
+      check: (err: unknown) =>
+        isBirthOutcomesColumnMissing(err) ||
+        isPhoneColumnMissing(err) ||
+        isQuickBooksSyncColumnMissing(err),
+    },
+    {
+      cols: OPERATIONAL_COLUMNS_LIFECYCLE,
+      check: (err: unknown) =>
+        isQuickBooksSyncColumnMissing(err) || isPhoneNumberColumnMissing(err),
+    },
+    {
+      cols: OPERATIONAL_COLUMNS_LIFECYCLE_ALT_PHONE,
+      check: (err: unknown) =>
+        isQuickBooksSyncColumnMissing(err) || isPhoneColumnMissing(err),
+    },
+    {
+      cols: OPERATIONAL_COLUMNS_LEGACY,
+      check: (err: unknown) =>
+        isLifecycleColumnMissing(err) || isPhoneNumberColumnMissing(err),
+    },
+    {
+      cols: OPERATIONAL_COLUMNS_LEGACY_ALT_PHONE,
+      check: (err: unknown) =>
+        isLifecycleColumnMissing(err) || isPhoneColumnMissing(err),
+    },
   ];
 
   let lastError: unknown;
@@ -263,7 +316,9 @@ export class CloudSqlClientRepository implements ClientRepository {
     return rows.map((r: Record<string, any>) => mapRowToClient(r));
   }
 
-  private async getClientIdsAssignedToDoula(doulaId: string): Promise<string[]> {
+  private async getClientIdsAssignedToDoula(
+    doulaId: string
+  ): Promise<string[]> {
     const { rows } = await queryCloudSql<{ client_id: string }>(
       `SELECT client_id FROM public.doula_assignments WHERE doula_id = $1::uuid`,
       [doulaId]
@@ -332,41 +387,104 @@ export class CloudSqlClientRepository implements ClientRepository {
     return client;
   }
 
-  async updateClient(clientId: string, fieldsToUpdate: Partial<Client>): Promise<Client> {
+  async updateClient(
+    clientId: string,
+    fieldsToUpdate: Partial<Client>
+  ): Promise<Client> {
     const allowed = new Set([
-      'first_name', 'last_name', 'email', 'phone_number', 'status', 'service_needed',
-      'portal_status', 'pronouns', 'preferred_name', 'payment_method', 'home_type',
-      'insurance_provider', 'insurance_member_id',
-      'insurance_policy_holder_name', 'insurance_policy_holder_dob', 'insurance_policy_holder_relationship',
+      'first_name',
+      'last_name',
+      'email',
+      'phone_number',
+      'status',
+      'service_needed',
+      'portal_status',
+      'pronouns',
+      'preferred_name',
+      'payment_method',
+      'home_type',
+      'insurance_provider',
+      'insurance_member_id',
+      'insurance_policy_holder_name',
+      'insurance_policy_holder_dob',
+      'insurance_policy_holder_relationship',
       'insurance_plan_type',
-      'policy_number', 'self_pay_card_info',
-      'services_interested', 'health_notes', 'health_history', 'allergies', 'medications',
-      'baby_name', 'baby_sex', 'number_of_babies', 'birth_hospital', 'provider_type',
-      'pregnancy_number', 'had_previous_pregnancies', 'previous_pregnancies_count',
-      'living_children_count', 'past_pregnancy_experience', 'service_support_details',
+      'policy_number',
+      'self_pay_card_info',
+      'services_interested',
+      'health_notes',
+      'health_history',
+      'allergies',
+      'medications',
+      'baby_name',
+      'baby_sex',
+      'number_of_babies',
+      'birth_hospital',
+      'provider_type',
+      'pregnancy_number',
+      'had_previous_pregnancies',
+      'previous_pregnancies_count',
+      'living_children_count',
+      'past_pregnancy_experience',
+      'service_support_details',
       'birth_outcomes',
       'birth_outcomes_induction',
       'birth_outcomes_delivery_type',
       'birth_outcomes_medications_used',
-      'race_ethnicity', 'primary_language', 'client_age_range', 'insurance', 'annual_income',
-      'preferred_contact_method', 'relationship_status', 'referral_source', 'referral_name',
-      'referral_email', 'referral_source_other', 'address_line1', 'address_line2', 'city', 'state', 'zip_code',
-      'country', 'bio', 'date_of_birth', 'due_date', 'profile_picture',
+      'race_ethnicity',
+      'primary_language',
+      'client_age_range',
+      'insurance',
+      'annual_income',
+      'preferred_contact_method',
+      'relationship_status',
+      'referral_source',
+      'referral_name',
+      'referral_email',
+      'referral_source_other',
+      'address_line1',
+      'address_line2',
+      'city',
+      'state',
+      'zip_code',
+      'country',
+      'bio',
+      'date_of_birth',
+      'due_date',
+      'profile_picture',
     ]);
     const raw = fieldsToUpdate as Record<string, any>;
     const setParts: string[] = [];
     const values: any[] = [];
     let i = 1;
     if (raw.user) {
-      if (raw.user.firstname !== undefined) { setParts.push(`first_name = $${i++}`); values.push(raw.user.firstname); }
-      if (raw.user.lastname !== undefined) { setParts.push(`last_name = $${i++}`); values.push(raw.user.lastname); }
-      if (raw.user.first_name !== undefined) { setParts.push(`first_name = $${i++}`); values.push(raw.user.first_name); }
-      if (raw.user.last_name !== undefined) { setParts.push(`last_name = $${i++}`); values.push(raw.user.last_name); }
-      if (raw.user.email !== undefined) { setParts.push(`email = $${i++}`); values.push(raw.user.email); }
+      if (raw.user.firstname !== undefined) {
+        setParts.push(`first_name = $${i++}`);
+        values.push(raw.user.firstname);
+      }
+      if (raw.user.lastname !== undefined) {
+        setParts.push(`last_name = $${i++}`);
+        values.push(raw.user.lastname);
+      }
+      if (raw.user.first_name !== undefined) {
+        setParts.push(`first_name = $${i++}`);
+        values.push(raw.user.first_name);
+      }
+      if (raw.user.last_name !== undefined) {
+        setParts.push(`last_name = $${i++}`);
+        values.push(raw.user.last_name);
+      }
+      if (raw.user.email !== undefined) {
+        setParts.push(`email = $${i++}`);
+        values.push(raw.user.email);
+      }
     }
     for (const [k, v] of Object.entries(raw)) {
       if (k === 'user' || v === undefined) continue;
-      const col = k.replace(/([A-Z])/g, '_$1').toLowerCase().replace(/^_/, '');
+      const col = k
+        .replace(/([A-Z])/g, '_$1')
+        .toLowerCase()
+        .replace(/^_/, '');
       if (allowed.has(col) || allowed.has(k)) {
         setParts.push(`${col} = $${i++}`);
         values.push(v);
@@ -399,10 +517,20 @@ export class CloudSqlClientRepository implements ClientRepository {
       `SELECT first_name, last_name, annual_income, address_line1 FROM phi_clients`
     );
     if (rows.length === 0) return null;
-    const headers = ['first_name', 'last_name', 'annual_income', 'address_line1'];
+    const headers = [
+      'first_name',
+      'last_name',
+      'annual_income',
+      'address_line1',
+    ];
     const lines = [headers.join(',')];
     for (const r of rows) {
-      lines.push(headers.map((h) => (r[h] != null ? String(r[h]).replace(/"/g, '""') : '')).map((c) => `"${c}"`).join(','));
+      lines.push(
+        headers
+          .map((h) => (r[h] != null ? String(r[h]).replace(/"/g, '""') : ''))
+          .map((c) => `"${c}"`)
+          .join(',')
+      );
     }
     return lines.join('\n');
   }
@@ -417,7 +545,10 @@ export class CloudSqlClientRepository implements ClientRepository {
     return (rows[0] as ClientOperationalRow) || null;
   }
 
-  async updateClientStatusCanonical(clientId: string, status: string): Promise<ClientOperationalRow | null> {
+  async updateClientStatusCanonical(
+    clientId: string,
+    status: string
+  ): Promise<ClientOperationalRow | null> {
     const isMatchedConversion = status === 'matched' || status === 'customer';
     if (isMatchedConversion) {
       await queryCloudSql(
@@ -435,7 +566,10 @@ export class CloudSqlClientRepository implements ClientRepository {
     return this.getClientById(clientId);
   }
 
-  async saveQboCustomerId(clientId: string, qboCustomerId: string): Promise<void> {
+  async saveQboCustomerId(
+    clientId: string,
+    qboCustomerId: string
+  ): Promise<void> {
     await queryCloudSql(
       `UPDATE phi_clients SET qbo_customer_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
       [qboCustomerId, clientId]
@@ -448,21 +582,59 @@ export class CloudSqlClientRepository implements ClientRepository {
   ): Promise<ClientOperationalRow | null> {
     const allowed = new Set([
       // identity + contact
-      'first_name', 'last_name', 'email', 'phone_number', 'phone',
+      'first_name',
+      'last_name',
+      'email',
+      'phone_number',
+      'phone',
       // operational workflow
-      'status', 'service_needed', 'portal_status', 'invited_at', 'last_invite_sent_at', 'invite_sent_count',
+      'status',
+      'service_needed',
+      'portal_status',
+      'invited_at',
+      'last_invite_sent_at',
+      'invite_sent_count',
       // profile + address
-      'address_line1', 'address', 'city', 'state', 'zip_code', 'country', 'bio',
+      'address_line1',
+      'address',
+      'city',
+      'state',
+      'zip_code',
+      'country',
+      'bio',
       // clinical/profile fields stored in Cloud SQL phi_clients
-      'date_of_birth', 'due_date', 'health_history', 'health_notes', 'allergies', 'medications',
-      'annual_income', 'baby_sex', 'baby_name', 'number_of_babies', 'race_ethnicity',
-      'client_age_range', 'insurance', 'pregnancy_number', 'had_previous_pregnancies',
-      'previous_pregnancies_count', 'living_children_count', 'past_pregnancy_experience',
-      'birth_outcomes', 'payment_method', 'insurance_provider', 'insurance_member_id',
-      'insurance_policy_holder_name', 'insurance_policy_holder_dob', 'insurance_policy_holder_relationship',
+      'date_of_birth',
+      'due_date',
+      'health_history',
+      'health_notes',
+      'allergies',
+      'medications',
+      'annual_income',
+      'baby_sex',
+      'baby_name',
+      'number_of_babies',
+      'race_ethnicity',
+      'client_age_range',
+      'insurance',
+      'pregnancy_number',
+      'had_previous_pregnancies',
+      'previous_pregnancies_count',
+      'living_children_count',
+      'past_pregnancy_experience',
+      'birth_outcomes',
+      'payment_method',
+      'insurance_provider',
+      'insurance_member_id',
+      'insurance_policy_holder_name',
+      'insurance_policy_holder_dob',
+      'insurance_policy_holder_relationship',
       'insurance_plan_type',
-      'policy_number', 'insurance_phone_number', 'has_secondary_insurance',
-      'secondary_insurance_provider', 'secondary_insurance_member_id', 'secondary_policy_number',
+      'policy_number',
+      'insurance_phone_number',
+      'has_secondary_insurance',
+      'secondary_insurance_provider',
+      'secondary_insurance_member_id',
+      'secondary_policy_number',
       'self_pay_card_info',
       'birth_outcomes_induction',
       'birth_outcomes_delivery_type',
@@ -525,15 +697,32 @@ export class CloudSqlClientRepository implements ClientRepository {
 
   async updateIdentityCache(
     clientId: string,
-    fields: { first_name?: string; last_name?: string; email?: string; phone_number?: string }
+    fields: {
+      first_name?: string;
+      last_name?: string;
+      email?: string;
+      phone_number?: string;
+    }
   ): Promise<void> {
     const setParts: string[] = [];
     const values: any[] = [];
     let i = 1;
-    if (fields.first_name !== undefined) { setParts.push(`first_name = $${i++}`); values.push(fields.first_name); }
-    if (fields.last_name !== undefined) { setParts.push(`last_name = $${i++}`); values.push(fields.last_name); }
-    if (fields.email !== undefined) { setParts.push(`email = $${i++}`); values.push(fields.email); }
-    if (fields.phone_number !== undefined) { setParts.push(`phone = $${i++}`); values.push(fields.phone_number); }
+    if (fields.first_name !== undefined) {
+      setParts.push(`first_name = $${i++}`);
+      values.push(fields.first_name);
+    }
+    if (fields.last_name !== undefined) {
+      setParts.push(`last_name = $${i++}`);
+      values.push(fields.last_name);
+    }
+    if (fields.email !== undefined) {
+      setParts.push(`email = $${i++}`);
+      values.push(fields.email);
+    }
+    if (fields.phone_number !== undefined) {
+      setParts.push(`phone = $${i++}`);
+      values.push(fields.phone_number);
+    }
     if (setParts.length === 0) return;
     setParts.push('updated_at = CURRENT_TIMESTAMP');
     values.push(clientId);
@@ -543,7 +732,9 @@ export class CloudSqlClientRepository implements ClientRepository {
     );
   }
 
-  async getClientBilling(clientId: string): Promise<ClientOperationalRow | null> {
+  async getClientBilling(
+    clientId: string
+  ): Promise<ClientOperationalRow | null> {
     const { rows } = await queryCloudSql<ClientOperationalRow>(
       `SELECT ${BILLING_COLUMNS} FROM phi_clients WHERE id = $1`,
       [clientId]
@@ -551,7 +742,10 @@ export class CloudSqlClientRepository implements ClientRepository {
     return rows[0] || null;
   }
 
-  async updateClientBilling(clientId: string, fields: Record<string, any>): Promise<ClientOperationalRow | null> {
+  async updateClientBilling(
+    clientId: string,
+    fields: Record<string, any>
+  ): Promise<ClientOperationalRow | null> {
     const allowed = new Set([
       'payment_method',
       'insurance',

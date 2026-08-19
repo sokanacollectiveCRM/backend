@@ -7,16 +7,16 @@
  * 3. Requires authorization (admin or assigned doula)
  * 4. Updates only Google Cloud SQL via PHI Broker
  */
-
 import { Request, Response } from 'express';
+
 import { ClientController } from '../controllers/clientController';
-import { ClientUseCase } from '../usecase/clientUseCase';
-import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
 import { ClientRepository } from '../repositories/interface/clientRepository';
-import { AuthRequest, ROLE } from '../types';
-import * as phiBrokerService from '../services/phiBrokerService';
-import * as sensitiveAccess from '../utils/sensitiveAccess';
+import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
 import { SupabaseClientRepository } from '../repositories/supabaseClientRepository';
+import * as phiBrokerService from '../services/phiBrokerService';
+import { AuthRequest, ROLE } from '../types';
+import { ClientUseCase } from '../usecase/clientUseCase';
+import * as sensitiveAccess from '../utils/sensitiveAccess';
 
 // Mock dependencies
 jest.mock('../services/phiBrokerService');
@@ -50,10 +50,16 @@ describe('PUT /clients/:id/phi', () => {
       }),
       updateIdentityCache: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<ClientRepository>;
-    clientController = new ClientController(mockClientUseCase, mockAssignmentRepository, mockClientRepository);
+    clientController = new ClientController(
+      mockClientUseCase,
+      mockAssignmentRepository,
+      mockClientRepository
+    );
 
     // Mock SupabaseClientRepository to return same shape (for any code that instantiates it)
-    (SupabaseClientRepository as jest.Mock).mockImplementation(() => mockClientRepository);
+    (SupabaseClientRepository as jest.Mock).mockImplementation(
+      () => mockClientRepository
+    );
 
     // Mock response object
     mockResponse = {
@@ -360,7 +366,9 @@ describe('PUT /clients/:id/phi', () => {
     });
 
     it('should update identity cache for name/email/phone changes', async () => {
-      mockClientRepository.getClientById!.mockResolvedValue({ id: clientId } as any);
+      mockClientRepository.getClientById!.mockResolvedValue({
+        id: clientId,
+      } as any);
       mockClientRepository.updateIdentityCache!.mockResolvedValue(undefined);
 
       mockRequest.body = {
@@ -386,7 +394,9 @@ describe('PUT /clients/:id/phi', () => {
     });
 
     it('should NOT update identity cache for non-identity PHI fields', async () => {
-      mockClientRepository.getClientById!.mockResolvedValue({ id: clientId } as any);
+      mockClientRepository.getClientById!.mockResolvedValue({
+        id: clientId,
+      } as any);
       mockClientRepository.updateIdentityCache!.mockResolvedValue(undefined);
 
       mockRequest.body = {
@@ -409,7 +419,9 @@ describe('PUT /clients/:id/phi', () => {
         .fn()
         .mockResolvedValue({ id: clientId });
       (phiBrokerService.updateClientPhi as jest.Mock).mockRejectedValue(
-        new phiBrokerService.PhiBrokerError('Failed to connect to PHI Broker for update')
+        new phiBrokerService.PhiBrokerError(
+          'Failed to connect to PHI Broker for update'
+        )
       );
       mockRequest.body = {
         first_name: 'Jane',
