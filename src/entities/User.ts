@@ -13,15 +13,15 @@ export class User {
   state?: STATE;
   country?: string;
   zip_code?: number;
-  children_expected?:string;
-  pronouns?:string;
-  health_history?:string;
-  allergies?:string;
-  due_date?:string;
-  annual_income?:string;
-  status?:string;
-  hospital?:string;
-  service_needed?:string;
+  children_expected?: string;
+  pronouns?: string;
+  health_history?: string;
+  allergies?: string;
+  due_date?: string;
+  annual_income?: string;
+  status?: string;
+  hospital?: string;
+  service_needed?: string;
   profile_picture?: File;
   account_status?: ACCOUNT_STATUS;
   business?: string;
@@ -30,7 +30,7 @@ export class User {
   // Add all the missing fields that were causing the issue
   preferred_contact_method?: string;
   preferred_name?: string;
-  payment_method?: string;  // Add this field
+  payment_method?: string; // Add this field
   insurance_provider?: string;
   insurance_member_id?: string;
   insurance_policy_holder_name?: string;
@@ -103,15 +103,15 @@ export class User {
     updated_at?: Date;
     role?: ROLE;
     address?: string;
-    children_expected?:string;
-    service_needed?:string;
-    pronouns?:string;
-    health_history?:string;
-    allergies?:string;
-    due_date?:string;
-    annual_income?:string;
-    status?:string;
-    hospital?:string;
+    children_expected?: string;
+    service_needed?: string;
+    pronouns?: string;
+    health_history?: string;
+    allergies?: string;
+    due_date?: string;
+    annual_income?: string;
+    status?: string;
+    hospital?: string;
     city?: string;
     state?: STATE;
     country?: string;
@@ -124,7 +124,7 @@ export class User {
     // Add all the missing fields that were causing the issue
     preferred_contact_method?: string;
     preferred_name?: string;
-    payment_method?: string;  // Add this field
+    payment_method?: string; // Add this field
     insurance_provider?: string;
     insurance_member_id?: string;
     insurance_policy_holder_name?: string;
@@ -183,95 +183,96 @@ export class User {
     referral_email?: string;
     referral_source_other?: string;
     intake_age_years?: number;
-    }) {
-      this.id = data.id;
-      this.email = data.email || "";
-      this.firstname = data.firstname || '';
-      this.lastname = data.lastname || '';
-      this.created_at = data.created_at || new Date();
-      this.updated_at = data.updated_at || new Date();
-      this.role = data.role || ROLE.CLIENT;
-      this.children_expected = data.children_expected || "";
-      this.service_needed = data.service_needed ||"";
-      this.health_history = data.health_history || "";
-      this.allergies = data.allergies || "";
-      this.due_date = data.due_date || "";
-      this.annual_income = data.annual_income || "";
-      this.status = data.status || "";
-      this.hospital = data.hospital || "";
-      this.address = data.address || "";
-      this.city = data.city || "";
-      this.state = data.state || STATE.IL;
-      this.country = data.country || "";
-      this.zip_code = data.zip_code || -1;
-      this.profile_picture = data.profile_picture || null;
-      this.account_status = data.account_status || ACCOUNT_STATUS.PENDING;
-      this.business = data.business || "";
-      this.bio = data.bio || "";
-      this.service_needed = data.service_needed || "";
+  }) {
+    this.id = data.id;
+    this.email = data.email || '';
+    this.firstname = data.firstname || '';
+    this.lastname = data.lastname || '';
+    this.created_at = data.created_at || new Date();
+    this.updated_at = data.updated_at || new Date();
+    this.role = data.role || ROLE.CLIENT;
+    this.children_expected = data.children_expected || '';
+    this.service_needed = data.service_needed || '';
+    this.health_history = data.health_history || '';
+    this.allergies = data.allergies || '';
+    this.due_date = data.due_date || '';
+    this.annual_income = data.annual_income || '';
+    this.status = data.status || '';
+    this.hospital = data.hospital || '';
+    this.address = data.address || '';
+    this.city = data.city || '';
+    this.state = data.state || STATE.IL;
+    this.country = data.country || '';
+    this.zip_code = data.zip_code || -1;
+    this.profile_picture = data.profile_picture || null;
+    this.account_status = data.account_status || ACCOUNT_STATUS.PENDING;
+    this.business = data.business || '';
+    this.bio = data.bio || '';
+    this.service_needed = data.service_needed || '';
 
-      // Add all the missing fields that were causing the issue
-      this.preferred_contact_method = data.preferred_contact_method;
-      this.preferred_name = data.preferred_name;
-      this.payment_method = data.payment_method;  // Add this field
-      this.insurance_provider = data.insurance_provider;
-      this.insurance_member_id = data.insurance_member_id;
-      this.insurance_policy_holder_name = data.insurance_policy_holder_name;
-      this.insurance_policy_holder_dob = data.insurance_policy_holder_dob;
-      this.insurance_policy_holder_relationship = data.insurance_policy_holder_relationship;
-      this.insurance_plan_type = data.insurance_plan_type;
-      this.policy_number = data.policy_number;
-      this.insurance_phone_number = data.insurance_phone_number;
-      this.has_secondary_insurance = data.has_secondary_insurance;
-      this.secondary_insurance_provider = data.secondary_insurance_provider;
-      this.secondary_insurance_member_id = data.secondary_insurance_member_id;
-      this.secondary_policy_number = data.secondary_policy_number;
-      this.self_pay_card_info = data.self_pay_card_info;
-      this.home_type = data.home_type;
-      this.home_types = data.home_types;
-      this.home_type_other = data.home_type_other;
-      this.home_adults_count = data.home_adults_count;
-      this.home_youth_count = data.home_youth_count;
-      this.services_interested = data.services_interested;
-      this.phone_number = data.phone_number;
-      this.health_notes = data.health_notes;
-      this.birth_outcomes = data.birth_outcomes;
-      this.birth_outcomes_induction = data.birth_outcomes_induction;
-      this.birth_outcomes_delivery_type = data.birth_outcomes_delivery_type;
-      this.birth_outcomes_medications_used = data.birth_outcomes_medications_used;
-      this.service_specifics = data.service_specifics;
-      this.baby_sex = data.baby_sex;
-      this.baby_name = data.baby_name;
-      this.birth_hospital = data.birth_hospital;
-      this.birth_location = data.birth_location;
-      this.number_of_babies = data.number_of_babies;
-      this.provider_type = data.provider_type;
-      this.pregnancy_number = data.pregnancy_number;
-      this.had_previous_pregnancies = data.had_previous_pregnancies;
-      this.previous_pregnancies_count = data.previous_pregnancies_count;
-      this.living_children_count = data.living_children_count;
-      this.past_pregnancy_experience = data.past_pregnancy_experience;
-      this.service_support_details = data.service_support_details;
-      this.race_ethnicity = data.race_ethnicity;
-      this.primary_language = data.primary_language;
-      this.client_age_range = data.client_age_range;
-      this.insurance = data.insurance;
-      this.demographics_multi = data.demographics_multi;
-      this.pronouns_other = data.pronouns_other;
-      this.home_phone = data.home_phone;
-      this.home_access = data.home_access;
-      this.pets = data.pets;
-      this.relationship_status = data.relationship_status;
-      this.first_name = data.first_name;
-      this.last_name = data.last_name;
-      this.middle_name = data.middle_name;
-      this.mobile_phone = data.mobile_phone;
-      this.work_phone = data.work_phone;
-      this.referral_source = data.referral_source;
-      this.referral_name = data.referral_name;
-      this.referral_email = data.referral_email;
-      this.referral_source_other = data.referral_source_other;
-      this.intake_age_years = data.intake_age_years;
+    // Add all the missing fields that were causing the issue
+    this.preferred_contact_method = data.preferred_contact_method;
+    this.preferred_name = data.preferred_name;
+    this.payment_method = data.payment_method; // Add this field
+    this.insurance_provider = data.insurance_provider;
+    this.insurance_member_id = data.insurance_member_id;
+    this.insurance_policy_holder_name = data.insurance_policy_holder_name;
+    this.insurance_policy_holder_dob = data.insurance_policy_holder_dob;
+    this.insurance_policy_holder_relationship =
+      data.insurance_policy_holder_relationship;
+    this.insurance_plan_type = data.insurance_plan_type;
+    this.policy_number = data.policy_number;
+    this.insurance_phone_number = data.insurance_phone_number;
+    this.has_secondary_insurance = data.has_secondary_insurance;
+    this.secondary_insurance_provider = data.secondary_insurance_provider;
+    this.secondary_insurance_member_id = data.secondary_insurance_member_id;
+    this.secondary_policy_number = data.secondary_policy_number;
+    this.self_pay_card_info = data.self_pay_card_info;
+    this.home_type = data.home_type;
+    this.home_types = data.home_types;
+    this.home_type_other = data.home_type_other;
+    this.home_adults_count = data.home_adults_count;
+    this.home_youth_count = data.home_youth_count;
+    this.services_interested = data.services_interested;
+    this.phone_number = data.phone_number;
+    this.health_notes = data.health_notes;
+    this.birth_outcomes = data.birth_outcomes;
+    this.birth_outcomes_induction = data.birth_outcomes_induction;
+    this.birth_outcomes_delivery_type = data.birth_outcomes_delivery_type;
+    this.birth_outcomes_medications_used = data.birth_outcomes_medications_used;
+    this.service_specifics = data.service_specifics;
+    this.baby_sex = data.baby_sex;
+    this.baby_name = data.baby_name;
+    this.birth_hospital = data.birth_hospital;
+    this.birth_location = data.birth_location;
+    this.number_of_babies = data.number_of_babies;
+    this.provider_type = data.provider_type;
+    this.pregnancy_number = data.pregnancy_number;
+    this.had_previous_pregnancies = data.had_previous_pregnancies;
+    this.previous_pregnancies_count = data.previous_pregnancies_count;
+    this.living_children_count = data.living_children_count;
+    this.past_pregnancy_experience = data.past_pregnancy_experience;
+    this.service_support_details = data.service_support_details;
+    this.race_ethnicity = data.race_ethnicity;
+    this.primary_language = data.primary_language;
+    this.client_age_range = data.client_age_range;
+    this.insurance = data.insurance;
+    this.demographics_multi = data.demographics_multi;
+    this.pronouns_other = data.pronouns_other;
+    this.home_phone = data.home_phone;
+    this.home_access = data.home_access;
+    this.pets = data.pets;
+    this.relationship_status = data.relationship_status;
+    this.first_name = data.first_name;
+    this.last_name = data.last_name;
+    this.middle_name = data.middle_name;
+    this.mobile_phone = data.mobile_phone;
+    this.work_phone = data.work_phone;
+    this.referral_source = data.referral_source;
+    this.referral_name = data.referral_name;
+    this.referral_email = data.referral_email;
+    this.referral_source_other = data.referral_source_other;
+    this.intake_age_years = data.intake_age_years;
   }
 
   getFullName(): string {
@@ -289,10 +290,10 @@ export class User {
       service_needed: this.service_needed,
       health_history: this.health_history,
       allergies: this.allergies,
-      due_date:this.due_date,
-      annual_income:this.annual_income,
-      status:this.status,
-      hospital:this.hospital,
+      due_date: this.due_date,
+      annual_income: this.annual_income,
+      status: this.status,
+      hospital: this.hospital,
       created_at: this.created_at,
       updatedAt: this.updated_at,
       role: this.role,
@@ -309,7 +310,7 @@ export class User {
       // Add all the missing fields that were causing the issue
       preferred_contact_method: this.preferred_contact_method,
       preferred_name: this.preferred_name,
-      payment_method: this.payment_method,  // Add this field
+      payment_method: this.payment_method, // Add this field
       insurance_provider: this.insurance_provider,
       insurance_member_id: this.insurance_member_id,
       insurance_policy_holder_name: this.insurance_policy_holder_name,
@@ -317,7 +318,8 @@ export class User {
         this.insurance_policy_holder_dob instanceof Date
           ? this.insurance_policy_holder_dob.toISOString().slice(0, 10)
           : this.insurance_policy_holder_dob,
-      insurance_policy_holder_relationship: this.insurance_policy_holder_relationship,
+      insurance_policy_holder_relationship:
+        this.insurance_policy_holder_relationship,
       insurance_plan_type: this.insurance_plan_type,
       policy_number: this.policy_number,
       self_pay_card_info: this.self_pay_card_info,
