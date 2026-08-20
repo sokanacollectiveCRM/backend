@@ -9,7 +9,10 @@ export class ClientUseCase {
   private clientRepository: ClientRepository;
   private activityRepository: ActivityRepository;
 
-  constructor (clientRepository: ClientRepository, activityRepository: ActivityRepository) {
+  constructor(
+    clientRepository: ClientRepository,
+    activityRepository: ActivityRepository
+  ) {
     this.clientRepository = clientRepository;
     this.activityRepository = activityRepository;
   }
@@ -33,8 +36,7 @@ export class ClientUseCase {
     }
   }
 
-
-    //
+  //
   // // forward to repository to Fetch csv client data
   // //
   // // returns:
@@ -55,9 +57,7 @@ export class ClientUseCase {
       return csvData;
     } catch (error) {
       if (error instanceof AuthorizationError) throw error;
-      throw new Error(
-        `Failed to retrive CSV data ${(error as Error).message}`
-      );
+      throw new Error(`Failed to retrive CSV data ${(error as Error).message}`);
     }
   }
 
@@ -74,18 +74,13 @@ export class ClientUseCase {
   }
 
   // updates a client's status
-  async updateClientStatus(
-    clientId: string,
-    status: string
-  ): Promise<Client> {
-
+  async updateClientStatus(clientId: string, status: string): Promise<Client> {
     try {
       // Update the client status directly
       const client = await this.clientRepository.updateStatus(clientId, status);
 
       return client;
-    }
-    catch (error) {
+    } catch (error) {
       throw new Error(`Could not update client: ${error.message}`);
     }
   }
@@ -95,14 +90,15 @@ export class ClientUseCase {
     clientId: string,
     fieldsToUpdate: Partial<Client>
   ): Promise<Client> {
-
     try {
       // Update the client directly
-      const client = await this.clientRepository.updateClient(clientId, fieldsToUpdate);
+      const client = await this.clientRepository.updateClient(
+        clientId,
+        fieldsToUpdate
+      );
 
       return client;
-    }
-    catch (error) {
+    } catch (error) {
       throw new Error(`Could not update client profile: ${error.message}`);
     }
   }

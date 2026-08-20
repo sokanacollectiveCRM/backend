@@ -14,7 +14,8 @@
 
 ## Why This Is Needed
 
-`GET /clients/fetchCSV` allowed the `client` role and exported all families’ names, income, and address. Highest-clarity P0 authorization issue.
+`GET /clients/fetchCSV` allowed the `client` role and exported all families’
+names, income, and address. Highest-clarity P0 authorization issue.
 
 ## Requested Changes
 
@@ -35,4 +36,7 @@
 
 ## Completion Summary (2026-08-20)
 
-Contained in code. Automated tests: `src/__tests__/clientCsvExportAuth.test.ts` — **10/10 passed**. Stakeholder brief: `docs/HIPAA_13A_CLIENT_CSV_EXPORT_STATUS.md`. Remaining: deploy + formal closure.
+Contained in code. Automated tests: `src/__tests__/clientCsvExportAuth.test.ts`
+— **10/10 passed**. Stakeholder brief:
+`docs/HIPAA_13A_CLIENT_CSV_EXPORT_STATUS.md`. Remaining: deploy + formal
+closure.

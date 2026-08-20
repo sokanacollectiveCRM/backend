@@ -1,4 +1,5 @@
 import pino from 'pino';
+
 import pinoHttp from 'pino-http';
 
 const isProd = process.env.NODE_ENV === 'production';
@@ -36,17 +37,35 @@ const baseOptions: pino.LoggerOptions = {
   hooks: {
     logMethod(args, method) {
       const allowed = new Set([
-        'service', 'module', 'operation', 'correlationId', 'method', 'route',
-        'status', 'durationMs', 'errorCode', 'retryable', 'severity', 'context',
-        'count', 'source', 'partsCount', 'port', 'host',
+        'service',
+        'module',
+        'operation',
+        'correlationId',
+        'method',
+        'route',
+        'status',
+        'durationMs',
+        'errorCode',
+        'retryable',
+        'severity',
+        'context',
+        'count',
+        'source',
+        'partsCount',
+        'port',
+        'host',
         // Authz deny audit (HIPAA-13A): identifiers only — never PHI payloads
-        'event', 'userId', 'role',
+        'event',
+        'userId',
+        'role',
       ]);
       const first = args[0];
       if (first && typeof first === 'object') {
         const safe = Object.fromEntries(
-          Object.entries(first as Record<string, unknown>).filter(([key, value]) =>
-            allowed.has(key) && ['string', 'number', 'boolean'].includes(typeof value)
+          Object.entries(first as Record<string, unknown>).filter(
+            ([key, value]) =>
+              allowed.has(key) &&
+              ['string', 'number', 'boolean'].includes(typeof value)
           )
         );
         method.apply(this, [safe, ...args.slice(1)]);

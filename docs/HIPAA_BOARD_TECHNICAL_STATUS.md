@@ -3,8 +3,9 @@
 **Scope:** Code and infra docs in `backend` and `frontend-crm`. Not a legal
 HIPAA determination. Not an attestation that BAAs, policies, or training exist.
 
-**Method:** Re-checked the board outline against `docs/HIPAA_TECHNICAL_PHI_INVENTORY.md`
-(2026-08-17), `docs/SECURITY_P0_HARDENING_SUMMARY.md` (2026-08-14),
+**Method:** Re-checked the board outline against
+`docs/HIPAA_TECHNICAL_PHI_INVENTORY.md` (2026-08-17),
+`docs/SECURITY_P0_HARDENING_SUMMARY.md` (2026-08-14),
 `docs/CLOUD_SQL_NETWORK_HARDENING.md` (through Phase 4, 2026-08-19), and current
 source in both repositories.
 
@@ -12,11 +13,11 @@ source in both repositories.
 Only **HIPAA-02** is reported complete, and that completion is **not verifiable
 from code**.
 
-| Bucket | Count |
-| ------ | ----- |
-| Done (operational report only) | 1 |
-| In progress / partial | 11 |
-| Not started / not evidenced | 6 |
+| Bucket                         | Count |
+| ------------------------------ | ----- |
+| Done (operational report only) | 1     |
+| In progress / partial          | 11    |
+| Not started / not evidenced    | 6     |
 
 ---
 
@@ -41,23 +42,23 @@ rest/in transit (Google-managed), Cloud Run deploy test gates.
 
 **Still open (code-verified):**
 
-| ID | Finding | Evidence |
-| -- | ------- | -------- |
+| ID     | Finding                                                                | Evidence                                                                                                                                                                                  |
+| ------ | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | INV-02 | `GET /clients/fetchCSV` was open to `client` and exported all families | **Contained 2026-08-20:** admin-only route + use case; see `docs/HIPAA_13A_CLIENT_CSV_EXPORT_STATUS.md`. Residual: admin exports **all** `phi_clients` columns for all rows (`SELECT *`). |
-| INV-09 | Any authenticated user can write hours for any client | `src/routes/specificUserRoutes.ts` `POST /:id/addhours` is session-only; `userController.addNewHours` trusts body `doula_id` / `client_id` |
-| INV-01 | Public intake emails full clinical + identity payload to Gmail | `requestFormController.ts` staff email includes health history, address, income, due date |
-| INV-10 | Live `POST /quickbooks/simulate-payment` accepts PAN/CVC | `quickbooksRoutes.ts` (admin) → `paymentsController` / `createCharge.ts` / `buildChargePayload.ts` |
-| INV-11 | Hardcoded Gmail app password in repo | `src/scripts/sendTestEmail.ts` |
-| INV-12 | Birth-outcomes write has no assignment check | Route allows any `admin`/`doula`; handler never calls `canAccessSensitive` |
-| INV-03 | Any authenticated doula can read another family's operational profile | `GET /clients/:id` |
-| — | Client document **files** remain in Supabase Storage | `clientDocumentUploadService.ts` |
-| — | Cloud SQL public IP still enabled | Hardening Phase 7 not started; last verify 2026-08-19 `ipv4Enabled: true` |
-| — | Vercel not retired | Both repos still have `vercel.json`; backend CORS still lists `*.vercel.app` |
+| INV-09 | Any authenticated user can write hours for any client                  | `src/routes/specificUserRoutes.ts` `POST /:id/addhours` is session-only; `userController.addNewHours` trusts body `doula_id` / `client_id`                                                |
+| INV-01 | Public intake emails full clinical + identity payload to Gmail         | `requestFormController.ts` staff email includes health history, address, income, due date                                                                                                 |
+| INV-10 | Live `POST /quickbooks/simulate-payment` accepts PAN/CVC               | `quickbooksRoutes.ts` (admin) → `paymentsController` / `createCharge.ts` / `buildChargePayload.ts`                                                                                        |
+| INV-11 | Hardcoded Gmail app password in repo                                   | `src/scripts/sendTestEmail.ts`                                                                                                                                                            |
+| INV-12 | Birth-outcomes write has no assignment check                           | Route allows any `admin`/`doula`; handler never calls `canAccessSensitive`                                                                                                                |
+| INV-03 | Any authenticated doula can read another family's operational profile  | `GET /clients/:id`                                                                                                                                                                        |
+| —      | Client document **files** remain in Supabase Storage                   | `clientDocumentUploadService.ts`                                                                                                                                                          |
+| —      | Cloud SQL public IP still enabled                                      | Hardening Phase 7 not started; last verify 2026-08-19 `ipv4Enabled: true`                                                                                                                 |
+| —      | Vercel not retired                                                     | Both repos still have `vercel.json`; backend CORS still lists `*.vercel.app`                                                                                                              |
 
 ### HIPAA-07 — Sensitive logging
 
-**Partial.** Backend request logger allowlists route metadata (`safeLogging.ts`);
-production `console.*` is no-op on the API.
+**Partial.** Backend request logger allowlists route metadata
+(`safeLogging.ts`); production `console.*` is no-op on the API.
 
 Frontend still logs PHI-capable payloads:
 
@@ -105,14 +106,14 @@ deactivation, contracts, or billing (who / when / which record, without values).
 
 ### HIPAA-09 — Vendor inventory
 
-**Partial.** Technical vendor table is in `HIPAA_TECHNICAL_PHI_INVENTORY.md`
-§6. Agreement copies, configuration evidence, and an approved register are not
-in the repo.
+**Partial.** Technical vendor table is in `HIPAA_TECHNICAL_PHI_INVENTORY.md` §6.
+Agreement copies, configuration evidence, and an approved register are not in
+the repo.
 
 ### HIPAA-10 — Risk / remediation register
 
-**Partial.** Inventory + P0 summary identify risks. There is no approved, scored,
-living risk register.
+**Partial.** Inventory + P0 summary identify risks. There is no approved,
+scored, living risk register.
 
 ### HIPAA-19 — Workforce training
 
@@ -154,7 +155,8 @@ are equally blocking from a technical standpoint.
 2. **Frontend PHI logging (HIPAA-07) — P0/P1**  
    Remove `console.log` of client ID, update payload, error body, and returned
    client in `updateClient.ts`. Same class of leak in `deleteClient.ts`,
-   `createContract.ts`, `LeadProfileModal.tsx`, `Clients.tsx`, `doulaService.ts`.
+   `createContract.ts`, `LeadProfileModal.tsx`, `Clients.tsx`,
+   `doulaService.ts`.
 
 3. **Birth-outcomes assignment (INV-12) — P1, clinical write**  
    `updateClientBirthOutcomes` must deny unassigned doulas (`canAccessSensitive`
@@ -178,8 +180,8 @@ are equally blocking from a technical standpoint.
    ignore body `doula_id` except admin.
 7. **Intake Gmail (INV-01)** — stop emailing health history / address / income;
    notify with client number + CRM link.
-8. **Simulate-payment PAN (INV-10)** — unmount `POST /quickbooks/simulate-payment`
-   in all environments.
+8. **Simulate-payment PAN (INV-10)** — unmount
+   `POST /quickbooks/simulate-payment` in all environments.
 9. **Hardcoded SMTP secret (INV-11)** — rotate the Gmail app password; remove
    the secret from `sendTestEmail.ts` (do not copy the value into tickets).
 
@@ -187,13 +189,13 @@ are equally blocking from a technical standpoint.
 
 - Disable Cloud SQL public IP (hardening Phase 7).
 - Retire Vercel (`vercel.json` + CORS `*.vercel.app` origins).
-- Decide/approve Supabase Storage for client insurance-card files, or move
-  bytes off Supabase.
+- Decide/approve Supabase Storage for client insurance-card files, or move bytes
+  off Supabase.
 - Execute remaining BAAs (Workspace, SignNow, Intuit, Supabase, CloudConvert).
 
 ---
 
-## What this does *not* change
+## What this does _not_ change
 
 Engineering cannot mark HIPAA-11 through HIPAA-21 complete. P0 + encryption are
 prerequisites, not compliance. Do not claim the system is HIPAA-compliant from

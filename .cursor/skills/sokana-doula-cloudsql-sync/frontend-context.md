@@ -18,7 +18,8 @@ Use this checklist at the top of every new preflight entry:
 
 - **Gate Result**: `run_preflight`
 - **Reason**: `preflight_required_every_task`
-- **Task Intent**: Fix production Payment Schedule red HTML from missing `/api/payment-methods/:clientId`.
+- **Task Intent**: Fix production Payment Schedule red HTML from missing
+  `/api/payment-methods/:clientId`.
 - **Repos Scanned**: both
 - **Files Scanned**:
   - `frontend-crm/src/features/clients/components/dialog/LeadProfileModal.tsx`
@@ -26,9 +27,13 @@ Use this checklist at the top of every new preflight entry:
   - `frontend-crm/src/api/http.ts`
   - `backend/src/server.ts`
   - `backend/src/routes/paymentMethodRoutes.ts`
-- **Contract Findings**: FE calls `GET /api/payment-methods/:clientId` + `GET /clients/:id/billing/payment-schedule` via `Promise.all`. Route existed in code but was gated behind `FEATURE_QUICKBOOKS`; prod docs set that flag false → Express HTML 404. FE rendered raw HTML as `billingError`.
+- **Contract Findings**: FE calls `GET /api/payment-methods/:clientId` +
+  `GET /clients/:id/billing/payment-schedule` via `Promise.all`. Route existed
+  in code but was gated behind `FEATURE_QUICKBOOKS`; prod docs set that flag
+  false → Express HTML 404. FE rendered raw HTML as `billingError`.
 - **Drift Risk**: Card-on-file path must stay mounted even when QB OAuth is off.
-- **Required Compatibility**: Always mount `/api/payment-methods`; keep `{ success, data }` wrapper for card status.
+- **Required Compatibility**: Always mount `/api/payment-methods`; keep
+  `{ success, data }` wrapper for card status.
 - **Context Updated**: yes
 - **Implementation Started After Gate**: yes
 
@@ -42,8 +47,12 @@ Use this checklist at the top of every new preflight entry:
   - `frontend-crm/src/features/clients/components/users-primary-buttons.tsx`
   - `backend/src/repositories/cloudSqlClientRepository.ts`
   - `backend/docs/HIPAA_13A_CLIENT_CSV_EXPORT_STATUS.md`
-- **Contract Findings**: Path/auth unchanged (`GET /clients/fetchCSV`, admin-only). CSV body expands from 4 columns to all `phi_clients` columns (~88). FE still downloads `demographics.csv` as text/csv — no FE parse of columns.
-- **Drift Risk**: Larger PHI payload on admin export; FE must not log response body.
+- **Contract Findings**: Path/auth unchanged (`GET /clients/fetchCSV`,
+  admin-only). CSV body expands from 4 columns to all `phi_clients` columns
+  (~88). FE still downloads `demographics.csv` as text/csv — no FE parse of
+  columns.
+- **Drift Risk**: Larger PHI payload on admin export; FE must not log response
+  body.
 - **Required Compatibility**: Keep text/csv download UX for admin Export button.
 - **Context Updated**: yes
 - **Implementation Started After Gate**: yes
@@ -52,7 +61,8 @@ Use this checklist at the top of every new preflight entry:
 
 - **Gate Result**: `run_preflight`
 - **Reason**: `preflight_required_every_task`
-- **Task Intent**: Restrict bulk client CSV export to admin; document exported fields for stakeholders.
+- **Task Intent**: Restrict bulk client CSV export to admin; document exported
+  fields for stakeholders.
 - **Repos Scanned**: both
 - **Files Scanned**:
   - `frontend-crm/src/features/clients/components/users-primary-buttons.tsx`
@@ -60,9 +70,14 @@ Use this checklist at the top of every new preflight entry:
   - `backend/src/usecase/clientUseCase.ts`
   - `backend/src/middleware/authorizeRoles.ts`
   - `backend/src/repositories/cloudSqlClientRepository.ts`
-- **Contract Findings**: Path unchanged (`GET /clients/fetchCSV`). CSV body unchanged (`first_name,last_name,annual_income,address_line1` all rows). Role allowlist now admin-only (was admin+client). FE Export button gated to `user.role === 'admin'`.
-- **Drift Risk**: Non-admin callers that previously succeeded now get 403; doulas on Clients page no longer see Export.
-- **Required Compatibility**: Keep `/clients/fetchCSV` + text/csv download for admin.
+- **Contract Findings**: Path unchanged (`GET /clients/fetchCSV`). CSV body
+  unchanged (`first_name,last_name,annual_income,address_line1` all rows). Role
+  allowlist now admin-only (was admin+client). FE Export button gated to
+  `user.role === 'admin'`.
+- **Drift Risk**: Non-admin callers that previously succeeded now get 403;
+  doulas on Clients page no longer see Export.
+- **Required Compatibility**: Keep `/clients/fetchCSV` + text/csv download for
+  admin.
 - **Context Updated**: yes
 - **Implementation Started After Gate**: yes
 
@@ -70,16 +85,24 @@ Use this checklist at the top of every new preflight entry:
 
 - **Gate Result**: `run_preflight`
 - **Reason**: `preflight_required_every_task`
-- **Task Intent**: Confirm whether bulk client CSV export exists as a CRM feature (HIPAA-13A / INV-02).
+- **Task Intent**: Confirm whether bulk client CSV export exists as a CRM
+  feature (HIPAA-13A / INV-02).
 - **Repos Scanned**: both
 - **Files Scanned**:
   - `frontend-crm/src/features/clients/components/users-primary-buttons.tsx`
   - `backend/src/routes/clientRoutes.ts`
   - `backend/src/usecase/clientUseCase.ts`
   - `backend/src/repositories/cloudSqlClientRepository.ts`
-- **Contract Findings**: Feature exists end-to-end. FE Clients toolbar calls `GET /clients/fetchCSV` and downloads `clients.csv`. BE allows roles `admin` and `client`; use case re-checks same; repo `SELECT first_name, last_name, annual_income, address_line1 FROM phi_clients` with no row filter.
-- **Drift Risk**: Tightening BE roles to admin-only will break CSV button for any non-admin caller that currently succeeds; FE should stay admin-gated or show clear 403.
-- **Required Compatibility**: Keep path `/clients/fetchCSV` and CSV download UX for admin.
+- **Contract Findings**: Feature exists end-to-end. FE Clients toolbar calls
+  `GET /clients/fetchCSV` and downloads `clients.csv`. BE allows roles `admin`
+  and `client`; use case re-checks same; repo
+  `SELECT first_name, last_name, annual_income, address_line1 FROM phi_clients`
+  with no row filter.
+- **Drift Risk**: Tightening BE roles to admin-only will break CSV button for
+  any non-admin caller that currently succeeds; FE should stay admin-gated or
+  show clear 403.
+- **Required Compatibility**: Keep path `/clients/fetchCSV` and CSV download UX
+  for admin.
 - **Context Updated**: yes
 - **Implementation Started After Gate**: no (existence question only)
 
@@ -87,7 +110,8 @@ Use this checklist at the top of every new preflight entry:
 
 - **Gate Result**: `run_preflight`
 - **Reason**: `preflight_required_every_task`
-- **Task Intent**: Re-verify HIPAA board items against current frontend/backend code; update technical status list (no implementation).
+- **Task Intent**: Re-verify HIPAA board items against current frontend/backend
+  code; update technical status list (no implementation).
 - **Repos Scanned**: both
 - **Files Scanned**:
   - `frontend-crm/src/common/utils/updateClient.ts`
@@ -98,10 +122,14 @@ Use this checklist at the top of every new preflight entry:
   - `frontend-crm/src/api/doulas/doulaService.ts`
   - `backend/src/routes/clientRoutes.ts`
   - `backend/src/routes/specificUserRoutes.ts`
-  - `backend/src/controllers/clientController.ts` (`updateClientBirthOutcomes`, `exportCSV`)
+  - `backend/src/controllers/clientController.ts` (`updateClientBirthOutcomes`,
+    `exportCSV`)
   - `backend/src/services/emailService.ts` (`sendDoulaMatchNotification`)
   - `backend/src/services/clientDocumentUploadService.ts`
-- **Contract Findings**: No API contract change. Confirmed open: `GET /clients/fetchCSV` allows `client`; birth-outcomes has no assignment check; FE logs full client update payloads; assignment emails include client email + notes.
+- **Contract Findings**: No API contract change. Confirmed open:
+  `GET /clients/fetchCSV` allows `client`; birth-outcomes has no assignment
+  check; FE logs full client update payloads; assignment emails include client
+  email + notes.
 - **Drift Risk**: None for this pass (docs only).
 - **Required Compatibility**: Unchanged.
 - **Context Updated**: yes
@@ -111,7 +139,8 @@ Use this checklist at the top of every new preflight entry:
 
 - **Gate Result**: `run_preflight`
 - **Reason**: `preflight_required_every_task`
-- **Task Intent**: Fix Services Interested multiselect not showing/persisting on Lead Profile (production).
+- **Task Intent**: Fix Services Interested multiselect not showing/persisting on
+  Lead Profile (production).
 - **Repos Scanned**: both
 - **Files Scanned**:
   - `frontend-crm/src/features/clients/components/dialog/LeadProfileModal.tsx`
@@ -121,40 +150,64 @@ Use this checklist at the top of every new preflight entry:
   - `backend/src/repositories/cloudSqlClientRepository.ts`
 - **Context Updated**: yes
 - **Implementation Started After Gate**: yes
-- **Root cause**: GET `/clients/:id` merged home intake fields but omitted `services_interested` / service text fields; frontend multiselect without `altKey` only read `editedData`, not fetched detail.
-- **Fix**: Backend `mergeServiceProfileFields`; frontend `resolveProfileFieldValue` + mapper/init for services fields; same pattern covers `demographics_multi`.
+- **Root cause**: GET `/clients/:id` merged home intake fields but omitted
+  `services_interested` / service text fields; frontend multiselect without
+  `altKey` only read `editedData`, not fetched detail.
+- **Fix**: Backend `mergeServiceProfileFields`; frontend
+  `resolveProfileFieldValue` + mapper/init for services fields; same pattern
+  covers `demographics_multi`.
 
 ## Preflight Update 2026-08-20 (client detail prefetch + cache)
 
 - **Gate Result**: `run_preflight`
-- **Task Intent**: Performance — prefetch `GET /clients/:id` on row click; cache detail across modal open/close.
-- **Files Scanned**: users-table, LeadProfileModal, useClients, clients.service, Clients deep-link loader
+- **Task Intent**: Performance — prefetch `GET /clients/:id` on row click; cache
+  detail across modal open/close.
+- **Files Scanned**: users-table, LeadProfileModal, useClients, clients.service,
+  Clients deep-link loader
 - **Context Updated**: yes
-- **Implementation**: `clientDetailCache.ts` (Map cache + in-flight dedupe); row click prefetch; modal reads cache synchronously on open; force refresh after save.
+- **Implementation**: `clientDetailCache.ts` (Map cache + in-flight dedupe); row
+  click prefetch; modal reads cache synchronously on open; force refresh after
+  save.
 
 ## Preflight Update 2026-08-20 (local services multiselect test)
 
 - **Gate Result**: `run_preflight`
-- **Task Intent**: Local verification — Services Interested green pills not showing after save/read.
+- **Task Intent**: Local verification — Services Interested green pills not
+  showing after save/read.
 - **Repos Scanned**: both
-- **Files Scanned**: LeadProfileModal resolve/save paths, clients.service fetchClientById, clientController mergeExtendedProfileFields
+- **Files Scanned**: LeadProfileModal resolve/save paths, clients.service
+  fetchClientById, clientController mergeExtendedProfileFields
 - **Context Updated**: yes
-- **Local setup**: backend `:5050`, frontend `:3001`, `VITE_USE_CLOUD_RUN=false`, Cloud SQL proxy `:5433`, `SPLIT_DB_READ_MODE=primary`
-- **Diagnostic**: GET `/clients/:id` must include `services_interested` array; UI reads `servicesInterested` via mapper alias.
-- **Follow-up fix**: refetch detail after profile save; `resolveProfileFieldValue` uses `readProfileFieldFromRecord` for editedData (camelCase alias support).
+- **Local setup**: backend `:5050`, frontend `:3001`,
+  `VITE_USE_CLOUD_RUN=false`, Cloud SQL proxy `:5433`,
+  `SPLIT_DB_READ_MODE=primary`
+- **Diagnostic**: GET `/clients/:id` must include `services_interested` array;
+  UI reads `servicesInterested` via mapper alias.
+- **Follow-up fix**: refetch detail after profile save;
+  `resolveProfileFieldValue` uses `readProfileFieldFromRecord` for editedData
+  (camelCase alias support).
 
 ## Preflight Update 2026-08-20 (profile form field audit)
 
 - **Gate Result**: `run_preflight`
-- **Task Intent**: Audit all Lead Profile form fields for read/persist gaps (same class as Home Type / Services Interested).
+- **Task Intent**: Audit all Lead Profile form fields for read/persist gaps
+  (same class as Home Type / Services Interested).
 - **Repos Scanned**: both
-- **Files Scanned**: LeadProfileModal, clientController merge paths, cloudSqlClientRepository map/update, profileArrayFields, client.mapper
+- **Files Scanned**: LeadProfileModal, clientController merge paths,
+  cloudSqlClientRepository map/update, profileArrayFields, client.mapper
 - **Context Updated**: yes
 - **Findings**:
-  - Backend GET omitted many intake scalars (`preferred_contact_method`, `birth_location`, `primary_language`, `provider_type`, `relationship_status`, family phones, `demographics_multi`, `intake_age_years`, `children_expected`, `pets` via incomplete user mapping).
-  - `mapRowToUser` skipped columns present on `phi_clients`; `updateClientOperational` blocked several saves.
-  - Frontend fixed globally via `resolveProfileFieldValue` + expanded camelCase aliases (not only services).
-  - **Not persisted** (by design / no column): `family_pronouns`, `family_email` on Cloud SQL intake INSERT.
+  - Backend GET omitted many intake scalars (`preferred_contact_method`,
+    `birth_location`, `primary_language`, `provider_type`,
+    `relationship_status`, family phones, `demographics_multi`,
+    `intake_age_years`, `children_expected`, `pets` via incomplete user
+    mapping).
+  - `mapRowToUser` skipped columns present on `phi_clients`;
+    `updateClientOperational` blocked several saves.
+  - Frontend fixed globally via `resolveProfileFieldValue` + expanded camelCase
+    aliases (not only services).
+  - **Not persisted** (by design / no column): `family_pronouns`, `family_email`
+    on Cloud SQL intake INSERT.
 
 ## Repos
 
@@ -190,8 +243,8 @@ write-up: `docs/SECURITY_P0_HARDENING_SUMMARY.md` → “Frontend P0”.
 - Host: Cloud Run `sokana-front-end`. API URL baked via Cloud Build
   `_VITE_APP_BACKEND_URL`. Vercel is being decommissioned; `vercel.json` headers
   do not protect production — put CSP/HSTS on the Cloud Run frontend container.
-- Mobile login: frontend and API are different sites (`*.run.app`). Safari/Chrome
-  on phones often drop the `sb-access-token` cookie even with
+- Mobile login: frontend and API are different sites (`*.run.app`).
+  Safari/Chrome on phones often drop the `sb-access-token` cookie even with
   `SameSite=None; Secure`. After `POST /auth/login`, store JSON `token` in
   sessionStorage and send `Authorization` + `X-Session-Token` on `/auth/me`.
   Cookie remains httpOnly for desktop; header token is the mobile fallback.
@@ -2271,11 +2324,28 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 
 - **Gate Result**: `run_preflight`
 - **Reason**: `preflight_required_every_task`
-- **Task Intent**: Read-only HIPAA PHI/data-flow inventory across backend + frontend (no application code changes)
-- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`; `no_open_handoff_tasks` for `frontend->backend`
+- **Task Intent**: Read-only HIPAA PHI/data-flow inventory across backend +
+  frontend (no application code changes)
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`;
+  `no_open_handoff_tasks` for `frontend->backend`
 - **Repos Scanned**: both
-- **Files Scanned**: FE `src/features/request/useRequestForm.ts`, `src/api/dto/client.dto.ts`, `src/config/phi.ts`, `src/common/auth/roles.ts`, `src/Routes.tsx`, `src/common/contexts/UserContext.tsx`, `src/api/sessionAccessToken.ts`, `src/features/client-dashboard/`; BE `src/constants/phiFields.ts`, `src/security/authorizationPolicies.ts`, `src/controllers/clientController.ts`, `src/controllers/requestFormController.ts`, `src/repositories/requestFormRepository.ts`, `src/services/emailService.ts`, `src/services/customer/buildCustomerPayload.ts`, `src/utils/sensitiveAccess.ts`, `docs/ENDPOINT_AUTHORIZATION_MATRIX.md`
-- **Contract Findings**: Public intake schema in `useRequestForm.ts` matches Cloud SQL `phi_clients` insert in `requestFormRepository.ts`. Frontend `PHI_KEYS` treats name/email/phone as PHI; backend `PHI_FIELDS` / `ClientMapper` treat those as operational identifiers. Client portal vs staff CRM is frontend-routed (`StaffCrmRoute` / `ClientPortalRoute`) and backend-enforced via `/auth/me` roles.
+- **Files Scanned**: FE `src/features/request/useRequestForm.ts`,
+  `src/api/dto/client.dto.ts`, `src/config/phi.ts`, `src/common/auth/roles.ts`,
+  `src/Routes.tsx`, `src/common/contexts/UserContext.tsx`,
+  `src/api/sessionAccessToken.ts`, `src/features/client-dashboard/`; BE
+  `src/constants/phiFields.ts`, `src/security/authorizationPolicies.ts`,
+  `src/controllers/clientController.ts`,
+  `src/controllers/requestFormController.ts`,
+  `src/repositories/requestFormRepository.ts`, `src/services/emailService.ts`,
+  `src/services/customer/buildCustomerPayload.ts`,
+  `src/utils/sensitiveAccess.ts`, `docs/ENDPOINT_AUTHORIZATION_MATRIX.md`
+- **Contract Findings**: Public intake schema in `useRequestForm.ts` matches
+  Cloud SQL `phi_clients` insert in `requestFormRepository.ts`. Frontend
+  `PHI_KEYS` treats name/email/phone as PHI; backend `PHI_FIELDS` /
+  `ClientMapper` treat those as operational identifiers. Client portal vs staff
+  CRM is frontend-routed (`StaffCrmRoute` / `ClientPortalRoute`) and
+  backend-enforced via `/auth/me` roles.
 - **Drift Risk**: Inventory is read-only. No API contract change.
 - **Required Compatibility**: No implementation this task.
 - **Context Updated**: yes
@@ -2285,8 +2355,8 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 
 - **Gate Result**: `run_preflight`
 - **Reason**: `preflight_required_every_task`
-- **Task Intent**: Production mobile login fails after success:
-  "Signed in, but the session could not be verified"
+- **Task Intent**: Production mobile login fails after success: "Signed in, but
+  the session could not be verified"
 - **Handoff inbox**: `open_handoff_tasks_found`:
   `2026-08-10-backend-architecture-boundary-refactor.md`;
   `no_open_handoff_tasks` for `frontend->backend`
@@ -2303,9 +2373,9 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
   third-party and drop the cookie, so `/auth/me` returns 401.
 - **Drift Risk**: Mobile login stays broken if frontend ships without storing
   `token`, or if backend stops returning JSON `token`.
-- **Required Compatibility**: Keep JSON `token` on login; frontend must store
-  it and send header auth on `/auth/me`. Cookie `SameSite=None; Secure;
-  Partitioned` remains the desktop path.
+- **Required Compatibility**: Keep JSON `token` on login; frontend must store it
+  and send header auth on `/auth/me`. Cookie
+  `SameSite=None; Secure; Partitioned` remains the desktop path.
 - **Context Updated**: yes
 - **Implementation Started After Gate**: yes
 
@@ -2314,7 +2384,8 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 - **Gate Result**: `run_preflight`
 - **Reason**: `preflight_required_every_task`
 - **Task Intent**: PR + merge to `main` so Cloud Build deploys the mobile
-  session verification fix (frontend token storage + backend partitioned cookies)
+  session verification fix (frontend token storage + backend partitioned
+  cookies)
 - **Handoff inbox**: `open_handoff_tasks_found`:
   `2026-08-10-backend-architecture-boundary-refactor.md`;
   `no_open_handoff_tasks` for `frontend->backend`
@@ -2335,7 +2406,8 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
   `2026-08-10-backend-architecture-boundary-refactor.md`;
   `no_open_handoff_tasks` for `frontend->backend`
 - **Repos Scanned**: frontend
-- **Files Scanned**: `AuthCallback.tsx`, `UserContext.tsx`, `.github/workflows/lint.yaml`
+- **Files Scanned**: `AuthCallback.tsx`, `UserContext.tsx`,
+  `.github/workflows/lint.yaml`
 - **Contract Findings**: No API change. Reset-password now stores `accessToken`
   for the same header-token fallback used at login.
 - **Context Updated**: yes
@@ -2345,8 +2417,8 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 
 - **Gate Result**: `run_preflight`
 - **Reason**: `preflight_required_every_task`
-- **Task Intent**: Phase 1 only — verify Cloud SQL / Cloud Run network foundation
-  (read-only; no infra mutations)
+- **Task Intent**: Phase 1 only — verify Cloud SQL / Cloud Run network
+  foundation (read-only; no infra mutations)
 - **Handoff inbox**: `open_handoff_tasks_found`:
   `2026-08-10-backend-architecture-boundary-refactor.md`;
   `no_open_handoff_tasks` for `frontend->backend`
@@ -2365,32 +2437,35 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 ## Preflight Update 2026-08-19 (Phase 4 private IP production cutover)
 
 - **Gate Result**: `run_preflight`
-- **Task Intent**: Switch prod `CLOUD_SQL_HOST` to `10.109.240.3` + `require` TLS
-- **Result**: Revision `sokana-private-api-00033-8wc`; `/health` 200; pool boot OK;
-  connector kept for rollback; public IP unchanged
+- **Task Intent**: Switch prod `CLOUD_SQL_HOST` to `10.109.240.3` + `require`
+  TLS
+- **Result**: Revision `sokana-private-api-00033-8wc`; `/health` 200; pool boot
+  OK; connector kept for rollback; public IP unchanged
 - **Docs**: `docs/CLOUD_SQL_NETWORK_HARDENING.md` Phase 4
 - **Context Updated**: yes
 
 ## Preflight Update 2026-08-19 (Phase 3 private IP connectivity test)
 
 - **Gate Result**: `run_preflight`
-- **Task Intent**: TCP probe `10.109.240.3:5432` via Direct VPC; no prod DB change
-- **Result**: Job `cloudsql-private-ip-probe-hx56n` TCP OK; no-VPC control timed out;
-  production still on `/cloudsql/...`; `/health` 200
+- **Task Intent**: TCP probe `10.109.240.3:5432` via Direct VPC; no prod DB
+  change
+- **Result**: Job `cloudsql-private-ip-probe-hx56n` TCP OK; no-VPC control timed
+  out; production still on `/cloudsql/...`; `/health` 200
 - **Docs**: `docs/CLOUD_SQL_NETWORK_HARDENING.md` Phase 3
 - **Context Updated**: yes
 
 ## Preflight Update 2026-08-19 (Phase 2 Direct VPC egress)
 
 - **Gate Result**: `run_preflight`
-- **Task Intent**: Attach Direct VPC egress to `sokana-private-api`; keep connector
+- **Task Intent**: Attach Direct VPC egress to `sokana-private-api`; keep
+  connector
 - **Handoff inbox**: `open_handoff_tasks_found`:
   `2026-08-10-backend-architecture-boundary-refactor.md`;
   `no_open_handoff_tasks` for `frontend->backend`
 - **Contract Findings**: No frontend/API contract change
 - **Result**: Revision `sokana-private-api-00032-5wc`; network-interfaces on
-  `default`/`default`; vpc-egress `private-ranges-only`; connector + `/cloudsql/`
-  host unchanged; `/health` 200
+  `default`/`default`; vpc-egress `private-ranges-only`; connector +
+  `/cloudsql/` host unchanged; `/health` 200
 - **Docs**: `docs/CLOUD_SQL_NETWORK_HARDENING.md`
 - **Context Updated**: yes
 
@@ -2406,8 +2481,7 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 - **Repos Scanned**: backend (infra/docs); frontend not relevant
 - **Files Scanned**: `cloudbuild.yaml`, `src/db/cloudSqlPool.ts`,
   `docs/SECURITY_P0_HARDENING_SUMMARY.md`,
-  `docs/PILOT_JOURNEYS_AND_ROLLBACK.md`,
-  `docs/PRODUCTION_CLOUD_SQL_VERCEL.md`,
+  `docs/PILOT_JOURNEYS_AND_ROLLBACK.md`, `docs/PRODUCTION_CLOUD_SQL_VERCEL.md`,
   `.cursor/skills/sokana-cloudsql-local-connect/SKILL.md`
 - **Contract Findings**: No frontend contract impact. Production DB path is
   Cloud Run unix socket `/cloudsql/...`, not a private IP host.
@@ -2423,21 +2497,31 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 
 - **Gate Result**: `run_preflight`
 - **Reason**: `preflight_required_every_task`
-- **Task Intent**: Fix local client profile save — operational fields wrongly routed to `/clients/:id/phi`
+- **Task Intent**: Fix local client profile save — operational fields wrongly
+  routed to `/clients/:id/phi`
 - **Handoff inbox**: `open_handoff_tasks_found`:
-  `2026-08-10-backend-architecture-boundary-refactor.md` (unrelated; user-reported bug)
+  `2026-08-10-backend-architecture-boundary-refactor.md` (unrelated;
+  user-reported bug)
 - **Repos Scanned**: backend + frontend
 - **Files Scanned**:
-  - `backend/src/constants/phiFields.ts` (PHI_FIELDS vs OPERATIONAL_UPDATE_COLUMNS, FIELD_ALIAS_MAP)
+  - `backend/src/constants/phiFields.ts` (PHI_FIELDS vs
+    OPERATIONAL_UPDATE_COLUMNS, FIELD_ALIAS_MAP)
   - `backend/src/controllers/clientController.ts` (`updateClientPhi` validation)
-  - `frontend-crm/src/config/phi.ts` (PHI_KEYS — redaction-only, too broad for save routing)
-  - `frontend-crm/src/features/clients/components/dialog/LeadProfileModal.tsx` (save split)
+  - `frontend-crm/src/config/phi.ts` (PHI_KEYS — redaction-only, too broad for
+    save routing)
+  - `frontend-crm/src/features/clients/components/dialog/LeadProfileModal.tsx`
+    (save split)
   - `frontend-crm/src/common/utils/updateClient.ts` (strip list)
   - `frontend-crm/src/api/services/clients.service.ts` (`updateClientPhi`)
-- **Contract Findings**: `PUT /clients/:id/phi` accepts only `PHI_FIELDS` (snake_case after normalize). Fields like `paymentMethod`, `pregnancyNumber`, `babyName`, `raceEthnicity`, `clientAgeRange`, `annualIncome`, `hasSecondaryInsurance` are operational/billing — must not go to `/phi`.
-- **Drift Risk**: Frontend `PHI_KEYS` used for save routing caused 400 on `/phi`; operational fields were also stripped from `PUT /clients/:id` payload.
-- **Required Compatibility**: Added `clientFieldRouting.ts` with backend-aligned split; updated LeadProfileModal, updateClient, updateClientPhi; expanded backend FIELD_ALIAS_MAP camelCase aliases.
+- **Contract Findings**: `PUT /clients/:id/phi` accepts only `PHI_FIELDS`
+  (snake_case after normalize). Fields like `paymentMethod`, `pregnancyNumber`,
+  `babyName`, `raceEthnicity`, `clientAgeRange`, `annualIncome`,
+  `hasSecondaryInsurance` are operational/billing — must not go to `/phi`.
+- **Drift Risk**: Frontend `PHI_KEYS` used for save routing caused 400 on
+  `/phi`; operational fields were also stripped from `PUT /clients/:id` payload.
+- **Required Compatibility**: Added `clientFieldRouting.ts` with backend-aligned
+  split; updated LeadProfileModal, updateClient, updateClientPhi; expanded
+  backend FIELD_ALIAS_MAP camelCase aliases.
 - **Action**: Frontend routing fix + backend alias hardening
 - **Context Updated**: yes
 - **Implementation Started After Gate**: yes
-

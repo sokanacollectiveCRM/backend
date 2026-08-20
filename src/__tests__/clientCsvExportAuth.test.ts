@@ -5,9 +5,10 @@ import request from 'supertest';
 
 import { logger } from '../common/utils/logger';
 import authorizeRoles from '../middleware/authorizeRoles';
+import clientRoutes from '../routes/clientRoutes';
 import { CLIENT_CSV_EXPORT_ROLES } from '../security/authorizationPolicies';
-import { ClientUseCase } from '../usecase/clientUseCase';
 import type { AuthRequest } from '../types';
+import { ClientUseCase } from '../usecase/clientUseCase';
 
 let currentUser: { id: string; role: string; email: string } | null = null;
 
@@ -27,7 +28,10 @@ jest.mock('../middleware/authMiddleware', () => ({
 }));
 
 const exportCSVHandler = jest.fn((req: any, res: any) => {
-  res.status(200).type('text/csv').send('first_name,last_name\n"Ada","Lovelace"');
+  res
+    .status(200)
+    .type('text/csv')
+    .send('first_name,last_name\n"Ada","Lovelace"');
 });
 
 jest.mock('../index', () => ({
@@ -55,8 +59,6 @@ jest.mock('../controllers/clientBillingController', () => ({
   getClientPaymentSchedule: jest.fn(),
 }));
 
-import clientRoutes from '../routes/clientRoutes';
-
 describe('HIPAA-13A client CSV export authorization', () => {
   const app = express();
   app.use(express.json());
@@ -79,7 +81,9 @@ describe('HIPAA-13A client CSV export authorization', () => {
     const start = routeSrc.indexOf("'/fetchCSV'");
     const end = routeSrc.indexOf(');', start) + 2;
     const fetchCsvBlock = routeSrc.slice(start, end);
-    expect(fetchCsvBlock).toContain("authorizeRoles(req, res, next, ['admin'])");
+    expect(fetchCsvBlock).toContain(
+      "authorizeRoles(req, res, next, ['admin'])"
+    );
     expect(fetchCsvBlock).not.toMatch(/\['admin',\s*'client'\]/);
     expect(fetchCsvBlock).not.toMatch(/'doula'/);
     expect(fetchCsvBlock).not.toMatch(/'billing'/);
@@ -170,7 +174,9 @@ describe('HIPAA-13A client CSV export authorization', () => {
       })
     );
     const logged = JSON.stringify(warnSpy.mock.calls[0][0]);
-    expect(logged).not.toMatch(/annual_income|address_line1|first_name|last_name|password/i);
+    expect(logged).not.toMatch(
+      /annual_income|address_line1|first_name|last_name|password/i
+    );
     expect(logged).not.toContain('@test.example');
     warnSpy.mockRestore();
   });

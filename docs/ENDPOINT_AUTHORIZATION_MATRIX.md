@@ -68,13 +68,13 @@ Middleware legend: `auth` = `authMiddleware`; `roles[...]` = `authorizeRoles`.
 | GET    | `/quickbooks/customers/invoiceable`                                                                                                        | —                                  | Staff                | admin, billing        | —                          | auth + roles                         |
 | \*     | `/quickbooks/*` CRM ops (status, invoices, customers, disconnect, invoice, sync)                                                           | `/api/quickbooks/*`                | Staff                | admin, billing        | —                          | auth + roles                         |
 | POST   | `/quickbooks/simulate-payment`                                                                                                             | `/api/quickbooks/simulate-payment` | Admin                | admin                 | —                          | auth + roles                         |
-| POST   | `/email/client-approval`, `/email/team-invite`                                                                                             | —                                  | Admin              | admin                 | —                          | auth + roles                         |
+| POST   | `/email/client-approval`, `/email/team-invite`                                                                                             | —                                  | Admin                | admin                 | —                          | auth + roles                         |
 
 ### HIPAA-13A containment (2026-08-20)
 
-| Method | Canonical path        | Aliases                                              | Classification | Allowed roles | Ownership | Middleware       |
-| ------ | --------------------- | ---------------------------------------------------- | -------------- | ------------- | --------- | ---------------- |
-| GET    | `/clients/fetchCSV`   | `/client/fetchCSV`, `/api/clients/fetchCSV`, `/api/client/fetchCSV` | Admin          | admin only    | —         | auth + roles     |
+| Method | Canonical path      | Aliases                                                             | Classification | Allowed roles | Ownership | Middleware   |
+| ------ | ------------------- | ------------------------------------------------------------------- | -------------- | ------------- | --------- | ------------ |
+| GET    | `/clients/fetchCSV` | `/client/fetchCSV`, `/api/clients/fetchCSV`, `/api/client/fetchCSV` | Admin          | admin only    | —         | auth + roles |
 
 Previously allowed `client` and exported a 4-column subset. As of 2026-08-20,
 admin export is `SELECT * FROM phi_clients` (all columns). See
