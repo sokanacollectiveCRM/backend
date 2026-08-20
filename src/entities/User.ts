@@ -92,6 +92,7 @@ export class User {
   referral_name?: string;
   referral_email?: string;
   referral_source_other?: string;
+  intake_age_years?: number;
 
   constructor(data: {
     id?: string;
@@ -181,6 +182,7 @@ export class User {
     referral_name?: string;
     referral_email?: string;
     referral_source_other?: string;
+    intake_age_years?: number;
     }) {
       this.id = data.id;
       this.email = data.email || "";
@@ -269,6 +271,7 @@ export class User {
       this.referral_name = data.referral_name;
       this.referral_email = data.referral_email;
       this.referral_source_other = data.referral_source_other;
+      this.intake_age_years = data.intake_age_years;
   }
 
   getFullName(): string {
