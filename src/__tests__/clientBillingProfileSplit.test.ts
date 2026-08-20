@@ -1,9 +1,10 @@
 import { Response } from 'express';
+
 import { ClientController } from '../controllers/clientController';
-import { ClientUseCase } from '../usecase/clientUseCase';
-import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
 import { ClientRepository } from '../repositories/interface/clientRepository';
+import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
 import { AuthRequest, ROLE } from '../types';
+import { ClientUseCase } from '../usecase/clientUseCase';
 import * as sensitiveAccess from '../utils/sensitiveAccess';
 
 jest.mock('../utils/sensitiveAccess');
@@ -148,20 +149,23 @@ describe('Client billing/profile validation split', () => {
 
     await clientController.updateClient(req, mockResponse as Response);
 
-    expect(mockClientRepository.updateClientBilling).toHaveBeenCalledWith(clientId, {
-      payment_method: 'Self-Pay',
-      insurance: null,
-      insurance_provider: null,
-      insurance_member_id: null,
-      ...nullPrimaryInsuranceHolderFields,
-      policy_number: null,
-      insurance_phone_number: null,
-      has_secondary_insurance: false,
-      secondary_insurance_provider: null,
-      secondary_insurance_member_id: null,
-      secondary_policy_number: null,
-      self_pay_card_info: 'Visa ending 4242',
-    });
+    expect(mockClientRepository.updateClientBilling).toHaveBeenCalledWith(
+      clientId,
+      {
+        payment_method: 'Self-Pay',
+        insurance: null,
+        insurance_provider: null,
+        insurance_member_id: null,
+        ...nullPrimaryInsuranceHolderFields,
+        policy_number: null,
+        insurance_phone_number: null,
+        has_secondary_insurance: false,
+        secondary_insurance_provider: null,
+        secondary_insurance_member_id: null,
+        secondary_policy_number: null,
+        self_pay_card_info: 'Visa ending 4242',
+      }
+    );
     expect(mockClientRepository.updateClientOperational).not.toHaveBeenCalled();
     expect(mockResponse.status).not.toHaveBeenCalledWith(400);
     expect(mockResponse.json).toHaveBeenCalledWith({
@@ -220,7 +224,8 @@ describe('Client billing/profile validation split', () => {
     expect(mockResponse.status).toHaveBeenCalledWith(400);
     expect(mockResponse.json).toHaveBeenCalledWith({
       success: false,
-      error: 'An insurance card upload is required before saving insurance billing',
+      error:
+        'An insurance card upload is required before saving insurance billing',
       code: 'VALIDATION_ERROR',
     });
     expect(mockClientRepository.updateClientBilling).not.toHaveBeenCalled();
@@ -363,6 +368,13 @@ describe('Client billing/profile validation split', () => {
         secondary_insurance_member_id: 'SEC-12345',
         secondary_policy_number: 'SEC-POL-1',
         self_pay_card_info: null,
+        services_interested: ['Labor Support', 'Postpartum Support'],
+        service_support_details: 'Night support preferred',
+        service_specifics: 'First baby',
+        preferred_contact_method: 'Email',
+        birth_location: 'Hospital',
+        primary_language: 'English',
+        provider_type: 'OB',
       },
     } as any);
 
@@ -390,6 +402,13 @@ describe('Client billing/profile validation split', () => {
         secondary_insurance_provider: 'Kaiser Secondary',
         secondary_insurance_member_id: 'SEC-12345',
         secondary_policy_number: 'SEC-POL-1',
+        services_interested: ['Labor Support', 'Postpartum Support'],
+        service_support_details: 'Night support preferred',
+        service_specifics: 'First baby',
+        preferred_contact_method: 'Email',
+        birth_location: 'Hospital',
+        primary_language: 'English',
+        provider_type: 'OB',
       }),
     });
   });

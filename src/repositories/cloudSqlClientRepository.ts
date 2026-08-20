@@ -192,6 +192,15 @@ function mapRowToClient(row: Record<string, any>): Client {
     referral_email: row.referral_email,
     referral_source_other: row.referral_source_other,
     bio: row.bio,
+    birth_location: row.birth_location,
+    pets: row.pets,
+    pronouns_other: row.pronouns_other,
+    middle_name: row.middle_name,
+    mobile_phone: row.mobile_phone,
+    work_phone: row.work_phone,
+    demographics_multi: row.demographics_multi,
+    intake_age_years: row.intake_age_years,
+    children_expected: row.children_expected,
   });
 
   const client = new Client(
@@ -201,7 +210,7 @@ function mapRowToClient(row: Record<string, any>): Client {
     row.requested_at ? new Date(row.requested_at) : new Date(),
     row.updated_at ? new Date(row.updated_at) : new Date(),
     row.status ?? 'lead',
-    undefined, // childrenExpected
+    row.children_expected ?? undefined,
     row.pronouns ?? undefined,
     row.health_history ?? undefined,
     row.allergies ?? undefined,
@@ -658,9 +667,17 @@ export class CloudSqlClientRepository implements ClientRepository {
       'intake_age_years',
       'services_interested',
       'service_support_details',
+      'service_specifics',
       'birth_hospital',
       'birth_location',
       'provider_type',
+      'primary_language',
+      'relationship_status',
+      'middle_name',
+      'mobile_phone',
+      'work_phone',
+      'children_expected',
+      'demographics_multi',
     ]);
     const columnValues = new Map<string, any>();
     for (const [k, v] of Object.entries(fields)) {

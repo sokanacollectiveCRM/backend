@@ -361,6 +361,77 @@ export class ClientController {
     }
   }
 
+  /** Merge services/intake profile fields stored on phi_clients (Cloud SQL). */
+  private mergeServiceProfileFields(
+    target: Record<string, unknown>,
+    user: Record<string, unknown> | null | undefined
+  ): void {
+    if (!user) return;
+    if (
+      user.services_interested !== undefined &&
+      user.services_interested !== null
+    ) {
+      target.services_interested = user.services_interested;
+    }
+    if (
+      user.service_support_details !== undefined &&
+      user.service_support_details !== null
+    ) {
+      target.service_support_details = user.service_support_details;
+    }
+    if (
+      user.service_specifics !== undefined &&
+      user.service_specifics !== null
+    ) {
+      target.service_specifics = user.service_specifics;
+    }
+  }
+
+  /** Merge remaining intake/profile scalars from phi_clients.user row. */
+  private mergeExtendedProfileFields(
+    target: Record<string, unknown>,
+    user: Record<string, unknown> | null | undefined,
+    clientLevel?: {
+      children_expected?: string | null;
+      intake_age_years?: number | null;
+    }
+  ): void {
+    this.mergeHomeIntakeFields(target, user);
+    this.mergeServiceProfileFields(target, user);
+    if (!user) return;
+    const scalarFields = [
+      'preferred_contact_method',
+      'preferred_name',
+      'pronouns',
+      'pronouns_other',
+      'primary_language',
+      'provider_type',
+      'birth_hospital',
+      'birth_location',
+      'relationship_status',
+      'middle_name',
+      'mobile_phone',
+      'work_phone',
+      'demographics_multi',
+    ] as const;
+    for (const key of scalarFields) {
+      if (user[key] !== undefined && user[key] !== null) {
+        target[key] = user[key];
+      }
+    }
+    const intakeAge =
+      clientLevel?.intake_age_years ?? user.intake_age_years ?? null;
+    if (intakeAge !== undefined && intakeAge !== null) {
+      target.intake_age_years = intakeAge;
+      target.age = intakeAge;
+    }
+    const childrenExpected =
+      clientLevel?.children_expected ?? user.children_expected ?? null;
+    if (childrenExpected !== undefined && childrenExpected !== null) {
+      target.children_expected = childrenExpected;
+    }
+  }
+
   /**
    * Write PHI fields via broker when available; in primary mode fall back to
    * Cloud SQL direct write (local dev + production private-IP path).
@@ -1351,9 +1422,15 @@ export class ClientController {
         if ((u as any)?.zip_code != null) merged.zipCode = (u as any).zip_code;
         if ((u as any)?.country != null) merged.country = (u as any).country;
         if ((u as any)?.bio != null) merged.bio = (u as any).bio;
-        this.mergeHomeIntakeFields(
+        this.mergeExtendedProfileFields(
           merged,
-          u as unknown as Record<string, unknown>
+          u as unknown as Record<string, unknown>,
+          {
+            children_expected: fullClient.childrenExpected ?? null,
+            intake_age_years:
+              (u as { intake_age_years?: number | null }).intake_age_years ??
+              null,
+          }
         );
         logger.info(
           { clientId: targetClientId, source: 'cloud_sql', phi: 'included' },
@@ -1924,9 +2001,17 @@ export class ClientController {
           if (u?.zip_code != null) response.zipCode = u.zip_code;
           if (u?.country != null) response.country = u.country;
           if (u?.bio != null) response.bio = u.bio;
-          this.mergeHomeIntakeFields(
+          this.mergeExtendedProfileFields(
             response,
-            u as unknown as Record<string, unknown>
+            u as unknown as Record<string, unknown>,
+            {
+              children_expected:
+                (u as { children_expected?: string | null })
+                  .children_expected ?? null,
+              intake_age_years:
+                (u as { intake_age_years?: number | null }).intake_age_years ??
+                null,
+            }
           );
         } catch {
           logger.warn(
@@ -1942,10 +2027,13 @@ export class ClientController {
           response = { ...dto, ...freshPhi };
           const fullClient =
             await this.clientRepository.findClientDetailedById(targetClientId);
-          this.mergeHomeIntakeFields(
-            response,
-            fullClient.user as unknown as Record<string, unknown>
-          );
+          const u = fullClient.user as unknown as Record<string, unknown>;
+          this.mergeExtendedProfileFields(response, u, {
+            children_expected: fullClient.childrenExpected ?? null,
+            intake_age_years:
+              (u as { intake_age_years?: number | null }).intake_age_years ??
+              null,
+          });
         } catch {
           // PHI fetch failed — return operational only, don't block update response
           logger.warn(
