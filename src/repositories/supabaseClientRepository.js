@@ -21,7 +21,7 @@ class SupabaseClientRepository {
   async exportCSV() {
     const { data, error } = await this.supabaseClient
       .from('client_info')
-      .select('firstname,lastname,zip_code,annual_income,pronouns')
+      .select('*')
       .csv();
     if (error || !data) {
       throw new Error(`Failed to fetch CSV Data ${error.message}`);

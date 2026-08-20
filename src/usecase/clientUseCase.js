@@ -30,15 +30,21 @@ class ClientUseCase {
   // //    CSV data of Client
   // //
   async exportCSV(role) {
+    const normalized = String(role || '').toLowerCase();
+    if (normalized !== 'admin') {
+      const { AuthorizationError } = require('../domains/errors');
+      throw new AuthorizationError(
+        'Forbidden: client CSV export is admin-only'
+      );
+    }
     try {
-      if (role == 'admin' || role == 'client') {
-        const csvData = await this.clientRepository.exportCSV();
-        if (!csvData) {
-          throw new Error('No data available for CSV export');
-        }
-        return csvData;
+      const csvData = await this.clientRepository.exportCSV();
+      if (!csvData) {
+        throw new Error('No data available for CSV export');
       }
+      return csvData;
     } catch (error) {
+      if (error && error.name === 'AuthorizationError') throw error;
       throw new Error(`Failed to retrive CSV data ${error.message}`);
     }
   }

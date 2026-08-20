@@ -9,7 +9,7 @@ This document covers feature flags, environment variables, Cloud Run deployment,
 | Flag | Default | Description |
 |------|---------|-------------|
 | `FEATURE_STRIPE` | `false` | Enable Stripe payment processing. When `false`, Stripe routes are not mounted and `STRIPE_SECRET_KEY` is not required. |
-| `FEATURE_QUICKBOOKS` | `false` | Enable QuickBooks integration. When `false`, QuickBooks and customers routes are not mounted; QB env vars are not required. |
+| `FEATURE_QUICKBOOKS` | `false` | Enable QuickBooks OAuth/CRM integration routes. When `false`, `/quickbooks` and `/api/quickbooks` are not mounted; QB env vars are not required. **`/api/payment-methods` remains mounted** (card-on-file / Payment Schedule). |
 | `FEATURE_EMAIL` | `false` | Enable email (SMTP) sending. When `false`, SMTP vars are not required. |
 | `ENABLE_DEBUG_ENDPOINTS` | — | Only honored when `NODE_ENV !== "production"`. Enables `/debug` routes for local testing. **Never enabled in production.** |
 

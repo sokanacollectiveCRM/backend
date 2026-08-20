@@ -39,6 +39,8 @@ const baseOptions: pino.LoggerOptions = {
         'service', 'module', 'operation', 'correlationId', 'method', 'route',
         'status', 'durationMs', 'errorCode', 'retryable', 'severity', 'context',
         'count', 'source', 'partsCount', 'port', 'host',
+        // Authz deny audit (HIPAA-13A): identifiers only — never PHI payloads
+        'event', 'userId', 'role',
       ]);
       const first = args[0];
       if (first && typeof first === 'object') {

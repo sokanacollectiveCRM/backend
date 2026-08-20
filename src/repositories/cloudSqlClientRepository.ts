@@ -55,6 +55,33 @@ const OPERATIONAL_COLUMNS_ALT_PHONE = `${OPERATIONAL_COLUMNS_BASE_ALT_PHONE},
   birth_outcomes_induction, birth_outcomes_delivery_type, birth_outcomes_medications_used
 `;
 
+/** Serialize a phi_clients cell for CSV (admin export). Arrays join with `;`. */
+export function formatClientCsvCell(value: unknown): string {
+  if (value == null) return '';
+  let raw: string;
+  if (value instanceof Date) {
+    raw = value.toISOString();
+  } else if (Array.isArray(value)) {
+    raw = value.map((v) => (v == null ? '' : String(v))).join(';');
+  } else if (typeof value === 'object') {
+    raw = JSON.stringify(value);
+  } else {
+    raw = String(value);
+  }
+  return `"${raw.replace(/"/g, '""')}"`;
+}
+
+/** Build a full-row CSV from phi_clients query results (all columns). */
+export function rowsToClientCsv(rows: Record<string, unknown>[]): string {
+  if (rows.length === 0) return '';
+  const headers = Object.keys(rows[0]);
+  const lines = [headers.join(',')];
+  for (const row of rows) {
+    lines.push(headers.map((h) => formatClientCsvCell(row[h])).join(','));
+  }
+  return lines.join('\n');
+}
+
 function isBirthOutcomesColumnMissing(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const code = String((error as { code?: string }).code || '');
@@ -523,25 +550,10 @@ export class CloudSqlClientRepository implements ClientRepository {
 
   async exportCSV(): Promise<string | null> {
     const { rows } = await queryCloudSql(
-      `SELECT first_name, last_name, annual_income, address_line1 FROM phi_clients`
+      `SELECT * FROM phi_clients ORDER BY updated_at DESC NULLS LAST`
     );
     if (rows.length === 0) return null;
-    const headers = [
-      'first_name',
-      'last_name',
-      'annual_income',
-      'address_line1',
-    ];
-    const lines = [headers.join(',')];
-    for (const r of rows) {
-      lines.push(
-        headers
-          .map((h) => (r[h] != null ? String(r[h]).replace(/"/g, '""') : ''))
-          .map((c) => `"${c}"`)
-          .join(',')
-      );
-    }
-    return lines.join('\n');
+    return rowsToClientCsv(rows as Record<string, unknown>[]);
   }
 
   // ---- Canonical methods (used by clientController in primary mode) ----

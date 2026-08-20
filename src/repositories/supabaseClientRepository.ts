@@ -90,7 +90,7 @@ export class SupabaseClientRepository  {
   async exportCSV():Promise<string | null>{
     const {data,error} = await this.supabaseClient
     .from('client_info')
-    .select('first_name,last_name,zip_code,annual_income,pronouns')
+    .select('*')
     .csv()
 
     if(error || !data){

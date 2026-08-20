@@ -1,7 +1,9 @@
+import { AuthorizationError } from '../domains/errors';
 import { Activity } from '../entities/Activity';
 import { Client } from '../entities/Client';
 import { ActivityRepository } from '../repositories/interface/activityRepository';
 import { ClientRepository } from '../repositories/interface/clientRepository';
+import { normalizeRole } from '../security/authorizationPolicies';
 
 export class ClientUseCase {
   private clientRepository: ClientRepository;
@@ -38,17 +40,24 @@ export class ClientUseCase {
   // // returns:
   // //    CSV data of Client
   // //
-  async exportCSV(role:string): Promise<string|null> {
+  // Defense in depth: route middleware is admin-only; keep the same rule here.
+  async exportCSV(role: string): Promise<string | null> {
+    if (normalizeRole(role) !== 'admin') {
+      throw new AuthorizationError(
+        'Forbidden: client CSV export is admin-only'
+      );
+    }
     try {
-      if (role == "admin"|| role == "client"){
-        const csvData = await this.clientRepository.exportCSV()
-        if (!csvData) {
-          throw new Error("No data available for CSV export");
-        }
-        return csvData;
+      const csvData = await this.clientRepository.exportCSV();
+      if (!csvData) {
+        throw new Error('No data available for CSV export');
       }
+      return csvData;
     } catch (error) {
-      throw new Error(`Failed to retrive CSV data ${error.message}`)
+      if (error instanceof AuthorizationError) throw error;
+      throw new Error(
+        `Failed to retrive CSV data ${(error as Error).message}`
+      );
     }
   }
 
