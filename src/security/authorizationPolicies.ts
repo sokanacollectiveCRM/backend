@@ -19,6 +19,9 @@ export const ADMIN_DOULA = ['admin', 'doula'] as const;
 export const ADMIN_DOULA_CLIENT = ['admin', 'doula', 'client'] as const;
 export const ADMIN_BILLING_DOULA = ['admin', 'billing', 'doula'] as const;
 
+/** HIPAA-13A / INV-02: bulk client CSV export until leadership expands roles. */
+export const CLIENT_CSV_EXPORT_ROLES = ADMIN_ONLY;
+
 export function normalizeRole(role: unknown): string {
   return String(role || '').toLowerCase();
 }

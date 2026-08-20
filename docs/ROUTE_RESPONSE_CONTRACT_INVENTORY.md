@@ -134,14 +134,18 @@ Prefix `/api/admin` — cookie-auth · **admin**
 
 ---
 
-## QuickBooks + payment methods (`FEATURE_QUICKBOOKS` only)
+## QuickBooks (`FEATURE_QUICKBOOKS` only) + payment methods (always)
 
-Mounts when enabled:
+Mounts when `FEATURE_QUICKBOOKS` enabled:
 
 - `/quickbooks`, `/api/quickbooks`
 - `/quickbooks/customers`
-- `/api/payment-methods`, `/api/quickbooks/payment-methods`,
-  `/quickbooks/payment-methods`
+- `/api/quickbooks/payment-methods`, `/quickbooks/payment-methods` (aliases)
+
+Always mounted (needed by CRM Payment Schedule / card-on-file status even when
+QB OAuth is off):
+
+- `/api/payment-methods`
 
 | Area                                                          | Auth                                             | Notes                                                |
 | ------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------- |
@@ -149,7 +153,7 @@ Mounts when enabled:
 | Status, customers, invoices, create, disconnect, sync refresh | cookie-auth (after middleware)                   | CRM integrations                                     |
 | `POST …/webhooks/invoice-paid`                                | public + Intuit HMAC (PR 5; before session auth) | `{ received: true }` (+ `duplicate: true` on replay) |
 | `/quickbooks/customers` create + invoiceable                  | **no auth on that router today**                 | inventory risk for later hardening                   |
-| Payment methods POST/GET                                      | cookie-auth · admin\|doula\|client               | `{ success, data }`                                  |
+| Payment methods POST/GET `/api/payment-methods`               | cookie-auth · admin\|doula\|client               | `{ success, data }` — always mounted                 |
 
 ---
 

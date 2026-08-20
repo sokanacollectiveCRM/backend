@@ -59,10 +59,11 @@ clientRoutes.post(
 );
 
 // Client specific routes - ORDER MATTERS! Specific routes first
+// HIPAA-13A / INV-02: bulk client CSV is admin-only until leadership expands roles.
 clientRoutes.get(
   '/fetchCSV',
   authMiddleware,
-  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'client']),
+  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
   (req, res) => clientController.exportCSV(req, res)
 );
 

@@ -70,6 +70,16 @@ Middleware legend: `auth` = `authMiddleware`; `roles[...]` = `authorizeRoles`.
 | POST   | `/quickbooks/simulate-payment`                                                                                                             | `/api/quickbooks/simulate-payment` | Admin                | admin                 | —                          | auth + roles                         |
 | POST   | `/email/client-approval`, `/email/team-invite`                                                                                             | —                                  | Admin                | admin                 | —                          | auth + roles                         |
 
+### HIPAA-13A containment (2026-08-20)
+
+| Method | Canonical path      | Aliases                                                             | Classification | Allowed roles | Ownership | Middleware   |
+| ------ | ------------------- | ------------------------------------------------------------------- | -------------- | ------------- | --------- | ------------ |
+| GET    | `/clients/fetchCSV` | `/client/fetchCSV`, `/api/clients/fetchCSV`, `/api/client/fetchCSV` | Admin          | admin only    | —         | auth + roles |
+
+Previously allowed `client` and exported a 4-column subset. As of 2026-08-20,
+admin export is `SELECT * FROM phi_clients` (all columns). See
+`docs/HIPAA_13A_CLIENT_CSV_EXPORT_STATUS.md`.
+
 Already-auth `GET /api/payments` and `GET /api/payments/contract/:id/history`
 unchanged (roles tightened only where listed above for history ownership
 behavior).

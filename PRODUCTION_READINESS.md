@@ -1,17 +1,18 @@
 # Production Readiness Guide
 
-This document covers feature flags, environment variables, Cloud Run deployment, and PHI boundary verification for the split-db (PHI vs non-PHI) backend.
+This document covers feature flags, environment variables, Cloud Run deployment,
+and PHI boundary verification for the split-db (PHI vs non-PHI) backend.
 
 ---
 
 ## Feature Flags
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `FEATURE_STRIPE` | `false` | Enable Stripe payment processing. When `false`, Stripe routes are not mounted and `STRIPE_SECRET_KEY` is not required. |
-| `FEATURE_QUICKBOOKS` | `false` | Enable QuickBooks integration. When `false`, QuickBooks and customers routes are not mounted; QB env vars are not required. |
-| `FEATURE_EMAIL` | `false` | Enable email (SMTP) sending. When `false`, SMTP vars are not required. |
-| `ENABLE_DEBUG_ENDPOINTS` | — | Only honored when `NODE_ENV !== "production"`. Enables `/debug` routes for local testing. **Never enabled in production.** |
+| Flag                     | Default | Description                                                                                                                                                                                                                    |
+| ------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `FEATURE_STRIPE`         | `false` | Enable Stripe payment processing. When `false`, Stripe routes are not mounted and `STRIPE_SECRET_KEY` is not required.                                                                                                         |
+| `FEATURE_QUICKBOOKS`     | `false` | Enable QuickBooks OAuth/CRM integration routes. When `false`, `/quickbooks` and `/api/quickbooks` are not mounted; QB env vars are not required. **`/api/payment-methods` remains mounted** (card-on-file / Payment Schedule). |
+| `FEATURE_EMAIL`          | `false` | Enable email (SMTP) sending. When `false`, SMTP vars are not required.                                                                                                                                                         |
+| `ENABLE_DEBUG_ENDPOINTS` | —       | Only honored when `NODE_ENV !== "production"`. Enables `/debug` routes for local testing. **Never enabled in production.**                                                                                                     |
 
 ---
 
@@ -19,34 +20,34 @@ This document covers feature flags, environment variables, Cloud Run deployment,
 
 ### Always Required
 
-| Variable | Purpose |
-|----------|---------|
-| `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service role key for backend operations |
-| `PHI_BROKER_URL` | PHI Broker base URL (sokana-private) |
-| `PHI_BROKER_SECRET` or `PHI_BROKER_SHARED_SECRET` | HMAC secret for PHI Broker requests |
-| `FRONTEND_ORIGIN` | Comma-separated CORS origins (e.g. `https://app.example.com`) |
+| Variable                                          | Purpose                                                       |
+| ------------------------------------------------- | ------------------------------------------------------------- |
+| `SUPABASE_URL`                                    | Supabase project URL                                          |
+| `SUPABASE_SERVICE_ROLE_KEY`                       | Service role key for backend operations                       |
+| `PHI_BROKER_URL`                                  | PHI Broker base URL (sokana-private)                          |
+| `PHI_BROKER_SECRET` or `PHI_BROKER_SHARED_SECRET` | HMAC secret for PHI Broker requests                           |
+| `FRONTEND_ORIGIN`                                 | Comma-separated CORS origins (e.g. `https://app.example.com`) |
 
 ### Required When `FEATURE_STRIPE=true`
 
-| Variable | Purpose |
-|----------|---------|
-| `STRIPE_SECRET_KEY` | Stripe API secret key |
+| Variable                | Purpose                                              |
+| ----------------------- | ---------------------------------------------------- |
+| `STRIPE_SECRET_KEY`     | Stripe API secret key                                |
 | `STRIPE_WEBHOOK_SECRET` | (Optional) For Stripe webhook signature verification |
 
 ### Required When `FEATURE_EMAIL=true`
 
-| Variable | Purpose |
-|----------|---------|
+| Variable                                           | Purpose                                    |
+| -------------------------------------------------- | ------------------------------------------ |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | SMTP configuration for transactional email |
 
 ### Required When `FEATURE_QUICKBOOKS=true`
 
-| Variable | Purpose |
-|----------|---------|
-| `QB_CLIENT_ID` | QuickBooks OAuth client ID |
+| Variable           | Purpose                        |
+| ------------------ | ------------------------------ |
+| `QB_CLIENT_ID`     | QuickBooks OAuth client ID     |
 | `QB_CLIENT_SECRET` | QuickBooks OAuth client secret |
-| `QB_REDIRECT_URI` | QuickBooks OAuth redirect URI |
+| `QB_REDIRECT_URI`  | QuickBooks OAuth redirect URI  |
 
 ---
 
@@ -87,7 +88,8 @@ curl http://localhost:8080/health
      --no-allow-unauthenticated
    ```
 
-2. **Set environment variables** via Secret Manager (recommended) or Cloud Run env:
+2. **Set environment variables** via Secret Manager (recommended) or Cloud Run
+   env:
 
    ```bash
    gcloud run services update backend \
@@ -134,32 +136,39 @@ curl -H "Authorization: Bearer <SUPABASE_ACCESS_TOKEN>" \
 
 ### Verify PHI Boundaries
 
-1. **List endpoint (`GET /clients`)**  
-   - Must return only operational fields (no PHI).  
-   - In production, any PHI keys in the response are stripped and a security warning is logged (values never logged).
+1. **List endpoint (`GET /clients`)**
 
-2. **Detail endpoint (`GET /clients/:id`)**  
-   - Returns operational-only if requester is not authorized for PHI.  
+   - Must return only operational fields (no PHI).
+   - In production, any PHI keys in the response are stripped and a security
+     warning is logged (values never logged).
+
+2. **Detail endpoint (`GET /clients/:id`)**
+
+   - Returns operational-only if requester is not authorized for PHI.
    - If authorized (admin or assigned doula), PHI is merged from the PHI Broker.
 
-3. **Update endpoint (`PUT /clients/:id`)**  
-   - Uses `splitClientPatch` to separate operational vs PHI.  
-   - Operational fields → Supabase.  
+3. **Update endpoint (`PUT /clients/:id`)**
+   - Uses `splitClientPatch` to separate operational vs PHI.
+   - Operational fields → Supabase.
    - PHI fields → PHI Broker (403 if requester not authorized for PHI).
 
 ---
 
 ## Security
 
-- **CORS** origins are locked to `FRONTEND_ORIGIN` (and localhost in non-production).
+- **CORS** origins are locked to `FRONTEND_ORIGIN` (and localhost in
+  non-production).
 - **helmet** is applied for basic HTTP hardening.
 - **x-powered-by** is disabled.
 - **Logging** redacts: Authorization header, cookies, PHI fields.
 - **Debug routes** (`/debug/*`) are never mounted in production.
-- **Cookie auth** is disabled in production; use `Authorization: Bearer <token>` or `X-Session-Token`.
+- **Cookie auth** is disabled in production; use `Authorization: Bearer <token>`
+  or `X-Session-Token`.
 
 ---
 
 ## Secrets Management
 
-Use Google Secret Manager (or equivalent) to inject secrets as environment variables. No code changes are needed; the app reads from `process.env` as usual. Document required vars per feature as above.
+Use Google Secret Manager (or equivalent) to inject secrets as environment
+variables. No code changes are needed; the app reads from `process.env` as
+usual. Document required vars per feature as above.

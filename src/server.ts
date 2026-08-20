@@ -136,18 +136,24 @@ app.use(
   asMiddleware(clientRoutes)
 );
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const paymentMethodRoutes = require('./routes/paymentMethodRoutes').default;
+
 if (FEATURE_QUICKBOOKS) {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const quickbookRoutes = require('./routes/quickbooksRoutes').default;
   const customersRoutes = require('./routes/customersRoutes').default;
-  const paymentMethodRoutes = require('./routes/paymentMethodRoutes').default;
   app.use('/quickbooks', asMiddleware(quickbookRoutes));
   app.use('/api/quickbooks', asMiddleware(quickbookRoutes));
   app.use('/quickbooks/customers', asMiddleware(customersRoutes));
-  app.use('/api/payment-methods', asMiddleware(paymentMethodRoutes));
+  // Aliases kept under the QB flag for historical FE paths.
   app.use('/api/quickbooks/payment-methods', asMiddleware(paymentMethodRoutes));
   app.use('/quickbooks/payment-methods', asMiddleware(paymentMethodRoutes));
 }
+
+// Card-on-file status is required by CRM Payment Schedule even when QB OAuth
+// routes are disabled (production often runs FEATURE_QUICKBOOKS=false).
+app.use('/api/payment-methods', asMiddleware(paymentMethodRoutes));
 
 app.use('/users', asMiddleware(userRoutes));
 app.use('/api/contract', asMiddleware(contractRoutes));
