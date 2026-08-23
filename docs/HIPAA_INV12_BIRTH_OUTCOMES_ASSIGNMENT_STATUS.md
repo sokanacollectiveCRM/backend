@@ -46,12 +46,16 @@ npm test -- --testPathPattern="clientBirthOutcomes"
 
 ---
 
-## Production deployment (pending)
+## Production deployment
 
 | Item | Value |
 | ---- | ----- |
-| PR / commit | _TBD at merge_ |
-| Serving revision | _TBD after deploy_ |
+| Backend commit | `cc60fd9` (`fix/hipaa13a-csv-and-payment-methods-mount`) |
+| Backend serving revision | `sokana-private-api-00038-tfx` |
+| Backend image | `backend-repo/api:latest` (deployed 2026-08-23) |
+| Frontend commit | `6faf1c3` (`fix/lead-profile-dialog-description`) |
+| Frontend serving revision | `sokana-front-end-00021-h2d` |
+| Frontend build | `8fbcbffd-ef72-42f2-a401-d1b6d12d425b` SUCCESS |
 | Reviewer / date | _TBD_ |
 | Closure approval | _TBD_ |
 
