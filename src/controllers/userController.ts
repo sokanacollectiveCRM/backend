@@ -11,11 +11,14 @@ import { CloudSqlTeamService } from '../services/cloudSqlTeamService';
 import { DoulaDocumentCompletenessService } from '../services/doulaDocumentCompletenessService';
 import { AuthRequest, UpdateRequest } from '../types';
 import { UserUseCase } from '../usecase/userUseCase';
+import { ApiErrorCode } from '../security/errorCodes';
 import {
   buildHourSummary,
   parseHourFilter,
   parseHourType,
 } from '../utils/hourTypes';
+import { canAccessSensitive } from '../utils/sensitiveAccess';
+import { logger } from '../common/utils/logger';
 
 export class UserController {
   private userUseCase: UserUseCase;
@@ -174,8 +177,37 @@ export class UserController {
 
   async addNewHours(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { doula_id, client_id, start_time, end_time, note, type } =
+      const { role, id: userId, account_status } = req.user ?? {};
+      const pathDoulaId = req.params.id;
+      const { doula_id: bodyDoulaId, client_id, start_time, end_time, note, type } =
         req.body;
+
+      if (!userId || !role) {
+        res.status(401).json({
+          error: 'Unauthorized',
+          code: ApiErrorCode.UNAUTHENTICATED,
+        });
+        return;
+      }
+
+      const normalizedRole = String(role).toLowerCase();
+      if (normalizedRole !== 'admin' && normalizedRole !== 'doula') {
+        this.logAddHoursDenied(req, normalizedRole);
+        res.status(403).json({
+          error: 'Not authorized to log service hours',
+          code: ApiErrorCode.FORBIDDEN,
+        });
+        return;
+      }
+
+      if (account_status && account_status !== 'approved') {
+        this.logAddHoursDenied(req, normalizedRole);
+        res.status(403).json({
+          error: 'Not authorized to log service hours',
+          code: ApiErrorCode.FORBIDDEN,
+        });
+        return;
+      }
 
       const normalizedType = parseHourType(type);
       if (!normalizedType) {
@@ -185,15 +217,52 @@ export class UserController {
         return;
       }
 
-      if (!doula_id || !client_id || !start_time || !end_time) {
-        console.log(`${doula_id}, ${client_id}, ${start_time}, ${end_time}`);
-        throw new Error(
-          `Error: missing doula_id, client_id, start_time, or end_time`
-        );
+      if (!client_id || !start_time || !end_time) {
+        res.status(400).json({
+          error: 'Missing required fields: client_id, start_time, end_time',
+        });
+        return;
+      }
+
+      let effectiveDoulaId: string;
+      if (normalizedRole === 'admin') {
+        effectiveDoulaId = bodyDoulaId || pathDoulaId;
+        if (!effectiveDoulaId) {
+          res.status(400).json({ error: 'Missing doula_id' });
+          return;
+        }
+      } else {
+        if (bodyDoulaId && bodyDoulaId !== userId) {
+          this.logAddHoursDenied(req, normalizedRole);
+          res.status(403).json({
+            error: 'Not authorized to log service hours',
+            code: ApiErrorCode.FORBIDDEN,
+          });
+          return;
+        }
+        if (pathDoulaId && pathDoulaId !== userId) {
+          this.logAddHoursDenied(req, normalizedRole);
+          res.status(403).json({
+            error: 'Not authorized to log service hours',
+            code: ApiErrorCode.FORBIDDEN,
+          });
+          return;
+        }
+        effectiveDoulaId = userId;
+
+        const { canAccess } = await canAccessSensitive(req.user, client_id);
+        if (!canAccess) {
+          this.logAddHoursDenied(req, normalizedRole);
+          res.status(403).json({
+            error: 'Not authorized to log service hours',
+            code: ApiErrorCode.FORBIDDEN,
+          });
+          return;
+        }
       }
 
       const newWorkEntry = await this.userUseCase.addNewHours(
-        doula_id,
+        effectiveDoulaId,
         client_id,
         new Date(start_time),
         new Date(end_time),
@@ -205,6 +274,19 @@ export class UserController {
       console.log('Error trying to add new work entry');
       this.handleError(error, res);
     }
+  }
+
+  private logAddHoursDenied(req: AuthRequest, role: string): void {
+    logger.warn({
+      service: 'backend-authz',
+      event: 'authorization_denied',
+      userId: String(req.user?.id || ''),
+      role,
+      method: req.method,
+      route: req.route?.path ? String(req.route.path) : req.path,
+      status: 403,
+      errorCode: ApiErrorCode.FORBIDDEN,
+    });
   }
 
   async updateHour(req: AuthRequest, res: Response): Promise<void> {
