@@ -2,6 +2,103 @@
 
 This file is intentionally updateable as frontend work finishes.
 
+## Preflight Update 2026-08-23 (remove legacy birth_outcomes narrative)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Drop free-text `birth_outcomes`; CRM saves via
+  `PUT /clients/:id/birth-outcomes` only (structured dropdowns/checkboxes).
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md` (deferred)
+- **Files Scanned**:
+  - `frontend-crm/src/features/doula-dashboard/components/ActivitiesTab.tsx`
+  - `frontend-crm/src/features/clients/components/dialog/LeadProfileModal.tsx`
+  - `frontend-crm/src/api/services/clients.service.ts`
+  - `frontend-crm/src/api/doulas/doulaService.ts`
+  - `backend/src/controllers/clientController.ts`
+  - `backend/src/constants/phiFields.ts`
+- **Contract Findings**:
+  - Generic `PUT /clients/:id` now returns 400 for any birth-outcomes keys.
+  - Dedicated route returns
+    `{ success, data: { birth_outcomes_induction, ... } }`.
+  - Legacy narrative column no longer exposed in client detail DTO/API.
+- **Action**: [x] Context updated · [x] Implementation complete
+
+## Preflight Update 2026-08-23 (INV-12 birth-outcomes assignment)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Enforce `canAccessSensitive` on
+  `PUT /clients/:id/birth-outcomes`.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md` (deferred; user
+  prioritized INV-12)
+- **Files Scanned**:
+  - `frontend-crm/src/features/doula-dashboard/components/ActivitiesTab.tsx`
+  - `frontend-crm/src/features/clients/components/dialog/LeadProfileModal.tsx`
+  - `frontend-crm/src/common/utils/updateClient.ts`
+  - `frontend-crm/src/config/clientFieldRouting.ts`
+  - `frontend-crm/src/api/doulas/doulaService.ts`
+  - `backend/src/controllers/clientController.ts`
+  - `backend/src/routes/clientRoutes.ts`
+- **Contract Findings**:
+  - Doula dashboard and Lead Profile save structured birth outcomes via
+    `updateClient` → `PUT /clients/:id` (generic), not
+    `PUT /clients/:id/birth-outcomes`.
+  - Dedicated birth-outcomes endpoint expects snake_case structured fields;
+    frontend already uses those keys in save payloads.
+  - Denied access should surface as non-2xx; frontend shows toast via
+    `result.success` / HTTP error — no change required for 403.
+- **Drift Risk**: Generic `PUT /clients/:id` may still accept birth-outcome
+  fields without assignment check until separately gated.
+- **Required Compatibility**: Keep 200 success shape
+  `{ success: true, data: { birth_outcomes_induction, ... } }` on dedicated
+  route; 403 body `{ success: false, error, code: 'FORBIDDEN' }`.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation complete
+
+## Preflight Update 2026-08-23 (payment-schedule migration)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Apply Cloud SQL migration adding `paid_at` to fix
+  payment-schedule 500.
+- **Repos Scanned**: backend only
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md` (deferred)
+- **Files Scanned**:
+  - `src/db/migrations/20260717_complete_payment_schedules_cloudsql.sql`
+  - `scripts/run-cloudsql-migration.ts`
+  - `src/services/installmentInvoiceService.ts`
+- **Contract Findings**: DB schema drift caused
+  `/clients/:id/billing/payment-schedule` 500.
+- **Drift Risk**: Local Cloud SQL must stay aligned with service SQL
+  expectations.
+- **Action**:
+  - [x] Context updated
+  - [x] Migration applied locally
+
+## Preflight Update 2026-08-23 (LeadProfileModal DialogDescription)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Add Radix `DialogDescription` to Lead Profile modal (Leads
+  tab).
+- **Repos Scanned**: frontend only
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md` (non-HIPAA; deferred)
+- **Files Scanned**:
+  - `frontend-crm/src/features/clients/components/dialog/LeadProfileModal.tsx`
+  - `frontend-crm/src/common/components/ui/dialog.tsx`
+- **Contract Findings**: UI-only a11y fix. No API contract change.
+- **Drift Risk**: None.
+- **Required Compatibility**: N/A
+- **Manual verification (2026-08-23)**: User opened lead profile from Leads tab;
+  no PHI in browser console logs (HIPAA-07 spot-check).
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started
+
 ## Preflight Entry Checklist
 
 Use this checklist at the top of every new preflight entry:
@@ -13,6 +110,53 @@ Use this checklist at the top of every new preflight entry:
 - **Files Scanned**: list of concrete paths
 - **Context Updated**: yes/no
 - **Implementation Started After Gate**: yes/no
+
+## Preflight Update 2026-08-22 (HIPAA-07 frontend sensitive logging)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Remove PHI/token/body console logging from CRM SPA; add CI
+  gate.
+- **Repos Scanned**: both (frontend primary; backend docs/handoff only)
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-22-hipaa-07-frontend-sensitive-logging.md`
+- **Files Scanned**:
+  - `frontend-crm/src/common/utils/updateClient.ts`
+  - `frontend-crm/src/common/utils/deleteClient.ts`
+  - `frontend-crm/src/common/utils/createContract.ts`
+  - `frontend-crm/src/features/clients/Clients.tsx`
+  - `frontend-crm/src/features/clients/components/dialog/LeadProfileModal.tsx`
+  - `frontend-crm/src/api/doulas/doulaService.ts`
+  - Full `src/` for `console.log` / `console.debug`
+- **Contract Findings**: No API contract change. Logging only. Production uses
+  `logger` no-ops + `safeLog` metadata (`scope`, `operation`, `status`).
+- **Drift Risk**: Reintroducing `console.log` of payloads would re-expose PHI in
+  browser DevTools; CI `check:sensitive-logging` blocks regression.
+- **Required Compatibility**: Keep toast/user-visible errors; never log response
+  bodies. Export/download flows must not console-log CSV/JSON payloads.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-20 (QB-authoritative card on file)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Card-on-file status must check linked QuickBooks customer
+  cards only.
+- **Repos Scanned**: both
+- **Files Scanned**:
+  - `frontend-crm/src/features/clients/components/dialog/LeadProfileModal.tsx`
+  - `frontend-crm/src/api/services/clients.service.ts`
+  - `backend/src/services/payments/customerPaymentMethodService.ts`
+- **Contract Findings**: `GET /api/payment-methods/:clientId` now returns
+  `message` and treats QuickBooks customer cards as sole on-file authority (no
+  local fallback for staff messaging). FE displays `message` directly.
+- **Drift Risk**: Older FE without `message` still has on_file/status fallbacks.
+- **Required Compatibility**: Keep `{ success, data }` wrapper; include
+  `message`, `on_file`, `source`.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
 
 ## Preflight Update 2026-08-20 (Payment Schedule HTML 404)
 

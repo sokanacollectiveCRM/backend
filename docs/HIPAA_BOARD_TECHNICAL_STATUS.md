@@ -49,7 +49,7 @@ rest/in transit (Google-managed), Cloud Run deploy test gates.
 | INV-01 | Public intake emails full clinical + identity payload to Gmail         | `requestFormController.ts` staff email includes health history, address, income, due date                                                                                                 |
 | INV-10 | Live `POST /quickbooks/simulate-payment` accepts PAN/CVC               | `quickbooksRoutes.ts` (admin) → `paymentsController` / `createCharge.ts` / `buildChargePayload.ts`                                                                                        |
 | INV-11 | Hardcoded Gmail app password in repo                                   | `src/scripts/sendTestEmail.ts`                                                                                                                                                            |
-| INV-12 | Birth-outcomes write has no assignment check                           | Route allows any `admin`/`doula`; handler never calls `canAccessSensitive`                                                                                                                |
+| INV-12 | Birth-outcomes write assignment check (`canAccessSensitive`)           | **Closed (2026-08-23)** — see `docs/HIPAA_INV12_BIRTH_OUTCOMES_ASSIGNMENT_STATUS.md`                                                                                                      |
 | INV-03 | Any authenticated doula can read another family's operational profile  | `GET /clients/:id`                                                                                                                                                                        |
 | —      | Client document **files** remain in Supabase Storage                   | `clientDocumentUploadService.ts`                                                                                                                                                          |
 | —      | Cloud SQL public IP still enabled                                      | Hardening Phase 7 not started; last verify 2026-08-19 `ipv4Enabled: true`                                                                                                                 |
@@ -57,17 +57,23 @@ rest/in transit (Google-managed), Cloud Run deploy test gates.
 
 ### HIPAA-07 — Sensitive logging
 
-**Partial.** Backend request logger allowlists route metadata
-(`safeLogging.ts`); production `console.*` is no-op on the API.
+**Frontend SPA: remediated 2026-08-22** (pending Cloud Run deploy). Direct
+`console.log` / `console.debug` removed from `src/` (except centralized logger).
+Sensitive error paths use metadata-only `safeLog`. CI gate:
+`npm run check:sensitive-logging`. Evidence:
+`docs/HIPAA_07_FRONTEND_LOGGING_SCAN.md`,
+`docs/HIPAA_07_FRONTEND_LOGGING_SIGNOFF.md`.
 
-Frontend still logs PHI-capable payloads:
+Backend request logger allowlists route metadata (`safeLogging.ts`); production
+`console.*` is no-op on the API.
 
-- `frontend-crm/src/common/utils/updateClient.ts` — client ID, full update
-  payload, error body, returned client
-- `frontend-crm/src/common/utils/deleteClient.ts` — client ID
-- `frontend-crm/src/common/utils/createContract.ts` — contract body
-- `LeadProfileModal.tsx`, `Clients.tsx`, `doulaService.ts`, `ClientsTab.tsx` —
-  names, emails, notes, assigned-client payloads
+Previously open frontend PHI logging paths are closed in code:
+
+- ~~`updateClient.ts` — client ID, full update payload, error body, returned
+  client~~
+- ~~`deleteClient.ts` — client ID~~
+- ~~`createContract.ts` — contract body~~
+- ~~`LeadProfileModal.tsx`, `Clients.tsx`, `doulaService.ts`~~
 
 ### HIPAA-13 — Technical security remediation
 
@@ -158,10 +164,9 @@ are equally blocking from a technical standpoint.
    `createContract.ts`, `LeadProfileModal.tsx`, `Clients.tsx`,
    `doulaService.ts`.
 
-3. **Birth-outcomes assignment (INV-12) — P1, clinical write**  
-   `updateClientBirthOutcomes` must deny unassigned doulas (`canAccessSensitive`
-   or Cloud SQL `doula_assignments`). Comment currently claims the handler
-   enforces assignment; it does not.
+3. **Birth-outcomes assignment (INV-12) — closed 2026-08-23**  
+   `updateClientBirthOutcomes` now calls `canAccessSensitive` before DB access.
+   Evidence: `docs/HIPAA_INV12_BIRTH_OUTCOMES_ASSIGNMENT_STATUS.md`.
 
 4. **Assignment emails (HIPAA-05 email path)**  
    `sendDoulaMatchNotification` includes client email and optional assignment
