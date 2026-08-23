@@ -85,7 +85,9 @@ describe('INV-12 birth-outcomes route authorization', () => {
     const end = routeSrc.indexOf(');', start) + 2;
     const block = routeSrc.slice(start, end);
     expect(block).toContain('authMiddleware');
-    expect(block).toContain("authorizeRoles(req, res, next, ['admin', 'doula'])");
+    expect(block).toContain(
+      "authorizeRoles(req, res, next, ['admin', 'doula'])"
+    );
     expect(block).toContain('updateClientBirthOutcomes');
   });
 

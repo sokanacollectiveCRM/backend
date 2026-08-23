@@ -1,9 +1,10 @@
 import { Response } from 'express';
+
 import { ClientController } from '../controllers/clientController';
-import { ClientUseCase } from '../usecase/clientUseCase';
-import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
 import { ClientRepository } from '../repositories/interface/clientRepository';
+import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
 import { AuthRequest, ROLE } from '../types';
+import { ClientUseCase } from '../usecase/clientUseCase';
 import * as sensitiveAccess from '../utils/sensitiveAccess';
 
 jest.mock('../utils/sensitiveAccess');
@@ -22,7 +23,9 @@ describe('PUT /clients/:id/birth-outcomes', () => {
 
     mockClientRepository = {
       getClientById: jest.fn().mockResolvedValue({ id: clientId } as any),
-      updateClientOperational: jest.fn().mockResolvedValue({ id: clientId } as any),
+      updateClientOperational: jest
+        .fn()
+        .mockResolvedValue({ id: clientId } as any),
       findClientDetailedById: jest.fn().mockResolvedValue({
         user: {
           birth_outcomes_induction: true,
@@ -65,7 +68,10 @@ describe('PUT /clients/:id/birth-outcomes', () => {
       user: { id: 'admin-id', role: ROLE.ADMIN } as any,
     } as unknown as AuthRequest;
 
-    await clientController.updateClientBirthOutcomes(req, mockResponse as Response);
+    await clientController.updateClientBirthOutcomes(
+      req,
+      mockResponse as Response
+    );
 
     expect(mockResponse.status).toHaveBeenCalledWith(400);
     expect(mockResponse.json).toHaveBeenCalledWith({
@@ -86,7 +92,10 @@ describe('PUT /clients/:id/birth-outcomes', () => {
       user: { id: 'doula-id', role: ROLE.DOULA } as any,
     } as unknown as AuthRequest;
 
-    await clientController.updateClientBirthOutcomes(req, mockResponse as Response);
+    await clientController.updateClientBirthOutcomes(
+      req,
+      mockResponse as Response
+    );
 
     expect(mockResponse.status).toHaveBeenCalledWith(400);
     expect(mockResponse.json).toHaveBeenCalledWith({
@@ -107,7 +116,10 @@ describe('PUT /clients/:id/birth-outcomes', () => {
       user: { id: 'admin-id', role: ROLE.ADMIN } as any,
     } as unknown as AuthRequest;
 
-    await clientController.updateClientBirthOutcomes(req, mockResponse as Response);
+    await clientController.updateClientBirthOutcomes(
+      req,
+      mockResponse as Response
+    );
 
     expect(mockResponse.status).toHaveBeenCalledWith(400);
     expect(mockResponse.json).toHaveBeenCalledWith({
@@ -128,7 +140,10 @@ describe('PUT /clients/:id/birth-outcomes', () => {
       user: { id: 'admin-id', role: ROLE.ADMIN } as any,
     } as unknown as AuthRequest;
 
-    await clientController.updateClientBirthOutcomes(req, mockResponse as Response);
+    await clientController.updateClientBirthOutcomes(
+      req,
+      mockResponse as Response
+    );
 
     expect(mockResponse.status).toHaveBeenCalledWith(400);
     expect(mockResponse.json).toHaveBeenCalledWith({
@@ -157,7 +172,10 @@ describe('PUT /clients/:id/birth-outcomes', () => {
         user: { id: 'admin-id', role: ROLE.ADMIN } as any,
       } as unknown as AuthRequest;
 
-      await clientController.updateClientBirthOutcomes(req, mockResponse as Response);
+      await clientController.updateClientBirthOutcomes(
+        req,
+        mockResponse as Response
+      );
 
       expect(sensitiveAccess.canAccessSensitive).toHaveBeenCalledWith(
         req.user,
@@ -181,7 +199,10 @@ describe('PUT /clients/:id/birth-outcomes', () => {
         user: { id: 'doula-id', role: ROLE.DOULA } as any,
       } as unknown as AuthRequest;
 
-      await clientController.updateClientBirthOutcomes(req, mockResponse as Response);
+      await clientController.updateClientBirthOutcomes(
+        req,
+        mockResponse as Response
+      );
 
       expect(mockClientRepository.updateClientOperational).toHaveBeenCalled();
       expect(mockResponse.json).toHaveBeenCalledWith(
@@ -201,7 +222,10 @@ describe('PUT /clients/:id/birth-outcomes', () => {
         user: { id: 'doula-id', role: ROLE.DOULA } as any,
       } as unknown as AuthRequest;
 
-      await clientController.updateClientBirthOutcomes(req, mockResponse as Response);
+      await clientController.updateClientBirthOutcomes(
+        req,
+        mockResponse as Response
+      );
 
       expect(mockResponse.status).toHaveBeenCalledWith(403);
       expect(mockResponse.json).toHaveBeenCalledWith({
@@ -210,7 +234,9 @@ describe('PUT /clients/:id/birth-outcomes', () => {
         code: 'FORBIDDEN',
       });
       expect(mockClientRepository.getClientById).not.toHaveBeenCalled();
-      expect(mockClientRepository.updateClientOperational).not.toHaveBeenCalled();
+      expect(
+        mockClientRepository.updateClientOperational
+      ).not.toHaveBeenCalled();
     });
 
     it('rejects inactive assignment (no active assign) with 403 without client lookup', async () => {
@@ -218,15 +244,24 @@ describe('PUT /clients/:id/birth-outcomes', () => {
         canAccess: false,
         assignedClientIds: [],
       });
-      mockClientRepository.getClientById = jest.fn().mockResolvedValue({ id: clientId });
+      mockClientRepository.getClientById = jest
+        .fn()
+        .mockResolvedValue({ id: clientId });
 
       const req = {
         params: { id: clientId },
         body: validBody,
-        user: { id: 'doula-id', role: ROLE.DOULA, account_status: 'approved' } as any,
+        user: {
+          id: 'doula-id',
+          role: ROLE.DOULA,
+          account_status: 'approved',
+        } as any,
       } as unknown as AuthRequest;
 
-      await clientController.updateClientBirthOutcomes(req, mockResponse as Response);
+      await clientController.updateClientBirthOutcomes(
+        req,
+        mockResponse as Response
+      );
 
       expect(mockResponse.status).toHaveBeenCalledWith(403);
       expect(mockClientRepository.getClientById).not.toHaveBeenCalled();
@@ -244,10 +279,15 @@ describe('PUT /clients/:id/birth-outcomes', () => {
         user: undefined,
       } as unknown as AuthRequest;
 
-      await clientController.updateClientBirthOutcomes(req, mockResponse as Response);
+      await clientController.updateClientBirthOutcomes(
+        req,
+        mockResponse as Response
+      );
 
       expect(mockResponse.status).toHaveBeenCalledWith(403);
-      expect(mockClientRepository.updateClientOperational).not.toHaveBeenCalled();
+      expect(
+        mockClientRepository.updateClientOperational
+      ).not.toHaveBeenCalled();
     });
 
     it('returns 404 for authorized admin when client does not exist', async () => {
@@ -263,10 +303,15 @@ describe('PUT /clients/:id/birth-outcomes', () => {
         user: { id: 'admin-id', role: ROLE.ADMIN } as any,
       } as unknown as AuthRequest;
 
-      await clientController.updateClientBirthOutcomes(req, mockResponse as Response);
+      await clientController.updateClientBirthOutcomes(
+        req,
+        mockResponse as Response
+      );
 
       expect(mockResponse.status).toHaveBeenCalledWith(404);
-      expect(mockClientRepository.updateClientOperational).not.toHaveBeenCalled();
+      expect(
+        mockClientRepository.updateClientOperational
+      ).not.toHaveBeenCalled();
     });
   });
 
@@ -281,13 +326,19 @@ describe('PUT /clients/:id/birth-outcomes', () => {
       user: { id: 'admin-id', role: ROLE.ADMIN } as any,
     } as unknown as AuthRequest;
 
-    await clientController.updateClientBirthOutcomes(req, mockResponse as Response);
+    await clientController.updateClientBirthOutcomes(
+      req,
+      mockResponse as Response
+    );
 
-    expect(mockClientRepository.updateClientOperational).toHaveBeenCalledWith(clientId, {
-      birth_outcomes_induction: true,
-      birth_outcomes_delivery_type: 'Emergency Cesarean',
-      birth_outcomes_medications_used: ['Pitocin', 'Epidural'],
-    });
+    expect(mockClientRepository.updateClientOperational).toHaveBeenCalledWith(
+      clientId,
+      {
+        birth_outcomes_induction: true,
+        birth_outcomes_delivery_type: 'Emergency Cesarean',
+        birth_outcomes_medications_used: ['Pitocin', 'Epidural'],
+      }
+    );
     expect(mockResponse.json).toHaveBeenCalledWith({
       success: true,
       data: {
@@ -316,11 +367,14 @@ describe('PUT /clients/:id/birth-outcomes', () => {
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
           success: false,
-          error: 'Birth outcomes must be updated via PUT /clients/:id/birth-outcomes',
+          error:
+            'Birth outcomes must be updated via PUT /clients/:id/birth-outcomes',
           code: 'VALIDATION_ERROR',
         })
       );
-      expect(mockClientRepository.updateClientOperational).not.toHaveBeenCalled();
+      expect(
+        mockClientRepository.updateClientOperational
+      ).not.toHaveBeenCalled();
     });
 
     it('rejects legacy birth_outcomes narrative on generic update', async () => {
@@ -333,7 +387,9 @@ describe('PUT /clients/:id/birth-outcomes', () => {
       await clientController.updateClient(req, mockResponse as Response);
 
       expect(mockResponse.status).toHaveBeenCalledWith(400);
-      expect(mockClientRepository.updateClientOperational).not.toHaveBeenCalled();
+      expect(
+        mockClientRepository.updateClientOperational
+      ).not.toHaveBeenCalled();
     });
   });
 });

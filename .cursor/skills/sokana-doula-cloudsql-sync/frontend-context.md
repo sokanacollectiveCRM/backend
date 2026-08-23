@@ -18,7 +18,8 @@ This file is intentionally updateable as frontend work finishes.
   - `backend/src/constants/phiFields.ts`
 - **Contract Findings**:
   - Generic `PUT /clients/:id` now returns 400 for any birth-outcomes keys.
-  - Dedicated route returns `{ success, data: { birth_outcomes_induction, ... } }`.
+  - Dedicated route returns
+    `{ success, data: { birth_outcomes_induction, ... } }`.
   - Legacy narrative column no longer exposed in client detail DTO/API.
 - **Action**: [x] Context updated · [x] Implementation complete
 
@@ -26,9 +27,11 @@ This file is intentionally updateable as frontend work finishes.
 
 - **Gate Result**: `run_preflight`
 - **Reason**: `preflight_required_every_task`
-- **Task Intent**: Enforce `canAccessSensitive` on `PUT /clients/:id/birth-outcomes`.
+- **Task Intent**: Enforce `canAccessSensitive` on
+  `PUT /clients/:id/birth-outcomes`.
 - **Handoff inbox**: `open_handoff_tasks_found`:
-  `2026-08-10-backend-architecture-boundary-refactor.md` (deferred; user prioritized INV-12)
+  `2026-08-10-backend-architecture-boundary-refactor.md` (deferred; user
+  prioritized INV-12)
 - **Files Scanned**:
   - `frontend-crm/src/features/doula-dashboard/components/ActivitiesTab.tsx`
   - `frontend-crm/src/features/clients/components/dialog/LeadProfileModal.tsx`
@@ -58,7 +61,8 @@ This file is intentionally updateable as frontend work finishes.
 
 - **Gate Result**: `run_preflight`
 - **Reason**: `preflight_required_every_task`
-- **Task Intent**: Apply Cloud SQL migration adding `paid_at` to fix payment-schedule 500.
+- **Task Intent**: Apply Cloud SQL migration adding `paid_at` to fix
+  payment-schedule 500.
 - **Repos Scanned**: backend only
 - **Handoff inbox**: `open_handoff_tasks_found`:
   `2026-08-10-backend-architecture-boundary-refactor.md` (deferred)
@@ -66,8 +70,10 @@ This file is intentionally updateable as frontend work finishes.
   - `src/db/migrations/20260717_complete_payment_schedules_cloudsql.sql`
   - `scripts/run-cloudsql-migration.ts`
   - `src/services/installmentInvoiceService.ts`
-- **Contract Findings**: DB schema drift caused `/clients/:id/billing/payment-schedule` 500.
-- **Drift Risk**: Local Cloud SQL must stay aligned with service SQL expectations.
+- **Contract Findings**: DB schema drift caused
+  `/clients/:id/billing/payment-schedule` 500.
+- **Drift Risk**: Local Cloud SQL must stay aligned with service SQL
+  expectations.
 - **Action**:
   - [x] Context updated
   - [x] Migration applied locally
@@ -76,7 +82,8 @@ This file is intentionally updateable as frontend work finishes.
 
 - **Gate Result**: `run_preflight`
 - **Reason**: `preflight_required_every_task`
-- **Task Intent**: Add Radix `DialogDescription` to Lead Profile modal (Leads tab).
+- **Task Intent**: Add Radix `DialogDescription` to Lead Profile modal (Leads
+  tab).
 - **Repos Scanned**: frontend only
 - **Handoff inbox**: `open_handoff_tasks_found`:
   `2026-08-10-backend-architecture-boundary-refactor.md` (non-HIPAA; deferred)
@@ -108,7 +115,8 @@ Use this checklist at the top of every new preflight entry:
 
 - **Gate Result**: `run_preflight`
 - **Reason**: `preflight_required_every_task`
-- **Task Intent**: Remove PHI/token/body console logging from CRM SPA; add CI gate.
+- **Task Intent**: Remove PHI/token/body console logging from CRM SPA; add CI
+  gate.
 - **Repos Scanned**: both (frontend primary; backend docs/handoff only)
 - **Handoff inbox**: `open_handoff_tasks_found`:
   `2026-08-10-backend-architecture-boundary-refactor.md`,
@@ -134,15 +142,19 @@ Use this checklist at the top of every new preflight entry:
 
 - **Gate Result**: `run_preflight`
 - **Reason**: `preflight_required_every_task`
-- **Task Intent**: Card-on-file status must check linked QuickBooks customer cards only.
+- **Task Intent**: Card-on-file status must check linked QuickBooks customer
+  cards only.
 - **Repos Scanned**: both
 - **Files Scanned**:
   - `frontend-crm/src/features/clients/components/dialog/LeadProfileModal.tsx`
   - `frontend-crm/src/api/services/clients.service.ts`
   - `backend/src/services/payments/customerPaymentMethodService.ts`
-- **Contract Findings**: `GET /api/payment-methods/:clientId` now returns `message` and treats QuickBooks customer cards as sole on-file authority (no local fallback for staff messaging). FE displays `message` directly.
+- **Contract Findings**: `GET /api/payment-methods/:clientId` now returns
+  `message` and treats QuickBooks customer cards as sole on-file authority (no
+  local fallback for staff messaging). FE displays `message` directly.
 - **Drift Risk**: Older FE without `message` still has on_file/status fallbacks.
-- **Required Compatibility**: Keep `{ success, data }` wrapper; include `message`, `on_file`, `source`.
+- **Required Compatibility**: Keep `{ success, data }` wrapper; include
+  `message`, `on_file`, `source`.
 - **Context Updated**: yes
 - **Implementation Started After Gate**: yes
 

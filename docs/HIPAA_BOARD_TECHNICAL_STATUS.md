@@ -49,7 +49,7 @@ rest/in transit (Google-managed), Cloud Run deploy test gates.
 | INV-01 | Public intake emails full clinical + identity payload to Gmail         | `requestFormController.ts` staff email includes health history, address, income, due date                                                                                                 |
 | INV-10 | Live `POST /quickbooks/simulate-payment` accepts PAN/CVC               | `quickbooksRoutes.ts` (admin) → `paymentsController` / `createCharge.ts` / `buildChargePayload.ts`                                                                                        |
 | INV-11 | Hardcoded Gmail app password in repo                                   | `src/scripts/sendTestEmail.ts`                                                                                                                                                            |
-| INV-12 | Birth-outcomes write assignment check (`canAccessSensitive`) | **Closed (2026-08-23)** — see `docs/HIPAA_INV12_BIRTH_OUTCOMES_ASSIGNMENT_STATUS.md` |
+| INV-12 | Birth-outcomes write assignment check (`canAccessSensitive`)           | **Closed (2026-08-23)** — see `docs/HIPAA_INV12_BIRTH_OUTCOMES_ASSIGNMENT_STATUS.md`                                                                                                      |
 | INV-03 | Any authenticated doula can read another family's operational profile  | `GET /clients/:id`                                                                                                                                                                        |
 | —      | Client document **files** remain in Supabase Storage                   | `clientDocumentUploadService.ts`                                                                                                                                                          |
 | —      | Cloud SQL public IP still enabled                                      | Hardening Phase 7 not started; last verify 2026-08-19 `ipv4Enabled: true`                                                                                                                 |
@@ -69,7 +69,8 @@ Backend request logger allowlists route metadata (`safeLogging.ts`); production
 
 Previously open frontend PHI logging paths are closed in code:
 
-- ~~`updateClient.ts` — client ID, full update payload, error body, returned client~~
+- ~~`updateClient.ts` — client ID, full update payload, error body, returned
+  client~~
 - ~~`deleteClient.ts` — client ID~~
 - ~~`createContract.ts` — contract body~~
 - ~~`LeadProfileModal.tsx`, `Clients.tsx`, `doulaService.ts`~~
