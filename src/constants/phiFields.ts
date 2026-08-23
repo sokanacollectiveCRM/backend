@@ -243,6 +243,20 @@ export function normalizeClientPatch(
  * @param input - Normalized flat key-value patch
  * @returns { operational, phi } — two disjoint objects
  */
+/** Structured + legacy birth outcomes — use PUT /clients/:id/birth-outcomes only. */
+export const BIRTH_OUTCOMES_WRITE_KEYS = new Set([
+  'birth_outcomes',
+  'birth_outcomes_induction',
+  'birth_outcomes_delivery_type',
+  'birth_outcomes_medications_used',
+]);
+
+export function findBirthOutcomesWriteKeys(
+  input: Record<string, unknown>
+): string[] {
+  return Object.keys(input).filter((key) => BIRTH_OUTCOMES_WRITE_KEYS.has(key));
+}
+
 export function splitClientPatch(input: Record<string, any>): {
   operational: Record<string, any>;
   phi: Record<string, any>;

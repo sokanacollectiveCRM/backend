@@ -21,7 +21,11 @@ import {
   CLIENT_DOCUMENT_TYPE_INSURANCE_CARD,
   MAX_CLIENT_DOCUMENT_SIZE_BYTES,
 } from '../constants/clientDocuments';
-import { normalizeClientPatch, splitClientPatch } from '../constants/phiFields';
+import {
+  findBirthOutcomesWriteKeys,
+  normalizeClientPatch,
+  splitClientPatch,
+} from '../constants/phiFields';
 import { PortalEligibilitySnapshot } from '../constants/portalEligibility';
 import { normalizeStaffReferralOperationalPatch } from '../constants/referralSource';
 import {
@@ -1349,8 +1353,6 @@ export class ClientController {
           merged.annual_income = fullClient.annual_income;
         if (fullClient.baby_sex != null) merged.baby_sex = fullClient.baby_sex;
         if (u?.health_notes != null) merged.health_notes = u.health_notes;
-        if ((u as any)?.birth_outcomes != null)
-          merged.birth_outcomes = (u as any).birth_outcomes;
         if ((u as any)?.birth_outcomes_induction != null)
           merged.birth_outcomes_induction = (u as any).birth_outcomes_induction;
         if ((u as any)?.birth_outcomes_delivery_type != null)
@@ -1662,6 +1664,18 @@ export class ClientController {
     try {
       // ── Step 0: Normalize + validate profile/address field lengths ──
       const normalizedRaw = normalizeClientPatch(updateData);
+      const birthOutcomesKeys = findBirthOutcomesWriteKeys(normalizedRaw);
+      if (birthOutcomesKeys.length > 0) {
+        res
+          .status(400)
+          .json(
+            ApiResponse.error(
+              'Birth outcomes must be updated via PUT /clients/:id/birth-outcomes',
+              'VALIDATION_ERROR'
+            )
+          );
+        return;
+      }
       const billingPatch = this.extractBillingPatch(normalizedRaw);
       const profilePatch = this.stripBillingPatch(normalizedRaw);
       const billingFieldsPresent = Object.keys(billingPatch).length > 0;
@@ -1929,8 +1943,6 @@ export class ClientController {
           if (fullClient.baby_sex != null)
             response.baby_sex = fullClient.baby_sex;
           if (u?.health_notes != null) response.health_notes = u.health_notes;
-          if ((u as any)?.birth_outcomes != null)
-            response.birth_outcomes = (u as any).birth_outcomes;
           if ((u as any)?.birth_outcomes_induction != null)
             response.birth_outcomes_induction = (
               u as any
@@ -2083,7 +2095,7 @@ export class ClientController {
    * - birth_outcomes_delivery_type: one of allowed options
    * - birth_outcomes_medications_used: string[] with allowed options (min 1)
    *
-   * Authorization: admin or assigned doula (enforced by route + middleware).
+   * Authorization: admin or assigned doula (`canAccessSensitive`).
    */
   async updateClientBirthOutcomes(
     req: AuthRequest,
@@ -2197,6 +2209,23 @@ export class ClientController {
           ApiResponse.error(
             'birth_outcomes_medications_used contains invalid option(s)',
             'VALIDATION_ERROR'
+          )
+        );
+      return;
+    }
+
+    const { canAccess } = await canAccessSensitive(req.user, id);
+    if (!canAccess) {
+      logger.warn(
+        { clientId: id, role: req.user?.role },
+        '[Client] unauthorized birth outcomes update attempt'
+      );
+      res
+        .status(403)
+        .json(
+          ApiResponse.error(
+            'Not authorized to update birth outcomes',
+            'FORBIDDEN'
           )
         );
       return;

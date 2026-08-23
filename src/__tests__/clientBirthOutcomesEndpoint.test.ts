@@ -25,7 +25,6 @@ describe('PUT /clients/:id/birth-outcomes', () => {
       updateClientOperational: jest.fn().mockResolvedValue({ id: clientId } as any),
       findClientDetailedById: jest.fn().mockResolvedValue({
         user: {
-          birth_outcomes: 'Legacy narrative',
           birth_outcomes_induction: true,
           birth_outcomes_delivery_type: 'Emergency Cesarean',
           birth_outcomes_medications_used: ['Pitocin'],
@@ -139,6 +138,138 @@ describe('PUT /clients/:id/birth-outcomes', () => {
     });
   });
 
+  describe('Authorization', () => {
+    const validBody = {
+      birth_outcomes_induction: true,
+      birth_outcomes_delivery_type: 'Emergency Cesarean',
+      birth_outcomes_medications_used: ['Pitocin'],
+    };
+
+    it('allows admin to update birth outcomes', async () => {
+      (sensitiveAccess.canAccessSensitive as jest.Mock).mockResolvedValue({
+        canAccess: true,
+        assignedClientIds: [],
+      });
+
+      const req = {
+        params: { id: clientId },
+        body: validBody,
+        user: { id: 'admin-id', role: ROLE.ADMIN } as any,
+      } as unknown as AuthRequest;
+
+      await clientController.updateClientBirthOutcomes(req, mockResponse as Response);
+
+      expect(sensitiveAccess.canAccessSensitive).toHaveBeenCalledWith(
+        req.user,
+        clientId
+      );
+      expect(mockClientRepository.updateClientOperational).toHaveBeenCalled();
+      expect(mockResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({ success: true })
+      );
+    });
+
+    it('allows assigned doula to update birth outcomes', async () => {
+      (sensitiveAccess.canAccessSensitive as jest.Mock).mockResolvedValue({
+        canAccess: true,
+        assignedClientIds: [clientId],
+      });
+
+      const req = {
+        params: { id: clientId },
+        body: validBody,
+        user: { id: 'doula-id', role: ROLE.DOULA } as any,
+      } as unknown as AuthRequest;
+
+      await clientController.updateClientBirthOutcomes(req, mockResponse as Response);
+
+      expect(mockClientRepository.updateClientOperational).toHaveBeenCalled();
+      expect(mockResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({ success: true })
+      );
+    });
+
+    it('rejects unassigned doula with 403', async () => {
+      (sensitiveAccess.canAccessSensitive as jest.Mock).mockResolvedValue({
+        canAccess: false,
+        assignedClientIds: [],
+      });
+
+      const req = {
+        params: { id: clientId },
+        body: validBody,
+        user: { id: 'doula-id', role: ROLE.DOULA } as any,
+      } as unknown as AuthRequest;
+
+      await clientController.updateClientBirthOutcomes(req, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(403);
+      expect(mockResponse.json).toHaveBeenCalledWith({
+        success: false,
+        error: 'Not authorized to update birth outcomes',
+        code: 'FORBIDDEN',
+      });
+      expect(mockClientRepository.getClientById).not.toHaveBeenCalled();
+      expect(mockClientRepository.updateClientOperational).not.toHaveBeenCalled();
+    });
+
+    it('rejects inactive assignment (no active assign) with 403 without client lookup', async () => {
+      (sensitiveAccess.canAccessSensitive as jest.Mock).mockResolvedValue({
+        canAccess: false,
+        assignedClientIds: [],
+      });
+      mockClientRepository.getClientById = jest.fn().mockResolvedValue({ id: clientId });
+
+      const req = {
+        params: { id: clientId },
+        body: validBody,
+        user: { id: 'doula-id', role: ROLE.DOULA, account_status: 'approved' } as any,
+      } as unknown as AuthRequest;
+
+      await clientController.updateClientBirthOutcomes(req, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(403);
+      expect(mockClientRepository.getClientById).not.toHaveBeenCalled();
+    });
+
+    it('rejects missing authenticated user (fail-closed)', async () => {
+      (sensitiveAccess.canAccessSensitive as jest.Mock).mockResolvedValue({
+        canAccess: false,
+        assignedClientIds: [],
+      });
+
+      const req = {
+        params: { id: clientId },
+        body: validBody,
+        user: undefined,
+      } as unknown as AuthRequest;
+
+      await clientController.updateClientBirthOutcomes(req, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(403);
+      expect(mockClientRepository.updateClientOperational).not.toHaveBeenCalled();
+    });
+
+    it('returns 404 for authorized admin when client does not exist', async () => {
+      (sensitiveAccess.canAccessSensitive as jest.Mock).mockResolvedValue({
+        canAccess: true,
+        assignedClientIds: [],
+      });
+      mockClientRepository.getClientById = jest.fn().mockResolvedValue(null);
+
+      const req = {
+        params: { id: clientId },
+        body: validBody,
+        user: { id: 'admin-id', role: ROLE.ADMIN } as any,
+      } as unknown as AuthRequest;
+
+      await clientController.updateClientBirthOutcomes(req, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(404);
+      expect(mockClientRepository.updateClientOperational).not.toHaveBeenCalled();
+    });
+  });
+
   it('writes valid structured birth outcomes to Cloud SQL', async () => {
     const req = {
       params: { id: clientId },
@@ -164,6 +295,45 @@ describe('PUT /clients/:id/birth-outcomes', () => {
         birth_outcomes_delivery_type: 'Emergency Cesarean',
         birth_outcomes_medications_used: ['Pitocin', 'Epidural'],
       },
+    });
+  });
+
+  describe('Generic PUT /clients/:id', () => {
+    it('rejects structured birth outcomes fields on generic update', async () => {
+      const req = {
+        params: { id: clientId },
+        body: {
+          birth_outcomes_induction: true,
+          birth_outcomes_delivery_type: 'Emergency Cesarean',
+          birth_outcomes_medications_used: ['Pitocin'],
+        },
+        user: { id: 'admin-id', role: ROLE.ADMIN } as any,
+      } as unknown as AuthRequest;
+
+      await clientController.updateClient(req, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(400);
+      expect(mockResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          error: 'Birth outcomes must be updated via PUT /clients/:id/birth-outcomes',
+          code: 'VALIDATION_ERROR',
+        })
+      );
+      expect(mockClientRepository.updateClientOperational).not.toHaveBeenCalled();
+    });
+
+    it('rejects legacy birth_outcomes narrative on generic update', async () => {
+      const req = {
+        params: { id: clientId },
+        body: { birth_outcomes: 'Free text should not be accepted' },
+        user: { id: 'admin-id', role: ROLE.ADMIN } as any,
+      } as unknown as AuthRequest;
+
+      await clientController.updateClient(req, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(400);
+      expect(mockClientRepository.updateClientOperational).not.toHaveBeenCalled();
     });
   });
 });
@@ -202,7 +372,6 @@ describe('GET /clients/:id includes structured birth outcomes (authorized)', () 
       } as any),
       findClientDetailedById: jest.fn().mockResolvedValue({
         user: {
-          birth_outcomes: 'Legacy narrative',
           birth_outcomes_induction: false,
           birth_outcomes_delivery_type: 'Vaginal (unmedicated)',
           birth_outcomes_medications_used: ['Nitrous Oxide'],
@@ -242,7 +411,7 @@ describe('GET /clients/:id includes structured birth outcomes (authorized)', () 
     jest.clearAllMocks();
   });
 
-  it('returns legacy birth_outcomes plus structured fields', async () => {
+  it('returns structured birth outcome fields when authorized', async () => {
     const req = {
       params: { id: clientId },
       user: { id: 'admin-id', role: ROLE.ADMIN } as any,
@@ -255,7 +424,6 @@ describe('GET /clients/:id includes structured birth outcomes (authorized)', () 
         success: true,
         data: expect.objectContaining({
           id: clientId,
-          birth_outcomes: 'Legacy narrative',
           birth_outcomes_induction: false,
           birth_outcomes_delivery_type: 'Vaginal (unmedicated)',
           birth_outcomes_medications_used: ['Nitrous Oxide'],

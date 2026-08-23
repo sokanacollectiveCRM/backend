@@ -113,8 +113,6 @@ export interface ClientDetailDTO {
   // Health
   health_history?: string;
   health_notes?: string;
-  /** Doula-entered narrative birth summary (not structured / not checkboxes). */
-  birth_outcomes?: string;
   /** Structured birth outcomes: was labor induced? */
   birth_outcomes_induction?: boolean;
   /** Structured birth outcomes: delivery type (reportable option). */
