@@ -45,7 +45,7 @@ rest/in transit (Google-managed), Cloud Run deploy test gates.
 | ID     | Finding                                                                | Evidence                                                                                                                                                                                  |
 | ------ | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | INV-02 | `GET /clients/fetchCSV` was open to `client` and exported all families | **Contained 2026-08-20:** admin-only route + use case; see `docs/HIPAA_13A_CLIENT_CSV_EXPORT_STATUS.md`. Residual: admin exports **all** `phi_clients` columns for all rows (`SELECT *`). |
-| INV-09 | Any authenticated user can write hours for any client                  | `src/routes/specificUserRoutes.ts` `POST /:id/addhours` is session-only; `userController.addNewHours` trusts body `doula_id` / `client_id`                                                |
+| INV-09 | Any authenticated user can write hours for any client                  | **Closed (2026-08-23)** — HIPAA-13E; see `docs/HIPAA_13E_VERIFICATION_SIGNOFF.md` (PR #80, revision `00040-n2d`)                                                                          |
 | INV-01 | Public intake emails full clinical + identity payload to Gmail         | `requestFormController.ts` staff email includes health history, address, income, due date                                                                                                 |
 | INV-10 | Live `POST /quickbooks/simulate-payment` accepts PAN/CVC               | `quickbooksRoutes.ts` (admin) → `paymentsController` / `createCharge.ts` / `buildChargePayload.ts`                                                                                        |
 | INV-11 | Hardcoded Gmail app password in repo                                   | `src/scripts/sendTestEmail.ts`                                                                                                                                                            |
@@ -181,8 +181,8 @@ are equally blocking from a technical standpoint.
 
 ### Same-sprint P0s still in code (do not skip)
 
-6. **Hours IDOR (INV-09)** — `POST /users/:id/addhours` needs role + assignment;
-   ignore body `doula_id` except admin.
+6. **Hours IDOR (INV-09)** — **Closed 2026-08-23** (HIPAA-13E / PR #80 /
+   `docs/HIPAA_13E_VERIFICATION_SIGNOFF.md`).
 7. **Intake Gmail (INV-01)** — stop emailing health history / address / income;
    notify with client number + CRM link.
 8. **Simulate-payment PAN (INV-10)** — unmount

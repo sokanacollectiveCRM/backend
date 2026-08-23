@@ -2,7 +2,8 @@
 
 **Ticket:** HIPAA-13E / INV-09 — Fix the service-hours IDOR  
 **Priority:** P0 — Launch blocker  
-**Status:** Ready for verification (code + automated tests complete; production deploy pending)
+**Status:** **Verified and closed** (2026-08-23). See
+`docs/HIPAA_13E_VERIFICATION_SIGNOFF.md`.
 
 ---
 
@@ -35,8 +36,8 @@
 - [x] Assignment validated on server (`canAccessSensitive` → active `assignments` row)
 - [x] Negative tests: unassigned doula, client, billing, inactive user, altered record IDs
 - [x] Authorization audit logging retained (no PHI in deny logs)
-- [ ] Production deployment confirmation
-- [ ] Reviewer sign-off
+- [x] Production deployment confirmation (`sokana-private-api-00040-n2d` @ `66332ab`)
+- [x] Reviewer sign-off (`docs/HIPAA_13E_VERIFICATION_SIGNOFF.md`, Jerry Bony, 2026-08-23)
 
 ---
 
@@ -48,21 +49,19 @@
 | Controller | `src/controllers/userController.ts` — `addNewHours` |
 | Assignment helper | `src/utils/sensitiveAccess.ts` — `canAccessSensitive` |
 | Tests | `src/__tests__/addHoursAuthorization.test.ts` |
+| Prod verify script | `scripts/verify-hipaa13e-addhours-prod.ts` |
 | Frontend consumer | `frontend-crm/src/common/utils/addWorkSession.ts` (unchanged; sends session doula id) |
 
 ---
 
 ## Automated test results
 
-Run:
-
 ```bash
 npm test -- addHoursAuthorization.test.ts
 ```
 
-Expected: all tests pass (assigned doula, admin, unassigned doula, client, billing, inactive user, altered path/body ids, unassigned client, unauthenticated, deny audit log shape).
-
-**Local run (2026-08-23):** 11/11 pass.
+**Local run (2026-08-23):** 11/11 pass.  
+**Full suite (2026-08-23):** 51 suites / 413 tests pass.
 
 ---
 
@@ -70,15 +69,16 @@ Expected: all tests pass (assigned doula, admin, unassigned doula, client, billi
 
 - Legacy route remains (`POST /users/:id/addhours`); secure parallel exists at `POST /api/doulas/hours` (`doulaController.logHours`). Frontend still uses legacy path but is compatible with new guards.
 - Admin hour entry is intentionally unscoped (explicit administrator authorization per ticket).
-- Production verification pending post-deploy.
 
 ---
 
-## Closure (pending deploy)
+## Closure
 
 | Field | Value |
 | ----- | ----- |
-| PR / commit | _TBD at merge_ |
-| Production revision | _TBD_ |
-| Reviewer / date | _TBD_ |
-| Formal approval | _Pending production verification_ |
+| PR / commit | [PR #80](https://github.com/sokanacollectiveCRM/backend/pull/80) / `66332ab` |
+| Production revision | `sokana-private-api-00040-n2d` |
+| Image | `backend-repo/api:66332ab62b5fcbb3eec460cf7cb9dbd3038102e0` |
+| Cloud Build | SUCCESS `2026-08-23T19:57:11Z` |
+| Reviewer / date | Jerry Bony / 2026-08-23 |
+| Formal approval | **Verified — closed** |

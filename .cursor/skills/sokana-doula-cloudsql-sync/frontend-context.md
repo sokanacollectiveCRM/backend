@@ -2598,6 +2598,33 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 - **Docs**: `docs/CLOUD_SQL_NETWORK_HARDENING.md` Phase 3
 - **Context Updated**: yes
 
+## Preflight Update 2026-08-23 (HIPAA-13E closure)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Close HIPAA-13E / INV-09 after merge + prod deploy
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`; `no_open_handoff_tasks` for `frontend->backend`
+- **Result**: PR #80 merged (`66332ab`); Cloud Run `sokana-private-api-00040-n2d`; formal sign-off in `docs/HIPAA_13E_VERIFICATION_SIGNOFF.md`
+- **Contract Findings**: No frontend change; legacy `addWorkSession` path remains compatible
+- **Context Updated**: yes
+
+## Preflight Update 2026-08-23 (HIPAA-13E service-hours IDOR)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Fix `POST /users/:id/addhours` IDOR — restrict hour writes to assigned doula or admin
+- **Handoff inbox**: `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`; `no_open_handoff_tasks` for `frontend->backend`
+- **Files Scanned**:
+  - `frontend-crm/src/common/utils/addWorkSession.ts` (POST `/users/${doula_id}/addhours` with body `doula_id`, `client_id`, times, `type`)
+  - `frontend-crm/src/features/hours/components/users-primary-buttons.tsx` (passes `user?.id` + selected client)
+  - `backend/src/controllers/userController.ts` (`addNewHours` — was session-only)
+  - `backend/src/controllers/doulaController.ts` (`logHours` — already assignment-gated via `getClientsLite`)
+  - `backend/src/utils/sensitiveAccess.ts` (`canAccessSensitive` for assignment)
+- **Contract Findings**: Frontend sends legacy route with matching session doula id in path and body; expects 200 + work entry JSON on success. No wrapper change required.
+- **Drift Risk**: If backend rejects mismatched body `doula_id`, frontend already sends session id — compatible. Admin hour entry UI may rely on path `:id` + body `doula_id` — preserved for admin.
+- **Required Compatibility**: Keep `POST /users/:id/addhours` path and 200 response shape for assigned doula flows; 403/401 JSON with `code` field on deny.
+- **Action**: Backend authorization hardening only; no frontend change required
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
 ## Preflight Update 2026-08-19 (Phase 2 Direct VPC egress)
 
 - **Gate Result**: `run_preflight`
