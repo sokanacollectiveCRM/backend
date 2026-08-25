@@ -1,16 +1,15 @@
 /**
- * PHI Broker Service - Client for Vercel backend to fetch PHI data
- * 
+ * PHI Broker Service - Client for the CRM API to fetch PHI data via Cloud Run broker
+ *
  * HIPAA COMPLIANCE:
  * - PHI response values are NEVER logged
  * - Uses HMAC signature for service-to-service auth
  * - Throws typed error on broker failure (controller returns 502)
- * 
+ *
  * Environment Variables:
  * - PHI_BROKER_URL: Base URL of the PHI Broker service
  * - PHI_BROKER_SHARED_SECRET: HMAC shared secret
  */
-
 import { createHmac } from 'crypto';
 
 /**
@@ -112,7 +111,8 @@ export async function updateClientPhi(
       let errorDetails = 'Unknown error';
       try {
         const errorBody = await response.json();
-        errorDetails = errorBody.error || errorBody.message || JSON.stringify(errorBody);
+        errorDetails =
+          errorBody.error || errorBody.message || JSON.stringify(errorBody);
       } catch {
         errorDetails = await response.text();
       }
@@ -125,10 +125,16 @@ export async function updateClientPhi(
         fieldKeys: Object.keys(fields), // Log field names (not values)
         brokerError: errorDetails,
       });
-      throw new PhiBrokerError(`Broker update returned ${response.status}: ${errorDetails}`);
+      throw new PhiBrokerError(
+        `Broker update returned ${response.status}: ${errorDetails}`
+      );
     }
 
-    const result = await response.json() as { success: boolean; data?: PhiData; error?: string };
+    const result = (await response.json()) as {
+      success: boolean;
+      data?: PhiData;
+      error?: string;
+    };
 
     if (!result.success) {
       throw new PhiBrokerError('Broker update returned error response');
@@ -156,12 +162,12 @@ export async function updateClientPhi(
 
 /**
  * Fetch PHI data for a client from the PHI Broker service.
- * 
+ *
  * @param clientId - The client UUID
  * @param requester - Information about the requester (role, userId, assignedClientIds)
  * @returns PHI data object (empty if unauthorized or no data)
  * @throws PhiBrokerError if broker is unavailable or returns an error
- * 
+ *
  * HIPAA: PHI values are NEVER logged
  */
 export async function fetchClientPhi(
@@ -213,7 +219,11 @@ export async function fetchClientPhi(
       throw new PhiBrokerError(`Broker returned ${response.status}`);
     }
 
-    const result = await response.json() as { success: boolean; data?: PhiData; error?: string };
+    const result = (await response.json()) as {
+      success: boolean;
+      data?: PhiData;
+      error?: string;
+    };
 
     if (!result.success) {
       console.error('[PhiBroker] Broker returned error', {

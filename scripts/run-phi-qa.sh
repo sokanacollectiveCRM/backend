@@ -28,7 +28,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 BROKER_BASE="${BROKER_BASE:-https://sokana-phi-broker-634744984887.us-central1.run.app}"
-VERCEL_BASE="${VERCEL_BASE:-https://crmbackend-six-wine.vercel.app}"
+VERCEL_BASE="${VERCEL_BASE:-https://sokana-private-api-634744984887.us-central1.run.app}"
 CLIENT_ID="${CLIENT_ID:-ced55ced-c62c-48c0-81fb-353fe4a99cc4}"
 
 if [[ -z "$JWT_ADMIN" ]]; then

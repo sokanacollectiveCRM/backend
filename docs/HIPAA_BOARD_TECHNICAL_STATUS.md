@@ -53,7 +53,7 @@ rest/in transit (Google-managed), Cloud Run deploy test gates.
 | INV-03 | Any authenticated doula can read another family's operational profile  | **Closed (2026-08-25)** — HIPAA-13B; see `docs/HIPAA_13B_VERIFICATION_SIGNOFF.md` (PR #23, revision `00053-4lh`)                                                                          |
 | —      | Client document **files** remain in Supabase Storage                   | `clientDocumentUploadService.ts`                                                                                                                                                          |
 | —      | Cloud SQL public IP still enabled                                      | Hardening Phase 7 not started; last verify 2026-08-19 `ipv4Enabled: true`                                                                                                                 |
-| —      | Vercel not retired                                                     | Both repos still have `vercel.json`; backend CORS still lists `*.vercel.app`                                                                                                              |
+| —      | Vercel not retired                                                     | **Closed 2026-08-25** — `vercel.json` removed; CORS Vercel origins removed (`docs/VERCEL_RETIREMENT_SIGNOFF.md`)                                                                          |
 
 ### HIPAA-07 — Sensitive logging
 
@@ -194,7 +194,9 @@ are equally blocking from a technical standpoint.
 ### Infra / vendor (not closable by app patch alone)
 
 - Disable Cloud SQL public IP (hardening Phase 7).
-- Retire Vercel (`vercel.json` + CORS `*.vercel.app` origins).
+- Retire Vercel — **Closed 2026-08-25** (`vercel.json` removed both repos; CORS
+  Vercel origins removed from code and Cloud Run `FRONTEND_ORIGIN`; see
+  `docs/VERCEL_RETIREMENT_SIGNOFF.md`).
 - Decide/approve Supabase Storage for client insurance-card files, or move bytes
   off Supabase.
 - Execute remaining BAAs (Workspace, SignNow, Intuit, Supabase, CloudConvert).
