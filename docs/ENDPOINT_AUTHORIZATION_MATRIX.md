@@ -67,7 +67,13 @@ Middleware legend: `auth` = `authMiddleware`; `roles[...]` = `authorizeRoles`.
 | POST   | `/quickbooks/customers`                                                                                                                    | —                                  | Staff                | admin, billing        | —                          | auth + roles                         |
 | GET    | `/quickbooks/customers/invoiceable`                                                                                                        | —                                  | Staff                | admin, billing        | —                          | auth + roles                         |
 | \*     | `/quickbooks/*` CRM ops (status, invoices, customers, disconnect, invoice, sync)                                                           | `/api/quickbooks/*`                | Staff                | admin, billing        | —                          | auth + roles                         |
-| POST   | `/quickbooks/simulate-payment`                                                                                                             | `/api/quickbooks/simulate-payment` | Admin                | admin                 | —                          | auth + roles                         |
+
+### INV-10 containment (2026-08-25)
+
+| Method | Former path                     | Aliases                            | Status   | Notes                                                                 |
+| ------ | ------------------------------- | ---------------------------------- | -------- | --------------------------------------------------------------------- |
+| POST   | `/quickbooks/simulate-payment`  | `/api/quickbooks/simulate-payment` | **Removed** | Former admin route accepted raw PAN/CVC; unmounted in all environments. Tokenized card-on-file only via `/api/payment-methods` (`intuit_token`). See `docs/HIPAA_INV10_SIMULATE_PAYMENT_SIGNOFF.md`. |
+
 | POST   | `/email/client-approval`, `/email/team-invite`                                                                                             | —                                  | Admin                | admin                 | —                          | auth + roles                         |
 
 ### HIPAA-13A containment (2026-08-20)

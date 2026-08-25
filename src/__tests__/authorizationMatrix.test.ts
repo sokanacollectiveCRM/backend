@@ -114,11 +114,6 @@ jest.mock('../controllers/quickbooksController', () => ({
   createInvoice: (_req: any, res: any) => res.status(201).json({ ok: true }),
 }));
 
-jest.mock('../services/payments/paymentsController', () => ({
-  simulatePaymentController: (_req: any, res: any) =>
-    res.status(200).json({ ok: true }),
-}));
-
 jest.mock('../services/simplePaymentService', () => ({
   SimplePaymentService: jest.fn().mockImplementation(() => ({
     getPaymentDashboard: jest.fn().mockResolvedValue({ total: 0 }),
