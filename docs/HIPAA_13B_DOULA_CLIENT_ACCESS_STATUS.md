@@ -64,13 +64,15 @@ regression).
 
 ## Production deployment
 
-| Item             | Value                   |
-| ---------------- | ----------------------- |
-| Backend commit   | _filled post-deploy_    |
-| Service          | `sokana-private-api`    |
-| Region           | `us-central1`           |
-| Reviewer / date  | Jerry Bony / 2026-08-25 |
-| Closure approval | Jerry Bony / 2026-08-25 |
+| Item             | Value                                           |
+| ---------------- | ----------------------------------------------- |
+| Backend commit   | `c116175` (PR #23)                              |
+| Backend revision | `sokana-private-api-00053-4lh`                  |
+| Backend image    | `backend-repo/api:latest` (deployed 2026-08-25) |
+| Service          | `sokana-private-api`                            |
+| Region           | `us-central1`                                   |
+| Reviewer / date  | Jerry Bony / 2026-08-25                         |
+| Closure approval | Jerry Bony / 2026-08-25                         |
 
 ---
 

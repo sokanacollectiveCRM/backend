@@ -39,14 +39,15 @@ npm test -- --testPathPattern="clientDoulaAssignmentAccess|clientDocumentsContro
 
 ## Production deployment
 
-| Item             | Value                 |
-| ---------------- | --------------------- |
-| Service          | `sokana-private-api`  |
-| Region           | `us-central1`         |
-| Project          | `sokana-private-data` |
-| Git commit       | _filled post-deploy_  |
-| Serving revision | _filled post-deploy_  |
-| Cloud Build      | _filled post-deploy_  |
+| Item             | Value                                                          |
+| ---------------- | -------------------------------------------------------------- |
+| Service          | `sokana-private-api`                                           |
+| Region           | `us-central1`                                                  |
+| Project          | `sokana-private-data`                                          |
+| Git commit       | `c116175` (PR #23, branch `fix/hipaa-13b-doula-client-access`) |
+| Serving revision | `sokana-private-api-00053-4lh`                                 |
+| Cloud Build      | SUCCESS `f61da7b4-ee34-49eb-997b-4b5dd6069b90` (2026-08-25)    |
+| Image            | `backend-repo/api:latest` (`sha256:e60feae0…`)                 |
 
 ---
 
@@ -62,10 +63,10 @@ remains functional.
 | **Reviewer**      | Jerry Bony                                     |
 | **Role**          | Engineering verification / compliance reviewer |
 | **Sign-off date** | August 25, 2026                                |
-| **Status**        | _Updated post-deploy_                          |
+| **Status**        | **Verified — closed**                          |
 
 **Signature:** Jerry Bony  
-**Date:** _Updated post-deploy_
+**Date:** 2026-08-25
 
 ---
 
@@ -74,5 +75,5 @@ remains functional.
 | Date       | Change                                              |
 | ---------- | --------------------------------------------------- |
 | 2026-08-25 | Assignment gates + negative test matrix implemented |
-| 2026-08-25 | PR merged; Cloud Run deploy                         |
+| 2026-08-25 | PR #23 opened; Cloud Run deploy `00053-4lh`         |
 | 2026-08-25 | Formal sign-off — Jerry Bony                        |
