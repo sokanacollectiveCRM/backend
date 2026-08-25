@@ -271,8 +271,20 @@ describe('Request Endpoint Tests', () => {
   });
 
   describe('Email functionality', () => {
+    const savedLead = {
+      ...mockFormData,
+      id: '11111111-2222-3333-4444-555555555555',
+      client_number: 'CL-00042',
+    };
+
+    beforeEach(() => {
+      process.env.FRONTEND_URL = 'https://app.example.com';
+    });
+
     it('should send email with correct recipient', async () => {
-      jest.spyOn(requestFormService, 'newForm').mockResolvedValue(mockFormData);
+      jest
+        .spyOn(requestFormService, 'newForm')
+        .mockResolvedValue(savedLead as any);
 
       const nodemailer = require('nodemailer');
       const mockSendMail = jest.fn().mockResolvedValue({
@@ -288,13 +300,15 @@ describe('Request Endpoint Tests', () => {
       expect(mockSendMail).toHaveBeenCalledWith(
         expect.objectContaining({
           to: 'hello@sokanacollective.com',
-          subject: 'New Lead Submitted via Request Form',
+          subject: 'New lead submitted',
         })
       );
     });
 
-    it('should include form data in email', async () => {
-      jest.spyOn(requestFormService, 'newForm').mockResolvedValue(mockFormData);
+    it('should send minimal staff email without clinical or identity payload', async () => {
+      jest
+        .spyOn(requestFormService, 'newForm')
+        .mockResolvedValue(savedLead as any);
 
       const nodemailer = require('nodemailer');
       const mockSendMail = jest.fn().mockResolvedValue({
@@ -308,24 +322,38 @@ describe('Request Endpoint Tests', () => {
         .expect(200);
 
       const emailCall = mockSendMail.mock.calls[0][0];
+      const body = `${emailCall.subject}\n${emailCall.text}\n${emailCall.html}`;
 
-      // Check that email contains key form data
-      expect(emailCall.text).toContain('Jane Doe');
-      expect(emailCall.text).toContain('jane.doe@example.com');
-      expect(emailCall.text).toContain('555-123-4567');
-      expect(emailCall.text).toContain('Labor Support');
-      expect(emailCall.text).toContain('Anytown');
-      expect(emailCall.text).toContain('CA');
+      expect(emailCall.text).toContain('CL-00042');
+      expect(emailCall.text).toContain(
+        'https://app.example.com/admin/clients/11111111-2222-3333-4444-555555555555'
+      );
+      expect(emailCall.html).toContain('Open request in CRM');
+      expect(emailCall.text).toContain(
+        'Open the CRM to review the incoming request for service'
+      );
 
-      // Check HTML version
-      expect(emailCall.html).toContain('Jane Doe');
-      expect(emailCall.html).toContain('jane.doe@example.com');
-      expect(emailCall.html).toContain('555-123-4567');
-      expect(emailCall.html).toContain('Labor Support');
+      // Clinical / identity values from mockFormData must be absent
+      expect(body).not.toContain('Jane Doe');
+      expect(body).not.toContain('jane.doe@example.com');
+      expect(body).not.toContain('555-123-4567');
+      expect(body).not.toContain('Previous C-section');
+      expect(body).not.toContain('Latex allergy');
+      expect(body).not.toContain('Gestational diabetes');
+      expect(body).not.toContain('123 Main St');
+      expect(body).not.toContain('Baby Doe');
+      expect(body).not.toContain('MEM-12345');
+      expect(body).not.toContain('Emergency C-section');
+      expect(body).not.toContain('Labor Support');
+      expect(body).not.toContain('Health History');
+      expect(body).not.toContain('Annual Income');
+      expect(body).not.toContain('Due Date');
     });
 
     it('should send confirmation email to the person who submitted the request', async () => {
-      jest.spyOn(requestFormService, 'newForm').mockResolvedValue(mockFormData);
+      jest
+        .spyOn(requestFormService, 'newForm')
+        .mockResolvedValue(savedLead as any);
 
       const nodemailer = require('nodemailer');
       const mockSendMail = jest.fn().mockResolvedValue({
@@ -347,18 +375,15 @@ describe('Request Endpoint Tests', () => {
       expect(confirmationEmailCall.subject).toBe(
         "Request Received - We're Working on Your Match"
       );
-      expect(confirmationEmailCall.text).toContain('Dear Jane Doe');
-      expect(confirmationEmailCall.text).toContain(
-        'Thank you for submitting your request for doula services'
-      );
       expect(confirmationEmailCall.text).toContain(
         'Thank you for submitting your request for doula services'
       );
       expect(confirmationEmailCall.text).toContain(
         'We have received your information and are working on finding the perfect match for you'
       );
+      expect(confirmationEmailCall.text).not.toContain('Dear Jane');
       expect(confirmationEmailCall.html).toContain('Request Received');
-      expect(confirmationEmailCall.html).toContain('Dear Jane Doe');
+      expect(confirmationEmailCall.html).not.toContain('Dear Jane');
       expect(confirmationEmailCall.html).toContain(
         'Thank you for submitting your request for doula services'
       );

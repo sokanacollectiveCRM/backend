@@ -57,21 +57,21 @@ Supabase Storage receive client-identifying or document data.
 
 **Highest-priority technical gaps (not legal conclusions)**
 
-| ID     | Finding                                                                                                                                  | Severity                                                            |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| INV-01 | Public intake emails **full clinical + identity payload** to staff Gmail                                                                 | P0                                                                  |
-| INV-02 | `GET /clients/fetchCSV` allows role `client` and exports **all** clients’ names, income, address                                         | P0                                                                  |
-| INV-09 | `POST /users/:id/addhours` is session-only: any logged-in user can write hours for any `client_id`                                       | P0                                                                  |
-| INV-10 | Live `POST /quickbooks/simulate-payment` (admin) accepts **PAN/CVC** and posts them to Intuit sandbox                                    | P0                                                                  |
-| INV-11 | Hardcoded Gmail app password in `src/scripts/sendTestEmail.ts`                                                                           | P0                                                                  |
-| INV-03 | `GET /clients/:id` returns name/email/phone/address to **any authenticated doula**, not only assigned                                    | P1                                                                  |
-| INV-04 | Assignment checks are split: Cloud SQL `doula_assignments` vs Supabase `assignments`                                                     | P1                                                                  |
-| INV-05 | Gmail SMTP, SignNow, QuickBooks, CloudConvert, Supabase Storage receive identifiers/documents; **BAA status cannot be proven from code** | P1                                                                  |
-| INV-06 | `self_pay_card_info` is free text on `phi_clients` (possible PAN if typed)                                                               | P1                                                                  |
-| INV-12 | `PUT /clients/:id/birth-outcomes` assignment / `canAccessSensitive`                                                                      | **Closed** — `docs/HIPAA_INV12_BIRTH_OUTCOMES_ASSIGNMENT_STATUS.md` |
-| INV-13 | `POST/GET /clients/:id/activity(ies)` lack doula assignment checks (unlike `/api/doulas/...`)                                            | P1                                                                  |
-| INV-07 | Intake rate-limit keys store plaintext `email:` values                                                                                   | P2                                                                  |
-| INV-08 | Frontend logout does not clear `sessionStorage` session token                                                                            | P2                                                                  |
+| ID     | Finding                                                                                                                                  | Severity                                                                           |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| INV-01 | Public intake emails **full clinical + identity payload** to staff Gmail                                                                 | **P0 — Contained 2026-08-24** (HIPAA-13F; `docs/HIPAA_13F_INTAKE_EMAIL_STATUS.md`) |
+| INV-02 | `GET /clients/fetchCSV` allows role `client` and exports **all** clients’ names, income, address                                         | P0                                                                                 |
+| INV-09 | `POST /users/:id/addhours` is session-only: any logged-in user can write hours for any `client_id`                                       | P0                                                                                 |
+| INV-10 | Live `POST /quickbooks/simulate-payment` (admin) accepts **PAN/CVC** and posts them to Intuit sandbox                                    | P0                                                                                 |
+| INV-11 | Hardcoded Gmail app password in `src/scripts/sendTestEmail.ts`                                                                           | P0                                                                                 |
+| INV-03 | `GET /clients/:id` returns name/email/phone/address to **any authenticated doula**, not only assigned                                    | P1                                                                                 |
+| INV-04 | Assignment checks are split: Cloud SQL `doula_assignments` vs Supabase `assignments`                                                     | P1                                                                                 |
+| INV-05 | Gmail SMTP, SignNow, QuickBooks, CloudConvert, Supabase Storage receive identifiers/documents; **BAA status cannot be proven from code** | P1                                                                                 |
+| INV-06 | `self_pay_card_info` is free text on `phi_clients` (possible PAN if typed)                                                               | P1                                                                                 |
+| INV-12 | `PUT /clients/:id/birth-outcomes` assignment / `canAccessSensitive`                                                                      | **Closed** — `docs/HIPAA_INV12_BIRTH_OUTCOMES_ASSIGNMENT_STATUS.md`                |
+| INV-13 | `POST/GET /clients/:id/activity(ies)` lack doula assignment checks (unlike `/api/doulas/...`)                                            | P1                                                                                 |
+| INV-07 | Intake rate-limit keys store plaintext `email:` values                                                                                   | P2                                                                                 |
+| INV-08 | Frontend logout does not clear `sessionStorage` session token                                                                            | P2                                                                                 |
 
 ---
 
