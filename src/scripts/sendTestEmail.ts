@@ -7,6 +7,15 @@ type CliArgs = {
   text: string;
 };
 
+type SmtpConfig = {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  pass: string;
+  from: string;
+};
+
 function parseCliArgs(argv: string[]): CliArgs {
   const argMap: Record<string, string> = {};
   for (let i = 2; i < argv.length; i++) {
@@ -38,38 +47,50 @@ function parseCliArgs(argv: string[]): CliArgs {
   return { to, subject, text };
 }
 
+/** Same env contract as NodemailerService — credentials must never be hardcoded. */
+export function resolveSmtpConfigFromEnv(): SmtpConfig {
+  const host = process.env.EMAIL_HOST || 'smtp.gmail.com';
+  const port = parseInt(process.env.EMAIL_PORT || '465', 10);
+  const secure = process.env.EMAIL_SECURE
+    ? process.env.EMAIL_SECURE === 'true'
+    : true;
+  const user = process.env.EMAIL_USER || 'hello@sokanacollective.com';
+  const pass = (process.env.EMAIL_PASSWORD || '').trim().replace(/\s+/g, '');
+  const from =
+    process.env.EMAIL_FROM || 'Sokana CRM <hello@sokanacollective.com>';
+
+  if (!pass) {
+    throw new Error(
+      'Missing EMAIL_PASSWORD. Load from environment or Google Secret Manager; do not commit SMTP credentials.'
+    );
+  }
+
+  return { host, port, secure, user, pass, from };
+}
+
 async function main(): Promise<void> {
   const { to, subject, text } = parseCliArgs(process.argv);
-
-  // Hardcoded SMTP settings. Update as needed.
-  const HOST = 'smtp.gmail.com';
-  const PORT = 465; // TLS port
-  const SECURE = true;
-  const USER = 'hello@sokanacollective.com';
-  const PASS = 'bfrqortlirqkwvsr';
-  const FROM = 'Sokana CRM <hello@sokanacollective.com>';
-
-  // Using hardcoded PASS above for testing purposes.
+  const smtp = resolveSmtpConfigFromEnv();
 
   const transporter = nodemailer.createTransport({
-    host: HOST,
-    port: PORT,
-    secure: SECURE,
-    auth: { user: USER, pass: PASS },
+    host: smtp.host,
+    port: smtp.port,
+    secure: smtp.secure,
+    auth: { user: smtp.user, pass: smtp.pass },
   });
 
   // Log effective settings without secrets.
   // eslint-disable-next-line no-console
   console.log('SMTP config:', {
-    host: HOST,
-    port: PORT,
-    secure: SECURE,
-    from: FROM,
-    configured: Boolean(USER && PASS),
+    host: smtp.host,
+    port: smtp.port,
+    secure: smtp.secure,
+    from: smtp.from,
+    configured: Boolean(smtp.user && smtp.pass),
   });
 
   const mailOptions = {
-    from: FROM,
+    from: smtp.from,
     to,
     subject,
     text,
@@ -92,8 +113,10 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
-  // eslint-disable-next-line no-console
-  console.error('Unexpected error in test email script:', err);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    // eslint-disable-next-line no-console
+    console.error('Unexpected error in test email script:', err);
+    process.exit(1);
+  });
+}
