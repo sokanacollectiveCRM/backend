@@ -7,7 +7,6 @@
  * Optional env (from .env):
  *   TEST_ADMIN_EMAIL / TEST_ADMIN_PASSWORD — authenticated admin 404 checks
  */
-
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -34,10 +33,7 @@ type Check = {
   expectStatus: number;
 };
 
-async function login(
-  email: string,
-  password: string
-): Promise<string | null> {
+async function login(email: string, password: string): Promise<string | null> {
   const res = await fetch(`${BASE_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -151,16 +147,17 @@ async function main(): Promise<void> {
   let failed = 0;
   for (const check of checks) {
     const { status, body } = await check.run();
-    const pass =
-      check.label.includes('not 404')
-        ? status !== 404
-        : status === check.expectStatus;
+    const pass = check.label.includes('not 404')
+      ? status !== 404
+      : status === check.expectStatus;
     const icon = pass ? 'PASS' : 'FAIL';
     if (!pass) {
       failed += 1;
     }
     console.log(`${icon}  ${check.label}`);
-    console.log(`      HTTP ${status}${body ? ` — ${body.slice(0, 120)}` : ''}`);
+    console.log(
+      `      HTTP ${status}${body ? ` — ${body.slice(0, 120)}` : ''}`
+    );
   }
 
   console.log('');

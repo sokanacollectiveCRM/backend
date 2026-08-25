@@ -3,8 +3,8 @@ import fs from 'fs';
 import path from 'path';
 import request from 'supertest';
 
-import quickbooksRoutes from '../routes/quickbooksRoutes';
 import paymentMethodRoutes from '../routes/paymentMethodRoutes';
+import quickbooksRoutes from '../routes/quickbooksRoutes';
 
 let currentUser: { id: string; role: string; email: string } | null = null;
 
@@ -24,7 +24,8 @@ jest.mock('../middleware/authMiddleware', () => ({
 }));
 
 jest.mock('../controllers/quickbooksController', () => ({
-  connectQuickBooks: (_req: any, res: any) => res.status(200).json({ ok: true }),
+  connectQuickBooks: (_req: any, res: any) =>
+    res.status(200).json({ ok: true }),
   handleQuickBooksCallback: (_req: any, res: any) =>
     res.status(200).json({ ok: true }),
   quickBooksAuthUrl: (_req: any, res: any) =>
@@ -80,9 +81,12 @@ describe('INV-10 simulate-payment route disabled', () => {
     expect(routeSrc).not.toMatch(/simulatePaymentController/);
   });
 
-  it.each(REMOVED_PAN_CVC_FILES)('removed legacy PAN/CVC handler %s', (relPath) => {
-    expect(fs.existsSync(path.join(process.cwd(), relPath))).toBe(false);
-  });
+  it.each(REMOVED_PAN_CVC_FILES)(
+    'removed legacy PAN/CVC handler %s',
+    (relPath) => {
+      expect(fs.existsSync(path.join(process.cwd(), relPath))).toBe(false);
+    }
+  );
 
   it('payment-methods route accepts tokenized payload schema only', () => {
     const routeSrc = fs.readFileSync(
@@ -105,15 +109,17 @@ describe('INV-10 simulate-payment route disabled', () => {
         role: 'admin',
         email: 'admin@test.example',
       };
-      const res = await request(app).post(pathPrefix).send({
-        amount: '1.00',
-        card: {
-          number: '4111111111111111',
-          expMonth: '12',
-          expYear: '2099',
-          cvc: '123',
-        },
-      });
+      const res = await request(app)
+        .post(pathPrefix)
+        .send({
+          amount: '1.00',
+          card: {
+            number: '4111111111111111',
+            expMonth: '12',
+            expYear: '2099',
+            cvc: '123',
+          },
+        });
       expect(res.status).toBe(404);
     }
   );
