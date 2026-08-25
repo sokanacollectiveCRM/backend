@@ -17,10 +17,10 @@ This file is intentionally updateable as frontend work finishes.
 - **Contract Findings**:
   - Deep-link `/admin/clients/:clientId` opens lead modal via
     `RouteAwareLeadProfileLoader` + `getClientById`.
-  - `getClientById` previously wrote 404 into shared `error`, which rendered
-    the list banner while the missing-client modal also opened.
-- **Action**: Quiet redirect to `/admin/clients` (or `/clients`) on miss;
-  detail 404 does not set list `error`.
+  - `getClientById` previously wrote 404 into shared `error`, which rendered the
+    list banner while the missing-client modal also opened.
+- **Action**: Quiet redirect to `/admin/clients` (or `/clients`) on miss; detail
+  404 does not set list `error`.
 - **Status**: [x] Context updated · [x] Implementation complete
 
 ## Preflight Update 2026-08-24 (HIPAA-13F intake email minimization)

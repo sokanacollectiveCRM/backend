@@ -9,11 +9,9 @@
  *   PREVIEW_TO=you@example.com npx tsx scripts/preview-intake-notification-email.ts
  *   SEND=false npx tsx scripts/preview-intake-notification-email.ts   # HTML files only
  */
-
+import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
-
-import dotenv from 'dotenv';
 
 import {
   buildAuthenticatedCrmClientUrl,
@@ -91,7 +89,9 @@ async function main() {
     confirmation.html
   );
   console.log('Confirmation preview sent.');
-  console.log('\nCheck your inbox (and spam). Subjects are prefixed with [PREVIEW].');
+  console.log(
+    '\nCheck your inbox (and spam). Subjects are prefixed with [PREVIEW].'
+  );
 }
 
 main().catch((err) => {

@@ -1,20 +1,27 @@
 # Email Notification System Documentation
 
 ## Overview
-The email notification system uses **Nodemailer** to send emails via SMTP. The system is implemented as a service class (`NodemailerService`) that implements the `EmailService` interface.
+
+The email notification system uses **Nodemailer** to send emails via SMTP. The
+system is implemented as a service class (`NodemailerService`) that implements
+the `EmailService` interface.
 
 ## Architecture
 
 ### Core Components
 
 1. **Email Service** (`src/services/emailService.ts`)
+
    - Main service class: `NodemailerService`
    - Implements `EmailService` interface
    - Handles SMTP configuration and email sending
 
-2. **Email Service Interface** (`src/services/interface/emailServiceInterface.ts`)
+2. **Email Service Interface**
+   (`src/services/interface/emailServiceInterface.ts`)
+
    - Defines contract for email operations
-   - Methods: `sendEmail`, `sendInvoiceEmail`, `sendClientApprovalEmail`, `sendTeamInviteEmail`
+   - Methods: `sendEmail`, `sendInvoiceEmail`, `sendClientApprovalEmail`,
+     `sendTeamInviteEmail`
 
 3. **Email Controller** (`src/controllers/emailController.ts`)
    - HTTP endpoints for sending emails
@@ -24,18 +31,19 @@ The email notification system uses **Nodemailer** to send emails via SMTP. The s
 
 The email system uses the following environment variables:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `EMAIL_HOST` | `smtp.gmail.com` | SMTP server hostname |
-| `EMAIL_PORT` | `465` | SMTP server port |
-| `EMAIL_SECURE` | `true` | Use SSL/TLS (true/false) |
-| `EMAIL_USER` | `hello@sokanacollective.com` | SMTP authentication username |
-| `EMAIL_PASSWORD` | (required) | SMTP authentication password (app password for Gmail) |
-| `EMAIL_FROM` | `Sokana CRM <hello@sokanacollective.com>` | Default "from" address |
-| `USE_TEST_EMAIL` | `false` | Test mode - logs emails instead of sending |
-| `FRONTEND_URL` | (required) | Frontend URL for links in emails |
+| Variable         | Default                                   | Description                                           |
+| ---------------- | ----------------------------------------- | ----------------------------------------------------- |
+| `EMAIL_HOST`     | `smtp.gmail.com`                          | SMTP server hostname                                  |
+| `EMAIL_PORT`     | `465`                                     | SMTP server port                                      |
+| `EMAIL_SECURE`   | `true`                                    | Use SSL/TLS (true/false)                              |
+| `EMAIL_USER`     | `hello@sokanacollective.com`              | SMTP authentication username                          |
+| `EMAIL_PASSWORD` | (required)                                | SMTP authentication password (app password for Gmail) |
+| `EMAIL_FROM`     | `Sokana CRM <hello@sokanacollective.com>` | Default "from" address                                |
+| `USE_TEST_EMAIL` | `false`                                   | Test mode - logs emails instead of sending            |
+| `FRONTEND_URL`   | (required)                                | Frontend URL for links in emails                      |
 
 ### Example Configuration
+
 ```env
 EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=465
@@ -50,29 +58,34 @@ FRONTEND_URL=https://sokana-front-end-634744984887.us-central1.run.app
 ## Email Types
 
 ### 1. **General Email** (`sendEmail`)
+
 - **Purpose**: Generic email sending with text and optional HTML
 - **Parameters**: `to`, `subject`, `text`, `html?`
 - **Usage**: Used internally by other email methods
 
 ### 2. **Request Form Notification** (via `RequestFormController`)
+
 - **Trigger**: When a new request form is submitted
 - **Recipients**:
   - **Notification Email**: `hello@sokanacollective.com` (hardcoded)
   - **Confirmation Email**: The person who submitted the form
 - **Content** (HIPAA-13F / INV-01 approved minimal template):
-  - **Staff notification**: Subject `New lead submitted`; body contains
-    **client number** + authenticated CRM link only. No clinical or identity
-    intake fields in subject, body, or URL query.
+  - **Staff notification**: Subject `New lead submitted`; body contains **client
+    number** + authenticated CRM link only. No clinical or identity intake
+    fields in subject, body, or URL query.
   - **Submitter confirmation**: Generic thank-you (no name/clinical content in
     subject or body).
 - **Location**:
-  - Template: `src/features/intake/notifications/intakeStaffNotificationEmail.ts`
+  - Template:
+    `src/features/intake/notifications/intakeStaffNotificationEmail.ts`
   - Controller: `src/controllers/requestFormController.ts`
 - **Status doc**: `docs/HIPAA_13F_INTAKE_EMAIL_STATUS.md`
 
 ### 3. **Invoice Email** (`sendInvoiceEmail`)
+
 - **Purpose**: Send invoices with PDF attachments
-- **Parameters**: `to`, `customerName`, `invoiceNumber`, `amount`, `dueDate`, `invoicePdfBuffer`, `customHtml?`, `customText?`
+- **Parameters**: `to`, `customerName`, `invoiceNumber`, `amount`, `dueDate`,
+  `invoicePdfBuffer`, `customHtml?`, `customText?`
 - **Features**:
   - PDF attachment
   - Customizable HTML/text content
@@ -80,12 +93,14 @@ FRONTEND_URL=https://sokana-front-end-634744984887.us-central1.run.app
 - **Usage**: Called from `src/services/invoice/sendInvoiceEmail.ts`
 
 ### 4. **Client Approval Email** (`sendClientApprovalEmail`)
+
 - **Purpose**: Notify clients when their account request is approved
 - **Parameters**: `to`, `name`, `signupUrl`
 - **Content**: Welcome message with signup link
 - **Endpoint**: `POST /api/email/client-approval`
 
 ### 5. **Team Invite Email** (`sendTeamInviteEmail`)
+
 - **Purpose**: Invite team members to join the CRM
 - **Parameters**: `to`, `firstname`, `lastname`, `role`
 - **Content**: Welcome message with signup link
@@ -101,8 +116,8 @@ Staff notification to `hello@sokanacollective.com` includes **only**:
 2. **Client number** (e.g. `CL-00042`)
 3. Copy: “Open the CRM to review the incoming request for service.”
 4. **Action button / link** to authenticated CRM deep-link:
-   `${FRONTEND_URL}/admin/clients/${id}` (opens lead profile modal after sign-in;
-   opaque id in path; no PHI query params)
+   `${FRONTEND_URL}/admin/clients/${id}` (opens lead profile modal after
+   sign-in; opaque id in path; no PHI query params)
 
 It must **not** include: name, email, phone, address, health history, allergies,
 due date, income, insurance, pregnancy details, demographics, or referral PHI.
@@ -110,6 +125,7 @@ due date, income, insurance, pregnancy details, demographics, or referral PHI.
 See `docs/HIPAA_13F_INTAKE_EMAIL_STATUS.md` for the full approved template text.
 
 ### Email Styling
+
 - Uses inline CSS for email client compatibility
 - Color scheme: Green (#4CAF50) for primary actions
 - Responsive design with max-width: 800px
@@ -118,6 +134,7 @@ See `docs/HIPAA_13F_INTAKE_EMAIL_STATUS.md` for the full approved template text.
 ## Test Mode
 
 When `USE_TEST_EMAIL=true`:
+
 - Emails are **not sent** via SMTP
 - Email content is **logged to console** instead
 - Useful for development and testing
@@ -133,6 +150,7 @@ When `USE_TEST_EMAIL=true`:
 ## Code Examples
 
 ### Sending a Simple Email
+
 ```typescript
 import { NodemailerService } from '../services/emailService';
 
@@ -146,6 +164,7 @@ await emailService.sendEmail(
 ```
 
 ### Sending Invoice Email
+
 ```typescript
 const emailService = new NodemailerService();
 await emailService.sendInvoiceEmail(
@@ -162,10 +181,14 @@ await emailService.sendInvoiceEmail(
 
 ## Integration Points
 
-1. **Request Form Submission**: `RequestFormController.createForm()` sends notification and confirmation emails
-2. **Invoice Creation**: `sendInvoiceEmailToCustomer()` sends invoice emails with PDFs
-3. **Client Approval**: `EmailController.sendClientApproval()` sends approval emails
-4. **Team Invites**: `EmailController.sendTeamInvite()` sends team invitation emails
+1. **Request Form Submission**: `RequestFormController.createForm()` sends
+   notification and confirmation emails
+2. **Invoice Creation**: `sendInvoiceEmailToCustomer()` sends invoice emails
+   with PDFs
+3. **Client Approval**: `EmailController.sendClientApproval()` sends approval
+   emails
+4. **Team Invites**: `EmailController.sendTeamInvite()` sends team invitation
+   emails
 
 ## Security Considerations
 
@@ -178,4 +201,3 @@ await emailService.sendInvoiceEmail(
 
 - `nodemailer`: SMTP email sending library
 - Node.js environment variables for configuration
-

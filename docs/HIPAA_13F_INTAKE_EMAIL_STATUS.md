@@ -11,10 +11,10 @@
 Public intake (`POST /requestService/requestSubmission`) no longer emails the
 full identity + clinical intake payload to staff Gmail.
 
-| Email | Before | After (approved template) |
-| ----- | ------ | ------------------------- |
+| Email                                | Before                                                                                          | After (approved template)                                                                |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | Staff (`hello@sokanacollective.com`) | Full intake (health history, address, income, due date, partner, insurance, demographics, etc.) | Subject `New lead submitted`; body = **client number** + **authenticated CRM link** only |
-| Submitter confirmation | Greeting with legal name | Generic thank-you; **no name/clinical content** in subject or body |
+| Submitter confirmation               | Greeting with legal name                                                                        | Generic thank-you; **no name/clinical content** in subject or body                       |
 
 Full intake remains in Cloud SQL (`phi_clients`) and is viewed only after CRM
 authentication.
@@ -42,8 +42,8 @@ Do not reply to this message with client details.
 `https://sokana-front-end-634744984887.us-central1.run.app`
 
 **CRM deep-link behavior:** `/admin/clients/{clientId}` is the staff Clients
-route; after auth it opens that lead’s **Lead Profile modal** (frontend deep-link
-in `Clients.tsx` / `UsersDialogs`).
+route; after auth it opens that lead’s **Lead Profile modal** (frontend
+deep-link in `Clients.tsx` / `UsersDialogs`).
 
 **Rules:**
 

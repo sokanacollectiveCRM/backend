@@ -282,7 +282,9 @@ describe('Request Endpoint Tests', () => {
     });
 
     it('should send email with correct recipient', async () => {
-      jest.spyOn(requestFormService, 'newForm').mockResolvedValue(savedLead as any);
+      jest
+        .spyOn(requestFormService, 'newForm')
+        .mockResolvedValue(savedLead as any);
 
       const nodemailer = require('nodemailer');
       const mockSendMail = jest.fn().mockResolvedValue({
@@ -304,7 +306,9 @@ describe('Request Endpoint Tests', () => {
     });
 
     it('should send minimal staff email without clinical or identity payload', async () => {
-      jest.spyOn(requestFormService, 'newForm').mockResolvedValue(savedLead as any);
+      jest
+        .spyOn(requestFormService, 'newForm')
+        .mockResolvedValue(savedLead as any);
 
       const nodemailer = require('nodemailer');
       const mockSendMail = jest.fn().mockResolvedValue({
@@ -347,7 +351,9 @@ describe('Request Endpoint Tests', () => {
     });
 
     it('should send confirmation email to the person who submitted the request', async () => {
-      jest.spyOn(requestFormService, 'newForm').mockResolvedValue(savedLead as any);
+      jest
+        .spyOn(requestFormService, 'newForm')
+        .mockResolvedValue(savedLead as any);
 
       const nodemailer = require('nodemailer');
       const mockSendMail = jest.fn().mockResolvedValue({
