@@ -2,6 +2,10 @@ import nodemailer from 'nodemailer';
 
 import { logger } from '../common/utils/logger';
 import { contractNotifications } from '../config/env';
+import {
+  buildAuthenticatedDoulaClientActivitiesUrl,
+  buildDoulaAssignmentNotificationEmail,
+} from '../features/assignments';
 import { getLimitedBillingViewUrl } from '../utils/billingViewUrl';
 import { EmailService } from './interface/emailServiceInterface';
 
@@ -410,43 +414,20 @@ The Sokana Team`;
 
   async sendDoulaMatchNotification(
     doulaEmail: string,
-    doulaName: string,
-    clientName: string,
-    clientEmail: string,
-    notes?: string
+    input: {
+      clientNumber?: string | null;
+      clientId: string;
+      crmBaseUrl?: string;
+    }
   ): Promise<void> {
-    const subject = 'New Client Assignment - Sokana Collective';
-    const text = `Dear ${doulaName},\n\nYou have been matched with a new client!\n\nClient Details:\n- Name: ${clientName}\n- Email: ${clientEmail}\n${notes ? `\nAssignment Notes:\n${notes}\n` : ''}\n\nYou can now view this client's information in your doula dashboard and start logging hours and activities.\n\nBest regards,\nThe Sokana Team`;
-
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #333;">New Client Assignment</h2>
-        <p>Dear ${doulaName},</p>
-        <p>You have been matched with a new client! We're excited for you to begin working together.</p>
-
-        <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
-          <h3 style="margin-top: 0; color: #333;">Client Details:</h3>
-          <ul style="list-style: none; padding: 0; margin: 0;">
-            <li style="margin: 10px 0;"><strong>Name:</strong> ${clientName}</li>
-            <li style="margin: 10px 0;"><strong>Email:</strong> ${clientEmail}</li>
-            ${notes ? `<li style="margin: 10px 0;"><strong>Assignment Notes:</strong><br>${notes}</li>` : ''}
-          </ul>
-        </div>
-
-        <p>You can now view this client's information in your doula dashboard and start logging hours and activities.</p>
-
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${process.env.FRONTEND_URL || 'http://localhost:3001'}/doula/dashboard"
-             style="background-color: #4CAF50; color: white; padding: 15px 30px; text-decoration: none;
-                    border-radius: 5px; font-weight: bold; font-size: 16px; display: inline-block;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            View Dashboard
-          </a>
-        </div>
-
-        <p>Best regards,<br>The Sokana Team</p>
-      </div>
-    `;
+    const crmActivitiesUrl = buildAuthenticatedDoulaClientActivitiesUrl(
+      input.crmBaseUrl ?? process.env.FRONTEND_URL,
+      input.clientId
+    );
+    const { subject, text, html } = buildDoulaAssignmentNotificationEmail({
+      clientNumber: input.clientNumber,
+      crmActivitiesUrl,
+    });
 
     await this.sendEmail(doulaEmail, subject, text, html);
   }

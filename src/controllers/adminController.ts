@@ -1,6 +1,7 @@
 import * as crypto from 'crypto';
 import { Response } from 'express';
 
+import { logger } from '../common/utils/logger';
 import {
   ASSIGNMENT_SERVICE_CATALOG,
   normalizeAssignmentServices,
@@ -244,13 +245,13 @@ export class AdminController {
         const doulaName = getUserFullName(doula);
         const clientName = getUserFullName(client.user);
 
-        // Send email to doula
+        // HIPAA-05: doula assignment mail = client_number + CRM link only (no PHI body)
         await this.emailController.sendDoulaMatchNotification(
           doula.email || '',
-          doulaName,
-          clientName,
-          client.user.email,
-          notes
+          {
+            clientNumber: client.clientNumber,
+            clientId,
+          }
         );
 
         // Send email to client
@@ -261,11 +262,26 @@ export class AdminController {
           doula.email || ''
         );
 
-        console.log(
-          `📧 Sent match notification emails to doula (${doula.email || 'no-email'}) and client (${client.user.email})`
+        logger.info(
+          {
+            service: 'admin',
+            operation: 'match_notification_sent',
+            clientId,
+            doulaId,
+          },
+          'Sent match notification emails'
         );
       } catch (emailError) {
-        console.error('Failed to send match notification emails:', emailError);
+        logger.error(
+          {
+            service: 'admin',
+            operation: 'match_notification_send_failed',
+            clientId,
+            doulaId,
+            err: emailError instanceof Error ? emailError.message : 'unknown',
+          },
+          'Failed to send match notification emails'
+        );
         // Don't fail the request if email fails
       }
 
