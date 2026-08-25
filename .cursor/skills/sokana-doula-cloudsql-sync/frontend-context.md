@@ -23,7 +23,8 @@ This file is intentionally updateable as frontend work finishes.
   - Old email used wrong path `/doula/dashboard`; corrected to activities
     deep-link matching frontend routing.
   - No frontend changes required for this backend email minimization.
-- **Status**: [x] Context updated · [x] Implementation in progress
+- **Status**: [x] Context updated · [x] Implementation complete · [x] Production
+  deploy `00044-bhf`
 
 ## Preflight Update 2026-08-24 (deep-link not-found quiet UX)
 

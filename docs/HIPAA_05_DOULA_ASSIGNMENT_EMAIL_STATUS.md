@@ -2,8 +2,8 @@
 
 **Ticket:** HIPAA-05 (assignment email path)  
 **Date:** 2026-08-25  
-**Status:** **Ready for production verification** (pending merge/deploy
-sign-off)
+**Status:** **Closed in production** (PR #84, revision
+`sokana-private-api-00044-bhf`; see `docs/HIPAA_05_VERIFICATION_SIGNOFF.md`).
 
 ---
 
