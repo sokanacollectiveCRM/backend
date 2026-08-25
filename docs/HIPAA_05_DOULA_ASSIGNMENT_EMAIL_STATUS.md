@@ -2,7 +2,8 @@
 
 **Ticket:** HIPAA-05 (assignment email path)  
 **Date:** 2026-08-25  
-**Status:** **Ready for production verification** (pending merge/deploy sign-off)
+**Status:** **Ready for production verification** (pending merge/deploy
+sign-off)
 
 ---
 
@@ -11,8 +12,8 @@
 Admin doula match (`POST /api/admin/assignments/match`) no longer emails client
 name, client email, or assignment notes to the assigned doula.
 
-| Email                         | Before                                                                 | After (approved template)                                                                                      |
-| ----------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Email                         | Before                                                                 | After (approved template)                                                                                   |
+| ----------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | Doula assignment notification | Client name + email + optional assignment notes; generic dashboard URL | Subject `New client assignment`; body = **client number** + **authenticated CRM activities deep-link** only |
 
 Full client profile, notes, and clinical data remain in Cloud SQL and are viewed
@@ -58,7 +59,8 @@ doula Activities route; after auth it opens that client’s activities view
 
 Implementation:
 `src/features/assignments/notifications/doulaAssignmentNotificationEmail.ts`  
-Wired from: `src/controllers/adminController.ts` → `emailService.sendDoulaMatchNotification`
+Wired from: `src/controllers/adminController.ts` →
+`emailService.sendDoulaMatchNotification`
 
 ---
 

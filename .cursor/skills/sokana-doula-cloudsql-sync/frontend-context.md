@@ -18,8 +18,8 @@ This file is intentionally updateable as frontend work finishes.
   - `backend/src/services/emailService.ts` (`sendDoulaMatchNotification`)
   - `backend/src/controllers/adminController.ts` (`matchDoulaWithClient`)
 - **Contract Findings**:
-  - Doula assignment CRM deep-link:
-    `/doula-dashboard/activities/{clientId}` (protected doula route).
+  - Doula assignment CRM deep-link: `/doula-dashboard/activities/{clientId}`
+    (protected doula route).
   - Old email used wrong path `/doula/dashboard`; corrected to activities
     deep-link matching frontend routing.
   - No frontend changes required for this backend email minimization.
