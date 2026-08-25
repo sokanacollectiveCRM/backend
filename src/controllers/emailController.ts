@@ -92,18 +92,13 @@ export class EmailController {
 
   async sendDoulaMatchNotification(
     doulaEmail: string,
-    doulaName: string,
-    clientName: string,
-    clientEmail: string,
-    notes?: string
+    input: {
+      clientNumber?: string | null;
+      clientId: string;
+      crmBaseUrl?: string;
+    }
   ): Promise<void> {
-    await this.emailService.sendDoulaMatchNotification(
-      doulaEmail,
-      doulaName,
-      clientName,
-      clientEmail,
-      notes
-    );
+    await this.emailService.sendDoulaMatchNotification(doulaEmail, input);
   }
 
   async sendClientMatchNotification(

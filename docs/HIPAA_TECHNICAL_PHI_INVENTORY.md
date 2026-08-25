@@ -488,21 +488,21 @@ Transport: Nodemailer, default Gmail (`EMAIL_HOST`). Recipient
 `hello@sokanacollective.com` hardcoded for intake (`requestFormController.ts`).
 Billing mailbox from `BILLING_NOTIFICATION_EMAIL`.
 
-| Trigger             | Recipient                          | Subject (pattern)                            | Client fields in body                                                                                           | Links                                  | PHI may be included      |
-| ------------------- | ---------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------- | ------------------------ |
-| Public intake       | Staff `hello@sokanacollective.com` | New Lead Submitted via Request Form          | **Nearly entire intake including health, address, income, due date, partner, insurance-related display fields** | CRM profile URL                        | **Yes — P0**             |
-| Intake confirmation | Submitter                          | Request Received…                            | Name                                                                                                            | None                                   | Name only                |
-| Portal invite       | Client                             | Welcome to Your Sokana Client Portal         | Name                                                                                                            | Set-password URL                       | Name + auth link         |
-| Client approval     | Client                             | Account request approved                     | Name                                                                                                            | Signup URL                             | Name                     |
-| Team invite         | Staff                              | Welcome to the Sokana CRM Team               | Name, role                                                                                                      | Signup                                 | Workforce                |
-| Doula invite        | Doula                              | Welcome to the Sokana Doula Team             | Name; **email in URL**                                                                                          | Signup with email + token              | Identifier in URL        |
-| Doula match         | Doula                              | New Client Assignment                        | **Client name + email** + assignment notes                                                                      | Dashboard                              | Yes if CE                |
-| Client match        | Client                             | Your Doula Match                             | Doula name + email                                                                                              | None                                   | PII                      |
-| Contract initiated  | Billing mailbox                    | New contract initiated                       | Client name, type, totals                                                                                       | Billing view URL                       | Name + financial         |
-| Invoice             | Customer                           | Invoice {n} from Sokana CRM                  | Name, amount, dates; PDF attach                                                                                 | Pay link (sandbox URL in default HTML) | Financial + name         |
-| Billing reminders   | Client                             | Payment overdue / card declined / etc.       | Contract type                                                                                                   | Unknown in snippet                     | Financial                |
-| SignNow             | Signer (vendor-sent)               | `{clientName} - Contract Signature Required` | Name                                                                                                            | SignNow URL                            | Name                     |
-| Test mode           | Console                            | Full body                                    | Full                                                                                                            | —                                      | If `USE_TEST_EMAIL=true` |
+| Trigger             | Recipient                          | Subject (pattern)                            | Client fields in body                                   | Links                                  | PHI may be included      |
+| ------------------- | ---------------------------------- | -------------------------------------------- | ------------------------------------------------------- | -------------------------------------- | ------------------------ |
+| Public intake       | Staff `hello@sokanacollective.com` | New lead submitted                           | **Client number + CRM link only** (HIPAA-13F closed)    | CRM profile URL                        | Minimized                |
+| Intake confirmation | Submitter                          | Request Received…                            | Generic thank-you (no name/clinical)                    | None                                   | Minimized (HIPAA-13F)    |
+| Portal invite       | Client                             | Welcome to Your Sokana Client Portal         | Name                                                    | Set-password URL                       | Name + auth link         |
+| Client approval     | Client                             | Account request approved                     | Name                                                    | Signup URL                             | Name                     |
+| Team invite         | Staff                              | Welcome to the Sokana CRM Team               | Name, role                                              | Signup                                 | Workforce                |
+| Doula invite        | Doula                              | Welcome to the Sokana Doula Team             | Name; **email in URL**                                  | Signup with email + token              | Identifier in URL        |
+| Doula match         | Doula                              | New client assignment                        | **Client number + CRM activities link only** (HIPAA-05) | Doula activities deep-link             | Minimized                |
+| Client match        | Client                             | Your Doula Match                             | Doula name + email                                      | None                                   | PII                      |
+| Contract initiated  | Billing mailbox                    | New contract initiated                       | Client name, type, totals                               | Billing view URL                       | Name + financial         |
+| Invoice             | Customer                           | Invoice {n} from Sokana CRM                  | Name, amount, dates; PDF attach                         | Pay link (sandbox URL in default HTML) | Financial + name         |
+| Billing reminders   | Client                             | Payment overdue / card declined / etc.       | Contract type                                           | Unknown in snippet                     | Financial                |
+| SignNow             | Signer (vendor-sent)               | `{clientName} - Contract Signature Required` | Name                                                    | SignNow URL                            | Name                     |
+| Test mode           | Console                            | Full body                                    | Full                                                    | —                                      | If `USE_TEST_EMAIL=true` |
 
 Health information **is** placed in ordinary staff email on every public intake
 (INV-01).
@@ -657,8 +657,8 @@ Engineering order (re-confirmed 2026-08-20; see
    and remove** the hardcoded SMTP secret (INV-11), revoke/reconnect exposed
    QuickBooks OAuth.
 2. Remove FE `console.log` of client update payloads (`updateClient.ts` and
-   siblings); close birth-outcomes assignment (INV-12); minimize
-   doula-assignment email (client email + notes).
+   siblings); close birth-outcomes assignment (INV-12); **doula-assignment email
+   minimized (HIPAA-05)** — client match email remains separate.
 3. Close doula BOLA on `GET /clients/:id` and `/clients/:id` notes; unify
    assignment checks on Cloud SQL.
 4. Complete vendor BAA / CE determination with leadership using Section 18.

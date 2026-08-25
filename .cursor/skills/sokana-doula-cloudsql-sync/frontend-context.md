@@ -2,6 +2,29 @@
 
 This file is intentionally updateable as frontend work finishes.
 
+## Preflight Update 2026-08-25 (HIPAA-05 doula assignment email minimization)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Remove PHI from doula-assignment emails; notify with
+  client_number + authenticated CRM activities deep-link only (HIPAA-05).
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md` (deferred; user
+  prioritized HIPAA-05)
+- **Files Scanned**:
+  - `frontend-crm/src/features/doula-dashboard/DoulaDashboardRoutes.tsx`
+  - `frontend-crm/src/features/doula-dashboard/DoulaDashboardSidebar.tsx`
+  - `frontend-crm/src/common/data/sidebar-data.ts`
+  - `backend/src/services/emailService.ts` (`sendDoulaMatchNotification`)
+  - `backend/src/controllers/adminController.ts` (`matchDoulaWithClient`)
+- **Contract Findings**:
+  - Doula assignment CRM deep-link: `/doula-dashboard/activities/{clientId}`
+    (protected doula route).
+  - Old email used wrong path `/doula/dashboard`; corrected to activities
+    deep-link matching frontend routing.
+  - No frontend changes required for this backend email minimization.
+- **Status**: [x] Context updated · [x] Implementation in progress
+
 ## Preflight Update 2026-08-24 (deep-link not-found quiet UX)
 
 - **Gate Result**: `run_preflight`

@@ -170,11 +170,10 @@ are equally blocking from a technical standpoint.
    `updateClientBirthOutcomes` now calls `canAccessSensitive` before DB access.
    Evidence: `docs/HIPAA_INV12_BIRTH_OUTCOMES_ASSIGNMENT_STATUS.md`.
 
-4. **Assignment emails (HIPAA-05 email path)**  
-   `sendDoulaMatchNotification` includes client email and optional assignment
-   notes. Minimize to name + dashboard link unless leadership explicitly
-   requires email in the body. Intake staff email (INV-01) is a larger PHI dump
-   than assignment mail.
+4. **Assignment emails (HIPAA-05 email path) — closed pending deploy**  
+   `sendDoulaMatchNotification` minimized to client number + authenticated CRM
+   activities link (no client email, name, or assignment notes). Evidence:
+   `docs/HIPAA_05_DOULA_ASSIGNMENT_EMAIL_STATUS.md`.
 
 5. **QuickBooks authorization exposure**  
    Historical screenshot exposed access/refresh tokens. Rotate/revoke in Intuit,
