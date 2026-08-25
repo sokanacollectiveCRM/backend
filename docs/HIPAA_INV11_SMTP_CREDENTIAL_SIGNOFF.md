@@ -28,6 +28,8 @@ document, tickets, or test output.**
 | Serving revision      | `sokana-private-api-00049-5wh`                                          |
 | Secret Manager        | `EMAIL_PASSWORD` version `1` (2026-08-25T21:43:31Z)                     |
 | Cloud Run SA accessor | `sokana-private-storage-sa@sokana-private-data.iam.gserviceaccount.com` |
+| Git commit            | `0cf9088` (INV-11 source removal + containment tests)                   |
+| Pull request          | _See PR link in change log after merge_                                 |
 
 ---
 
@@ -54,6 +56,7 @@ document, tickets, or test output.**
 | Removed hardcoded credential | `src/scripts/sendTestEmail.ts`                        |
 | Production mail transport    | `src/services/emailService.ts`                        |
 | Containment tests            | `src/__tests__/smtpCredentialContainment.test.ts`     |
+| Sign-off doc                 | `docs/HIPAA_INV11_SMTP_CREDENTIAL_SIGNOFF.md`         |
 | Local dev (gitignored)       | `.env` — `EMAIL_PASSWORD` updated after rotation      |
 | Secret Manager               | `projects/sokana-private-data/secrets/EMAIL_PASSWORD` |
 
