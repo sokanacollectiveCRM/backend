@@ -18,15 +18,11 @@ import { quickBooksInvoicePaidWebhook } from '../controllers/quickbooksWebhookCo
 import authMiddleware from '../middleware/authMiddleware';
 import authorizeRoles from '../middleware/authorizeRoles';
 import { requireQuickBooksWebhookAuth } from '../security/webhookAuth';
-import { simulatePaymentController } from '../services/payments/paymentsController';
 
 const router = Router();
 
 const requireBillingStaff = (req: any, res: any, next: any) =>
   authorizeRoles(req, res, next, ['admin', 'billing']);
-
-const requireAdmin = (req: any, res: any, next: any) =>
-  authorizeRoles(req, res, next, ['admin']);
 
 // 1️⃣ Public OAuth endpoints (no user-session auth)
 router.get('/auth', connectQuickBooks);
@@ -57,8 +53,5 @@ router.post(
 router.post('/customer', createCustomer);
 router.post('/disconnect', quickBooksDisconnect);
 router.post('/invoice', createInvoice);
-
-// Simulate payment — admin only
-router.post('/simulate-payment', requireAdmin, simulatePaymentController);
 
 export default router;
