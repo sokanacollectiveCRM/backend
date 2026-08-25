@@ -1,8 +1,9 @@
 # HIPAA-13F — Remove clinical information from intake emails
 
 **Ticket:** HIPAA-13F / INV-01  
-**Date:** 2026-08-24  
-**Status:** **Contained in code** (pending production deploy + formal sign-off).
+**Date:** 2026-08-25  
+**Status:** **Closed in production** (PR #82, revision
+`sokana-private-api-00042-9cb`; see `docs/HIPAA_13F_VERIFICATION_SIGNOFF.md`).
 
 ---
 
