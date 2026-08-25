@@ -12,6 +12,8 @@ import {
 
 export class RequestForm {
   public id?: string;
+  /** Operational display id (e.g. CL-00042); safe for minimal staff notifications. */
+  public client_number?: string;
   public status?: RequestStatus; // Remove default value
   public user_id?: string;
   public created_at?: Date;

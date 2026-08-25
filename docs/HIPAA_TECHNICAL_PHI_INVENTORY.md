@@ -59,7 +59,7 @@ Supabase Storage receive client-identifying or document data.
 
 | ID     | Finding                                                                                                                                  | Severity                                                            |
 | ------ | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| INV-01 | Public intake emails **full clinical + identity payload** to staff Gmail                                                                 | P0                                                                  |
+| INV-01 | Public intake emails **full clinical + identity payload** to staff Gmail                                                                 | **P0 — Contained 2026-08-24** (HIPAA-13F; `docs/HIPAA_13F_INTAKE_EMAIL_STATUS.md`) |
 | INV-02 | `GET /clients/fetchCSV` allows role `client` and exports **all** clients’ names, income, address                                         | P0                                                                  |
 | INV-09 | `POST /users/:id/addhours` is session-only: any logged-in user can write hours for any `client_id`                                       | P0                                                                  |
 | INV-10 | Live `POST /quickbooks/simulate-payment` (admin) accepts **PAN/CVC** and posts them to Intuit sandbox                                    | P0                                                                  |

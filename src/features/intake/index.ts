@@ -44,3 +44,17 @@ export {
   PUBLIC_INTAKE_SUCCESS_MESSAGE,
   PUBLIC_INTAKE_PATH,
 } from './http/publicSubmissionContract';
+
+export {
+  INTAKE_STAFF_NOTIFICATION_SUBJECT,
+  INTAKE_SUBMITTER_CONFIRMATION_SUBJECT,
+  INTAKE_EMAIL_FORBIDDEN_FIELD_LABELS,
+  buildIntakeStaffNotificationEmail,
+  buildIntakeSubmitterConfirmationEmail,
+  buildAuthenticatedCrmClientUrl,
+  intakeEmailContainsForbiddenLabels,
+} from './notifications/intakeStaffNotificationEmail';
+export type {
+  IntakeStaffNotificationInput,
+  IntakeEmailContent,
+} from './notifications/intakeStaffNotificationEmail';

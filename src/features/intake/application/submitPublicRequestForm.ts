@@ -73,6 +73,7 @@ export function mapIntakeResponseToRequestForm(
   );
 
   requestForm.id = response.id;
+  requestForm.client_number = response.client_number;
   requestForm.status = response.status;
   requestForm.user_id = response.user_id;
   requestForm.created_at = response.created_at

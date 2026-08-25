@@ -2,6 +2,59 @@
 
 This file is intentionally updateable as frontend work finishes.
 
+## Preflight Update 2026-08-24 (deep-link not-found quiet UX)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Email CRM deep-link to missing client must not show list
+  banner ("Error loading clients") or "Client Not Found" modal.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md` (deferred)
+- **Files Scanned**:
+  - `frontend-crm/src/features/clients/Clients.tsx`
+  - `frontend-crm/src/common/hooks/clients/useClients.ts`
+  - `frontend-crm/src/features/clients/components/users-dialogs.tsx`
+  - `frontend-crm/src/features/clients/components/dialog/LeadProfileModal.tsx`
+- **Contract Findings**:
+  - Deep-link `/admin/clients/:clientId` opens lead modal via
+    `RouteAwareLeadProfileLoader` + `getClientById`.
+  - `getClientById` previously wrote 404 into shared `error`, which rendered
+    the list banner while the missing-client modal also opened.
+- **Action**: Quiet redirect to `/admin/clients` (or `/clients`) on miss;
+  detail 404 does not set list `error`.
+- **Status**: [x] Context updated · [x] Implementation complete
+
+## Preflight Update 2026-08-24 (HIPAA-13F intake email minimization)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Remove clinical/identity payload from public intake staff
+  emails; notify with client_number + authenticated CRM link only (INV-01).
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md` (deferred; user
+  prioritized HIPAA-13F)
+- **Files Scanned**:
+  - `frontend-crm/src/features/request/RequestForm.tsx`
+  - `frontend-crm/src/features/request/RequestFormDesktop.tsx`
+  - `frontend-crm/src/features/request/contexts/RequestFormContext.tsx`
+  - `frontend-crm/src/features/clients/ClientRoutes.tsx`
+  - `frontend-crm/src/Routes.tsx`
+  - `backend/src/controllers/requestFormController.ts`
+  - `backend/src/features/intake/notifications/intakeStaffNotificationEmail.ts`
+- **Contract Findings**:
+  - Public intake posts to `/requestService/requestSubmission`; success message
+    contract unchanged (`PUBLIC_INTAKE_SUCCESS_MESSAGE`).
+  - Frontend does not parse staff email content; CRM deep-link
+    `/admin/clients/:clientId` (and `/clients/:clientId`) already supported.
+  - No frontend API response-shape change required for this ticket.
+- **Drift Risk**: Low — email is backend-only; frontend continues to open leads
+  via authenticated CRM routes.
+- **Required Compatibility**: Keep public intake 200 body
+  `{ message: PUBLIC_INTAKE_SUCCESS_MESSAGE }`; CRM client routes remain
+  staff-auth gated.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation complete
+
 ## Preflight Update 2026-08-23 (remove legacy birth_outcomes narrative)
 
 - **Gate Result**: `run_preflight`

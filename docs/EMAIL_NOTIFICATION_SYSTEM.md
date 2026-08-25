@@ -44,7 +44,7 @@ EMAIL_USER=hello@sokanacollective.com
 EMAIL_PASSWORD=your-app-password-here
 EMAIL_FROM=Sokana CRM <hello@sokanacollective.com>
 USE_TEST_EMAIL=false
-FRONTEND_URL=https://app.sokanacollective.com
+FRONTEND_URL=https://sokana-front-end-634744984887.us-central1.run.app
 ```
 
 ## Email Types
@@ -59,10 +59,16 @@ FRONTEND_URL=https://app.sokanacollective.com
 - **Recipients**:
   - **Notification Email**: `hello@sokanacollective.com` (hardcoded)
   - **Confirmation Email**: The person who submitted the form
-- **Content**:
-  - Notification: Comprehensive HTML email with all form data (10 sections)
-  - Confirmation: Simple acknowledgment email
-- **Location**: `src/controllers/requestFormController.ts` (lines 203-451)
+- **Content** (HIPAA-13F / INV-01 approved minimal template):
+  - **Staff notification**: Subject `New lead submitted`; body contains
+    **client number** + authenticated CRM link only. No clinical or identity
+    intake fields in subject, body, or URL query.
+  - **Submitter confirmation**: Generic thank-you (no name/clinical content in
+    subject or body).
+- **Location**:
+  - Template: `src/features/intake/notifications/intakeStaffNotificationEmail.ts`
+  - Controller: `src/controllers/requestFormController.ts`
+- **Status doc**: `docs/HIPAA_13F_INTAKE_EMAIL_STATUS.md`
 
 ### 3. **Invoice Email** (`sendInvoiceEmail`)
 - **Purpose**: Send invoices with PDF attachments
@@ -87,21 +93,21 @@ FRONTEND_URL=https://app.sokanacollective.com
 
 ## Email Content Structure
 
-### Request Form Notification Email
-The notification email sent to `hello@sokanacollective.com` includes:
+### Request Form Notification Email (HIPAA-13F approved)
 
-1. **Client Details**: Name, email, phone, pronouns, children expected
-2. **Home Details**: Address, city, state, zip, home phone, home type, access, pets
-3. **Family Members**: Relationship status, partner name, partner contact info
-4. **Referral**: Source, referral name, referral email
-5. **Health History**: Health history, allergies, health notes
-6. **Payment Info**: Annual income, service needed, service specifics
-7. **Pregnancy/Baby**: Due date, birth location, hospital, baby name, provider type
-8. **Past Pregnancies**: Previous pregnancies count, living children, past experience
-9. **Services Interested**: Services list, service support details
-10. **Demographics**: Race/ethnicity, language, age range, insurance, demographics
-11. **Form Submission Details**: Submission date, status
-12. **Action Button**: Link to view lead in CRM (`${FRONTEND_URL}/clients/${id}?open=profile&mode=modal`)
+Staff notification to `hello@sokanacollective.com` includes **only**:
+
+1. Statement that a new lead was submitted
+2. **Client number** (e.g. `CL-00042`)
+3. Copy: “Open the CRM to review the incoming request for service.”
+4. **Action button / link** to authenticated CRM deep-link:
+   `${FRONTEND_URL}/admin/clients/${id}` (opens lead profile modal after sign-in;
+   opaque id in path; no PHI query params)
+
+It must **not** include: name, email, phone, address, health history, allergies,
+due date, income, insurance, pregnancy details, demographics, or referral PHI.
+
+See `docs/HIPAA_13F_INTAKE_EMAIL_STATUS.md` for the full approved template text.
 
 ### Email Styling
 - Uses inline CSS for email client compatibility
