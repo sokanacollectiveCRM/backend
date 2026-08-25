@@ -46,7 +46,7 @@ rest/in transit (Google-managed), Cloud Run deploy test gates.
 | ------ | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | INV-02 | `GET /clients/fetchCSV` was open to `client` and exported all families | **Contained 2026-08-20:** admin-only route + use case; see `docs/HIPAA_13A_CLIENT_CSV_EXPORT_STATUS.md`. Residual: admin exports **all** `phi_clients` columns for all rows (`SELECT *`). |
 | INV-09 | Any authenticated user can write hours for any client                  | **Closed (2026-08-23)** — HIPAA-13E; see `docs/HIPAA_13E_VERIFICATION_SIGNOFF.md` (PR #80, revision `00040-n2d`)                                                                          |
-| INV-01 | Public intake emails full clinical + identity payload to Gmail         | **Contained 2026-08-24:** HIPAA-13F minimal staff mail (client number + CRM link); see `docs/HIPAA_13F_INTAKE_EMAIL_STATUS.md`                                                            |
+| INV-01 | Public intake emails full clinical + identity payload to Gmail         | **Closed (2026-08-25)** — HIPAA-13F; see `docs/HIPAA_13F_VERIFICATION_SIGNOFF.md` (PR #82, revision `00042-9cb`)                                                                          |
 | INV-10 | Live `POST /quickbooks/simulate-payment` accepts PAN/CVC               | `quickbooksRoutes.ts` (admin) → `paymentsController` / `createCharge.ts` / `buildChargePayload.ts`                                                                                        |
 | INV-11 | Hardcoded Gmail app password in repo                                   | `src/scripts/sendTestEmail.ts`                                                                                                                                                            |
 | INV-12 | Birth-outcomes write assignment check (`canAccessSensitive`)           | **Closed (2026-08-23)** — see `docs/HIPAA_INV12_BIRTH_OUTCOMES_ASSIGNMENT_STATUS.md`                                                                                                      |
@@ -79,9 +79,9 @@ Previously open frontend PHI logging paths are closed in code:
 
 **Partial.** P0 auth/webhook/intake work is in. **HIPAA-13A / INV-02 CSV role
 containment shipped 2026-08-20** (`docs/HIPAA_13A_CLIENT_CSV_EXPORT_STATUS.md`).
-**HIPAA-13F / INV-01 intake email minimization contained 2026-08-24**
-(`docs/HIPAA_13F_INTAKE_EMAIL_STATUS.md`). Other critical/high findings above
-are not all closed.
+**HIPAA-13F / INV-01 intake email minimization closed 2026-08-25**
+(`docs/HIPAA_13F_VERIFICATION_SIGNOFF.md`, PR #82, revision `00042-9cb`). Other
+critical/high findings above are not all closed.
 
 ### HIPAA-15 — Vendor / BAA review
 
@@ -185,9 +185,8 @@ are equally blocking from a technical standpoint.
 
 6. **Hours IDOR (INV-09)** — **Closed 2026-08-23** (HIPAA-13E / PR #80 /
    `docs/HIPAA_13E_VERIFICATION_SIGNOFF.md`).
-7. **Intake Gmail (INV-01)** — **Contained 2026-08-24** (HIPAA-13F;
-   `docs/HIPAA_13F_INTAKE_EMAIL_STATUS.md`). Pending production deploy /
-   sign-off.
+7. **Intake Gmail (INV-01)** — **Closed 2026-08-25** (HIPAA-13F / PR #82 /
+   `docs/HIPAA_13F_VERIFICATION_SIGNOFF.md`).
 8. **Simulate-payment PAN (INV-10)** — unmount
    `POST /quickbooks/simulate-payment` in all environments.
 9. **Hardcoded SMTP secret (INV-11)** — rotate the Gmail app password; remove
