@@ -52,15 +52,29 @@ via Intuit hosted fields; the backend accepts **`intuit_token`** on
 | Service | `sokana-private-api` |
 | Region | `us-central1` |
 | Project | `sokana-private-data` |
-| Serving revision | _Pending deploy after merge_ |
-| Git commit | _Pending merge commit_ |
-| Cloud Build | _Pending_ |
+| Serving revision | _Pending deploy after merge_ (current prod `00049-5wh` pre-INV-10 merge) |
+| Git commit | `11cf784` (INV-10 source removal) |
+| Pull request | https://github.com/sokanacollectiveCRM/backend/pull/86 |
+| Cloud Build | _Pending merge trigger_ |
+
+**Pre-merge production baseline (2026-08-25, revision `00049-5wh`):**
+
+Production already returns **404** for simulate-payment because
+`FEATURE_QUICKBOOKS=false` (QB router unmounted). `POST /api/payment-methods`
+remains mounted (401 unauthenticated). Verified via
+`scripts/verify-inv10-simulate-payment-prod.ts` — **6/6 pass**.
+
+This does **not** close INV-10 alone: `main` still contains PAN/CVC handler
+source until PR #86 merges and deploys.
 
 **Post-deploy verification checklist:**
 
 1. `POST /api/quickbooks/simulate-payment` with admin session → **404**.
-2. `POST /api/payment-methods` with valid `intuit_token` → **200** (tokenized workflow intact).
-3. Confirm no application logs contain card number or CVC patterns on payment flows.
+2. `POST /quickbooks/simulate-payment` with admin session → **404**.
+3. `POST /api/payment-methods` unauthenticated → **401** (route mounted, not 404).
+4. `POST /api/payment-methods` with valid `intuit_token` → **200** (tokenized workflow intact).
+5. Confirm no application logs contain card number or CVC patterns on payment flows.
+6. Re-run: `BACKEND_URL=https://sokana-private-api-....run.app npx tsx scripts/verify-inv10-simulate-payment-prod.ts`
 
 ---
 
@@ -90,3 +104,4 @@ via Intuit hosted fields; the backend accepts **`intuit_token`** on
 | Date | Change |
 | ---- | ------ |
 | 2026-08-25 | Route unmounted; PAN/CVC handler modules removed; negative tests added |
+| 2026-08-25 | PR #86 opened (`11cf784`); pre-deploy prod baseline 6/6 pass on `00049-5wh` |
