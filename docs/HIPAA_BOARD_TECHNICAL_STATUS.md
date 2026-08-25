@@ -47,8 +47,8 @@ rest/in transit (Google-managed), Cloud Run deploy test gates.
 | INV-02 | `GET /clients/fetchCSV` was open to `client` and exported all families | **Contained 2026-08-20:** admin-only route + use case; see `docs/HIPAA_13A_CLIENT_CSV_EXPORT_STATUS.md`. Residual: admin exports **all** `phi_clients` columns for all rows (`SELECT *`). |
 | INV-09 | Any authenticated user can write hours for any client                  | **Closed (2026-08-23)** — HIPAA-13E; see `docs/HIPAA_13E_VERIFICATION_SIGNOFF.md` (PR #80, revision `00040-n2d`)                                                                          |
 | INV-01 | Public intake emails full clinical + identity payload to Gmail         | **Closed (2026-08-25)** — HIPAA-13F; see `docs/HIPAA_13F_VERIFICATION_SIGNOFF.md` (PR #82, revision `00042-9cb`)                                                                          |
-| INV-10 | Live `POST /quickbooks/simulate-payment` accepts PAN/CVC               | `quickbooksRoutes.ts` (admin) → `paymentsController` / `createCharge.ts` / `buildChargePayload.ts`                                                                                        |
-| INV-11 | Hardcoded Gmail app password in repo                                   | **Closed (2026-08-25)** — see `docs/HIPAA_INV11_SMTP_CREDENTIAL_SIGNOFF.md`; rotated, Secret Manager `EMAIL_PASSWORD`, revision `00049-5wh`                                               |
+| INV-10 | Live `POST /quickbooks/simulate-payment` accepts PAN/CVC               | **Closed (2026-08-25)** — HIPAA-13G; see `docs/HIPAA_INV10_SIMULATE_PAYMENT_SIGNOFF.md` (PR #86, revision `00051-2vz`)                                                                    |
+| INV-11 | Hardcoded Gmail app password in repo                                   | **Closed (2026-08-25)** — see `docs/HIPAA_INV11_SMTP_CREDENTIAL_SIGNOFF.md`; rotated, Secret Manager `EMAIL_PASSWORD`, revision `00050-qfh` (PR #85)                                      |
 | INV-12 | Birth-outcomes write assignment check (`canAccessSensitive`)           | **Closed (2026-08-23)** — see `docs/HIPAA_INV12_BIRTH_OUTCOMES_ASSIGNMENT_STATUS.md`                                                                                                      |
 | INV-03 | Any authenticated doula can read another family's operational profile  | `GET /clients/:id`                                                                                                                                                                        |
 | —      | Client document **files** remain in Supabase Storage                   | `clientDocumentUploadService.ts`                                                                                                                                                          |
@@ -186,10 +186,10 @@ are equally blocking from a technical standpoint.
    `docs/HIPAA_13E_VERIFICATION_SIGNOFF.md`).
 7. **Intake Gmail (INV-01)** — **Closed 2026-08-25** (HIPAA-13F / PR #82 /
    `docs/HIPAA_13F_VERIFICATION_SIGNOFF.md`).
-8. **Simulate-payment PAN (INV-10)** — unmount
-   `POST /quickbooks/simulate-payment` in all environments.
-9. **Hardcoded SMTP secret (INV-11)** — rotate the Gmail app password; remove
-   the secret from `sendTestEmail.ts` (do not copy the value into tickets).
+8. **Simulate-payment PAN (INV-10)** — **Closed 2026-08-25** (HIPAA-13G / PR #86
+   / revision `00051-2vz`)
+9. **Hardcoded SMTP secret (INV-11)** — **Closed 2026-08-25** (PR #85 /
+   `docs/HIPAA_INV11_SMTP_CREDENTIAL_SIGNOFF.md`).
 
 ### Infra / vendor (not closable by app patch alone)
 
