@@ -28,8 +28,8 @@ document, tickets, or test output.**
 | Serving revision      | `sokana-private-api-00049-5wh`                                          |
 | Secret Manager        | `EMAIL_PASSWORD` version `1` (2026-08-25T21:43:31Z)                     |
 | Cloud Run SA accessor | `sokana-private-storage-sa@sokana-private-data.iam.gserviceaccount.com` |
-| Git commit            | `0cf9088` (INV-11 source removal + containment tests)                   |
-| Pull request          | _See PR link in change log after merge_                                 |
+| Git commit            | `0cf9088`, `072efc3` (INV-11 source removal + sign-off)                 |
+| Pull request          | https://github.com/sokanacollectiveCRM/backend/pull/85                  |
 
 ---
 
@@ -102,6 +102,6 @@ test returned `250 2.0.0 OK`.
 
 ## Change log
 
-| Date       | Change                                                                                                            |
-| ---------- | ----------------------------------------------------------------------------------------------------------------- |
-| 2026-08-25 | Removed hardcoded SMTP password; containment tests; Secret Manager + Cloud Run bind; rotation + delivery verified |
+| Date       | Change                                                                    |
+| ---------- | ------------------------------------------------------------------------- |
+| 2026-08-25 | PR #85 opened; commits `0cf9088`, `072efc3`; rotation + delivery verified |
