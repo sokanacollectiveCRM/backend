@@ -1,4 +1,5 @@
 import { Response } from 'express';
+
 import { ClientController } from '../controllers/clientController';
 import type { AuthRequest } from '../types';
 import * as sensitiveAccess from '../utils/sensitiveAccess';
@@ -90,13 +91,15 @@ describe('Client document endpoints', () => {
       clientId,
       'insurance_card'
     );
-    expect(createDocument).toHaveBeenCalledWith(expect.objectContaining({
-      clientId,
-      documentType: 'insurance_card',
-      category: 'billing',
-    }));
-    expect((res.status as jest.Mock)).toHaveBeenCalledWith(201);
-    expect((res.json as jest.Mock)).toHaveBeenCalledWith({
+    expect(createDocument).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientId,
+        documentType: 'insurance_card',
+        category: 'billing',
+      })
+    );
+    expect(res.status as jest.Mock).toHaveBeenCalledWith(201);
+    expect(res.json as jest.Mock).toHaveBeenCalledWith({
       success: true,
       data: {
         id: documentId,
@@ -148,9 +151,13 @@ describe('Client document endpoints', () => {
 
     await controller.uploadMyDocument(req, res);
 
-    expect(uploadDocument).toHaveBeenCalledWith(req.file, clientId, 'insurance_card');
-    expect((res.status as jest.Mock)).toHaveBeenCalledWith(201);
-    expect((res.json as jest.Mock)).toHaveBeenCalledWith(
+    expect(uploadDocument).toHaveBeenCalledWith(
+      req.file,
+      clientId,
+      'insurance_card'
+    );
+    expect(res.status as jest.Mock).toHaveBeenCalledWith(201);
+    expect(res.json as jest.Mock).toHaveBeenCalledWith(
       expect.objectContaining({
         success: true,
         data: expect.objectContaining({
@@ -188,7 +195,7 @@ describe('Client document endpoints', () => {
     await controller.getMyDocuments(req, res);
 
     expect(getDocumentsByClientId).toHaveBeenCalledWith(clientId);
-    expect((res.json as jest.Mock)).toHaveBeenCalledWith({
+    expect(res.json as jest.Mock).toHaveBeenCalledWith({
       success: true,
       documents: [
         {
@@ -217,7 +224,9 @@ describe('Client document endpoints', () => {
       createdAt: new Date('2026-03-24T18:30:00.000Z'),
       updatedAt: new Date('2026-03-24T18:30:00.000Z'),
     });
-    const getSignedUrl = jest.fn().mockResolvedValue('https://signed-url.example.com/doc');
+    const getSignedUrl = jest
+      .fn()
+      .mockResolvedValue('https://signed-url.example.com/doc');
     const controller = buildController({
       clientDocumentRepository: { getDocumentById, getSignedUrl },
     });
@@ -229,7 +238,7 @@ describe('Client document endpoints', () => {
 
     await controller.getMyDocumentUrl(req, res);
 
-    expect((res.json as jest.Mock)).toHaveBeenCalledWith({
+    expect(res.json as jest.Mock).toHaveBeenCalledWith({
       success: true,
       url: 'https://signed-url.example.com/doc',
     });
@@ -263,9 +272,11 @@ describe('Client document endpoints', () => {
 
     await controller.deleteMyDocument(req, res);
 
-    expect(deleteStoredDocument).toHaveBeenCalledWith(`${clientId}/insurance_card/uploaded.png`);
+    expect(deleteStoredDocument).toHaveBeenCalledWith(
+      `${clientId}/insurance_card/uploaded.png`
+    );
     expect(deleteDocument).toHaveBeenCalledWith(documentId);
-    expect((res.json as jest.Mock)).toHaveBeenCalledWith({
+    expect(res.json as jest.Mock).toHaveBeenCalledWith({
       success: true,
       message: 'Document deleted successfully',
     });
@@ -297,8 +308,8 @@ describe('Client document endpoints', () => {
 
     await controller.deleteMyDocument(req, res);
 
-    expect((res.status as jest.Mock)).toHaveBeenCalledWith(404);
-    expect((res.json as jest.Mock)).toHaveBeenCalledWith({
+    expect(res.status as jest.Mock).toHaveBeenCalledWith(404);
+    expect(res.json as jest.Mock).toHaveBeenCalledWith({
       error: 'Document not found',
     });
   });
@@ -319,9 +330,9 @@ describe('Client document endpoints', () => {
 
     await controller.getClientDocuments(req, res);
 
-    expect((res.status as jest.Mock)).toHaveBeenCalledWith(403);
-    expect((res.json as jest.Mock)).toHaveBeenCalledWith({
-      error: 'Unauthorized staff access',
+    expect(res.status as jest.Mock).toHaveBeenCalledWith(404);
+    expect(res.json as jest.Mock).toHaveBeenCalledWith({
+      error: 'Client not found',
     });
   });
 
@@ -343,7 +354,9 @@ describe('Client document endpoints', () => {
       createdAt: new Date('2026-03-24T18:30:00.000Z'),
       updatedAt: new Date('2026-03-24T18:30:00.000Z'),
     });
-    const getSignedUrl = jest.fn().mockResolvedValue('https://signed-url.example.com/staff-doc');
+    const getSignedUrl = jest
+      .fn()
+      .mockResolvedValue('https://signed-url.example.com/staff-doc');
     const controller = buildController({
       clientDocumentRepository: { getDocumentById, getSignedUrl },
     });
@@ -355,7 +368,7 @@ describe('Client document endpoints', () => {
 
     await controller.getClientDocumentUrl(req, res);
 
-    expect((res.json as jest.Mock)).toHaveBeenCalledWith({
+    expect(res.json as jest.Mock).toHaveBeenCalledWith({
       success: true,
       url: 'https://signed-url.example.com/staff-doc',
     });

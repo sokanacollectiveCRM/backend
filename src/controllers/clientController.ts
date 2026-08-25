@@ -684,6 +684,68 @@ export class ClientController {
     return {};
   }
 
+  /**
+   * Admin or actively assigned doula may access a client record.
+   * Read denials return 404 (no existence leak); write denials return 403.
+   * Does not perform a client DB lookup — call before fetching client rows.
+   */
+  private async ensureStaffClientAccess(
+    req: AuthRequest,
+    clientId: string,
+    mode: 'read' | 'write' = 'read'
+  ): Promise<
+    | { allowed: true }
+    | {
+        allowed: false;
+        status: number;
+        body: ReturnType<typeof ApiResponse.error>;
+      }
+  > {
+    if (!req.user?.id || !req.user.role) {
+      return {
+        allowed: false,
+        status: 401,
+        body: ApiResponse.error('Unauthorized', 'UNAUTHENTICATED'),
+      };
+    }
+
+    if (req.user.role === 'admin') {
+      return { allowed: true };
+    }
+
+    if (req.user.role === 'doula') {
+      const { canAccess } = await canAccessSensitive(req.user, clientId);
+      if (!canAccess) {
+        logger.warn(
+          { clientId, role: req.user.role },
+          '[Client] unauthorized doula client access attempt'
+        );
+        if (mode === 'read') {
+          return {
+            allowed: false,
+            status: 404,
+            body: ApiResponse.error('Client not found', 'NOT_FOUND'),
+          };
+        }
+        return {
+          allowed: false,
+          status: 403,
+          body: ApiResponse.error(
+            'Not authorized to access this client',
+            'FORBIDDEN'
+          ),
+        };
+      }
+      return { allowed: true };
+    }
+
+    return {
+      allowed: false,
+      status: 403,
+      body: ApiResponse.error('Forbidden', 'FORBIDDEN'),
+    };
+  }
+
   private static isTransientCloudSqlError(error: unknown): boolean {
     if (!error || typeof error !== 'object') {
       return false;
@@ -747,18 +809,15 @@ export class ClientController {
     res: Response,
     clientId: string
   ): Promise<boolean> {
-    if (!req.user?.id || !req.user.role) {
-      res.status(401).json({ error: 'Unauthorized staff access' });
-      return false;
-    }
-
-    if (req.user.role === 'admin') {
-      return true;
-    }
-
-    const { canAccess } = await canAccessSensitive(req.user, clientId);
-    if (!canAccess) {
-      res.status(403).json({ error: 'Unauthorized staff access' });
+    const access = await this.ensureStaffClientAccess(req, clientId, 'read');
+    if (access.allowed === false) {
+      if (access.status === 404) {
+        res.status(404).json({ error: 'Client not found' });
+      } else if (access.status === 401) {
+        res.status(401).json({ error: 'Unauthorized staff access' });
+      } else {
+        res.status(403).json({ error: 'Unauthorized staff access' });
+      }
       return false;
     }
 
@@ -1304,6 +1363,21 @@ export class ClientController {
         targetClientId = ownClientId;
       }
 
+      if (req.user?.role === 'doula') {
+        const access = await this.ensureStaffClientAccess(
+          req,
+          targetClientId,
+          'read'
+        );
+        if (access.allowed === false) {
+          res.status(access.status).json(access.body);
+          return;
+        }
+      } else if (req.user?.role !== 'admin' && req.user?.role !== 'client') {
+        res.status(403).json(ApiResponse.error('Forbidden', 'FORBIDDEN'));
+        return;
+      }
+
       const clientRow =
         (await this.clientRepository.getClientById?.(targetClientId)) ?? null;
       if (!clientRow) {
@@ -1321,17 +1395,12 @@ export class ClientController {
       );
 
       const { canAccess } = await canAccessSensitive(req.user, targetClientId);
-      const canAccessForResponse = canAccess || req.user?.role === 'client';
+      const canAccessForResponse =
+        canAccess || req.user?.role === 'client' || req.user?.role === 'admin';
       if (!canAccessForResponse) {
-        logger.info(
-          {
-            clientId: targetClientId,
-            source: 'cloud_sql',
-            phi: 'skipped (unauthorized)',
-          },
-          '[Client] detail response'
-        );
-        res.json(ApiResponse.success(dto));
+        res
+          .status(404)
+          .json(ApiResponse.error('Client not found', 'NOT_FOUND'));
         return;
       }
 
@@ -1514,6 +1583,14 @@ export class ClientController {
       return;
     }
 
+    if (req.user?.role === 'doula') {
+      const access = await this.ensureStaffClientAccess(req, clientId, 'write');
+      if (access.allowed === false) {
+        res.status(access.status).json(access.body);
+        return;
+      }
+    }
+
     try {
       // Use repository with explicit SELECT columns (no select('*'), no PHI)
       const updatedRow =
@@ -1659,6 +1736,18 @@ export class ClientController {
         return;
       }
       targetClientId = ownClientId;
+    }
+
+    if (req.user?.role === 'doula') {
+      const access = await this.ensureStaffClientAccess(
+        req,
+        targetClientId,
+        'write'
+      );
+      if (access.allowed === false) {
+        res.status(access.status).json(access.body);
+        return;
+      }
     }
 
     try {
@@ -2703,6 +2792,17 @@ export class ClientController {
       return;
     }
 
+    if (req.user?.role === 'doula') {
+      const access = await this.ensureStaffClientAccess(req, id, 'write');
+      if (access.allowed === false) {
+        res.status(access.status).json(access.body);
+        return;
+      }
+    } else if (req.user?.role !== 'admin') {
+      res.status(403).json(ApiResponse.error('Forbidden', 'FORBIDDEN'));
+      return;
+    }
+
     try {
       // Verify client exists (optional but preferred)
       const clientExists =
@@ -2827,6 +2927,21 @@ export class ClientController {
         return;
       }
       targetClientId = ownClientId;
+    }
+
+    if (req.user?.role === 'doula') {
+      const access = await this.ensureStaffClientAccess(
+        req,
+        targetClientId,
+        'read'
+      );
+      if (access.allowed === false) {
+        res.status(access.status).json(access.body);
+        return;
+      }
+    } else if (req.user?.role !== 'admin' && req.user?.role !== 'client') {
+      res.status(403).json(ApiResponse.error('Forbidden', 'FORBIDDEN'));
+      return;
     }
 
     try {
@@ -3092,6 +3207,18 @@ export class ClientController {
           return;
         }
         targetClientId = ownClientId;
+      }
+
+      if (req.user?.role === 'doula') {
+        const access = await this.ensureStaffClientAccess(
+          req,
+          targetClientId,
+          'read'
+        );
+        if (access.allowed === false) {
+          res.status(access.status).json(access.body);
+          return;
+        }
       }
 
       const doulas =

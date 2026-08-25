@@ -1,35 +1,40 @@
 import { Response } from 'express';
-import { AuthRequest } from '../types';
-import { DoulaDocumentRepository } from '../repositories/doulaDocumentRepository';
-import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
-import { SupabaseUserRepository } from '../repositories/supabaseUserRepository';
-import { DoulaDocumentUploadService } from '../services/doulaDocumentUploadService';
-import { DoulaDocumentCompletenessService } from '../services/doulaDocumentCompletenessService';
-import { UserUseCase } from '../usecase/userUseCase';
-import { ClientUseCase } from '../usecase/clientUseCase';
 import { File as MulterFile } from 'multer';
-import supabase from '../supabase';
-import { NotFoundError } from '../domains/errors';
-import { CloudSqlTeamService } from '../services/cloudSqlTeamService';
-import { DoulaDocumentIdResolver } from '../services/doulaDocumentIdResolver';
-import { ActivityRepository } from '../repositories/interface/activityRepository';
-import { ActivityMapper } from '../mappers/ActivityMapper';
+
 import { logger } from '../common/utils/logger';
+import { sanitizeDoulaRaceEthnicity } from '../constants/doulaDemographics';
 import {
+  ALLOWED_MIME_TYPES,
   ALL_DOULA_DOCUMENT_TYPES,
   MAX_DOCUMENT_SIZE_BYTES,
-  ALLOWED_MIME_TYPES,
 } from '../constants/doulaDocuments';
+import { NotFoundError } from '../domains/errors';
 import {
   MAX_DOULA_DOCUMENT_FILE_NAME_LENGTH,
   renameDoulaDocumentSchema,
 } from '../dto/request/RenameDoulaDocumentRequestDTO';
-import { sanitizeDoulaRaceEthnicity } from '../constants/doulaDemographics';
-import type { TeamMemberDto } from '../services/cloudSqlTeamService';
-import { getSupabaseAdmin } from '../supabase';
 import { ActivityDTO } from '../dto/response/ActivityDTO';
-import { buildHourSummary, parseHourFilter, parseHourType } from '../utils/hourTypes';
+import { ActivityMapper } from '../mappers/ActivityMapper';
+import { DoulaDocumentRepository } from '../repositories/doulaDocumentRepository';
+import { ActivityRepository } from '../repositories/interface/activityRepository';
+import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
+import { SupabaseUserRepository } from '../repositories/supabaseUserRepository';
+import { CloudSqlTeamService } from '../services/cloudSqlTeamService';
+import type { TeamMemberDto } from '../services/cloudSqlTeamService';
 import { DoulaAvailabilityService } from '../services/doulaAvailabilityService';
+import { DoulaDocumentCompletenessService } from '../services/doulaDocumentCompletenessService';
+import { DoulaDocumentIdResolver } from '../services/doulaDocumentIdResolver';
+import { DoulaDocumentUploadService } from '../services/doulaDocumentUploadService';
+import supabase from '../supabase';
+import { getSupabaseAdmin } from '../supabase';
+import { AuthRequest } from '../types';
+import { ClientUseCase } from '../usecase/clientUseCase';
+import { UserUseCase } from '../usecase/userUseCase';
+import {
+  buildHourSummary,
+  parseHourFilter,
+  parseHourType,
+} from '../utils/hourTypes';
 
 export class DoulaController {
   private documentRepository: DoulaDocumentRepository;
@@ -58,11 +63,15 @@ export class DoulaController {
     this.userRepository = userRepository;
     this.activityRepository = activityRepository;
     this.uploadService = uploadService;
-    this.completenessService = new DoulaDocumentCompletenessService(documentRepository);
+    this.completenessService = new DoulaDocumentCompletenessService(
+      documentRepository
+    );
     this.userUseCase = userUseCase;
     this.clientUseCase = clientUseCase;
     this.cloudSqlTeamService = new CloudSqlTeamService();
-    this.documentIdResolver = new DoulaDocumentIdResolver(this.cloudSqlTeamService);
+    this.documentIdResolver = new DoulaDocumentIdResolver(
+      this.cloudSqlTeamService
+    );
     this.doulaAvailabilityService = new DoulaAvailabilityService();
   }
 
@@ -76,14 +85,24 @@ export class DoulaController {
 
   private isMissingRelationError(error: any, relationName: string): boolean {
     const message = String(error?.message || '').toLowerCase();
-    return message.includes(`relation "${relationName.toLowerCase()}" does not exist`) || message.includes(`public.${relationName.toLowerCase()}`);
+    return (
+      message.includes(
+        `relation "${relationName.toLowerCase()}" does not exist`
+      ) || message.includes(`public.${relationName.toLowerCase()}`)
+    );
   }
 
-  private async enrichCreatorNames(dtos: ActivityDTO[]): Promise<ActivityDTO[]> {
+  private async enrichCreatorNames(
+    dtos: ActivityDTO[]
+  ): Promise<ActivityDTO[]> {
     const unresolvedIds = Array.from(
       new Set(
         dtos
-          .filter((d) => d.created_by && (!d.created_by_name || d.created_by_name === 'Staff member'))
+          .filter(
+            (d) =>
+              d.created_by &&
+              (!d.created_by_name || d.created_by_name === 'Staff member')
+          )
           .map((d) => d.created_by as string)
       )
     );
@@ -97,13 +116,18 @@ export class DoulaController {
         try {
           const { data, error } = await supabase.auth.admin.getUserById(id);
           if (error || !data?.user) return;
-          const meta = (data.user.user_metadata as Record<string, unknown> | undefined) || {};
-          const appMeta = (data.user.app_metadata as Record<string, unknown> | undefined) || {};
+          const meta =
+            (data.user.user_metadata as Record<string, unknown> | undefined) ||
+            {};
+          const appMeta =
+            (data.user.app_metadata as Record<string, unknown> | undefined) ||
+            {};
           const first = String(meta.first_name ?? meta.firstname ?? '').trim();
           const last = String(meta.last_name ?? meta.lastname ?? '').trim();
           const full = `${first} ${last}`.trim();
           const email = String(data.user.email || '').trim();
-          const role = String(meta.role ?? appMeta.role ?? '').trim() || undefined;
+          const role =
+            String(meta.role ?? appMeta.role ?? '').trim() || undefined;
           const name = full || email || 'Staff member';
           resolved.set(id, { name, role });
         } catch {
@@ -151,7 +175,7 @@ export class DoulaController {
       const validTypes = ALL_DOULA_DOCUMENT_TYPES;
       if (!validTypes.includes(document_type)) {
         res.status(400).json({
-          error: `Invalid document_type. Must be one of: ${validTypes.join(', ')}`
+          error: `Invalid document_type. Must be one of: ${validTypes.join(', ')}`,
         });
         return;
       }
@@ -159,19 +183,23 @@ export class DoulaController {
       // Validate file size (backend enforcement - never trust client)
       if (file.size > MAX_DOCUMENT_SIZE_BYTES) {
         res.status(400).json({
-          error: `File size exceeds ${MAX_DOCUMENT_SIZE_BYTES / (1024 * 1024)}MB limit`
+          error: `File size exceeds ${MAX_DOCUMENT_SIZE_BYTES / (1024 * 1024)}MB limit`,
         });
         return;
       }
       if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
         res.status(400).json({
-          error: `Invalid file type. Allowed: PDF, PNG, JPG, JPEG`
+          error: `Invalid file type. Allowed: PDF, PNG, JPG, JPEG`,
         });
         return;
       }
 
       // Replace: if doula already has a document of this type, delete old one first
-      const existingDoc = await this.documentRepository.getCurrentDocumentByType(doulaId, document_type);
+      const existingDoc =
+        await this.documentRepository.getCurrentDocumentByType(
+          doulaId,
+          document_type
+        );
       if (existingDoc) {
         await this.uploadService.deleteDocument(existingDoc.filePath);
         await this.documentRepository.deleteDocument(existingDoc.id);
@@ -186,12 +214,17 @@ export class DoulaController {
       let authUserId = doulaId; // Fallback to doulaId if we can't get auth ID
       if (accessToken) {
         try {
-          const { data: { user: authUser } } = await supabase.auth.getUser(accessToken);
+          const {
+            data: { user: authUser },
+          } = await supabase.auth.getUser(accessToken);
           if (authUser?.id) {
             authUserId = authUser.id;
           }
         } catch (error) {
-          console.warn('Could not get auth user ID from token, using doulaId:', error);
+          console.warn(
+            'Could not get auth user ID from token, using doulaId:',
+            error
+          );
         }
       }
 
@@ -206,19 +239,25 @@ export class DoulaController {
 
       // Save document record to database
       // Pass accessToken so RLS policies can verify ownership
-      const document = await this.documentRepository.createDocument({
-        doulaId,
-        documentType: document_type,
-        fileName: uploadedDoc.fileName,
-        filePath: uploadedDoc.filePath, // Store file path instead of URL
-        fileSize: uploadedDoc.fileSize,
-        mimeType: uploadedDoc.mimeType,
-        expiresAt: expires_at ? new Date(expires_at) : undefined,
-        notes: notes || undefined
-      }, accessToken);
+      const document = await this.documentRepository.createDocument(
+        {
+          doulaId,
+          documentType: document_type,
+          fileName: uploadedDoc.fileName,
+          filePath: uploadedDoc.filePath, // Store file path instead of URL
+          fileSize: uploadedDoc.fileSize,
+          mimeType: uploadedDoc.mimeType,
+          expiresAt: expires_at ? new Date(expires_at) : undefined,
+          notes: notes || undefined,
+        },
+        accessToken
+      );
 
       // Generate signed URL for the response (valid for 1 hour)
-      const signedUrl = await this.documentRepository.getSignedUrl(document.filePath, 3600);
+      const signedUrl = await this.documentRepository.getSignedUrl(
+        document.filePath,
+        3600
+      );
 
       res.status(201).json({
         success: true,
@@ -230,13 +269,13 @@ export class DoulaController {
           fileSize: document.fileSize,
           uploadedAt: document.uploadedAt,
           expiresAt: document.expiresAt,
-          status: document.status
-        }
+          status: document.status,
+        },
       });
     } catch (error: any) {
       console.error('Error uploading document:', error);
       res.status(500).json({
-        error: error.message || 'Failed to upload document'
+        error: error.message || 'Failed to upload document',
       });
     }
   }
@@ -253,14 +292,19 @@ export class DoulaController {
         return;
       }
 
-      const documents = await this.documentRepository.getDocumentsByDoulaId(doulaId);
-      const completeness = await this.completenessService.getCompleteness(doulaId);
+      const documents =
+        await this.documentRepository.getDocumentsByDoulaId(doulaId);
+      const completeness =
+        await this.completenessService.getCompleteness(doulaId);
 
       // Generate signed URLs for each document (valid for 1 hour)
       const documentsWithUrls = await Promise.all(
         documents.map(async (doc) => {
           try {
-            const signedUrl = await this.documentRepository.getSignedUrl(doc.filePath, 3600);
+            const signedUrl = await this.documentRepository.getSignedUrl(
+              doc.filePath,
+              3600
+            );
             return {
               id: doc.id,
               documentType: doc.documentType,
@@ -281,7 +325,10 @@ export class DoulaController {
               rejection_reason: doc.rejectionReason,
             };
           } catch (error: any) {
-            console.error(`Error generating signed URL for document ${doc.id}:`, error);
+            console.error(
+              `Error generating signed URL for document ${doc.id}:`,
+              error
+            );
             return {
               id: doc.id,
               documentType: doc.documentType,
@@ -326,7 +373,8 @@ export class DoulaController {
       const lowered = message.toLowerCase();
       const isMissingDocumentsTable =
         message.includes("Could not find the table 'public.doula_documents'") ||
-        (lowered.includes('public.doula_documents') && lowered.includes('schema')) ||
+        (lowered.includes('public.doula_documents') &&
+          lowered.includes('schema')) ||
         (lowered.includes('doula_documents') &&
           (lowered.includes('does not exist') ||
             lowered.includes('schema cache') ||
@@ -342,7 +390,7 @@ export class DoulaController {
         return;
       }
       res.status(500).json({
-        error: error.message || 'Failed to fetch documents'
+        error: error.message || 'Failed to fetch documents',
       });
     }
   }
@@ -359,23 +407,30 @@ export class DoulaController {
         return;
       }
 
-      let documents = await this.documentRepository.getDocumentsByDoulaId(doulaId);
+      let documents =
+        await this.documentRepository.getDocumentsByDoulaId(doulaId);
       let effectiveDocDoulaId = doulaId;
 
       if (documents.length === 0) {
-        const resolvedId = await this.documentIdResolver.getEffectiveDocumentDoulaId(doulaId);
+        const resolvedId =
+          await this.documentIdResolver.getEffectiveDocumentDoulaId(doulaId);
         if (resolvedId !== doulaId) {
-          documents = await this.documentRepository.getDocumentsByDoulaId(resolvedId);
+          documents =
+            await this.documentRepository.getDocumentsByDoulaId(resolvedId);
           effectiveDocDoulaId = resolvedId;
         }
       }
 
-      const completeness = await this.completenessService.getCompleteness(effectiveDocDoulaId);
+      const completeness =
+        await this.completenessService.getCompleteness(effectiveDocDoulaId);
 
       const documentsWithUrls = await Promise.all(
         documents.map(async (doc) => {
           try {
-            const signedUrl = await this.documentRepository.getSignedUrl(doc.filePath, 3600);
+            const signedUrl = await this.documentRepository.getSignedUrl(
+              doc.filePath,
+              3600
+            );
             return {
               id: doc.id,
               documentType: doc.documentType,
@@ -439,7 +494,9 @@ export class DoulaController {
       });
     } catch (error: any) {
       console.error('Error fetching doula documents (admin):', error);
-      res.status(500).json({ error: error.message || 'Failed to fetch documents' });
+      res
+        .status(500)
+        .json({ error: error.message || 'Failed to fetch documents' });
     }
   }
 
@@ -458,18 +515,26 @@ export class DoulaController {
         return;
       }
       if (!['approved', 'rejected'].includes(status)) {
-        res.status(400).json({ error: 'status must be "approved" or "rejected"' });
+        res
+          .status(400)
+          .json({ error: 'status must be "approved" or "rejected"' });
         return;
       }
 
-      const document = await this.documentRepository.getDocumentById(documentId);
+      const document =
+        await this.documentRepository.getDocumentById(documentId);
       if (!document) {
         res.status(404).json({ error: 'Document not found' });
         return;
       }
-      const isOwned = await this.documentIdResolver.isDocumentOwnedByDoula(doulaId, document.doulaId);
+      const isOwned = await this.documentIdResolver.isDocumentOwnedByDoula(
+        doulaId,
+        document.doulaId
+      );
       if (!isOwned) {
-        res.status(403).json({ error: 'Document does not belong to this doula' });
+        res
+          .status(403)
+          .json({ error: 'Document does not belong to this doula' });
         return;
       }
 
@@ -491,7 +556,9 @@ export class DoulaController {
       });
     } catch (error: any) {
       console.error('Error reviewing document:', error);
-      res.status(500).json({ error: error.message || 'Failed to review document' });
+      res
+        .status(500)
+        .json({ error: error.message || 'Failed to review document' });
     }
   }
 
@@ -503,18 +570,27 @@ export class DoulaController {
     try {
       const { doulaId, documentId } = req.params;
 
-      const document = await this.documentRepository.getDocumentById(documentId);
+      const document =
+        await this.documentRepository.getDocumentById(documentId);
       if (!document) {
         res.status(404).json({ error: 'Document not found' });
         return;
       }
-      const isOwned = await this.documentIdResolver.isDocumentOwnedByDoula(doulaId, document.doulaId);
+      const isOwned = await this.documentIdResolver.isDocumentOwnedByDoula(
+        doulaId,
+        document.doulaId
+      );
       if (!isOwned) {
-        res.status(403).json({ error: 'Document does not belong to this doula' });
+        res
+          .status(403)
+          .json({ error: 'Document does not belong to this doula' });
         return;
       }
 
-      const signedUrl = await this.documentRepository.getSignedUrl(document.filePath, 3600);
+      const signedUrl = await this.documentRepository.getSignedUrl(
+        document.filePath,
+        3600
+      );
 
       res.json({
         success: true,
@@ -523,7 +599,9 @@ export class DoulaController {
       });
     } catch (error: any) {
       console.error('Error getting document URL:', error);
-      res.status(500).json({ error: error.message || 'Failed to get document URL' });
+      res
+        .status(500)
+        .json({ error: error.message || 'Failed to get document URL' });
     }
   }
 
@@ -550,7 +628,9 @@ export class DoulaController {
 
       const parsed = renameDoulaDocumentSchema.safeParse(req.body);
       if (!parsed.success) {
-        res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid request body' });
+        res.status(400).json({
+          error: parsed.error.issues[0]?.message || 'Invalid request body',
+        });
         return;
       }
 
@@ -566,10 +646,16 @@ export class DoulaController {
         'Doula document rename requested'
       );
 
-      const document = await this.documentRepository.getDocumentById(documentId);
+      const document =
+        await this.documentRepository.getDocumentById(documentId);
       if (!document) {
         logger.warn(
-          { context: 'DoulaController.renameDocument', doulaId, documentId, outcome: 'not_found' },
+          {
+            context: 'DoulaController.renameDocument',
+            doulaId,
+            documentId,
+            outcome: 'not_found',
+          },
           'Doula document rename failed: document not found'
         );
         res.status(404).json({ error: 'Document not found' });
@@ -578,10 +664,17 @@ export class DoulaController {
 
       if (document.doulaId !== doulaId) {
         logger.warn(
-          { context: 'DoulaController.renameDocument', doulaId, documentId, outcome: 'forbidden' },
+          {
+            context: 'DoulaController.renameDocument',
+            doulaId,
+            documentId,
+            outcome: 'forbidden',
+          },
           'Doula document rename forbidden'
         );
-        res.status(403).json({ error: 'You do not have permission to rename this document' });
+        res.status(403).json({
+          error: 'You do not have permission to rename this document',
+        });
         return;
       }
 
@@ -590,24 +683,36 @@ export class DoulaController {
         const existingExtension = this.getFileExtension(document.fileName);
         const requestedExtension = this.getFileExtension(parsed.data.file_name);
 
-        if (existingExtension && requestedExtension && existingExtension !== requestedExtension) {
-          res.status(400).json({ error: `file_name extension must remain "${existingExtension}"` });
+        if (
+          existingExtension &&
+          requestedExtension &&
+          existingExtension !== requestedExtension
+        ) {
+          res.status(400).json({
+            error: `file_name extension must remain "${existingExtension}"`,
+          });
           return;
         }
 
-        normalizedFileName = existingExtension && !requestedExtension
-          ? `${parsed.data.file_name}${existingExtension}`
-          : parsed.data.file_name;
+        normalizedFileName =
+          existingExtension && !requestedExtension
+            ? `${parsed.data.file_name}${existingExtension}`
+            : parsed.data.file_name;
         if (normalizedFileName.length > MAX_DOULA_DOCUMENT_FILE_NAME_LENGTH) {
-          res.status(400).json({ error: `file_name must be ${MAX_DOULA_DOCUMENT_FILE_NAME_LENGTH} characters or fewer` });
+          res.status(400).json({
+            error: `file_name must be ${MAX_DOULA_DOCUMENT_FILE_NAME_LENGTH} characters or fewer`,
+          });
           return;
         }
       }
 
-      const updated = await this.documentRepository.updateDocumentMetadata(documentId, {
-        fileName: normalizedFileName,
-        documentType: parsed.data.document_type,
-      });
+      const updated = await this.documentRepository.updateDocumentMetadata(
+        documentId,
+        {
+          fileName: normalizedFileName,
+          documentType: parsed.data.document_type,
+        }
+      );
       if (!updated) {
         res.status(404).json({ error: 'Document not found' });
         return;
@@ -633,7 +738,8 @@ export class DoulaController {
           file_name: updated.fileName,
           status: updated.status,
           uploadedAt: updated.uploadedAt?.toISOString?.() ?? updated.uploadedAt,
-          uploaded_at: updated.uploadedAt?.toISOString?.() ?? updated.uploadedAt,
+          uploaded_at:
+            updated.uploadedAt?.toISOString?.() ?? updated.uploadedAt,
           updatedAt: updated.updatedAt?.toISOString?.() ?? updated.updatedAt,
           updated_at: updated.updatedAt?.toISOString?.() ?? updated.updatedAt,
         },
@@ -649,7 +755,9 @@ export class DoulaController {
         },
         'Error renaming doula document'
       );
-      res.status(500).json({ error: error.message || 'Failed to rename document' });
+      res
+        .status(500)
+        .json({ error: error.message || 'Failed to rename document' });
     }
   }
 
@@ -673,14 +781,20 @@ export class DoulaController {
       }
 
       // Verify doula owns the document
-      const isOwner = await this.documentRepository.isDocumentOwner(documentId, doulaId);
+      const isOwner = await this.documentRepository.isDocumentOwner(
+        documentId,
+        doulaId
+      );
       if (!isOwner) {
-        res.status(403).json({ error: 'You do not have permission to delete this document' });
+        res.status(403).json({
+          error: 'You do not have permission to delete this document',
+        });
         return;
       }
 
       // Get document to get file path for deletion
-      const document = await this.documentRepository.getDocumentById(documentId);
+      const document =
+        await this.documentRepository.getDocumentById(documentId);
       if (!document) {
         res.status(404).json({ error: 'Document not found' });
         return;
@@ -694,12 +808,12 @@ export class DoulaController {
 
       res.json({
         success: true,
-        message: 'Document deleted successfully'
+        message: 'Document deleted successfully',
       });
     } catch (error: any) {
       console.error('Error deleting document:', error);
       res.status(500).json({
-        error: error.message || 'Failed to delete document'
+        error: error.message || 'Failed to delete document',
       });
     }
   }
@@ -721,7 +835,7 @@ export class DoulaController {
 
       res.json({
         success: true,
-        clients: clients.map(client => client.toJson())
+        clients: clients.map((client) => client.toJson()),
       });
     } catch (error: any) {
       console.error('Error fetching assigned clients:', error);
@@ -731,12 +845,12 @@ export class DoulaController {
           clients: [],
           degraded: true,
           source: 'cloud_sql',
-          reason: 'assignments_table_missing'
+          reason: 'assignments_table_missing',
         });
         return;
       }
       res.status(500).json({
-        error: error.message || 'Failed to fetch clients'
+        error: error.message || 'Failed to fetch clients',
       });
     }
   }
@@ -761,12 +875,15 @@ export class DoulaController {
       }
 
       // Verify client is assigned to doula using Cloud SQL-backed client list.
-      const assignedClients = await this.clientUseCase.getClientsLite(doulaId, 'doula');
-      const hasAssignment = assignedClients.some((client) => client.id === clientId);
+      const assignedClients = await this.clientUseCase.getClientsLite(
+        doulaId,
+        'doula'
+      );
+      const hasAssignment = assignedClients.some(
+        (client) => client.id === clientId
+      );
       if (!hasAssignment) {
-        res.status(403).json({
-          error: 'You do not have access to this client'
-        });
+        res.status(404).json({ error: 'Client not found' });
         return;
       }
 
@@ -779,12 +896,12 @@ export class DoulaController {
 
       res.json({
         success: true,
-        client: client.toJson()
+        client: client.toJson(),
       });
     } catch (error: any) {
       console.error('Error fetching client details:', error);
       res.status(500).json({
-        error: error.message || 'Failed to fetch client details'
+        error: error.message || 'Failed to fetch client details',
       });
     }
   }
@@ -809,24 +926,30 @@ export class DoulaController {
 
       if (!normalizedType) {
         res.status(400).json({
-          error: 'type is required and must be either prenatal or postpartum'
+          error: 'type is required and must be either prenatal or postpartum',
         });
         return;
       }
 
       if (!clientId || !startTime || !endTime) {
         res.status(400).json({
-          error: 'Missing required fields: client_id/clientId, start_time/startTime, end_time/endTime'
+          error:
+            'Missing required fields: client_id/clientId, start_time/startTime, end_time/endTime',
         });
         return;
       }
 
       // Verify client is assigned to doula using Cloud SQL-backed assignment join.
-      const assignedClients = await this.clientUseCase.getClientsLite(doulaId, 'doula');
-      const hasAssignment = assignedClients.some((client) => client.id === clientId);
+      const assignedClients = await this.clientUseCase.getClientsLite(
+        doulaId,
+        'doula'
+      );
+      const hasAssignment = assignedClients.some(
+        (client) => client.id === clientId
+      );
       if (!hasAssignment) {
         res.status(403).json({
-          error: 'You can only log hours for clients assigned to you'
+          error: 'You can only log hours for clients assigned to you',
         });
         return;
       }
@@ -843,12 +966,12 @@ export class DoulaController {
 
       res.status(201).json({
         success: true,
-        workEntry
+        workEntry,
       });
     } catch (error: any) {
       console.error('Error logging hours:', error);
       res.status(500).json({
-        error: error.message || 'Failed to log hours'
+        error: error.message || 'Failed to log hours',
       });
     }
   }
@@ -868,7 +991,8 @@ export class DoulaController {
 
       if (req.query.type && !hourTypeFilter) {
         res.status(400).json({
-          error: 'Invalid hour type filter. Must be prenatal, postpartum, or unknown'
+          error:
+            'Invalid hour type filter. Must be prenatal, postpartum, or unknown',
         });
         return;
       }
@@ -877,24 +1001,33 @@ export class DoulaController {
       const allHours = await this.userUseCase.getHoursById(doulaId);
 
       // Filter to only include hours for clients assigned in Cloud SQL.
-      const assignedClients = await this.clientUseCase.getClientsLite(doulaId, 'doula');
-      const assignedClientIds = new Set(assignedClients.map((client) => client.id));
+      const assignedClients = await this.clientUseCase.getClientsLite(
+        doulaId,
+        'doula'
+      );
+      const assignedClientIds = new Set(
+        assignedClients.map((client) => client.id)
+      );
       const filteredHours = allHours.filter((entry: any) => {
         // Handle both possible client structures: entry.client?.id or entry.client?.user?.id
         const clientId = entry.client?.id || entry.client?.user?.id;
-        const matchesType = !hourTypeFilter || (entry.type ?? 'unknown') === hourTypeFilter;
+        const matchesType =
+          !hourTypeFilter || (entry.type ?? 'unknown') === hourTypeFilter;
         return clientId && assignedClientIds.has(clientId) && matchesType;
       });
 
       // Avoid 304/no-body caching behavior for frequently changing dashboard data.
-      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.set(
+        'Cache-Control',
+        'no-store, no-cache, must-revalidate, proxy-revalidate'
+      );
       res.set('Pragma', 'no-cache');
       res.set('Expires', '0');
 
       res.json({
         success: true,
         hours: filteredHours,
-        summary: buildHourSummary(filteredHours)
+        summary: buildHourSummary(filteredHours),
       });
     } catch (error: any) {
       console.error('Error fetching hours:', error);
@@ -904,12 +1037,12 @@ export class DoulaController {
           hours: [],
           degraded: true,
           source: 'cloud_sql',
-          reason: 'hours_table_missing'
+          reason: 'hours_table_missing',
         });
         return;
       }
       res.status(500).json({
-        error: error.message || 'Failed to fetch hours'
+        error: error.message || 'Failed to fetch hours',
       });
     }
   }
@@ -936,21 +1069,25 @@ export class DoulaController {
 
       if (!normalizedType) {
         res.status(400).json({
-          error: 'type is required and must be either prenatal or postpartum'
+          error: 'type is required and must be either prenatal or postpartum',
         });
         return;
       }
 
-      const workEntry = await this.userUseCase.updateHourType(hourId, normalizedType, doulaId);
+      const workEntry = await this.userUseCase.updateHourType(
+        hourId,
+        normalizedType,
+        doulaId
+      );
 
       res.json({
         success: true,
-        workEntry
+        workEntry,
       });
     } catch (error: any) {
       console.error('Error updating hour:', error);
       res.status(500).json({
-        error: error.message || 'Failed to update hour'
+        error: error.message || 'Failed to update hour',
       });
     }
   }
@@ -963,7 +1100,13 @@ export class DoulaController {
     try {
       const doulaId = req.user?.id;
       const { clientId } = req.params;
-      const { type, description, metadata, visibleToClient, visible_to_client } = req.body;
+      const {
+        type,
+        description,
+        metadata,
+        visibleToClient,
+        visible_to_client,
+      } = req.body;
 
       if (!doulaId) {
         res.status(401).json({ error: 'Unauthorized' });
@@ -977,17 +1120,22 @@ export class DoulaController {
 
       if (!type || !description) {
         res.status(400).json({
-          error: 'Missing required fields: type, description'
+          error: 'Missing required fields: type, description',
         });
         return;
       }
 
       // Verify client is assigned to doula using Cloud SQL-backed assignment join.
-      const assignedClients = await this.clientUseCase.getClientsLite(doulaId, 'doula');
-      const hasAssignment = assignedClients.some((client) => client.id === clientId);
+      const assignedClients = await this.clientUseCase.getClientsLite(
+        doulaId,
+        'doula'
+      );
+      const hasAssignment = assignedClients.some(
+        (client) => client.id === clientId
+      );
       if (!hasAssignment) {
         res.status(403).json({
-          error: 'You can only add activities for clients assigned to you'
+          error: 'You can only add activities for clients assigned to you',
         });
         return;
       }
@@ -997,12 +1145,15 @@ export class DoulaController {
         visible_to_client === true ||
         visibleToClient === 'true' ||
         visible_to_client === 'true';
-      const creatorName = `${req.user?.firstname || ''} ${req.user?.lastname || ''}`.trim() ||
+      const creatorName =
+        `${req.user?.firstname || ''} ${req.user?.lastname || ''}`.trim() ||
         (req.user?.email || '').trim() ||
         'Staff member';
       const creatorRole = req.user?.role ? String(req.user.role) : 'staff';
       const baseMeta =
-        metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? { ...metadata } : {};
+        metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+          ? { ...metadata }
+          : {};
       const mergedMetadata = {
         ...baseMeta,
         visibleToClient: visible,
@@ -1017,18 +1168,19 @@ export class DoulaController {
         description,
         metadata: mergedMetadata,
         timestamp: new Date(),
-        createdBy: doulaId
+        createdBy: doulaId,
       });
 
       res.status(201).json({
         success: true,
-        activity: ActivityMapper.fromCloudActivity(activity)
+        activity: ActivityMapper.fromCloudActivity(activity),
       });
     } catch (error: any) {
       console.error('Error adding activity:', error);
       if (this.isMissingRelationError(error, 'client_activities')) {
         res.status(503).json({
-          error: 'Activities feature not available - client_activities table pending migration',
+          error:
+            'Activities feature not available - client_activities table pending migration',
           degraded: true,
           source: 'cloud_sql',
           reason: 'client_activities_table_missing',
@@ -1036,7 +1188,7 @@ export class DoulaController {
         return;
       }
       res.status(500).json({
-        error: error.message || 'Failed to add activity'
+        error: error.message || 'Failed to add activity',
       });
     }
   }
@@ -1061,24 +1213,30 @@ export class DoulaController {
       }
 
       // Verify client is assigned to doula using Cloud SQL-backed assignment join.
-      const assignedClients = await this.clientUseCase.getClientsLite(doulaId, 'doula');
-      const hasAssignment = assignedClients.some((client) => client.id === clientId);
+      const assignedClients = await this.clientUseCase.getClientsLite(
+        doulaId,
+        'doula'
+      );
+      const hasAssignment = assignedClients.some(
+        (client) => client.id === clientId
+      );
       if (!hasAssignment) {
-        res.status(403).json({
-          error: 'You do not have access to this client'
-        });
+        res.status(404).json({ error: 'Client not found' });
         return;
       }
 
       // Get activities
-      const activities = await this.activityRepository.getActivitiesByClientId(clientId);
+      const activities =
+        await this.activityRepository.getActivitiesByClientId(clientId);
 
-      const dtos = activities.map((activity) => ActivityMapper.fromCloudActivity(activity));
+      const dtos = activities.map((activity) =>
+        ActivityMapper.fromCloudActivity(activity)
+      );
       const enriched = await this.enrichCreatorNames(dtos);
 
       res.json({
         success: true,
-        activities: enriched
+        activities: enriched,
       });
     } catch (error: any) {
       console.error('Error fetching activities:', error);
@@ -1093,7 +1251,7 @@ export class DoulaController {
         return;
       }
       res.status(500).json({
-        error: error.message || 'Failed to fetch activities'
+        error: error.message || 'Failed to fetch activities',
       });
     }
   }
@@ -1129,13 +1287,19 @@ export class DoulaController {
         nextVisible = false;
       } else {
         res.status(400).json({
-          error: 'Provide visibleToClient (boolean) to update portal visibility',
+          error:
+            'Provide visibleToClient (boolean) to update portal visibility',
         });
         return;
       }
 
-      const assignedClients = await this.clientUseCase.getClientsLite(doulaId, 'doula');
-      const hasAssignment = assignedClients.some((client) => client.id === clientId);
+      const assignedClients = await this.clientUseCase.getClientsLite(
+        doulaId,
+        'doula'
+      );
+      const hasAssignment = assignedClients.some(
+        (client) => client.id === clientId
+      );
       if (!hasAssignment) {
         res.status(403).json({
           error: 'You do not have access to this client',
@@ -1143,9 +1307,13 @@ export class DoulaController {
         return;
       }
 
-      const updated = await this.activityRepository.updateActivityMetadataMerge(activityId, clientId, {
-        visibleToClient: nextVisible,
-      });
+      const updated = await this.activityRepository.updateActivityMetadataMerge(
+        activityId,
+        clientId,
+        {
+          visibleToClient: nextVisible,
+        }
+      );
 
       if (!updated) {
         res.status(404).json({ error: 'Activity not found' });
@@ -1160,7 +1328,8 @@ export class DoulaController {
       console.error('Error patching activity:', error);
       if (this.isMissingRelationError(error, 'client_activities')) {
         res.status(503).json({
-          error: 'Activities feature not available - client_activities table pending migration',
+          error:
+            'Activities feature not available - client_activities table pending migration',
           degraded: true,
           source: 'cloud_sql',
           reason: 'client_activities_table_missing',
@@ -1189,9 +1358,16 @@ export class DoulaController {
         res.status(400).json({ error: 'No file uploaded' });
         return;
       }
-      const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      const allowedMimes = [
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/webp',
+      ];
       if (!allowedMimes.includes(file.mimetype)) {
-        res.status(400).json({ error: 'Invalid file type. Allowed: JPEG, PNG, WebP' });
+        res
+          .status(400)
+          .json({ error: 'Invalid file type. Allowed: JPEG, PNG, WebP' });
         return;
       }
       const maxSize = 5 * 1024 * 1024; // 5MB
@@ -1201,16 +1377,21 @@ export class DoulaController {
       }
       const user = req.user!;
       const imageUrl = await this.userUseCase.uploadProfilePicture(user, file);
-      const updated = await this.cloudSqlTeamService.updateDoulaProfilePicture(doulaId, imageUrl);
+      const updated = await this.cloudSqlTeamService.updateDoulaProfilePicture(
+        doulaId,
+        imageUrl
+      );
       if (!updated) {
         res.status(404).json({ error: 'Doula profile not found' });
         return;
       }
-      const cloudSqlMember = await this.cloudSqlTeamService.getTeamMemberById(doulaId);
+      const cloudSqlMember =
+        await this.cloudSqlTeamService.getTeamMemberById(doulaId);
       const profile =
         cloudSqlMember && cloudSqlMember.role === 'doula'
           ? this.buildDoulaProfilePayload(cloudSqlMember, {
-              profilePictureFallback: cloudSqlMember.profile_picture ?? imageUrl,
+              profilePictureFallback:
+                cloudSqlMember.profile_picture ?? imageUrl,
             })
           : { profile_picture: imageUrl };
       res.json({ success: true, profile });
@@ -1230,8 +1411,12 @@ export class DoulaController {
         return;
       }
 
-      const records = await this.doulaAvailabilityService.listAvailabilityByDoulaId(doulaId);
-      const currentStatus = await this.doulaAvailabilityService.getCurrentAvailabilityStatus(doulaId);
+      const records =
+        await this.doulaAvailabilityService.listAvailabilityByDoulaId(doulaId);
+      const currentStatus =
+        await this.doulaAvailabilityService.getCurrentAvailabilityStatus(
+          doulaId
+        );
 
       res.json({
         success: true,
@@ -1239,7 +1424,9 @@ export class DoulaController {
         records,
       });
     } catch (error: any) {
-      res.status(500).json({ error: error.message || 'Failed to fetch availability' });
+      res
+        .status(500)
+        .json({ error: error.message || 'Failed to fetch availability' });
     }
   }
 
@@ -1255,7 +1442,8 @@ export class DoulaController {
         doulaId,
         startAt: req.body?.startAt ?? req.body?.start_at,
         endAt: req.body?.endAt ?? req.body?.end_at,
-        availabilityStatus: req.body?.availabilityStatus ?? req.body?.availability_status,
+        availabilityStatus:
+          req.body?.availabilityStatus ?? req.body?.availability_status,
         reason: req.body?.reason,
       });
 
@@ -1265,7 +1453,9 @@ export class DoulaController {
       });
     } catch (error: any) {
       const status = error?.status ?? 400;
-      res.status(status).json({ error: error.message || 'Failed to create availability record' });
+      res.status(status).json({
+        error: error.message || 'Failed to create availability record',
+      });
     }
   }
 
@@ -1287,8 +1477,11 @@ export class DoulaController {
         doulaId,
         startAt: req.body?.startAt ?? req.body?.start_at,
         endAt: req.body?.endAt ?? req.body?.end_at,
-        availabilityStatus: req.body?.availabilityStatus ?? req.body?.availability_status,
-        reason: Object.prototype.hasOwnProperty.call(req.body || {}, 'reason') ? req.body?.reason : undefined,
+        availabilityStatus:
+          req.body?.availabilityStatus ?? req.body?.availability_status,
+        reason: Object.prototype.hasOwnProperty.call(req.body || {}, 'reason')
+          ? req.body?.reason
+          : undefined,
       });
 
       res.json({
@@ -1297,7 +1490,9 @@ export class DoulaController {
       });
     } catch (error: any) {
       const status = error?.status ?? 400;
-      res.status(status).json({ error: error.message || 'Failed to update availability record' });
+      res.status(status).json({
+        error: error.message || 'Failed to update availability record',
+      });
     }
   }
 
@@ -1314,7 +1509,10 @@ export class DoulaController {
         return;
       }
 
-      const removed = await this.doulaAvailabilityService.deleteAvailability(availabilityId, doulaId);
+      const removed = await this.doulaAvailabilityService.deleteAvailability(
+        availabilityId,
+        doulaId
+      );
       if (!removed) {
         res.status(404).json({ error: 'Availability record not found' });
         return;
@@ -1325,7 +1523,9 @@ export class DoulaController {
         message: 'Availability record deleted',
       });
     } catch (error: any) {
-      res.status(500).json({ error: error.message || 'Failed to delete availability record' });
+      res.status(500).json({
+        error: error.message || 'Failed to delete availability record',
+      });
     }
   }
 
@@ -1340,11 +1540,18 @@ export class DoulaController {
         res.status(401).json({ error: 'Unauthorized' });
         return;
       }
-      const cloudSqlMember = await this.cloudSqlTeamService.getTeamMemberById(doulaId);
+      const cloudSqlMember =
+        await this.cloudSqlTeamService.getTeamMemberById(doulaId);
       if (cloudSqlMember && cloudSqlMember.role === 'doula') {
         const reqUserJson = req.user?.toJSON?.() as any;
-        const currentAvailability = await this.doulaAvailabilityService.getCurrentAvailabilityStatus(doulaId);
-        const profile = this.buildDoulaProfilePayload(cloudSqlMember, { reqUserJson, currentAvailability });
+        const currentAvailability =
+          await this.doulaAvailabilityService.getCurrentAvailabilityStatus(
+            doulaId
+          );
+        const profile = this.buildDoulaProfilePayload(cloudSqlMember, {
+          reqUserJson,
+          currentAvailability,
+        });
         res.json({
           success: true,
           profile,
@@ -1365,12 +1572,12 @@ export class DoulaController {
 
       res.json({
         success: true,
-        profile: user.toJSON()
+        profile: user.toJSON(),
       });
     } catch (error: any) {
       console.error('Error fetching profile:', error);
       res.status(500).json({
-        error: error.message || 'Failed to fetch profile'
+        error: error.message || 'Failed to fetch profile',
       });
     }
   }
@@ -1387,12 +1594,15 @@ export class DoulaController {
         return;
       }
       // Filter out undefined/null values but keep empty strings for explicit clearing.
-      const fieldsToUpdate = Object.entries(req.body || {}).reduce((acc, [key, value]) => {
-        if (value !== undefined && value !== null) {
-          (acc as any)[key] = value;
-        }
-        return acc;
-      }, {} as Record<string, any>);
+      const fieldsToUpdate = Object.entries(req.body || {}).reduce(
+        (acc, [key, value]) => {
+          if (value !== undefined && value !== null) {
+            (acc as any)[key] = value;
+          }
+          return acc;
+        },
+        {} as Record<string, any>
+      );
 
       const cloudSqlUpdateData: {
         firstname?: string;
@@ -1433,19 +1643,34 @@ export class DoulaController {
         return out;
       };
 
-      if (fieldsToUpdate.firstname !== undefined) cloudSqlUpdateData.firstname = String(fieldsToUpdate.firstname);
-      if (fieldsToUpdate.lastname !== undefined) cloudSqlUpdateData.lastname = String(fieldsToUpdate.lastname);
-      if (fieldsToUpdate.fullName !== undefined) cloudSqlUpdateData.fullName = String(fieldsToUpdate.fullName);
-      if (fieldsToUpdate.email !== undefined) cloudSqlUpdateData.email = String(fieldsToUpdate.email);
-      if (fieldsToUpdate.phone !== undefined) cloudSqlUpdateData.phone = fieldsToUpdate.phone;
-      if (fieldsToUpdate.phone_number !== undefined) cloudSqlUpdateData.phone_number = fieldsToUpdate.phone_number;
-      if (fieldsToUpdate.address !== undefined) cloudSqlUpdateData.address = fieldsToUpdate.address;
-      if (fieldsToUpdate.city !== undefined) cloudSqlUpdateData.city = fieldsToUpdate.city;
-      if (fieldsToUpdate.state !== undefined) cloudSqlUpdateData.state = fieldsToUpdate.state;
-      if (fieldsToUpdate.country !== undefined) cloudSqlUpdateData.country = fieldsToUpdate.country;
-      if (fieldsToUpdate.zip_code !== undefined) cloudSqlUpdateData.zip_code = fieldsToUpdate.zip_code;
-      if (fieldsToUpdate.account_status !== undefined) cloudSqlUpdateData.account_status = String(fieldsToUpdate.account_status);
-      if (fieldsToUpdate.bio !== undefined) cloudSqlUpdateData.bio = fieldsToUpdate.bio;
+      if (fieldsToUpdate.firstname !== undefined)
+        cloudSqlUpdateData.firstname = String(fieldsToUpdate.firstname);
+      if (fieldsToUpdate.lastname !== undefined)
+        cloudSqlUpdateData.lastname = String(fieldsToUpdate.lastname);
+      if (fieldsToUpdate.fullName !== undefined)
+        cloudSqlUpdateData.fullName = String(fieldsToUpdate.fullName);
+      if (fieldsToUpdate.email !== undefined)
+        cloudSqlUpdateData.email = String(fieldsToUpdate.email);
+      if (fieldsToUpdate.phone !== undefined)
+        cloudSqlUpdateData.phone = fieldsToUpdate.phone;
+      if (fieldsToUpdate.phone_number !== undefined)
+        cloudSqlUpdateData.phone_number = fieldsToUpdate.phone_number;
+      if (fieldsToUpdate.address !== undefined)
+        cloudSqlUpdateData.address = fieldsToUpdate.address;
+      if (fieldsToUpdate.city !== undefined)
+        cloudSqlUpdateData.city = fieldsToUpdate.city;
+      if (fieldsToUpdate.state !== undefined)
+        cloudSqlUpdateData.state = fieldsToUpdate.state;
+      if (fieldsToUpdate.country !== undefined)
+        cloudSqlUpdateData.country = fieldsToUpdate.country;
+      if (fieldsToUpdate.zip_code !== undefined)
+        cloudSqlUpdateData.zip_code = fieldsToUpdate.zip_code;
+      if (fieldsToUpdate.account_status !== undefined)
+        cloudSqlUpdateData.account_status = String(
+          fieldsToUpdate.account_status
+        );
+      if (fieldsToUpdate.bio !== undefined)
+        cloudSqlUpdateData.bio = fieldsToUpdate.bio;
       if (fieldsToUpdate.gender !== undefined) {
         const g = String(fieldsToUpdate.gender).trim();
         cloudSqlUpdateData.gender = g.length ? g : null;
@@ -1455,7 +1680,9 @@ export class DoulaController {
         cloudSqlUpdateData.pronouns = p.length ? p : null;
       }
       if (fieldsToUpdate.race_ethnicity !== undefined) {
-        cloudSqlUpdateData.race_ethnicity = sanitizeDoulaRaceEthnicity(fieldsToUpdate.race_ethnicity);
+        cloudSqlUpdateData.race_ethnicity = sanitizeDoulaRaceEthnicity(
+          fieldsToUpdate.race_ethnicity
+        );
       }
       const languagesRaw =
         fieldsToUpdate.languages_other_than_english ??
@@ -1464,7 +1691,9 @@ export class DoulaController {
         fieldsToUpdate.languages_spoken_other_than_english;
       if (languagesRaw !== undefined) {
         const langs = sanitizeStringArray(languagesRaw);
-        cloudSqlUpdateData.languages_other_than_english = langs.length ? langs : [];
+        cloudSqlUpdateData.languages_other_than_english = langs.length
+          ? langs
+          : [];
       }
       if (fieldsToUpdate.race_ethnicity_other !== undefined) {
         const t = String(fieldsToUpdate.race_ethnicity_other).trim();
@@ -1474,29 +1703,46 @@ export class DoulaController {
         const t = String(fieldsToUpdate.other_demographic_details).trim();
         cloudSqlUpdateData.other_demographic_details = t.length ? t : null;
       }
-      if (fieldsToUpdate.scheduling_url !== undefined || fieldsToUpdate.schedulingUrl !== undefined) {
-        const t = String(fieldsToUpdate.scheduling_url ?? fieldsToUpdate.schedulingUrl ?? '').trim();
+      if (
+        fieldsToUpdate.scheduling_url !== undefined ||
+        fieldsToUpdate.schedulingUrl !== undefined
+      ) {
+        const t = String(
+          fieldsToUpdate.scheduling_url ?? fieldsToUpdate.schedulingUrl ?? ''
+        ).trim();
         cloudSqlUpdateData.scheduling_url = t.length ? t : null;
       }
 
-      const updatedMember = await this.cloudSqlTeamService.updateTeamMember(doulaId, cloudSqlUpdateData);
+      const updatedMember = await this.cloudSqlTeamService.updateTeamMember(
+        doulaId,
+        cloudSqlUpdateData
+      );
       if (!updatedMember || updatedMember.role !== 'doula') {
         res.status(404).json({ error: 'Profile not found' });
         return;
       }
 
       const reqUserJson = req.user?.toJSON?.() as any;
-      const currentAvailability = await this.doulaAvailabilityService.getCurrentAvailabilityStatus(doulaId);
-      const profile = this.buildDoulaProfilePayload(updatedMember, { reqUserJson, currentAvailability });
+      const currentAvailability =
+        await this.doulaAvailabilityService.getCurrentAvailabilityStatus(
+          doulaId
+        );
+      const profile = this.buildDoulaProfilePayload(updatedMember, {
+        reqUserJson,
+        currentAvailability,
+      });
 
       res.json({
         success: true,
         profile,
       });
     } catch (error: any) {
-      console.error(`Error updating profile for doula ${req.user?.id}:`, error?.message || error);
+      console.error(
+        `Error updating profile for doula ${req.user?.id}:`,
+        error?.message || error
+      );
       res.status(500).json({
-        error: error.message || 'Failed to update profile'
+        error: error.message || 'Failed to update profile',
       });
     }
   }
@@ -1506,7 +1752,12 @@ export class DoulaController {
     opts: {
       reqUserJson?: Record<string, unknown>;
       profilePictureFallback?: string | null;
-      currentAvailability?: { status: 'available' | 'unavailable'; reason: string | null; startAt: string | null; endAt: string | null };
+      currentAvailability?: {
+        status: 'available' | 'unavailable';
+        reason: string | null;
+        startAt: string | null;
+        endAt: string | null;
+      };
     } = {}
   ) {
     const reqUserJson = opts.reqUserJson;
@@ -1516,7 +1767,9 @@ export class DoulaController {
       startAt: null,
       endAt: null,
     };
-    const race = Array.isArray(member.race_ethnicity) ? member.race_ethnicity : [];
+    const race = Array.isArray(member.race_ethnicity)
+      ? member.race_ethnicity
+      : [];
     const languages = Array.isArray(member.languages_other_than_english)
       ? member.languages_other_than_english
       : [];

@@ -2,6 +2,39 @@
 
 This file is intentionally updateable as frontend work finishes.
 
+## Preflight Update 2026-08-25 (HIPAA-13B doula client read assignment gates)
+
+- **Gate Result**: `run_preflight`
+- **Reason**: `preflight_required_every_task`
+- **Task Intent**: Block unassigned doulas from reading client/family records
+  via CRM client routes; return safe 404/403 without existence leak (HIPAA-13B /
+  INV-03 / INV-13).
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md` (deferred; user
+  prioritized HIPAA-13B)
+- **Files Scanned**:
+  - `frontend-crm/src/features/doula-dashboard/components/ClientsTab.tsx`
+  - `frontend-crm/src/api/doulas/doulaService.ts`
+  - `frontend-crm/src/features/clients/components/dialog/LeadProfileModal.tsx`
+  - `backend/src/controllers/clientController.ts`
+  - `backend/src/routes/clientRoutes.ts`
+- **Contract Findings**:
+  - Doula dashboard uses `/api/doulas/clients` and
+    `/api/doulas/clients/:clientId` (already assignment-scoped); unassigned read
+    now returns 404 instead of 403 — frontend should treat as “not found”.
+  - Admin CRM uses `GET /clients/:id`; unassigned doula must not call this path
+    (route allows doula but now enforces assignment).
+  - No response-shape change for authorized callers (`ApiResponse.success` /
+    `{ success, data }` unchanged).
+- **Drift Risk**: Low — only deny paths change for unauthorized doula; assigned
+  doula and admin payloads unchanged.
+- **Required Compatibility**: Frontend 404 handling on client detail fetch
+  already present (quiet redirect in admin list deep-link flow).
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation complete
+  - [ ] Production deploy verification pending
+
 ## Preflight Update 2026-08-25 (HIPAA-05 doula assignment email minimization)
 
 - **Gate Result**: `run_preflight`
