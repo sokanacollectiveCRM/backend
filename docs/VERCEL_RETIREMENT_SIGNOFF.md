@@ -72,11 +72,13 @@ http://localhost:3001,http://127.0.0.1:3001,https://sokana-front-end-46lcr3n2qa-
 
 Completed 2026-08-25:
 
-1. **Backend Vercel project** — retired / deleted.
-2. **Frontend Vercel project** — retired / deleted.
-3. **Supabase Auth redirect URLs** — confirm Site URL and redirect allow-list
+1. **Backend Vercel project** — deleted.
+2. **Frontend Vercel project** — deleted.
+3. **Vercel account / subscription** — canceled. Refund of **$7** expected from
+   Vercel (billing confirmation on cancel).
+4. **Supabase Auth redirect URLs** — confirm Site URL and redirect allow-list
    use Cloud Run frontend only (no `*.vercel.app`) when reviewing Auth config.
-4. **DNS** — no production traffic depends on Vercel.
+5. **DNS** — no production traffic depends on Vercel.
 
 ---
 
@@ -87,14 +89,17 @@ Completed 2026-08-25:
   trail; they are not runtime config.
 - `contractProcessor.ts` still checks `process.env.VERCEL` for serverless
   temp-path behavior; harmless on Cloud Run (env unset).
+- Supabase Auth redirect allow-list should still be spot-checked for any
+  leftover `*.vercel.app` entries if not already cleaned.
 
 ---
 
 ## Sign-off
 
 I confirm that Vercel retirement for the CRM stack has been **implemented in
-code, validated by tests, production CORS no longer includes Vercel origins, and
-Vercel projects have been retired**, as described above.
+code, validated by tests, production CORS no longer includes Vercel origins,
+Vercel projects deleted, and the Vercel subscription canceled**, as described
+above.
 
 | Field        | Value                                          |
 | ------------ | ---------------------------------------------- |
@@ -103,5 +108,5 @@ Vercel projects have been retired**, as described above.
 | **Date**     | 2026-08-25                                     |
 | **Decision** | **Closed / formally approved**                 |
 
-**Formal closure approval:** Approved 2026-08-25 — Vercel dashboard projects
-retired; production on Cloud Run only.
+**Formal closure approval:** Approved 2026-08-25 — all Vercel projects deleted;
+subscription canceled (refund ~$7 pending); production on Cloud Run only.
