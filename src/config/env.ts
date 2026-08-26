@@ -185,13 +185,5 @@ export function getAllowedOrigins(): string[] {
         'http://127.0.0.1:4173',
       ];
   const explicit = [...fromOrigin, ...legacy, ...dev];
-  // Production fallback: allow known deploy URLs when no env vars set
-  const prodDefaults =
-    IS_PRODUCTION && explicit.length === 0
-      ? [
-          'https://sokanacrm.vercel.app',
-          'https://crmbackend-six-wine.vercel.app',
-        ]
-      : [];
-  return [...new Set([...explicit, ...prodDefaults])];
+  return [...new Set(explicit)];
 }

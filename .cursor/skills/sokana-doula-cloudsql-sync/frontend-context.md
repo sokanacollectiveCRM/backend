@@ -2,6 +2,58 @@
 
 This file is intentionally updateable as frontend work finishes.
 
+## Preflight Update 2026-08-25 (launch boundary auth/data residency assessment)
+
+### Task
+
+- Assess staff-only pilot vs client-facing launch against Supabase-auth / Cloud
+  SQL residency boundary (read-only; no code changes).
+
+### Files Scanned
+
+- `frontend-crm/src/lib/supabase.ts`
+- `frontend-crm/src/features/auth/ClientLogin.tsx`
+- `frontend-crm/src/features/auth/SetPassword.tsx`
+- `frontend-crm/src/features/auth/SignUp.tsx`
+- `frontend-crm/src/common/hooks/auth/useClientAuth.ts`
+- `frontend-crm/src/common/components/routes/ProtectedRoutes.tsx`
+- `frontend-crm/src/Routes.tsx`
+- `backend/src/services/portalInviteService.ts`
+- `backend/src/services/supabaseAuthService.ts`
+- `backend/src/security/resolveAuthoritativeRole.ts`
+- `backend/src/middleware/authMiddleware.ts`
+- `backend/src/index.ts`
+- `docs/SUPABASE_DATABASE_USAGE_INVENTORY.md`
+- `docs/ENDPOINT_AUTHORIZATION_MATRIX.md`
+
+### Contract Findings
+
+- Client portal auth is live in FE: `/auth/set-password`, `/auth/client-login`
+  call Supabase Auth directly; staff CRM uses `/auth/login` + `/auth/me`.
+- Portal invite BE creates Supabase Auth users with
+  `user_metadata.role: 'client'` and recovery links to set-password.
+- Staff roles resolved from Cloud SQL (`admins`/`doulas`); client role from
+  `phi_clients.user_id` linkage.
+
+### Drift Risk
+
+- Assessment-only; no API contract changes.
+
+### Required Compatibility
+
+- No changes needed for this pass.
+
+### Action
+
+- [x] Context updated
+- [x] Assessment delivered (no implementation)
+
+### Handoff inbox
+
+- `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md` (user explicitly
+  requested this assessment; not implementing that handoff here)
+
 ## Preflight Update 2026-08-25 (HIPAA-13B doula client read assignment gates)
 
 - **Gate Result**: `run_preflight`
@@ -495,8 +547,8 @@ write-up: `docs/SECURITY_P0_HARDENING_SUMMARY.md` → “Frontend P0”.
   `VITE_ENABLE_REQUEST_TEST_DATA`. No `skip_email_notifications`. Contract
   verification not in localStorage.
 - Host: Cloud Run `sokana-front-end`. API URL baked via Cloud Build
-  `_VITE_APP_BACKEND_URL`. Vercel is being decommissioned; `vercel.json` headers
-  do not protect production — put CSP/HSTS on the Cloud Run frontend container.
+  `_VITE_APP_BACKEND_URL`. Vercel retired 2026-08-25 (`vercel.json` removed;
+  CORS Vercel origins removed — see `docs/VERCEL_RETIREMENT_SIGNOFF.md`).
 - Mobile login: frontend and API are different sites (`*.run.app`).
   Safari/Chrome on phones often drop the `sb-access-token` cookie even with
   `SameSite=None; Secure`. After `POST /auth/login`, store JSON `token` in
@@ -2722,6 +2774,25 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
   `/cloudsql/` host unchanged; `/health` 200
 - **Docs**: `docs/CLOUD_SQL_NETWORK_HARDENING.md`
 - **Context Updated**: yes
+
+## Preflight Update 2026-08-25 (Vercel retirement / CORS)
+
+- **Gate Result**: `run_preflight`
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md` (unrelated; user
+  override for Vercel retirement)
+- **Task**: Remove Vercel origins from backend CORS; delete `vercel.json` both
+  repos
+- **Files Scanned**: `src/config/env.ts`, `src/server.ts`,
+  `frontend-crm/src/api/http.ts`, `frontend-crm/src/config/env.ts`
+- **Contract Findings**: Frontend uses `VITE_APP_BACKEND_URL` / Cloud Run API
+  URL; CORS is backend-only. No frontend API contract change.
+- **Drift Risk**: Low — production already on Cloud Run; removing Vercel CORS
+  fallback does not affect approved origins when `FRONTEND_ORIGIN` is set on
+  Cloud Run.
+- **Required Compatibility**: Keep Cloud Run frontend URLs in `FRONTEND_ORIGIN`;
+  localhost dev origins in non-production only.
+- **Action**: Context updated; implementation started
 
 ## Preflight Update 2026-08-19 (Cloud SQL private IP / Direct VPC assessment)
 
