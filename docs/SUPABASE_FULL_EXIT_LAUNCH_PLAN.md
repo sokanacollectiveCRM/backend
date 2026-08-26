@@ -82,8 +82,14 @@ ops control during migration, not the end state.
 
 ### WS-3 — Object storage off Supabase
 
-- [ ] GCS buckets for client documents, contract PDFs, templates, doula docs
-- [ ] Update upload/download services; signed URLs via backend only
+- [x] GCS layout: one private bucket `sokana-private-documents` with type
+      prefixes (not separate buckets) — `docs/GCS_DOCUMENT_STORAGE.md`
+- [x] Contract templates cut over to GCS (services + FE preview)
+- [x] Client documents cut over to GCS (upload/delete/signed URL)
+- [x] Doula documents cut over to GCS (upload/delete/signed URL)
+- [x] Profile pictures cut over to GCS + existing images migrated per user
+      folder
+- [ ] Update remaining upload/download services; signed URLs via backend only
 - [ ] Migrate existing objects; verify; empty Supabase buckets
 
 ### WS-4 — Structured data: Cloud SQL only

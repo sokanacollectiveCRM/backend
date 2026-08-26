@@ -1,5 +1,11 @@
 import { SupabaseClient, createClient } from '@supabase/supabase-js';
 
+import {
+  GCS_PREFIX,
+  getSignedReadUrl,
+  objectPath,
+} from '../services/gcs/documentStorage';
+
 export interface DoulaDocument {
   id: string;
   doulaId: string;
@@ -61,9 +67,14 @@ export class DoulaDocumentRepository {
    * @param data - Document data
    * @param accessToken - Optional user access token for RLS policies
    */
-  async createDocument(data: CreateDoulaDocumentData, accessToken?: string): Promise<DoulaDocument> {
+  async createDocument(
+    data: CreateDoulaDocumentData,
+    accessToken?: string
+  ): Promise<DoulaDocument> {
     // Use user's token if provided (for RLS), otherwise use service role
-    const client = accessToken ? this.createUserClient(accessToken) : this.supabaseClient;
+    const client = accessToken
+      ? this.createUserClient(accessToken)
+      : this.supabaseClient;
 
     const { data: document, error } = await client
       .from('doula_documents')
@@ -76,7 +87,7 @@ export class DoulaDocumentRepository {
         mime_type: data.mimeType,
         expires_at: data.expiresAt,
         notes: data.notes,
-        status: 'uploaded'
+        status: 'uploaded',
       })
       .select()
       .single();
@@ -89,21 +100,23 @@ export class DoulaDocumentRepository {
   }
 
   /**
-   * Generate a signed URL for a file path
-   * @param filePath - Path to the file in storage
+   * Generate a signed URL for a file path in private GCS.
+   * @param filePath - Relative path stored in DB
    * @param expiresIn - Expiration time in seconds (default: 1 hour)
-   * @returns Signed URL that works for private buckets
    */
-  async getSignedUrl(filePath: string, expiresIn: number = 3600): Promise<string> {
-    const { data, error } = await this.supabaseClient.storage
-      .from('doula-documents')
-      .createSignedUrl(filePath, expiresIn);
-
-    if (error) {
-      throw new Error(`Failed to generate signed URL: ${error.message}`);
+  async getSignedUrl(
+    filePath: string,
+    expiresIn: number = 3600
+  ): Promise<string> {
+    try {
+      return await getSignedReadUrl(
+        objectPath(GCS_PREFIX.doulaDocuments, filePath),
+        expiresIn
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(`Failed to generate signed URL: ${message}`);
     }
-
-    return data.signedUrl;
   }
 
   /**
@@ -120,7 +133,7 @@ export class DoulaDocumentRepository {
       throw new Error(`Failed to fetch documents: ${error.message}`);
     }
 
-    return data.map(doc => this.mapToDocument(doc));
+    return data.map((doc) => this.mapToDocument(doc));
   }
 
   /**
@@ -182,7 +195,9 @@ export class DoulaDocumentRepository {
    * Get current (most recent) document per document type for a doula.
    * Returns one document per type - the latest uploaded.
    */
-  async getCurrentDocumentsByDoulaId(doulaId: string): Promise<DoulaDocument[]> {
+  async getCurrentDocumentsByDoulaId(
+    doulaId: string
+  ): Promise<DoulaDocument[]> {
     const { data, error } = await this.supabaseClient
       .from('doula_documents')
       .select('*')
@@ -252,7 +267,10 @@ export class DoulaDocumentRepository {
   /**
    * Get current (most recent) document for a specific type and doula.
    */
-  async getCurrentDocumentByType(doulaId: string, documentType: string): Promise<DoulaDocument | null> {
+  async getCurrentDocumentByType(
+    doulaId: string,
+    documentType: string
+  ): Promise<DoulaDocument | null> {
     const current = await this.getCurrentDocumentsByDoulaId(doulaId);
     return current.find((d) => d.documentType === documentType) ?? null;
   }

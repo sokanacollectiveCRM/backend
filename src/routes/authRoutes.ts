@@ -3,7 +3,12 @@ import express, { Router } from 'express';
 import { authController } from '../index';
 import authMiddleware from '../middleware/authMiddleware';
 import { validateBody } from '../middleware/validateRequest';
-import { loginBodySchema } from '../security/requestSchemas';
+import {
+  identityMfaResendBodySchema,
+  identityMfaVerifyBodySchema,
+  identitySessionBodySchema,
+  loginBodySchema,
+} from '../security/requestSchemas';
 
 const authRoutes: Router = express.Router();
 
@@ -13,6 +18,23 @@ authRoutes.post('/signup', (req, res) => authController.signup(req, res));
 // Login route — Zod body validation (PR 7); success shape unchanged.
 authRoutes.post('/login', validateBody(loginBodySchema), (req, res) =>
   authController.login(req, res)
+);
+
+// Identity Platform: password idToken → email OTP → session
+authRoutes.post(
+  '/session',
+  validateBody(identitySessionBodySchema),
+  (req, res) => authController.startIdentitySession(req, res)
+);
+authRoutes.post(
+  '/mfa/verify',
+  validateBody(identityMfaVerifyBodySchema),
+  (req, res) => authController.verifyIdentityMfa(req, res)
+);
+authRoutes.post(
+  '/mfa/resend',
+  validateBody(identityMfaResendBodySchema),
+  (req, res) => authController.resendIdentityMfa(req, res)
 );
 
 // Get current user route

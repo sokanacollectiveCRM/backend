@@ -1,12 +1,13 @@
 // infrastructure/repositories/SupabaseUserRepository.ts
+import { File as MulterFile } from 'multer';
 
 import { SupabaseClient } from '@supabase/supabase-js';
-import { File as MulterFile } from 'multer';
+
+import { queryCloudSql } from '../db/cloudSqlPool';
 import { Client } from '../entities/Client';
 import { WORK_ENTRY_ROW } from '../entities/Hours';
 import { NOTE } from '../entities/Note';
 import { User } from '../entities/User';
-import { queryCloudSql } from '../db/cloudSqlPool';
 import { UserRepository } from '../repositories/interface/userRepository';
 import { ROLE } from '../types';
 import { HourType } from '../utils/hourTypes';
@@ -14,9 +15,7 @@ import { HourType } from '../utils/hourTypes';
 export class SupabaseUserRepository implements UserRepository {
   private supabaseClient: SupabaseClient;
 
-  constructor(
-    supabaseClient: SupabaseClient
-  ) {
+  constructor(supabaseClient: SupabaseClient) {
     this.supabaseClient = supabaseClient;
   }
 
@@ -29,7 +28,10 @@ export class SupabaseUserRepository implements UserRepository {
 
     if (error) {
       // Supabase auth-only: public.users may not exist; backend falls back to auth user. Don't log as error.
-      const isMissingTable = error.code === 'PGRST205' || (error.message && error.message.includes("Could not find the table 'public.users'"));
+      const isMissingTable =
+        error.code === 'PGRST205' ||
+        (error.message &&
+          error.message.includes("Could not find the table 'public.users'"));
       if (!isMissingTable) {
         console.error(`Error finding user by email ${email}:`, error);
       }
@@ -42,7 +44,6 @@ export class SupabaseUserRepository implements UserRepository {
 
     return this.mapToUser(data);
   }
-
 
   async findByRole(role: string): Promise<User[]> {
     // Only select columns guaranteed to exist in users table.
@@ -79,18 +80,17 @@ export class SupabaseUserRepository implements UserRepository {
   //   }));
   // }
 
-// infrastructure/repositories/SupabaseUserRepository.ts
+  // infrastructure/repositories/SupabaseUserRepository.ts
 
-// infrastructure/repositories/SupabaseUserRepository.ts
+  // infrastructure/repositories/SupabaseUserRepository.ts
 
-// infrastructure/repositories/SupabaseUserRepository.ts
+  // infrastructure/repositories/SupabaseUserRepository.ts
 
-// infrastructure/repositories/SupabaseUserRepository.ts
+  // infrastructure/repositories/SupabaseUserRepository.ts
 
-async findClientsAll(): Promise<any[]> {
-  const { data, error } = await this.supabaseClient
-    .from('client_info')
-    .select(`
+  async findClientsAll(): Promise<any[]> {
+    const { data, error } = await this.supabaseClient.from('client_info')
+      .select(`
       id,
       user_id,
       firstname,
@@ -100,42 +100,42 @@ async findClientsAll(): Promise<any[]> {
       requested,
       updated_at,
       status
-    `)
+    `);
 
-  if (error) {
-    throw new Error(`Failed to fetch clients: ${error.message}`)
+    if (error) {
+      throw new Error(`Failed to fetch clients: ${error.message}`);
+    }
+
+    return (data as any[]).map((client) => ({
+      id: client.id,
+      userId: client.user_id, // expose the real UUID
+      firstName: client.firstname,
+      lastName: client.lastname,
+      email: client.email,
+      serviceNeeded: client.service_needed,
+      requestedAt: new Date(client.requested),
+      updatedAt: new Date(client.updated_at),
+      status: client.status,
+    }));
   }
 
-  return (data as any[]).map(client => ({
-    id:            client.id,
-    userId:        client.user_id,        // expose the real UUID
-    firstName:     client.firstname,
-    lastName:      client.lastname,
-    email:         client.email,
-    serviceNeeded: client.service_needed,
-    requestedAt:   new Date(client.requested),
-    updatedAt:     new Date(client.updated_at),
-    status:        client.status,
-  }))
-}
+  // Add this method inside the SupabaseUserRepository class
 
+  async updateClientStatusToCustomer(userId: string): Promise<void> {
+    const { error } = await this.supabaseClient
+      .from('client_info')
+      .update({ status: 'customer' }) // set the new status
+      .eq('user_id', userId); // match by user_id (UUID)
 
-// Add this method inside the SupabaseUserRepository class
-
-async updateClientStatusToCustomer(userId: string): Promise<void> {
-  const { error } = await this.supabaseClient
-    .from('client_info')
-    .update({ status: 'customer' })      // set the new status
-    .eq('user_id', userId);              // match by user_id (UUID)
-
-  if (error) {
-    throw new Error(`Failed to update client status: ${error.message}`);
+    if (error) {
+      throw new Error(`Failed to update client status: ${error.message}`);
+    }
   }
-}
-async findClientsById(id: string): Promise<any> {
-  const { data, error } = await this.supabaseClient
-    .from('client_info')
-    .select(`
+  async findClientsById(id: string): Promise<any> {
+    const { data, error } = await this.supabaseClient
+      .from('client_info')
+      .select(
+        `
       id,
       firstname,
       lastname,
@@ -151,30 +151,33 @@ async findClientsById(id: string): Promise<any> {
         lastname,
         email
       )
-    `)
-    .eq('id', id);
+    `
+      )
+      .eq('id', id);
 
-  if (error) {
-    throw new Error(`${error.message}`);
+    if (error) {
+      throw new Error(`${error.message}`);
+    }
+
+    if (!data || data.length === 0) {
+      return null;
+    }
+
+    return this.mapToClient(data[0]);
   }
-
-  if (!data || data.length === 0) {
-    return null;
-  }
-
-  return this.mapToClient(data[0]);
-}
-
 
   async findClientsByDoula(doulaId: string): Promise<Client[]> {
-    const { data: assignments, error: assignmentsError } = await this.supabaseClient
-      .from('assignments')
-      .select('client_id')
-      .eq('doula_id', doulaId)
-      .eq('status', 'active'); // Only get active assignments
+    const { data: assignments, error: assignmentsError } =
+      await this.supabaseClient
+        .from('assignments')
+        .select('client_id')
+        .eq('doula_id', doulaId)
+        .eq('status', 'active'); // Only get active assignments
 
     if (assignmentsError) {
-      throw new Error(`Failed to fetch assignments: ${assignmentsError.message}`);
+      throw new Error(
+        `Failed to fetch assignments: ${assignmentsError.message}`
+      );
     }
 
     // Return if there are no assigned clients
@@ -183,33 +186,38 @@ async findClientsById(id: string): Promise<any> {
     }
 
     // store out client ids into an array
-    const clientIds = assignments.map(assignment => assignment.client_id);
+    const clientIds = assignments.map((assignment) => assignment.client_id);
 
     // grab our users with full user data joined
     const { data: clients, error: getClientsError } = await this.supabaseClient
       .from('client_info')
-      .select(`
+      .select(
+        `
         *,
         users!user_id (*)
-      `)
+      `
+      )
       .in('id', clientIds);
 
     if (getClientsError) {
       throw new Error(`Failed to fetch clients: ${getClientsError.message}`);
     }
 
-    return clients.map(client => this.mapToClient(client));
+    return clients.map((client) => this.mapToClient(client));
   }
 
   async save(user: User): Promise<User> {
     const { data, error } = await this.supabaseClient
       .from('users')
-      .upsert({
-        id: user.id,
-        email: user.email,
-        firstname: user.firstname,
-        lastname: user.lastname,
-      }, { onConflict: 'email' })
+      .upsert(
+        {
+          id: user.id,
+          email: user.email,
+          firstname: user.firstname,
+          lastname: user.lastname,
+        },
+        { onConflict: 'email' }
+      )
       .select()
       .single();
 
@@ -221,18 +229,21 @@ async findClientsById(id: string): Promise<any> {
   }
 
   async update(userId: string, fieldsToUpdate: Partial<User>): Promise<User> {
-    const { data: updatedUser, error: updatedUserError } = await this.supabaseClient
-      .from('users')
-      .update(fieldsToUpdate)
-      .eq('id', userId)
-      .select()
-      .single()
+    const { data: updatedUser, error: updatedUserError } =
+      await this.supabaseClient
+        .from('users')
+        .update(fieldsToUpdate)
+        .eq('id', userId)
+        .select()
+        .single();
 
     if (updatedUserError) {
       throw new Error(updatedUserError.message);
     }
     if (updatedUser) {
-      console.log(`📋 Repository: Updated user data - Address: "${updatedUser.address}", City: "${updatedUser.city}", State: "${updatedUser.state}"`);
+      console.log(
+        `📋 Repository: Updated user data - Address: "${updatedUser.address}", City: "${updatedUser.city}", State: "${updatedUser.state}"`
+      );
     }
 
     return this.mapToUser(updatedUser);
@@ -240,9 +251,9 @@ async findClientsById(id: string): Promise<any> {
 
   async findAll(): Promise<User[]> {
     const { data, error } = await this.supabaseClient
-    .from('users')
-    .select('email, firstname, lastname')
-    .order('firstname', { ascending: true });
+      .from('users')
+      .select('email, firstname, lastname')
+      .order('firstname', { ascending: true });
 
     if (error) {
       throw new Error(`Failed to fetch users: ${error.message}`);
@@ -254,9 +265,9 @@ async findClientsById(id: string): Promise<any> {
   async findAllTeamMembers(): Promise<User[]> {
     try {
       const { data, error } = await this.supabaseClient
-      .from('users')
-      .select('id, firstname, lastname, email, role, account_status')
-      .in('role', ['doula','admin'])
+        .from('users')
+        .select('id, firstname, lastname, email, role, account_status')
+        .in('role', ['doula', 'admin']);
 
       if (error) {
         throw new Error(`Failed to retrieve team members: ${error.message}`);
@@ -269,7 +280,12 @@ async findClientsById(id: string): Promise<any> {
     }
   }
 
-  async addMember(firstname: string, lastname: string, userEmail: string, userRole: string): Promise<User> {
+  async addMember(
+    firstname: string,
+    lastname: string,
+    userEmail: string,
+    userRole: string
+  ): Promise<User> {
     try {
       // Normalize email to lowercase for consistency
       const normalizedEmail = userEmail.toLowerCase().trim();
@@ -282,11 +298,11 @@ async findClientsById(id: string): Promise<any> {
             lastname: lastname.trim(),
             email: normalizedEmail,
             role: userRole,
-            account_status: 'pending' // Set account status to pending for new invites
+            account_status: 'pending', // Set account status to pending for new invites
           },
         ])
         .select()
-        .single()
+        .single();
 
       if (error) {
         console.error(`Error adding member ${normalizedEmail}:`, error);
@@ -298,7 +314,9 @@ async findClientsById(id: string): Promise<any> {
       }
 
       const user = this.mapToUser(data);
-      console.log(`✅ Successfully added member: ${normalizedEmail}, ID: ${user.id}, Status: ${user.account_status}`);
+      console.log(
+        `✅ Successfully added member: ${normalizedEmail}, ID: ${user.id}, Status: ${user.account_status}`
+      );
       return user;
     } catch (err: any) {
       console.error(`Failed to add member ${userEmail}:`, err);
@@ -340,7 +358,10 @@ async findClientsById(id: string): Promise<any> {
       );
 
       return rows.map((entry) => {
-        const doulaNameParts = (entry.doula_full_name || '').trim().split(/\s+/).filter(Boolean);
+        const doulaNameParts = (entry.doula_full_name || '')
+          .trim()
+          .split(/\s+/)
+          .filter(Boolean);
         const doulaFirstname = doulaNameParts[0] || '';
         const doulaLastname = doulaNameParts.slice(1).join(' ');
         const client = {
@@ -409,7 +430,10 @@ async findClientsById(id: string): Promise<any> {
       );
 
       return rows.map((entry) => {
-        const doulaNameParts = (entry.doula_full_name || '').trim().split(/\s+/).filter(Boolean);
+        const doulaNameParts = (entry.doula_full_name || '')
+          .trim()
+          .split(/\s+/)
+          .filter(Boolean);
         const doulaFirstname = doulaNameParts[0] || '';
         const doulaLastname = doulaNameParts.slice(1).join(' ');
         const client = {
@@ -461,21 +485,24 @@ async findClientsById(id: string): Promise<any> {
   }
 
   async findNoteByWorkLogId(id: string): Promise<NOTE | null> {
-
     const { data, error } = await this.supabaseClient
-    .from('notes')
-    .select('*')
-    .eq('work_log_id', id)
+      .from('notes')
+      .select('*')
+      .eq('work_log_id', id);
 
-    if(error) {
-      console.log(`Given this work_log_id: ${id} error finding note correspimonding to it: ${error.message}`);
+    if (error) {
+      console.log(
+        `Given this work_log_id: ${id} error finding note correspimonding to it: ${error.message}`
+      );
     }
 
     return data[0];
   }
 
   async delete(id: string): Promise<void> {
-    console.log(`🗄️  Repository: Attempting to delete user ${id} from database`);
+    console.log(
+      `🗄️  Repository: Attempting to delete user ${id} from database`
+    );
 
     const { data, error } = await this.supabaseClient
       .from('users')
@@ -484,40 +511,33 @@ async findClientsById(id: string): Promise<any> {
       .select(); // Select to get info about what was deleted
 
     if (error) {
-      console.error(`❌ Repository: Failed to delete user ${id}:`, error.message);
+      console.error(
+        `❌ Repository: Failed to delete user ${id}:`,
+        error.message
+      );
       throw new Error(`Failed to delete user: ${error.message}`);
     }
 
     if (data && data.length > 0) {
       const deletedUser = data[0];
-      console.log(`✅ Repository: User ${id} (${deletedUser.email || 'N/A'}) deleted from database`);
+      console.log(
+        `✅ Repository: User ${id} (${deletedUser.email || 'N/A'}) deleted from database`
+      );
     } else {
       console.log(`⚠️  Repository: No user found with ID ${id} to delete`);
     }
   }
 
   async uploadProfilePicture(user: User, profilePicture: MulterFile) {
-    const filePath = `${user.id}/${Date.now()}_${profilePicture.originalname}`;
-
-    // upload to supabase
-    const { data, error: uploadError } = await this.supabaseClient.storage
-    .from('profile-pictures')
-    .upload(filePath, profilePicture.buffer, {
-      contentType: profilePicture.mimetype,
-      upsert: true,
-    });
-
-    if (uploadError) {
-      console.log('Upload error', uploadError);
-      throw new Error('failed to stash profile picture');
-    }
-
-    // grab the link to it
-    const { data: { publicUrl }} = await this.supabaseClient.storage
-      .from('profile-pictures')
-      .getPublicUrl(filePath);
-
-    return publicUrl;
+    const { uploadProfilePictureObject } = await import(
+      '../services/gcs/profilePictureStorage'
+    );
+    const { relativePath } = await uploadProfilePictureObject(
+      user.id,
+      profilePicture
+    );
+    // Persist relative GCS path; callers resolve to signed URLs on read.
+    return relativePath;
   }
 
   // Helper to map database user to domain User
@@ -538,7 +558,7 @@ async findClientsById(id: string): Promise<any> {
       profile_picture: data.profile_picture,
       account_status: data.account_status,
       business: data.business,
-      bio: data.bio
+      bio: data.bio,
     });
   }
 
@@ -546,18 +566,19 @@ async findClientsById(id: string): Promise<any> {
   private mapToClient(data: any): Client {
     // If the user has created a profile, grab user data from users table. If not, grab details
     // from the request form (client_info table).
-    const userData = data.users ? {
-      id: data.users.user_id,
-      firstname: data.users.firstname,
-      lastname: data.users.lastname,
-      profile_picture: data.users,
-    } :
-    {
-      id: data.id,
-      firstname: data.firstname,
-      lastname: data.lastname,
-      profile_picture: ''
-    };
+    const userData = data.users
+      ? {
+          id: data.users.user_id,
+          firstname: data.users.firstname,
+          lastname: data.users.lastname,
+          profile_picture: data.users,
+        }
+      : {
+          id: data.id,
+          firstname: data.firstname,
+          lastname: data.lastname,
+          profile_picture: '',
+        };
 
     // if user doesn't exist (not approved), we fill fields from client_info table
     const user = this.mapToUser({
@@ -566,7 +587,7 @@ async findClientsById(id: string): Promise<any> {
       lastname: userData.lastname,
       profile_picture: userData.profile_picture,
       role: 'client',
-    })
+    });
 
     return new Client(
       data.id,
@@ -575,10 +596,17 @@ async findClientsById(id: string): Promise<any> {
       new Date(data.requested),
       new Date(data.updated_at),
       data.status
-    )
+    );
   }
 
-  async addNewHours(doula_id: string, client_id: string, start_time: Date, end_time: Date, note: string, type: HourType): Promise<WORK_ENTRY_ROW> {
+  async addNewHours(
+    doula_id: string,
+    client_id: string,
+    start_time: Date,
+    end_time: Date,
+    note: string,
+    type: HourType
+  ): Promise<WORK_ENTRY_ROW> {
     const _ignoredNote = note;
     void _ignoredNote;
     const { rows } = await queryCloudSql<WORK_ENTRY_ROW>(
@@ -592,7 +620,11 @@ async findClientsById(id: string): Promise<any> {
     return rows[0];
   }
 
-  async updateHourType(hourId: string, type: HourType, doulaId?: string): Promise<WORK_ENTRY_ROW | null> {
+  async updateHourType(
+    hourId: string,
+    type: HourType,
+    doulaId?: string
+  ): Promise<WORK_ENTRY_ROW | null> {
     const params: Array<string | Date> = [type, hourId];
     let sql = `
       UPDATE public.hours

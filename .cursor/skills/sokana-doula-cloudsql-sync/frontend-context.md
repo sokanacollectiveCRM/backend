@@ -2,6 +2,501 @@
 
 This file is intentionally updateable as frontend work finishes.
 
+## Preflight Update 2026-08-26 (profile pictures → GCS)
+
+### Task
+
+- Switch profile picture storage to GCS `profile-pictures/` prefix; migrate
+  existing Supabase images into per-user folders; verify with smoke/migration
+  scripts.
+
+### Files Scanned
+
+- `frontend-crm/src/features/my-account/components/UpdateProfile.tsx`
+- `frontend-crm/src/features/teams/teams.tsx`
+- `backend/src/services/gcs/profilePictureStorage.ts`
+- `backend/src/services/cloudSqlTeamService.ts`
+- `backend/scripts/migrate-profile-pictures-to-gcs.ts`
+
+### Contract Findings
+
+- FE expects `profile_picture` to be a usable URL in API responses.
+- Backend stores relative `{userId}/{file}` and resolves signed URLs on read;
+  legacy http(s) URLs still pass through.
+
+### Drift Risk
+
+- Returning relative paths without resolve-on-read breaks avatars.
+
+### Required Compatibility
+
+- Keep `profile_picture` response field; sign GCS paths in team/auth payloads.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+### Handoff inbox
+
+- `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`
+
+## Preflight Update 2026-08-26 (doula documents → GCS)
+
+### Task
+
+- Switch doula document upload/download/delete/signed URLs from Supabase Storage
+  to GCS `doula-documents/` prefix; verify with smoke test.
+
+### Files Scanned
+
+- `frontend-crm/src/features/doula-dashboard/components/DocumentsTab.tsx`
+- `frontend-crm/src/api/doulas/doulaService.ts`
+- `backend/src/services/doulaDocumentUploadService.ts`
+- `backend/src/repositories/doulaDocumentRepository.ts`
+
+### Contract Findings
+
+- DocumentsTab uses backend upload/list/delete/update APIs; storage backend is
+  opaque if paths/signed URLs stay API-mediated.
+- Keep relative `filePath` shape used today so Cloud SQL metadata stays
+  compatible.
+
+### Drift Risk
+
+- Changing path format without prefix resolution breaks open/download for
+  existing rows.
+
+### Required Compatibility
+
+- Preserve document types, size/MIME checks, and response shapes; only storage
+  backend changes.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+### Handoff inbox
+
+- `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`
+
+## Preflight Update 2026-08-26 (client documents → GCS)
+
+### Task
+
+- Switch client document upload/download/delete/signed URLs from Supabase
+  Storage to GCS `client-documents/` prefix; verify with a test upload.
+
+### Files Scanned
+
+- `frontend-crm/src/api/clients/clientDocuments.ts`
+- `frontend-crm/src/features/client-dashboard/components/ClientProfileTab.tsx`
+- `backend/src/services/clientDocumentUploadService.ts`
+- `backend/src/repositories/clientDocumentRepository.ts`
+- `backend/src/constants/clientDocuments.ts`
+
+### Contract Findings
+
+- FE uses backend APIs for upload/list/delete/signed URL; does not talk to
+  Supabase Storage directly for client docs.
+- Response shape stays
+  `{ id, clientId, documentType, fileName, filePath, ... }` + signed URL from
+  download endpoint.
+
+### Drift Risk
+
+- Changing `filePath` format without resolving via GCS prefix breaks existing
+  Cloud SQL rows and FE open/download.
+- Keep relative path `{clientId}/{documentType}/{timestamp}_{file}`; resolve
+  with `client-documents/` prefix in GCS.
+
+### Required Compatibility
+
+- Preserve upload validation (MIME, size) and API routes; only storage backend
+  changes.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+### Handoff inbox
+
+- `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`
+
+## Preflight Update 2026-08-26 (contract templates live in GCS)
+
+### Task
+
+- Cut over contract template storage to GCS; FE preview via signed-url/download
+  instead of public Supabase URL.
+
+### Files Scanned
+
+- `frontend-crm/src/features/contracts/components/pdf/PdfPreview.tsx`
+- `frontend-crm/src/common/hooks/contracts/useTemplates.ts`
+- `backend/src/services/supabaseContractService.ts`
+- `backend/src/routes/contractTemplateRoutes.ts`
+
+### Contract Findings
+
+- Templates list still `GET /contracts/templates` →
+  `{ id, name, depositFee, serviceFee, storagePath }[]`.
+- Preview no longer uses `VITE_SUPABASE_URL` public storage; uses `/signed-url`
+  then `/download` blob fallback.
+
+### Drift Risk
+
+- Deploying BE without FE (or vice versa) breaks template preview until both
+  ship.
+- Local ADC cannot mint V4 signed URLs; download fallback required.
+
+### Required Compatibility
+
+- Keep template filenames unchanged.
+- Keep list/upload/delete routes; add signed-url + download under admin auth.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+### Handoff inbox
+
+- `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`
+
+## Preflight Update 2026-08-26 (upload contract templates to GCS)
+
+### Task
+
+- Upload known contract DOCX templates into GCS `contract-templates/` prefix
+  (bytes only; app still reads Supabase until cutover).
+
+### Files Scanned
+
+- `backend/templates/Agreement for Postpartum Doula Services.docx`
+- `backend/templates/Labor Support Agreement for Service.docx`
+- `backend/src/services/supabaseContractService.ts`
+- `docs/GCS_DOCUMENT_STORAGE.md`
+
+### Contract Findings
+
+- FE contracts UI lists templates via backend; storage path is opaque if
+  list/download stay API-mediated.
+- Known filenames must remain identical for Labor Support / Postpartum
+  detection.
+
+### Drift Risk
+
+- Renaming files in GCS without updating `KNOWN_STORAGE_TEMPLATES` /
+  contractProcessor breaks generation.
+
+### Required Compatibility
+
+- Keep filenames: `Agreement for Postpartum Doula Services.docx`,
+  `Labor Support Agreement for Service.docx`.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+### Handoff inbox
+
+- `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`
+
+## Preflight Update 2026-08-26 (GCS one-bucket + prefixes decision)
+
+### Task
+
+- Lock WS-3 storage layout: single private bucket `sokana-private-documents`
+  with type prefixes (not separate buckets).
+
+### Files Scanned
+
+- `frontend-crm/src/features/doula-dashboard/components/DocumentsTab.tsx`
+- `docs/SUPABASE_FULL_EXIT_LAUNCH_PLAN.md`
+
+### Contract Findings
+
+- FE still uses backend document APIs; bucket/prefix layout is opaque until
+  upload services cut over.
+
+### Drift Risk
+
+- None for FE from infra layout decision alone.
+
+### Required Compatibility
+
+- Keep Supabase-backed document APIs until code cutover; prefixes are prep only.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+### Handoff inbox
+
+- `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`
+
+## Preflight Update 2026-08-26 (create GCS document buckets)
+
+### Task
+
+- Provision private GCS buckets for WS-3 Supabase Storage → GCS (infra only; no
+  API cutover yet).
+
+### Files Scanned
+
+- `frontend-crm/src/features/doula-dashboard/components/DocumentsTab.tsx`
+- `backend/src/services/clientDocumentUploadService.ts`
+- `backend/src/services/doulaDocumentUploadService.ts`
+- `docs/SUPABASE_FULL_EXIT_LAUNCH_PLAN.md`
+- `.cursor/handoffs/open/2026-08-25-full-supabase-exit-launch-ready.md`
+
+### Contract Findings
+
+- DocumentsTab uses backend upload/list/delete APIs; does not reference Supabase
+  bucket names.
+- Bucket creation alone does not change FE contracts.
+
+### Drift Risk
+
+- None for FE until upload services switch to GCS signed URLs.
+
+### Required Compatibility
+
+- Keep current Supabase-backed document APIs until code cutover; buckets are
+  prep only.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+### Handoff inbox
+
+- `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`
+
+## Preflight Update 2026-08-26 (GCS doc storage explanation)
+
+### Task
+
+- Explain how Supabase Storage → private GCS document transfer works
+  (informational; no code).
+
+### Files Scanned
+
+- `.cursor/handoffs/open/2026-08-25-full-supabase-exit-launch-ready.md`
+- `docs/SUPABASE_FULL_EXIT_LAUNCH_PLAN.md`
+- `docs/SUPABASE_DATABASE_USAGE_INVENTORY.md`
+- `src/services/clientDocumentUploadService.ts`
+- `src/services/doulaDocumentUploadService.ts`
+
+### Contract Findings
+
+- Frontend still expects signed URLs / document metadata from backend; storage
+  backend is opaque if upload/download stay API-mediated.
+- No FE contract change required for an explanation-only answer.
+
+### Drift Risk
+
+- Switching storage without keeping signed-URL and metadata shapes breaks
+  DocumentsTab / insurance uploads / contracts.
+
+### Required Compatibility
+
+- Keep backend-issued signed URLs; metadata in Cloud SQL; no direct
+  browser→bucket writes.
+
+### Action
+
+- [x] Context updated (no code)
+- [ ] Implementation started
+
+### Handoff inbox
+
+- `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`
+
+## Preflight Update 2026-08-26 (admin-only Supabase Auth migration)
+
+### Task
+
+- Migrate Cloud SQL admins from Supabase Auth to GCP Identity Platform and
+  require password reset; do not migrate doulas or clients in this phase.
+
+### Files Scanned
+
+- `frontend-crm/src/common/contexts/UserContext.tsx`
+- `frontend-crm/src/features/auth/Login.tsx`
+- `backend/scripts/seed_admins_from_supabase.ts`
+- `backend/src/security/resolveAuthoritativeRole.ts`
+- `backend/src/services/identityPlatform/loadUserFromIdentity.ts`
+- `backend/src/services/cloudSqlTeamService.ts`
+
+### Contract Findings
+
+- Frontend `VITE_AUTH_MODE=identity` uses Identity Platform password auth,
+  backend email OTP, and existing Bearer/cookie session transport.
+- Cloud SQL `public.admins` is authoritative for admin role; Identity Platform
+  UIDs may differ from Cloud SQL UUIDs, so role/profile resolution must match
+  normalized email and return the Cloud SQL UUID downstream.
+- Client portal remains on its existing Supabase-specific flow; no client or
+  doula accounts are mutated in this migration.
+
+### Drift Risk
+
+- Treating Identity Platform UID as a Cloud SQL UUID breaks role lookup.
+- Removing Supabase verification before every admin completes reset would lock
+  out unmigrated users; keep backend `AUTH_PROVIDER=dual` during rollout.
+
+### Required Compatibility
+
+- Create/update Identity Platform accounts only for emails present in Cloud SQL
+  `public.admins`.
+- Verify each admin email exists in the Supabase Auth source inventory, retain
+  Cloud SQL role/profile data, and send an Identity Platform reset link.
+- Migration must be idempotent, dry-run by default, and report counts without
+  printing secrets.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+### Handoff inbox
+
+- `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`
+
+## Preflight Update 2026-08-26 (Identity Platform email/password + email OTP)
+
+### Task
+
+- Implement staff CRM auth via GCP Identity Platform (email/password) with
+  app-level email OTP 2FA; no Google Sign-In provider.
+
+### Files Scanned
+
+- `frontend-crm/src/api/config.ts`
+- `frontend-crm/src/api/http.ts`
+- `frontend-crm/src/common/contexts/UserContext.tsx`
+- `frontend-crm/src/features/auth/Login.tsx`
+- `frontend-crm/src/features/auth/GoogleButton.jsx`
+- `backend/src/middleware/authMiddleware.ts`
+- `backend/src/controllers/authController.ts`
+- `backend/src/routes/authRoutes.ts`
+- `backend/src/services/supabaseAuthService.ts`
+- `backend/src/security/resolveAuthoritativeRole.ts`
+
+### Contract Findings
+
+- Today: `VITE_AUTH_MODE=cookie|supabase`; session via cookie / Bearer /
+  `X-Session-Token`; `/auth/me` is authoritative for role/user.
+- Target identity mode: FE signs in with Firebase Web SDK → `POST /auth/session`
+  (idToken) → email OTP → `POST /auth/mfa/verify` → same session transport as
+  today (IdP idToken as session token).
+
+### Drift Risk
+
+- Middleware must dual-verify Supabase + Identity Platform JWTs during cutover.
+- Frontend must not set full session until MFA verify succeeds.
+
+### Required Compatibility
+
+- Keep Bearer + `X-Session-Token` + cookie after MFA.
+- Login success shape: `{ message, user, token }` after MFA verify.
+- `POST /auth/session` returns `{ mfaRequired: true, challengeId, emailHint }`
+  (no session cookie yet).
+
+### Action
+
+- [x] Context updated
+- [ ] Implementation started
+
+### Handoff inbox
+
+- `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`
+
+## Preflight Update 2026-08-26 (auth/login Google Identity exploration)
+
+### Task
+
+- Explore frontend-crm authentication/login for Google Identity migration
+  planning (read-only; no code changes).
+
+### Files Scanned
+
+- `frontend-crm/src/main.tsx`
+- `frontend-crm/src/App.tsx`
+- `frontend-crm/src/Routes.tsx`
+- `frontend-crm/src/lib/supabase.ts`
+- `frontend-crm/src/api/config.ts`
+- `frontend-crm/src/api/http.ts`
+- `frontend-crm/src/api/sessionAccessToken.ts`
+- `frontend-crm/src/api/authToken.ts`
+- `frontend-crm/src/common/contexts/UserContext.tsx`
+- `frontend-crm/src/common/components/routes/ProtectedRoutes.tsx`
+- `frontend-crm/src/features/auth/Login.tsx`
+- `frontend-crm/src/features/auth/ClientLogin.tsx`
+- `frontend-crm/src/features/auth/AuthCallback.tsx`
+- `frontend-crm/src/features/auth/GoogleButton.jsx`
+- `frontend-crm/src/features/auth/AuthRoutes.tsx`
+- `frontend-crm/src/common/hooks/auth/useClientAuth.ts`
+
+### Contract Findings
+
+- Dual auth mode via `VITE_AUTH_MODE`: default `cookie` → `POST /auth/login` +
+  cookies; `supabase` → `signInWithPassword` then Bearer.
+- Google today: Supabase `signInWithOAuth({ provider: 'google' })` or backend
+  `GET /auth/google` → `/auth/callback` hash token → `POST /auth/callback`.
+- No Firebase Auth / Identity Platform / GIS SDK in frontend.
+- No magic-link login UI; client portal is email/password only.
+- API auth transport: `sessionStorage` token + `Authorization: Bearer` +
+  `X-Session-Token`; cookie mode also `credentials: include`.
+
+### Drift Risk
+
+- Replacing Google/Supabase auth without updating `UserContext.googleAuth`,
+  `AuthCallback`, and `getRequestAuth()` will break staff login and API calls.
+
+### Required Compatibility
+
+- Keep Bearer + `X-Session-Token` (and/or cookie) contract until backend
+  Identity Platform verification is ready; frontend must mint/store the new
+  session token the same way.
+
+### Action
+
+- [x] Context updated
+- [x] Exploration report delivered (no implementation)
+
+### Handoff inbox
+
+- `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`
+
 ## Preflight Update 2026-08-25 (launch boundary auth/data residency assessment)
 
 ### Task
@@ -2850,3 +3345,81 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 - **Action**: Frontend routing fix + backend alias hardening
 - **Context Updated**: yes
 - **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-26 (Identity password-reset deployment)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Test and deploy frontend and backend after configuring the
+  Identity Platform password-reset continuation to production Cloud Run login.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-25-full-supabase-exit-launch-ready.md`,
+  `2026-08-10-backend-architecture-boundary-refactor.md` (user override for
+  deployment).
+- **Files Scanned**:
+  - `frontend-crm/src/common/contexts/UserContext.tsx`
+  - `frontend-crm/src/Routes.tsx`
+  - `frontend-crm/cloudbuild.yaml`
+- **Contract Findings**: Identity reset requests send Firebase
+  `continueUrl=<VITE_APP_FRONTEND_URL>/login`; `/login` is a public frontend
+  auth route. No backend request/response contract changed.
+- **Drift Risk**: Cloud Build must supply the production frontend URL or the
+  deployed app falls back to its own production origin. Existing reset emails
+  retain the URL generated when requested.
+- **Required Compatibility**: Keep the Cloud Run frontend domain authorized in
+  Identity Platform and issue a new reset email after deployment.
+- **Action**: Context updated; run both test suites, deploy both Cloud Run
+  services, and verify health/routes.
+
+## Preflight Update 2026-08-26 (Production Identity login IAM diagnosis)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Diagnose production `POST /auth/session` 401 after successful
+  Firebase email/password authentication.
+- **Files Scanned**:
+  - `frontend-crm/src/common/contexts/UserContext.tsx`
+  - `backend/src/services/identityPlatform/identityPlatformTokenService.ts`
+- **Contract Findings**: The frontend sends the Firebase ID token to
+  `/auth/session`; backend calls `verifyIdToken(idToken, true)`, whose
+  revocation check requires `firebaseauth.users.get`.
+- **Production Finding**: Cloud Run uses
+  `sokana-private-storage-sa@sokana-private-data.iam.gserviceaccount.com`, which
+  has Cloud SQL Client and Storage Object Admin only.
+- **Drift Risk**: Deploying Identity mode without Firebase Auth IAM causes every
+  production session exchange to fail with 401 despite valid browser login.
+- **Required Compatibility**: Grant the runtime identity at least
+  `roles/firebaseauth.viewer`; retain revocation checking.
+- **Action**: Granted and verified `roles/firebaseauth.viewer` on the production
+  Cloud Run service account. No code redeployment required.
+- **Follow-up**: Dashboard API requests still returned 401 because Cloud Run
+  lacked `AUTH_PROVIDER` and defaulted to Supabase. Updated production to
+  `AUTH_PROVIDER=dual` and `IDENTITY_PLATFORM_PROJECT_ID=sokana-private-data`;
+  revision `sokana-private-api-00060-466` serves 100% traffic and `/health` is
+  OK.
+
+## Preflight Update 2026-08-26 (Admin migration email resend)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Resend fresh production Identity Platform password-reset
+  links to all four Cloud SQL administrators and record verification evidence.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-25-full-supabase-exit-launch-ready.md`,
+  `2026-08-10-backend-architecture-boundary-refactor.md`; the approved resend
+  advances the P0 Supabase-exit admin phase.
+- **Files Scanned**:
+  - `scripts/migrate-admin-auth-to-identity.ts`
+  - `frontend-crm/src/common/contexts/UserContext.tsx`
+  - `frontend-crm/src/features/auth/ResetPassword.tsx`
+- **Contract Findings**: The migration script derives recipients only from Cloud
+  SQL `public.admins`, generates Firebase reset links with a production `/login`
+  continuation, and sends through the configured SMTP service.
+- **Drift Risk**: Apply mode must explicitly use the production frontend URL;
+  SMTP acceptance proves send submission but not inbox delivery or completion.
+- **Required Compatibility**: Keep `AUTH_PROVIDER=dual`; do not include doulas
+  or clients; retain Cloud SQL as the authoritative admin role source.
+- **Action**: Context updated; implementation begins with production/cohort
+  validation and a mandatory dry run.
+- **Result**: Read-only completion check found 1 post-migration sign-in and 3
+  pending admins. Apply mode skipped the completed admin and sent fresh
+  production reset links to the other 3 (`reset_sent=3`, SMTP status 200).
+  Production auth evidence confirms session, MFA, `/auth/me`, and dashboard
+  success for the completed admin. The remaining 3 require recipient action.

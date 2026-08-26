@@ -1,4 +1,5 @@
 import { File as MulterFile } from 'multer';
+
 import { NotFoundError } from '../domains/errors';
 import { WORK_ENTRY } from '../entities/Hours';
 import { User } from '../entities/User';
@@ -15,8 +16,8 @@ export class UserUseCase {
   async getUserById(targetUserId: string): Promise<User> {
     const user = await this.userRepository.findById(targetUserId);
 
-    if(!user) {
-      throw new NotFoundError("User not found");
+    if (!user) {
+      throw new NotFoundError('User not found');
     }
 
     return user;
@@ -25,8 +26,8 @@ export class UserUseCase {
   async getHoursById(targetUserId: string): Promise<WORK_ENTRY[]> {
     const hours = await this.userRepository.getHoursById(targetUserId);
 
-    if(!hours) {
-      throw new NotFoundError("Could not get hours based on Id");
+    if (!hours) {
+      throw new NotFoundError('Could not get hours based on Id');
     }
 
     return hours;
@@ -35,21 +36,39 @@ export class UserUseCase {
   async getAllHours(): Promise<WORK_ENTRY[]> {
     const hours = await this.userRepository.getAllHours();
 
-    if(!hours) {
-      throw new NotFoundError("Could not retrieve all work entries");
+    if (!hours) {
+      throw new NotFoundError('Could not retrieve all work entries');
     }
 
     return hours;
   }
 
-  async addNewHours(doula_id: string, client_id: string, start_time: Date, end_time: Date, note: string, type: HourType) {
-    const newWorkEntry = await this.userRepository.addNewHours(doula_id, client_id, start_time, end_time, note, type);
+  async addNewHours(
+    doula_id: string,
+    client_id: string,
+    start_time: Date,
+    end_time: Date,
+    note: string,
+    type: HourType
+  ) {
+    const newWorkEntry = await this.userRepository.addNewHours(
+      doula_id,
+      client_id,
+      start_time,
+      end_time,
+      note,
+      type
+    );
 
     return newWorkEntry;
   }
 
   async updateHourType(hourId: string, type: HourType, doulaId?: string) {
-    const updatedHour = await this.userRepository.updateHourType(hourId, type, doulaId);
+    const updatedHour = await this.userRepository.updateHourType(
+      hourId,
+      type,
+      doulaId
+    );
 
     if (!updatedHour) {
       throw new NotFoundError('Work entry not found');
@@ -59,18 +78,20 @@ export class UserUseCase {
   }
 
   async uploadProfilePicture(user: User, profilePicture: MulterFile) {
-    const signedUrl = await this.userRepository.uploadProfilePicture(user, profilePicture);
-    return signedUrl;
+    // Relative GCS path under profile-pictures/; APIs resolve to signed URLs on read.
+    return this.userRepository.uploadProfilePicture(user, profilePicture);
   }
 
   async updateUser(user: User, updateData: Partial<User>) {
-
-    const fieldsToUpdate = Object.entries(updateData).reduce((acc, [key, value]) => {
-      if (value !== '' && user[key] !== value) {
-        acc[key] = value;
-      }
-      return acc;
-    }, {} as Partial<User>);
+    const fieldsToUpdate = Object.entries(updateData).reduce(
+      (acc, [key, value]) => {
+        if (value !== '' && user[key] !== value) {
+          acc[key] = value;
+        }
+        return acc;
+      },
+      {} as Partial<User>
+    );
 
     if (Object.keys(fieldsToUpdate).length === 0) {
       return user; // Nothing to update
@@ -97,24 +118,40 @@ export class UserUseCase {
     console.log(`✅ UseCase: Member ${userId} deleted successfully`);
   }
 
-  async addMember(firstname: string, lastname: string, userEmail: string, userRole: string): Promise<User> {
-    return this.userRepository.addMember(firstname, lastname, userEmail, userRole);
+  async addMember(
+    firstname: string,
+    lastname: string,
+    userEmail: string,
+    userRole: string
+  ): Promise<User> {
+    return this.userRepository.addMember(
+      firstname,
+      lastname,
+      userEmail,
+      userRole
+    );
   }
 
-  async updateTeamMember(userId: string, updateData: Partial<User>): Promise<User> {
+  async updateTeamMember(
+    userId: string,
+    updateData: Partial<User>
+  ): Promise<User> {
     // First, verify the user exists
     const user = await this.userRepository.findById(userId);
     if (!user) {
-      throw new NotFoundError("User not found");
+      throw new NotFoundError('User not found');
     }
 
     // Filter out empty strings and unchanged values
-    const fieldsToUpdate = Object.entries(updateData).reduce((acc, [key, value]) => {
-      if (value !== '' && user[key] !== value) {
-        acc[key] = value;
-      }
-      return acc;
-    }, {} as Partial<User>);
+    const fieldsToUpdate = Object.entries(updateData).reduce(
+      (acc, [key, value]) => {
+        if (value !== '' && user[key] !== value) {
+          acc[key] = value;
+        }
+        return acc;
+      },
+      {} as Partial<User>
+    );
 
     if (Object.keys(fieldsToUpdate).length === 0) {
       return user; // Nothing to update
@@ -122,5 +159,4 @@ export class UserUseCase {
 
     return this.userRepository.update(userId, fieldsToUpdate);
   }
-
 }

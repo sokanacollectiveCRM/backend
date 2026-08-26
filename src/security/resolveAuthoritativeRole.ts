@@ -20,6 +20,14 @@ export interface AuthoritativeRoleLookup {
 
 const STAFF_ROLES = new Set<AppRole>(['admin', 'doula', 'billing']);
 
+/** Cloud SQL staff/client ids are UUIDs; Identity Platform UIDs often are not. */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function isUuid(value: string | null | undefined): boolean {
+  return Boolean(value && UUID_RE.test(value));
+}
+
 export function isStaffRole(role: string | null | undefined): boolean {
   return STAFF_ROLES.has(normalizeRole(role) as AppRole);
 }
@@ -44,35 +52,40 @@ export class DbAuthoritativeRoleLookup implements AuthoritativeRoleLookup {
   ): Promise<CloudSqlRoleHint> {
     const pool = getPool();
     const normalizedEmail = email?.trim().toLowerCase() || null;
+    const uidIsUuid = isUuid(authUserId);
+    // Identity Platform UIDs are not always UUIDs — never cast non-UUIDs with ::uuid.
+    const idParam = uidIsUuid ? authUserId : null;
 
     const admin = await pool.query(
       `SELECT 1
        FROM public.admins
-       WHERE id = $1::uuid
+       WHERE ($1::uuid IS NOT NULL AND id = $1::uuid)
           OR ($2::text IS NOT NULL AND lower(email) = $2::text)
        LIMIT 1`,
-      [authUserId, normalizedEmail]
+      [idParam, normalizedEmail]
     );
     if (admin.rowCount && admin.rowCount > 0) return 'admin';
 
     const doula = await pool.query(
       `SELECT 1
        FROM public.doulas
-       WHERE id = $1::uuid
+       WHERE ($1::uuid IS NOT NULL AND id = $1::uuid)
           OR ($2::text IS NOT NULL AND lower(email) = $2::text)
        LIMIT 1`,
-      [authUserId, normalizedEmail]
+      [idParam, normalizedEmail]
     );
     if (doula.rowCount && doula.rowCount > 0) return 'doula';
 
-    const client = await pool.query(
-      `SELECT 1
-       FROM public.phi_clients
-       WHERE user_id = $1::uuid
-       LIMIT 1`,
-      [authUserId]
-    );
-    if (client.rowCount && client.rowCount > 0) return 'client';
+    if (idParam) {
+      const client = await pool.query(
+        `SELECT 1
+         FROM public.phi_clients
+         WHERE user_id = $1::uuid
+         LIMIT 1`,
+        [idParam]
+      );
+      if (client.rowCount && client.rowCount > 0) return 'client';
+    }
 
     return null;
   }

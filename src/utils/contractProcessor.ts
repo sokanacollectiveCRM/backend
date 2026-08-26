@@ -1,10 +1,17 @@
-import { exec } from 'child_process';
 import Docxtemplater from 'docxtemplater';
-import fs from 'fs-extra';
 import path from 'path';
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import PizZip from 'pizzip';
+
+import { exec } from 'child_process';
+import fs from 'fs-extra';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+
 import { NodemailerService } from '../services/emailService';
+import {
+  GCS_PREFIX,
+  downloadObject,
+  objectPath,
+} from '../services/gcs/documentStorage';
 import supabase from '../supabase';
 import { GENERATED_DIR, ensureDir } from './runtimePaths';
 
@@ -41,7 +48,10 @@ export interface ProcessingResult {
  * @param contractId - Unique contract identifier
  * @returns Path to generated .docx file
  */
-async function generateContractDocx(contractData: Omit<ContractData, 'contractId'>, contractId: string): Promise<string> {
+async function generateContractDocx(
+  contractData: Omit<ContractData, 'contractId'>,
+  contractId: string
+): Promise<string> {
   try {
     // Ensure generated directory exists
     ensureDir(GENERATED_DIR);
@@ -49,31 +59,23 @@ async function generateContractDocx(contractData: Omit<ContractData, 'contractId
     const outputPath = path.join(GENERATED_DIR, `contract-${contractId}.docx`);
 
     // Determine contract type and download appropriate template
-    const isLaborSupport = contractData.serviceType?.toLowerCase().includes('labor support') ||
-                          contractData.serviceType?.toLowerCase().includes('labor') ||
-                          contractData.serviceType === 'Labor Support Services';
+    const isLaborSupport =
+      contractData.serviceType?.toLowerCase().includes('labor support') ||
+      contractData.serviceType?.toLowerCase().includes('labor') ||
+      contractData.serviceType === 'Labor Support Services';
 
     const templateFileName = isLaborSupport
       ? 'Labor Support Agreement for Service.docx'
       : 'Agreement for Postpartum Doula Services.docx';
 
-    console.log('📥 Downloading template from Supabase Storage...');
+    console.log('📥 Downloading template from GCS...');
     console.log(`📋 Using template: ${templateFileName}`);
-    console.log(`📋 Contract type detected: ${isLaborSupport ? 'Labor Support' : 'Postpartum'}`);
-    const { data: templateBlob, error: downloadError } = await supabase.storage
-      .from('contract-templates')
-      .download(templateFileName);
-
-    if (downloadError) {
-      throw new Error(`Failed to download template from Supabase Storage: ${downloadError.message}`);
-    }
-
-    if (!templateBlob) {
-      throw new Error('Template data is null from Supabase Storage');
-    }
-
-    // Convert Blob to Buffer
-    const content = Buffer.from(await templateBlob.arrayBuffer());
+    console.log(
+      `📋 Contract type detected: ${isLaborSupport ? 'Labor Support' : 'Postpartum'}`
+    );
+    const content = await downloadObject(
+      objectPath(GCS_PREFIX.contractTemplates, templateFileName)
+    );
     const zip = new PizZip(content);
 
     // Create docxtemplater instance
@@ -97,14 +99,26 @@ async function generateContractDocx(contractData: Omit<ContractData, 'contractId
         totalAmount: contractData.totalInvestment || '$2,500',
         depositAmount: contractData.depositAmount || '$500',
         balanceAmount: contractData.remainingBalance || '$2,000',
-        client_initials: contractData.clientInitials || contractData.clientName?.split(' ').map(n => n[0]).join('') || 'JT',
+        client_initials:
+          contractData.clientInitials ||
+          contractData.clientName
+            ?.split(' ')
+            .map((n) => n[0])
+            .join('') ||
+          'JT',
         clientName: contractData.clientName || 'Jerry Techluminate',
         client_signature: '', // Will be filled by SignNow
         client_signed_date: '', // Will be filled by SignNow
-        client_intials: contractData.clientInitials || contractData.clientName?.split(' ').map(n => n[0]).join('') || 'JT', // Note: template has typo "intials"
+        client_intials:
+          contractData.clientInitials ||
+          contractData.clientName
+            ?.split(' ')
+            .map((n) => n[0])
+            .join('') ||
+          'JT', // Note: template has typo "intials"
 
         // Additional data from contractData
-        ...contractData
+        ...contractData,
       };
     } else {
       // Postpartum Doula Services template variables (original)
@@ -131,9 +145,13 @@ async function generateContractDocx(contractData: Omit<ContractData, 'contractId
       console.log('  contractData.overnightFee:', contractData.overnightFee);
       console.log('  contractData.overnight:', contractData.overnight);
 
-      const finalTotalHours = contractData.totalHours || contractData.hours || contractData.totalhours;
+      const finalTotalHours =
+        contractData.totalHours ||
+        contractData.hours ||
+        contractData.totalhours;
       const finalHourlyRate = contractData.hourlyRate || contractData.rate;
-      const finalOvernightFee = contractData.overnightFee || contractData.overnight;
+      const finalOvernightFee =
+        contractData.overnightFee || contractData.overnight;
 
       console.log('🎯 Final calculated values:');
       console.log('  Final totalHours:', finalTotalHours);
@@ -146,12 +164,24 @@ async function generateContractDocx(contractData: Omit<ContractData, 'contractId
 
         // Then override with calculated values
         totalHours: finalTotalHours,
-        deposit: contractData.depositAmount?.replace('$', '') || contractData.deposit || '600.00',
+        deposit:
+          contractData.depositAmount?.replace('$', '') ||
+          contractData.deposit ||
+          '600.00',
         hourlyRate: finalHourlyRate,
         overnightFee: finalOvernightFee,
-        totalAmount: contractData.totalInvestment?.replace('$', '') || contractData.totalAmount || '4,200.00',
-        clientInitials: contractData.clientInitials || contractData.clientName?.split(' ').map(n => n[0]).join('') || 'JB',
-        clientName: contractData.clientName || 'Jerry Bony'
+        totalAmount:
+          contractData.totalInvestment?.replace('$', '') ||
+          contractData.totalAmount ||
+          '4,200.00',
+        clientInitials:
+          contractData.clientInitials ||
+          contractData.clientName
+            ?.split(' ')
+            .map((n) => n[0])
+            .join('') ||
+          'JB',
+        clientName: contractData.clientName || 'Jerry Bony',
       };
     }
 
@@ -178,11 +208,16 @@ async function generateContractDocx(contractData: Omit<ContractData, 'contractId
     const buffer = doc.getZip().generate({ type: 'nodebuffer' });
 
     // Check if we're in a serverless environment
-    const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NODE_ENV === 'production';
+    const isServerless =
+      process.env.VERCEL ||
+      process.env.AWS_LAMBDA_FUNCTION_NAME ||
+      process.env.NODE_ENV === 'production';
 
     if (isServerless) {
       // In serverless environments, return the buffer directly
-      console.log('🚀 Serverless environment detected, returning buffer for direct upload');
+      console.log(
+        '🚀 Serverless environment detected, returning buffer for direct upload'
+      );
       return buffer as any; // Return buffer instead of file path
     } else {
       // In non-serverless environments, write to local filesystem
@@ -202,9 +237,15 @@ async function generateContractDocx(contractData: Omit<ContractData, 'contractId
  * @param contractId - Contract identifier
  * @returns Path to generated .pdf file
  */
-async function convertDocxToPdf(docxPath: string, contractId: string): Promise<string> {
+async function convertDocxToPdf(
+  docxPath: string,
+  contractId: string
+): Promise<string> {
   // Check if we're in a serverless environment
-  const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NODE_ENV === 'production';
+  const isServerless =
+    process.env.VERCEL ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME ||
+    process.env.NODE_ENV === 'production';
 
   if (isServerless || docxPath.startsWith('supabase://')) {
     // In serverless environments, we'll skip PDF conversion for now
@@ -250,7 +291,11 @@ async function convertDocxToPdf(docxPath: string, contractId: string): Promise<s
  * @param contractId - Contract identifier
  * @returns Path to signed PDF file
  */
-async function addSignatureOverlay(pdfPath: string, contractData: Omit<ContractData, 'contractId'>, contractId: string): Promise<string> {
+async function addSignatureOverlay(
+  pdfPath: string,
+  contractData: Omit<ContractData, 'contractId'>,
+  contractId: string
+): Promise<string> {
   try {
     // Read the PDF
     const pdfBytes = await fs.readFile(pdfPath);
@@ -292,7 +337,10 @@ async function addSignatureOverlay(pdfPath: string, contractData: Omit<ContractD
 
     // Save the modified PDF
     const signedPdfBytes = await pdfDoc.save();
-    const signedPdfPath = path.join(GENERATED_DIR, `contract-${contractId}-signed.pdf`);
+    const signedPdfPath = path.join(
+      GENERATED_DIR,
+      `contract-${contractId}-signed.pdf`
+    );
     await fs.writeFile(signedPdfPath, signedPdfBytes);
 
     console.log(`Signed PDF generated: ${signedPdfPath}`);
@@ -309,7 +357,10 @@ async function addSignatureOverlay(pdfPath: string, contractData: Omit<ContractD
  * @param contractId - Contract identifier
  * @returns Signed URL for the uploaded file
  */
-async function uploadToSupabaseStorage(pdfPath: string, contractId: string): Promise<string> {
+async function uploadToSupabaseStorage(
+  pdfPath: string,
+  contractId: string
+): Promise<string> {
   try {
     // Read the file
     const fileBuffer = await fs.readFile(pdfPath);
@@ -320,7 +371,7 @@ async function uploadToSupabaseStorage(pdfPath: string, contractId: string): Pro
       .from('contracts')
       .upload(fileName, fileBuffer, {
         contentType: 'application/pdf',
-        upsert: true
+        upsert: true,
       });
 
     if (error) {
@@ -354,7 +405,12 @@ async function uploadToSupabaseStorage(pdfPath: string, contractId: string): Pro
  * @param contractId - Contract identifier
  * @returns Promise<void>
  */
-async function sendContractEmail(to: string, contractData: Omit<ContractData, 'contractId'>, signedUrl: string, contractId: string): Promise<void> {
+async function sendContractEmail(
+  to: string,
+  contractData: Omit<ContractData, 'contractId'>,
+  signedUrl: string,
+  contractId: string
+): Promise<void> {
   try {
     const emailService = new NodemailerService();
 
@@ -446,7 +502,9 @@ The Sokana Team`;
  * @param contractData - Contract data object
  * @returns Object containing file paths and signed URL
  */
-async function processAndUploadContract(contractData: ContractData): Promise<ProcessingResult> {
+async function processAndUploadContract(
+  contractData: ContractData
+): Promise<ProcessingResult> {
   try {
     const { contractId, clientEmail, ...data } = contractData;
 
@@ -480,12 +538,13 @@ async function processAndUploadContract(contractData: ContractData): Promise<Pro
       signedPdfPath,
       signedUrl,
       emailSent,
-      success: true
+      success: true,
     };
 
-    console.log(`Contract processing completed successfully for contract ID: ${contractId}`);
+    console.log(
+      `Contract processing completed successfully for contract ID: ${contractId}`
+    );
     return result;
-
   } catch (error) {
     console.error('Contract processing failed:', error);
     throw error;
@@ -501,7 +560,7 @@ async function cleanupGeneratedFiles(contractId: string): Promise<void> {
     const files = [
       path.join(GENERATED_DIR, `contract-${contractId}.docx`),
       path.join(GENERATED_DIR, `contract-${contractId}.pdf`),
-      path.join(GENERATED_DIR, `contract-${contractId}-signed.pdf`)
+      path.join(GENERATED_DIR, `contract-${contractId}-signed.pdf`),
     ];
 
     for (const file of files) {
@@ -523,23 +582,36 @@ async function cleanupGeneratedFiles(contractId: string): Promise<void> {
  * @param signatureDate - Date of signature
  * @returns Object containing signed PDF path and URL
  */
-async function signContract(contractId: string, clientName: string, signatureStyle: string, signatureDate: string): Promise<any> {
+async function signContract(
+  contractId: string,
+  clientName: string,
+  signatureStyle: string,
+  signatureDate: string
+): Promise<any> {
   try {
     console.log(`Applying digital signature to contract: ${contractId}`);
 
     // Find the existing PDF file (try both signed and unsigned versions)
     let pdfPath = path.join(GENERATED_DIR, `contract-${contractId}-signed.pdf`);
 
-    if (!await fs.pathExists(pdfPath)) {
+    if (!(await fs.pathExists(pdfPath))) {
       pdfPath = path.join(GENERATED_DIR, `contract-${contractId}.pdf`);
     }
 
-    if (!await fs.pathExists(pdfPath)) {
-      throw new Error(`Contract PDF not found. Please generate the contract first.`);
+    if (!(await fs.pathExists(pdfPath))) {
+      throw new Error(
+        `Contract PDF not found. Please generate the contract first.`
+      );
     }
 
     // Apply the signature
-    const signedPdfPath = await applyDigitalSignature(pdfPath, clientName, signatureStyle, signatureDate, contractId);
+    const signedPdfPath = await applyDigitalSignature(
+      pdfPath,
+      clientName,
+      signatureStyle,
+      signatureDate,
+      contractId
+    );
 
     // Upload to Supabase
     const signedUrl = await uploadToSupabaseStorage(signedPdfPath, contractId);
@@ -631,7 +703,12 @@ The Sokana Team`;
         </div>
       `;
 
-      await emailService.sendEmail(clientEmail, clientSubject, clientText, clientHtml);
+      await emailService.sendEmail(
+        clientEmail,
+        clientSubject,
+        clientText,
+        clientHtml
+      );
     } catch (emailError) {
       console.warn('Email sending failed:', emailError);
     }
@@ -642,7 +719,7 @@ The Sokana Team`;
       signedUrl,
       clientName,
       signatureDate,
-      success: true
+      success: true,
     };
   } catch (error) {
     console.error('Error signing contract:', error);
@@ -659,7 +736,13 @@ The Sokana Team`;
  * @param contractId - Contract identifier
  * @returns Path to signed PDF file
  */
-async function applyDigitalSignature(pdfPath: string, clientName: string, signatureStyle: string, signatureDate: string, contractId: string): Promise<string> {
+async function applyDigitalSignature(
+  pdfPath: string,
+  clientName: string,
+  signatureStyle: string,
+  signatureDate: string,
+  contractId: string
+): Promise<string> {
   try {
     // Read the PDF
     const pdfBytes = await fs.readFile(pdfPath);
@@ -683,7 +766,7 @@ async function applyDigitalSignature(pdfPath: string, clientName: string, signat
     const pageHeight = height;
     const pageWidth = width;
 
-        // Position signature in the Client Signature block area
+    // Position signature in the Client Signature block area
     // Client Signature block is at the very bottom of the page
     const signatureX = 50; // Left margin for Client Signature block
     const signatureY = 10; // 10 pts from the bottom (very low, should be in signature block area)
@@ -728,19 +811,19 @@ async function applyDigitalSignature(pdfPath: string, clientName: string, signat
         break;
     }
 
-        // Create a more signature-like appearance
+    // Create a more signature-like appearance
     const signatureText = clientName;
     const letters = signatureText.split('');
     let currentX = signatureX;
     const letterSpacing = signatureSize * 0.5; // Even tighter spacing for signature look
 
-        // Draw each letter with more pronounced variations to simulate handwriting
+    // Draw each letter with more pronounced variations to simulate handwriting
     letters.forEach((letter, index) => {
       const yOffset = Math.sin(index * 0.4) * 3; // More pronounced wave pattern
       const xOffset = Math.cos(index * 0.3) * 2; // More horizontal variation
 
       // Add some letters with different sizes for more natural look
-      const letterSize = signatureSize + (Math.sin(index * 0.7) * 2);
+      const letterSize = signatureSize + Math.sin(index * 0.7) * 2;
 
       page.drawText(letter, {
         x: currentX + xOffset,
@@ -750,7 +833,7 @@ async function applyDigitalSignature(pdfPath: string, clientName: string, signat
         color: signatureColor,
       });
 
-      currentX += letterSpacing + (Math.sin(index * 0.2) * 1); // Variable spacing
+      currentX += letterSpacing + Math.sin(index * 0.2) * 1; // Variable spacing
     });
 
     // Also add a signature in the Client Name (Printed) field
@@ -799,7 +882,10 @@ async function applyDigitalSignature(pdfPath: string, clientName: string, signat
 
     // Save the signed PDF
     const signedPdfBytes = await pdfDoc.save();
-    const signedPdfPath = path.join(GENERATED_DIR, `contract-${contractId}-signed.pdf`);
+    const signedPdfPath = path.join(
+      GENERATED_DIR,
+      `contract-${contractId}-signed.pdf`
+    );
     await fs.writeFile(signedPdfPath, signedPdfBytes);
 
     console.log(`Signed PDF generated: ${signedPdfPath}`);
@@ -811,5 +897,13 @@ async function applyDigitalSignature(pdfPath: string, clientName: string, signat
 }
 
 export {
-    addSignatureOverlay, applyDigitalSignature, cleanupGeneratedFiles, convertDocxToPdf, generateContractDocx, processAndUploadContract, sendContractEmail, signContract, uploadToSupabaseStorage
+  addSignatureOverlay,
+  applyDigitalSignature,
+  cleanupGeneratedFiles,
+  convertDocxToPdf,
+  generateContractDocx,
+  processAndUploadContract,
+  sendContractEmail,
+  signContract,
+  uploadToSupabaseStorage,
 };

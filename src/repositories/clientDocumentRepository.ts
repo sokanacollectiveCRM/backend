@@ -1,6 +1,11 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { CLIENT_DOCUMENT_BUCKET } from '../constants/clientDocuments';
+
 import { queryCloudSql } from '../db/cloudSqlPool';
+import {
+  GCS_PREFIX,
+  getSignedReadUrl,
+  objectPath,
+} from '../services/gcs/documentStorage';
 
 export interface ClientDocument {
   id: string;
@@ -28,9 +33,13 @@ export interface CreateClientDocumentData {
 }
 
 export class ClientDocumentRepository {
-  constructor(private readonly supabaseClient: SupabaseClient) {}
+  constructor(private readonly supabaseClient: SupabaseClient) {
+    void this.supabaseClient;
+  }
 
-  async createDocument(data: CreateClientDocumentData): Promise<ClientDocument> {
+  async createDocument(
+    data: CreateClientDocumentData
+  ): Promise<ClientDocument> {
     const { rows } = await queryCloudSql(
       `
       INSERT INTO public.client_documents (
@@ -102,16 +111,19 @@ export class ClientDocumentRepository {
     );
   }
 
-  async getSignedUrl(filePath: string, expiresIn: number = 3600): Promise<string> {
-    const { data, error } = await this.supabaseClient.storage
-      .from(CLIENT_DOCUMENT_BUCKET)
-      .createSignedUrl(filePath, expiresIn);
-
-    if (error) {
-      throw new Error(`Failed to generate client document URL: ${error.message}`);
+  async getSignedUrl(
+    filePath: string,
+    expiresIn: number = 3600
+  ): Promise<string> {
+    try {
+      return await getSignedReadUrl(
+        objectPath(GCS_PREFIX.clientDocuments, filePath),
+        expiresIn
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(`Failed to generate client document URL: ${message}`);
     }
-
-    return data.signedUrl;
   }
 
   private mapToDocument(data: any): ClientDocument {

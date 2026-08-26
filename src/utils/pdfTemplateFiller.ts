@@ -1,16 +1,15 @@
 import fs from 'fs';
 import path from 'path';
 
-import { createClient } from '@supabase/supabase-js';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 import currentCoordinates from '../config/pdfCoordinates.json';
+import {
+  GCS_PREFIX,
+  downloadObject,
+  objectPath,
+} from '../services/gcs/documentStorage';
 import { GENERATED_DIR, ensureDir } from './runtimePaths';
-
-const supabase = createClient(
-  process.env.SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
 
 interface CoordinatePosition {
   x: number;
@@ -39,21 +38,22 @@ export async function fillPdfTemplate(
     console.log(`📄 Filling PDF template: ${templateKey}`);
     console.log(`📋 Contract data:`, contractData);
 
-    // 1️⃣ Download the PDF template from Supabase
-    console.log(`📥 Downloading PDF template from Supabase...`);
-    const { data: file, error } = await supabase.storage
-      .from('contract-templates')
-      .download(`${templateKey}.pdf`);
-
-    if (error || !file) {
+    // 1️⃣ Download the PDF template from GCS
+    console.log(`📥 Downloading PDF template from GCS...`);
+    let pdfBuffer: Buffer;
+    try {
+      pdfBuffer = await downloadObject(
+        objectPath(GCS_PREFIX.contractTemplates, `${templateKey}.pdf`)
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       throw new Error(
-        `Template ${templateKey}.pdf not found in Supabase: ${error?.message}`
+        `Template ${templateKey}.pdf not found in GCS: ${message}`
       );
     }
 
     // 2️⃣ Load the PDF and font
     console.log(`🔄 Loading PDF and embedding font...`);
-    const pdfBuffer = Buffer.from(await file.arrayBuffer());
     const pdfDoc = await PDFDocument.load(pdfBuffer);
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
