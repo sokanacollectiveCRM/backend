@@ -2,6 +2,58 @@
 
 This file is intentionally updateable as frontend work finishes.
 
+## Preflight Update 2026-08-25 (launch boundary auth/data residency assessment)
+
+### Task
+
+- Assess staff-only pilot vs client-facing launch against Supabase-auth / Cloud
+  SQL residency boundary (read-only; no code changes).
+
+### Files Scanned
+
+- `frontend-crm/src/lib/supabase.ts`
+- `frontend-crm/src/features/auth/ClientLogin.tsx`
+- `frontend-crm/src/features/auth/SetPassword.tsx`
+- `frontend-crm/src/features/auth/SignUp.tsx`
+- `frontend-crm/src/common/hooks/auth/useClientAuth.ts`
+- `frontend-crm/src/common/components/routes/ProtectedRoutes.tsx`
+- `frontend-crm/src/Routes.tsx`
+- `backend/src/services/portalInviteService.ts`
+- `backend/src/services/supabaseAuthService.ts`
+- `backend/src/security/resolveAuthoritativeRole.ts`
+- `backend/src/middleware/authMiddleware.ts`
+- `backend/src/index.ts`
+- `docs/SUPABASE_DATABASE_USAGE_INVENTORY.md`
+- `docs/ENDPOINT_AUTHORIZATION_MATRIX.md`
+
+### Contract Findings
+
+- Client portal auth is live in FE: `/auth/set-password`, `/auth/client-login`
+  call Supabase Auth directly; staff CRM uses `/auth/login` + `/auth/me`.
+- Portal invite BE creates Supabase Auth users with
+  `user_metadata.role: 'client'` and recovery links to set-password.
+- Staff roles resolved from Cloud SQL (`admins`/`doulas`); client role from
+  `phi_clients.user_id` linkage.
+
+### Drift Risk
+
+- Assessment-only; no API contract changes.
+
+### Required Compatibility
+
+- No changes needed for this pass.
+
+### Action
+
+- [x] Context updated
+- [x] Assessment delivered (no implementation)
+
+### Handoff inbox
+
+- `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md` (user explicitly
+  requested this assessment; not implementing that handoff here)
+
 ## Preflight Update 2026-08-25 (HIPAA-13B doula client read assignment gates)
 
 - **Gate Result**: `run_preflight`

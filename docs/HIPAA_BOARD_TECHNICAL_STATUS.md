@@ -200,6 +200,11 @@ are equally blocking from a technical standpoint.
 - Decide/approve Supabase Storage for client insurance-card files, or move bytes
   off Supabase.
 - Execute remaining BAAs (Workspace, SignNow, Intuit, Supabase, CloudConvert).
+- **Full Supabase exit (launch plan, 2026-08-25):** migrate Auth → GCP Identity
+  Platform, files → GCS, leftover tables → Cloud SQL, then decommission Supabase
+  — see `docs/SUPABASE_FULL_EXIT_LAUNCH_PLAN.md` and handoff
+  `2026-08-25-full-supabase-exit-launch-ready.md`. Staff-only carve-out is not
+  the strategy; client portal stays disabled until Auth cutover.
 
 ---
 
