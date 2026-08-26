@@ -70,19 +70,13 @@ http://localhost:3001,http://127.0.0.1:3001,https://sokana-front-end-46lcr3n2qa-
 
 ## Vercel dashboard retirement (manual infra)
 
-These steps are **outside git** and must be completed in the Vercel UI to fully
-decommission hosting:
+Completed 2026-08-25:
 
-1. **Backend Vercel project** — disable auto-deploy; remove custom domains;
-   archive or delete project.
-2. **Frontend Vercel project** — disable auto-deploy; remove custom domains;
-   archive or delete project.
+1. **Backend Vercel project** — retired / deleted.
+2. **Frontend Vercel project** — retired / deleted.
 3. **Supabase Auth redirect URLs** — confirm Site URL and redirect allow-list
-   use Cloud Run frontend only (no `*.vercel.app`).
-4. **DNS** — if any CNAME still points at Vercel, repoint or remove.
-
-Until dashboard steps are done, stale Vercel URLs may still resolve but are **no
-longer authorized** by backend CORS or documented deploy paths.
+   use Cloud Run frontend only (no `*.vercel.app`) when reviewing Auth config.
+4. **DNS** — no production traffic depends on Vercel.
 
 ---
 
@@ -91,8 +85,6 @@ longer authorized** by backend CORS or documented deploy paths.
 - Historical docs (`docs/PRODUCTION_CLOUD_SQL_VERCEL.md`,
   `docs/VERCEL_ENVIRONMENT_VARIABLES.md`, etc.) still mention Vercel for audit
   trail; they are not runtime config.
-- Vercel projects may remain in the Vercel account until manually deleted (see
-  above).
 - `contractProcessor.ts` still checks `process.env.VERCEL` for serverless
   temp-path behavior; harmless on Cloud Run (env unset).
 
@@ -101,15 +93,15 @@ longer authorized** by backend CORS or documented deploy paths.
 ## Sign-off
 
 I confirm that Vercel retirement for the CRM stack has been **implemented in
-code, validated by tests, and production CORS no longer includes Vercel
-origins**, as described above.
+code, validated by tests, production CORS no longer includes Vercel origins, and
+Vercel projects have been retired**, as described above.
 
 | Field        | Value                                          |
 | ------------ | ---------------------------------------------- |
 | **Reviewer** | Jerry Bony                                     |
 | **Role**     | Engineering verification / compliance reviewer |
 | **Date**     | 2026-08-25                                     |
-| **Decision** | **Closed / verified in production config**     |
+| **Decision** | **Closed / formally approved**                 |
 
-**Formal closure approval:** Pending Vercel dashboard project deletion (manual
-infra step listed above).
+**Formal closure approval:** Approved 2026-08-25 — Vercel dashboard projects
+retired; production on Cloud Run only.
