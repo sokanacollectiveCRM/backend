@@ -25,7 +25,10 @@
 
 Reset links use the production frontend continue URL:
 
-`https://sokana-front-end-634744984887.us-central1.run.app/login`
+`https://sokana-front-end-634744984887.us-central1.run.app/auth/reset-password`
+
+(Legacy sends used `/login`; the frontend redirects `oobCode` query params to
+`/auth/reset-password`.)
 
 ## Role verification
 

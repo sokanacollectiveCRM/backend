@@ -162,7 +162,7 @@ async function sendResetEmail(
   frontendUrl: string
 ): Promise<void> {
   const link = await auth.generatePasswordResetLink(adminRow.email, {
-    url: `${frontendUrl}/login`,
+    url: `${frontendUrl}/auth/reset-password`,
     handleCodeInApp: false,
   });
   const name = adminRow.full_name?.trim() || 'Sokana administrator';

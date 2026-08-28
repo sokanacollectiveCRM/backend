@@ -2,6 +2,40 @@
 
 This file is intentionally updateable as frontend work finishes.
 
+## Preflight Update 2026-08-28 (Identity reset link oobCode redirect)
+
+### Task
+
+- Fix Teisha "Reset token not found" on Identity Platform admin password reset
+
+### Files Scanned
+
+- `frontend-crm/src/features/auth/Login.tsx`
+- `frontend-crm/src/features/auth/ResetPassword.tsx`
+- `backend/scripts/migrate-admin-auth-to-identity.ts`
+
+### Contract Findings
+
+- Migration reset emails used continueUrl `/login`; Firebase appends `oobCode`
+  there.
+- Reset page at `/auth/reset-password` reads `oobCode` from query params only.
+- Login had no redirect → user could reach reset form without token.
+
+### Drift Risk
+
+- Existing migration emails still land on `/login?oobCode=...` until frontend
+  deploy.
+
+### Required Compatibility
+
+- Login redirects `mode=resetPassword&oobCode` → `/auth/reset-password`.
+- New migration/resend emails use continueUrl `/auth/reset-password`.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
 ## Preflight Update 2026-08-26 (profile pictures → GCS)
 
 ### Task
