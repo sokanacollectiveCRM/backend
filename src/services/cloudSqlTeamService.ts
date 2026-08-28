@@ -3,6 +3,10 @@ import crypto from 'crypto';
 import { getPool } from '../db/cloudSqlPool';
 import { getSupabaseAdmin } from '../supabase';
 import { DoulaAvailabilityService } from './doulaAvailabilityService';
+import {
+  resolveProfilePictureFields,
+  resolveProfilePictureUrl,
+} from './gcs/profilePictureStorage';
 
 export interface TeamMemberDto {
   id: string;
@@ -180,6 +184,22 @@ function mapAdminRow(row: AdminRow): TeamMemberDto {
 export class CloudSqlTeamService {
   private readonly doulaAvailabilityService = new DoulaAvailabilityService();
 
+  private async withResolvedProfilePictures(
+    members: TeamMemberDto[]
+  ): Promise<TeamMemberDto[]> {
+    return resolveProfilePictureFields(members);
+  }
+
+  private async withResolvedProfilePicture(
+    member: TeamMemberDto | null
+  ): Promise<TeamMemberDto | null> {
+    if (!member) return null;
+    return {
+      ...member,
+      profile_picture: await resolveProfilePictureUrl(member.profile_picture),
+    };
+  }
+
   async listTeamMembers(): Promise<TeamMemberDto[]> {
     const pool = getPool();
     try {
@@ -193,11 +213,12 @@ export class CloudSqlTeamService {
         ORDER BY full_name ASC
         `
       );
-      return this.withAvailabilitySummary(
+      const withAvailability = await this.withAvailabilitySummary(
         rows.map((r) =>
           r.role === 'admin' ? mapAdminRow(r as unknown as AdminRow) : mapRow(r)
         )
       );
+      return this.withResolvedProfilePictures(withAvailability);
     } catch (error) {
       // Backward compatibility: if admins table doesn't exist yet, return doulas only.
       const msg = (error as Error)?.message || '';
@@ -209,7 +230,10 @@ export class CloudSqlTeamService {
           ORDER BY full_name ASC
           `
         );
-        return this.withAvailabilitySummary(rows.map(mapRow));
+        const withAvailability = await this.withAvailabilitySummary(
+          rows.map(mapRow)
+        );
+        return this.withResolvedProfilePictures(withAvailability);
       }
       throw error;
     }
@@ -232,7 +256,7 @@ export class CloudSqlTeamService {
       `,
       [id]
     );
-    if (rows[0]) return mapRow(rows[0]);
+    if (rows[0]) return this.withResolvedProfilePicture(mapRow(rows[0]));
 
     try {
       const { rows: adminRows } = await pool.query<AdminRow>(
@@ -244,7 +268,9 @@ export class CloudSqlTeamService {
         `,
         [id]
       );
-      return adminRows[0] ? mapAdminRow(adminRows[0]) : null;
+      return this.withResolvedProfilePicture(
+        adminRows[0] ? mapAdminRow(adminRows[0]) : null
+      );
     } catch (error) {
       const msg = (error as Error)?.message || '';
       if (msg.includes('public.admins') && msg.includes('does not exist')) {
@@ -512,7 +538,9 @@ export class CloudSqlTeamService {
           id,
         ]
       );
-      return rows[0] ? mapAdminRow(rows[0]) : null;
+      return this.withResolvedProfilePicture(
+        rows[0] ? mapAdminRow(rows[0]) : null
+      );
     }
 
     const { rows } = await getPool().query<DoulaRow>(
@@ -535,8 +563,9 @@ export class CloudSqlTeamService {
           race_ethnicity_other = $15,
           other_demographic_details = $16,
           scheduling_url = $17,
+          profile_picture = $18,
           updated_at = NOW()
-      WHERE id = $18::uuid
+      WHERE id = $19::uuid
       RETURNING id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture,
                gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details, scheduling_url,
                 created_at, updated_at
@@ -559,10 +588,11 @@ export class CloudSqlTeamService {
         raceEthnicityOther,
         otherDemographicDetails,
         schedulingUrl,
+        profilePicture,
         id,
       ]
     );
-    return rows[0] ? mapRow(rows[0]) : null;
+    return this.withResolvedProfilePicture(rows[0] ? mapRow(rows[0]) : null);
   }
 
   private async withAvailabilitySummary(

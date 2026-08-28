@@ -95,20 +95,21 @@ behavior).
 
 ## Already protected (unchanged behavior summary)
 
-| Area               | Canonical mounts / aliases                                                               | Classification                     | Roles (typical)                               |
-| ------------------ | ---------------------------------------------------------------------------------------- | ---------------------------------- | --------------------------------------------- |
-| Clients            | `/clients`, `/client`, `/api/clients`, `/api/client`                                     | Staff / Client-owned / Doula-owned | per-route admin\|doula\|client\|billing       |
-| Doula dashboard    | `/api/doulas/*`                                                                          | Doula-owned / Staff                | doula, admin                                  |
-| Admin directory    | `/api/doulas`, `/api/doula-assignments`, …                                               | Admin                              | admin                                         |
-| Admin ops          | `/api/admin/*`                                                                           | Admin                              | admin                                         |
-| Contract templates | `/contracts/templates`, `/api/contracts/templates`                                       | Admin                              | admin                                         |
-| Billing            | `/api/billing/*`                                                                         | Staff                              | admin, billing                                |
-| Invoices           | `/api/invoices`                                                                          | Staff                              | admin, doula                                  |
-| Financial          | `/api/financial/*`                                                                       | Staff                              | admin, doula                                  |
-| Dashboard          | `/api/dashboard/*`                                                                       | Admin                              | admin                                         |
-| Payment methods    | `/api/payment-methods`, `/api/quickbooks/payment-methods`, `/quickbooks/payment-methods` | Client-owned / Staff               | admin, doula, client (+ controller ownership) |
-| Users              | `/users/*`                                                                               | Authenticated user                 | cookie-auth                                   |
-| Auth users list    | `/auth/users`                                                                            | Authenticated user                 | auth                                          |
+| Area                   | Canonical mounts / aliases                                                               | Classification                     | Roles (typical)                               |
+| ---------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------- | --------------------------------------------- |
+| Clients                | `/clients`, `/client`, `/api/clients`, `/api/client`                                     | Staff / Client-owned / Doula-owned | per-route admin\|doula\|client\|billing       |
+| Doula dashboard        | `/api/doulas/*`                                                                          | Doula-owned / Staff                | doula, admin                                  |
+| Admin directory        | `/api/doulas`, `/api/doula-assignments`, …                                               | Admin                              | admin                                         |
+| Admin ops              | `/api/admin/*`                                                                           | Admin                              | admin                                         |
+| Contract templates     | `/contracts/templates`, `/api/contracts/templates`                                       | Admin                              | admin                                         |
+| Contract template file | `/contracts/templates/:name/signed-url`, `/contracts/templates/:name/download`           | Admin                              | admin                                         |
+| Billing                | `/api/billing/*`                                                                         | Staff                              | admin, billing                                |
+| Invoices               | `/api/invoices`                                                                          | Staff                              | admin, doula                                  |
+| Financial              | `/api/financial/*`                                                                       | Staff                              | admin, doula                                  |
+| Dashboard              | `/api/dashboard/*`                                                                       | Admin                              | admin                                         |
+| Payment methods        | `/api/payment-methods`, `/api/quickbooks/payment-methods`, `/quickbooks/payment-methods` | Client-owned / Staff               | admin, doula, client (+ controller ownership) |
+| Users                  | `/users/*`                                                                               | Authenticated user                 | cookie-auth                                   |
+| Auth users list        | `/auth/users`                                                                            | Authenticated user                 | auth                                          |
 
 ---
 

@@ -5,17 +5,18 @@ import { DoulaController } from './controllers/doulaController';
 import { EmailController } from './controllers/emailController';
 import { RequestFormController } from './controllers/requestFormController';
 import { UserController } from './controllers/userController';
-import { DoulaDocumentRepository } from './repositories/doulaDocumentRepository';
 import { ClientDocumentRepository } from './repositories/clientDocumentRepository';
-import { RequestFormRepository } from './repositories/requestFormRepository';
 import { CloudSqlActivityRepository } from './repositories/cloudSqlActivityRepository';
-import { SupabaseAssignmentRepository } from './repositories/supabaseAssignmentRepository';
 import { CloudSqlClientRepository } from './repositories/cloudSqlClientRepository';
+import { DoulaDocumentRepository } from './repositories/doulaDocumentRepository';
+import { RequestFormRepository } from './repositories/requestFormRepository';
+import { SupabaseAssignmentRepository } from './repositories/supabaseAssignmentRepository';
 import { SupabaseUserRepository } from './repositories/supabaseUserRepository';
-import { DoulaDocumentUploadService } from './services/doulaDocumentUploadService';
+import { RequestFormService } from './services/RequestFormService';
 import { ClientDocumentUploadService } from './services/clientDocumentUploadService';
 import { DoulaDocumentCompletenessService } from './services/doulaDocumentCompletenessService';
-import { RequestFormService } from './services/RequestFormService';
+import { DoulaDocumentUploadService } from './services/doulaDocumentUploadService';
+import { IdentityPlatformTokenService } from './services/identityPlatform/identityPlatformTokenService';
 import { SupabaseAuthService } from './services/supabaseAuthService';
 import { SupabaseContractService } from './services/supabaseContractService';
 import supabase from './supabase';
@@ -40,9 +41,10 @@ const clientDocumentRepository = new ClientDocumentRepository(supabase);
 // Services (External Integrations)
 //-----------------------------------------------
 const authService = new SupabaseAuthService(supabase, userRepository);
+const identityTokenService = new IdentityPlatformTokenService(userRepository);
 const requestService = new RequestFormService(requestRepository);
 const contractService = new SupabaseContractService(supabase);
-const doulaDocumentUploadService = new DoulaDocumentUploadService(supabase);
+const doulaDocumentUploadService = new DoulaDocumentUploadService();
 const clientDocumentUploadService = new ClientDocumentUploadService();
 //-----------------------------------------------
 // Use Cases (Business Logic)
@@ -55,9 +57,14 @@ const contractUseCase = new ContractUseCase(contractService);
 //-----------------------------------------------
 // Controllers (API Layer)
 //-----------------------------------------------
-const doulaDocumentCompletenessService = new DoulaDocumentCompletenessService(doulaDocumentRepository);
-const authController = new AuthController(authUseCase);
-const userController = new UserController(userUseCase, doulaDocumentCompletenessService);
+const doulaDocumentCompletenessService = new DoulaDocumentCompletenessService(
+  doulaDocumentRepository
+);
+const authController = new AuthController(authUseCase, identityTokenService);
+const userController = new UserController(
+  userUseCase,
+  doulaDocumentCompletenessService
+);
 const requestFormController = new RequestFormController(requestService);
 const clientController = new ClientController(
   clientUseCase,
@@ -78,4 +85,17 @@ const doulaController = new DoulaController(
   clientUseCase
 );
 
-export { authController, authService, clientController, contractController, doulaController, emailController, requestFormController, userController, userRepository, clientRepository, assignmentRepository };
+export {
+  authController,
+  authService,
+  identityTokenService,
+  clientController,
+  contractController,
+  doulaController,
+  emailController,
+  requestFormController,
+  userController,
+  userRepository,
+  clientRepository,
+  assignmentRepository,
+};

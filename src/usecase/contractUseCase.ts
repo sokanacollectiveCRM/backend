@@ -1,4 +1,5 @@
 import { MulterFile as File } from 'multer';
+
 import { Contract } from '../entities/Contract';
 import { Template } from '../entities/Template';
 import { ContractService } from '../services/interface/contractService';
@@ -26,29 +27,69 @@ export class ContractUseCase {
     );
   }
 
-  async fetchContractPDF(contractId: string): Promise<{ buffer: Buffer; filename: string }> {
+  async fetchContractPDF(
+    contractId: string
+  ): Promise<{ buffer: Buffer; filename: string }> {
     return await this.contractService.fetchContractPDF(contractId);
   }
 
   async getAllTemplates(): Promise<Template[]> {
-    return await this.contractService.getAllTemplates()
+    return await this.contractService.getAllTemplates();
   }
 
   async deleteTemplate(templateName: string): Promise<boolean> {
     return await this.contractService.deleteTemplate(templateName);
   }
 
-  async updateTemplate(templateName: string, deposit: number, fee: number, template: File) {
-    return await this.contractService.uploadTemplate(template, templateName, deposit, fee);
+  async updateTemplate(
+    templateName: string,
+    deposit: number,
+    fee: number,
+    template: File
+  ) {
+    return await this.contractService.uploadTemplate(
+      template,
+      templateName,
+      deposit,
+      fee
+    );
   }
 
-  async uploadTemplate(template: File, name: string, deposit: number, fee: number): Promise<Boolean> {
-    return await this.contractService.uploadTemplate(template, name, deposit, fee);
+  async uploadTemplate(
+    template: File,
+    name: string,
+    deposit: number,
+    fee: number
+  ): Promise<Boolean> {
+    return await this.contractService.uploadTemplate(
+      template,
+      name,
+      deposit,
+      fee
+    );
   }
 
-  async generateTemplate(templateName: string, fields: Record<string, string>): Promise<Buffer> {
-    // grab the template from supabase
+  async generateTemplate(
+    templateName: string,
+    fields: Record<string, string>
+  ): Promise<Buffer> {
     const buffer = await this.contractService.getTemplate(templateName);
     return await this.contractService.generateTemplate(buffer, fields);
+  }
+
+  async getTemplate(templateName: string): Promise<Buffer> {
+    return this.contractService.getTemplate(templateName);
+  }
+
+  async getTemplateSignedUrl(templateName: string): Promise<string> {
+    const service = this.contractService as ContractService & {
+      getTemplateSignedUrl?: (name: string) => Promise<string>;
+    };
+    if (typeof service.getTemplateSignedUrl !== 'function') {
+      throw new Error(
+        'Template signed URLs are not supported by this storage backend'
+      );
+    }
+    return service.getTemplateSignedUrl(templateName);
   }
 }

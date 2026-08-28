@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
+
 import { contractController } from '../index';
 import authMiddleware from '../middleware/authMiddleware';
 import authorizeRoles from '../middleware/authorizeRoles';
@@ -20,6 +21,14 @@ router.get('/templates', ...requireAdmin, (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   return contractController.getAllTemplates(req, res);
 });
+
+router.get('/templates/:name/signed-url', ...requireAdmin, (req, res) =>
+  contractController.getTemplateSignedUrl(req, res)
+);
+
+router.get('/templates/:name/download', ...requireAdmin, (req, res) =>
+  contractController.downloadTemplate(req, res)
+);
 
 router.post(
   '/templates',

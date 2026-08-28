@@ -11,11 +11,14 @@ import {
 } from '../domains/errors';
 import { getSessionToken } from '../middleware/authMiddleware';
 import { recordAuthTransport } from '../security/authTransportTelemetry';
+import { isStaffRole } from '../security/resolveAuthoritativeRole';
 import {
   clearSessionCookies,
   setSessionCookie,
 } from '../security/sessionCookies';
 import { CloudSqlTeamService } from '../services/cloudSqlTeamService';
+import { EmailMfaChallengeService } from '../services/identityPlatform/emailMfaChallengeService';
+import { IdentityPlatformTokenService } from '../services/identityPlatform/identityPlatformTokenService';
 import {
   AuthRequest,
   LoginBody,
@@ -29,9 +32,16 @@ import { AuthUseCase } from '../usecase/authUseCase.js';
 export class AuthController {
   private authUseCase: AuthUseCase;
   private cloudSqlTeamService = new CloudSqlTeamService();
+  private identityTokenService: IdentityPlatformTokenService;
+  private emailMfaService = new EmailMfaChallengeService();
 
-  constructor(authUseCase: AuthUseCase) {
+  constructor(
+    authUseCase: AuthUseCase,
+    identityTokenService?: IdentityPlatformTokenService
+  ) {
     this.authUseCase = authUseCase;
+    this.identityTokenService =
+      identityTokenService ?? new IdentityPlatformTokenService();
     this.handleError = this.handleError.bind(this);
   }
 
@@ -140,7 +150,13 @@ export class AuthController {
       }
 
       // App-managed / Cloud SQL authoritative role (PR 6) — no user_metadata override.
-      const appUser = await this.authUseCase.getMe(token);
+      // Prefer Identity Platform verify when AUTH_PROVIDER allows, else Supabase.
+      let appUser;
+      try {
+        appUser = await this.identityTokenService.getUserFromIdToken(token);
+      } catch {
+        appUser = await this.authUseCase.getMe(token);
+      }
       if (!appUser) {
         res.status(404).json({ error: 'User not found' });
         return;
@@ -149,6 +165,139 @@ export class AuthController {
     } catch (err: any) {
       const errorInfo = this.handleError(err, res);
       res.status(errorInfo.status).json({ error: errorInfo.message });
+    }
+  }
+
+  /**
+   * Identity Platform password sign-in step 1: verify idToken, send email OTP.
+   * Does not issue a CRM session cookie until /auth/mfa/verify succeeds.
+   */
+  async startIdentitySession(
+    req: Request<object, object, { idToken?: string }>,
+    res: Response
+  ): Promise<void> {
+    try {
+      const idToken = req.body?.idToken?.trim();
+      if (!idToken) {
+        res.status(400).json({ error: 'idToken is required' });
+        return;
+      }
+
+      const claims = await this.identityTokenService.verifyIdToken(idToken);
+      if (!claims.email) {
+        res.status(401).json({ error: 'Identity token is missing email' });
+        return;
+      }
+
+      const user = await this.identityTokenService.getUserFromIdToken(idToken);
+      if (!isStaffRole(user.role)) {
+        res.status(403).json({
+          error:
+            'Staff access only. This account is not authorized for CRM login.',
+        });
+        return;
+      }
+
+      const challenge = await this.emailMfaService.startChallenge({
+        authUid: claims.uid,
+        email: claims.email,
+        idToken,
+      });
+
+      res.status(200).json({
+        mfaRequired: true,
+        challengeId: challenge.challengeId,
+        emailHint: challenge.emailHint,
+        expiresInSec: challenge.expiresInSec,
+        resendAvailableInSec: challenge.resendAvailableInSec,
+      });
+    } catch (err: any) {
+      logger.error(
+        {
+          context: 'AuthController.startIdentitySession',
+          errName: err instanceof Error ? err.name : typeof err,
+          errMessage: err instanceof Error ? err.message : undefined,
+        },
+        'startIdentitySession failed'
+      );
+      const error = this.handleError(err, res);
+      res.status(error.status).json({ error: error.message });
+    }
+  }
+  async verifyIdentityMfa(
+    req: Request<
+      object,
+      object,
+      { challengeId?: string; code?: string; idToken?: string }
+    >,
+    res: Response
+  ): Promise<void> {
+    try {
+      const challengeId = req.body?.challengeId?.trim();
+      const code = req.body?.code?.trim();
+      const idToken = req.body?.idToken?.trim();
+      if (!challengeId || !code || !idToken) {
+        res.status(400).json({
+          error: 'challengeId, code, and idToken are required',
+        });
+        return;
+      }
+
+      await this.emailMfaService.verifyChallenge({
+        challengeId,
+        code,
+        idToken,
+      });
+
+      // Re-verify IdP token before minting session
+      const user = await this.identityTokenService.getUserFromIdToken(idToken);
+      if (!isStaffRole(user.role)) {
+        res.status(403).json({ error: 'Staff access only' });
+        return;
+      }
+
+      setSessionCookie(res, idToken);
+      recordAuthTransport('legacy.login_json_token_returned', {
+        path: req.path,
+      });
+      res.status(200).json({
+        message: 'Login successful',
+        user: user.toJSON(),
+        token: idToken,
+      });
+    } catch (err: any) {
+      const error = this.handleError(err, res);
+      res.status(error.status).json({ error: error.message });
+    }
+  }
+
+  async resendIdentityMfa(
+    req: Request<object, object, { challengeId?: string; idToken?: string }>,
+    res: Response
+  ): Promise<void> {
+    try {
+      const challengeId = req.body?.challengeId?.trim();
+      const idToken = req.body?.idToken?.trim();
+      if (!challengeId || !idToken) {
+        res.status(400).json({ error: 'challengeId and idToken are required' });
+        return;
+      }
+
+      const challenge = await this.emailMfaService.resendChallenge({
+        challengeId,
+        idToken,
+      });
+
+      res.status(200).json({
+        mfaRequired: true,
+        challengeId: challenge.challengeId,
+        emailHint: challenge.emailHint,
+        expiresInSec: challenge.expiresInSec,
+        resendAvailableInSec: challenge.resendAvailableInSec,
+      });
+    } catch (err: any) {
+      const error = this.handleError(err, res);
+      res.status(error.status).json({ error: error.message });
     }
   }
 
@@ -401,7 +550,18 @@ export class AuthController {
     res: Response
   ): { status: number; message: string } {
     logger.error(
-      toSafeProviderError('supabase', 'auth_request', error),
+      {
+        ...toSafeProviderError('auth', 'auth_request', error),
+        errName: error?.name,
+        errMessage:
+          error instanceof ValidationError ||
+          error instanceof AuthenticationError ||
+          error instanceof AuthorizationError ||
+          error instanceof NotFoundError ||
+          error instanceof ConflictError
+            ? error.message
+            : undefined,
+      },
       'Error handling request'
     );
 

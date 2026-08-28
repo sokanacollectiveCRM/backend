@@ -2,13 +2,14 @@ import { NextFunction, Response } from 'express';
 
 import { logger } from '../common/utils/logger';
 import { SAFE_INTERNAL_ERROR_MESSAGE } from '../common/utils/safeLogging';
-import { authService } from '../index';
+import { authService, identityTokenService } from '../index';
 import { recordAuthTransport } from '../security/authTransportTelemetry';
 import { ApiErrorCode } from '../security/errorCodes';
 import {
   LEGACY_SESSION_COOKIE,
   SESSION_COOKIE,
 } from '../security/sessionCookies';
+import { getAuthProviderMode } from '../services/identityPlatform/firebaseAdmin';
 import supabase from '../supabase';
 import type { AuthRequest } from '../types';
 
@@ -128,18 +129,54 @@ const authMiddleware = async (
 
     recordTokenSource(source, req);
 
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser(token);
+    const mode = getAuthProviderMode();
+    let user_entity = null as Awaited<
+      ReturnType<typeof authService.getUserFromToken>
+    > | null;
 
-    if (error || !user) {
+    const tryIdentity = mode === 'identity_platform' || mode === 'dual';
+    const trySupabase = mode === 'supabase' || mode === 'dual';
+
+    if (tryIdentity) {
+      try {
+        user_entity = await identityTokenService.getUserFromIdToken(token);
+      } catch {
+        // fall through to Supabase when dual / if IdP rejects
+      }
+    }
+
+    if (!user_entity && trySupabase) {
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser(token);
+
+      if (!error && user) {
+        user_entity = await authService.getUserFromToken(token);
+      } else if (mode === 'supabase') {
+        logger.warn(
+          {
+            context: 'authMiddleware',
+            path: req.path,
+            error: error?.message,
+            hasUser: !!user,
+          },
+          'Invalid or expired token'
+        );
+        res.status(401).json({
+          error: 'Invalid or expired session token',
+          code: ApiErrorCode.UNAUTHENTICATED,
+        });
+        return;
+      }
+    }
+
+    if (!user_entity) {
       logger.warn(
         {
           context: 'authMiddleware',
           path: req.path,
-          error: error?.message,
-          hasUser: !!user,
+          mode,
         },
         'Invalid or expired token'
       );
@@ -150,7 +187,6 @@ const authMiddleware = async (
       return;
     }
 
-    const user_entity = await authService.getUserFromToken(token);
     req.user = user_entity;
     next();
   } catch (err: any) {
