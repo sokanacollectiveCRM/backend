@@ -180,6 +180,9 @@ export const nativeContracts = {
   get pdfUrlTtlSeconds(): number {
     return positiveIntegerEnv('CONTRACT_PDF_URL_TTL_SECONDS', 300);
   },
+  get signingSessionTtlSeconds(): number {
+    return positiveIntegerEnv('CONTRACT_SIGNING_SESSION_TTL_SECONDS', 7200);
+  },
   get rateLimitHmacSecret(): string {
     const value = optionalEnv('SIGNING_RATE_LIMIT_HMAC_SECRET');
     if (value) return value;

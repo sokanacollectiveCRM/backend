@@ -211,6 +211,12 @@ export const signingCompleteBodySchema = z
   })
   .strict();
 
+export const signingExchangeBodySchema = z
+  .object({
+    invitation: z.string().trim().min(1).max(512),
+  })
+  .strict();
+
 export const adminContractDraftSchema = adminDraftBodySchema;
 export const adminContractSendSchema = adminSendBodySchema;
 export const adminContractResendSchema = adminResendBodySchema;

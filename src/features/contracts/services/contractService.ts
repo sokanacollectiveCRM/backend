@@ -331,7 +331,7 @@ export class ContractService {
       recipientEmail: contract.snapshot.client.email,
       recipientName: contract.snapshot.client.name,
       contractTitle: contract.snapshot.serviceType,
-      signingUrl: `${this.signingBaseUrl}/${encodeURIComponent(prepared.token)}`,
+      signingUrl: `${this.signingBaseUrl}#invitation=${encodeURIComponent(prepared.token)}`,
       expiresAt: prepared.input.expiresAt,
     });
 

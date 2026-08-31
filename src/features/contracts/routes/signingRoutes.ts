@@ -2,20 +2,18 @@ import { NextFunction, Request, Response, Router } from 'express';
 import { ZodError } from 'zod';
 
 import { SigningController } from '../controllers/signingController';
+import { InvalidInvitationError } from '../services/invitationService';
 import { RateLimitExceededError } from '../services/rateLimitService';
+import { InvalidSigningAccessSessionError } from '../services/signingAccessSessionService';
+import { SigningInputError } from '../services/signingSessionService';
 
-function redactTokenPath(
-  req: Request,
-  _res: Response,
+function signingSecurityHeaders(
+  _req: Request,
+  res: Response,
   next: NextFunction
 ): void {
-  // Express has already captured req.params.token. Remove it from path fields
-  // that HTTP loggers commonly serialize at response completion.
-  const token = req.params.token;
-  if (token) {
-    req.url = req.url.replace(token, '[redacted]');
-    req.originalUrl = req.originalUrl.replace(token, '[redacted]');
-  }
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Referrer-Policy', 'no-referrer');
   next();
 }
 
@@ -29,9 +27,15 @@ function safeError(
   const status =
     error instanceof ZodError
       ? 400
-      : typeof candidate?.statusCode === 'number'
-        ? candidate.statusCode
-        : 500;
+      : error instanceof InvalidSigningAccessSessionError
+        ? 401
+        : error instanceof InvalidInvitationError
+          ? 404
+          : error instanceof SigningInputError
+            ? 400
+            : typeof candidate?.statusCode === 'number'
+              ? candidate.statusCode
+              : 500;
   if (error instanceof RateLimitExceededError) {
     res.setHeader('Retry-After', String(error.retryAfterSeconds));
   }
@@ -43,16 +47,19 @@ function safeError(
 
 export function createSigningRoutes(controller: SigningController): Router {
   const router = Router();
-  router.use((_req, res, next) => {
-    res.setHeader('Cache-Control', 'no-store');
-    res.setHeader('Referrer-Policy', 'no-referrer');
-    next();
-  });
+  router.use(signingSecurityHeaders);
 
-  router.get('/:token/document', redactTokenPath, controller.document);
-  router.get('/:token', redactTokenPath, controller.get);
-  router.post('/:token/progress', redactTokenPath, controller.progress);
-  router.post('/:token/complete', redactTokenPath, controller.complete);
+  router.post('/session/exchange', controller.exchange);
+  router.get('/session', controller.get);
+  router.get('/session/document', controller.document);
+  router.post('/session/progress', controller.progress);
+  router.post('/session/complete', controller.complete);
+
+  router.get('/:token/document', controller.legacyUnavailable);
+  router.get('/:token', controller.legacyUnavailable);
+  router.post('/:token/progress', controller.legacyUnavailable);
+  router.post('/:token/complete', controller.legacyUnavailable);
+
   router.use(safeError);
   return router;
 }

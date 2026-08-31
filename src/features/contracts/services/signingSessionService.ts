@@ -14,6 +14,10 @@ import {
 } from './contractCompletionEmailService';
 import { InvitationService } from './invitationService';
 import { RateLimitService } from './rateLimitService';
+import { VerifiedSigningContext } from './signingAccessSessionService';
+
+/** Credential-free PDF fallback served behind session authorization. */
+export const SIGNING_SESSION_DOCUMENT_PATH = '/signing/session/document';
 
 export interface SigningContractRecord {
   id: string;
@@ -165,35 +169,30 @@ export class SigningSessionService {
   ) {}
 
   async get(
-    token: string,
+    context: VerifiedSigningContext,
     evidence: RequestEvidence = {}
   ): Promise<SigningSessionDto> {
-    const verified = await this.authorize(token, evidence.ipAddress);
-    const contract = await this.requireContract(verified.contract.id);
+    const contract = await this.requireContract(context.contractId);
+    this.assertContractBinding(contract, context);
     const viewedAt = new Date();
     await this.sessions.recordFirstViewed(
-      verified.invitation.id,
+      context.invitationId,
       contract.id,
       viewedAt,
       evidence
     );
     if (contract.status === 'sent') contract.status = 'viewed';
-    const progress = await this.sessions.getProgress(verified.invitation.id);
-    return this.toSafeSession(
-      contract,
-      progress,
-      verified.invitation.expiresAt,
-      token
-    );
+    const progress = await this.sessions.getProgress(context.invitationId);
+    return this.toSafeSession(contract, progress, context.invitationExpiresAt);
   }
 
   async saveProgress(
-    token: string,
+    context: VerifiedSigningContext,
     fieldIds: readonly string[],
     evidence: RequestEvidence = {}
   ): Promise<SigningSessionDto> {
-    const verified = await this.authorize(token, evidence.ipAddress);
-    const contract = await this.requireContract(verified.contract.id);
+    const contract = await this.requireContract(context.contractId);
+    this.assertContractBinding(contract, context);
     const knownIds = new Set(contract.signingManifest.map((field) => field.id));
     const uniqueIds = [...new Set(fieldIds)];
     if (
@@ -205,7 +204,7 @@ export class SigningSessionService {
     const now = new Date();
     // Client timestamps are intentionally unsupported.
     const progress = await this.sessions.saveProgress(
-      verified.invitation.id,
+      context.invitationId,
       contract.id,
       uniqueIds.map((fieldId) => ({ fieldId, completedAt: now })),
       evidence
@@ -213,20 +212,15 @@ export class SigningSessionService {
     if (uniqueIds.length > 0 && ['sent', 'viewed'].includes(contract.status)) {
       contract.status = 'partially_signed';
     }
-    return this.toSafeSession(
-      contract,
-      progress,
-      verified.invitation.expiresAt,
-      token
-    );
+    return this.toSafeSession(contract, progress, context.invitationExpiresAt);
   }
 
   async getDocument(
-    token: string,
+    context: VerifiedSigningContext,
     evidence: RequestEvidence = {}
   ): Promise<Buffer> {
-    const verified = await this.authorize(token, evidence.ipAddress);
-    const contract = await this.requireContract(verified.contract.id);
+    const contract = await this.requireContract(context.contractId);
+    this.assertContractBinding(contract, context);
     const bytes = await this.documents.download(contract.unsignedPdfObject);
     const actualHash = createHash('sha256').update(bytes).digest('hex');
     if (actualHash !== contract.unsignedPdfSha256) {
@@ -236,23 +230,22 @@ export class SigningSessionService {
   }
 
   async complete(
-    token: string,
+    context: VerifiedSigningContext,
     input: CompleteSigningInput,
     evidence: RequestEvidence = {}
   ): Promise<SignedCompletionResult> {
-    const verified = await this.authorize(token, evidence.ipAddress);
-    const contract = await this.requireContract(verified.contract.id);
+    const contract = await this.requireContract(context.contractId);
+    this.assertContractBinding(contract, context);
     this.validateCompletion(contract, input);
 
     let completionEmailInput: ContractCompletionEmailInput | null = null;
     const result = await this.sessions.withCompletionLock(
-      verified.invitation.id,
+      context.invitationId,
       async (transaction) => {
-        // Re-check after acquiring the completion lock so a revoked/expired
-        // invitation cannot complete based only on an earlier authorization.
-        const lockedVerification = await this.invitations.verify(token);
+        const lockedVerification =
+          await this.invitations.verifySessionInvitation(context.invitationId);
         if (
-          lockedVerification.invitation.id !== verified.invitation.id ||
+          lockedVerification.invitation.id !== context.invitationId ||
           lockedVerification.contract.id !== contract.id
         ) {
           throw new SigningInputError('Signing session unavailable');
@@ -263,13 +256,13 @@ export class SigningSessionService {
         );
         if (existing) return existing;
         const lockedContract = await this.sessions.getContractForCompletion(
-          verified.invitation.id,
+          context.invitationId,
           transaction
         );
         if (
           !lockedContract ||
           lockedContract.id !== contract.id ||
-          lockedContract.clientId !== verified.contract.clientId ||
+          lockedContract.clientId !== context.clientId ||
           !['sent', 'viewed', 'partially_signed'].includes(
             lockedContract.status
           )
@@ -290,7 +283,7 @@ export class SigningSessionService {
         });
         const result = await this.sessions.finalizeCompletion(
           {
-            invitationId: verified.invitation.id,
+            invitationId: context.invitationId,
             contractId: contract.id,
             signerName: lockedContract.clientName,
             initials: input.initials.trim(),
@@ -339,20 +332,16 @@ export class SigningSessionService {
     return result;
   }
 
-  private async authorize(token: string, networkAddress?: string | null) {
-    const tokenFingerprint = createHash('sha256')
-      .update(String(token), 'utf8')
-      .digest('hex');
-    const candidateId = String(token).split('.', 1)[0];
-    await this.rateLimits.assertAllowed({
-      invitationId: /^[0-9a-f-]{36}$/i.test(candidateId)
-        ? candidateId
-        : 'invalid',
-      tokenFingerprint,
-      networkAddress,
-    });
-    const verified = await this.invitations.verify(token);
-    return verified;
+  private assertContractBinding(
+    contract: SigningContractRecord,
+    context: VerifiedSigningContext
+  ): void {
+    if (
+      contract.id !== context.contractId ||
+      contract.clientId !== context.clientId
+    ) {
+      throw new SigningInputError('Signing session unavailable');
+    }
   }
 
   private async requireContract(id: string): Promise<SigningContractRecord> {
@@ -396,8 +385,7 @@ export class SigningSessionService {
   private async toSafeSession(
     contract: SigningContractRecord,
     progress: readonly SigningProgressRecord[],
-    expiresAt: Date,
-    token: string
+    expiresAt: Date
   ): Promise<SigningSessionDto> {
     let pdfUrl: string;
     try {
@@ -406,9 +394,7 @@ export class SigningSessionService {
         this.pdfUrlTtlSeconds
       );
     } catch {
-      // Local ADC and some Cloud Run identities cannot sign GCS URLs. Keep the
-      // document private behind the same expiring invitation instead.
-      pdfUrl = `/signing/${encodeURIComponent(token)}/document`;
+      pdfUrl = SIGNING_SESSION_DOCUMENT_PATH;
     }
     return {
       contractId: contract.id,

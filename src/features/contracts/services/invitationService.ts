@@ -106,6 +106,34 @@ export class InvitationService {
     return { input, token };
   }
 
+  /** Session-bound checks without the invitation secret. */
+  async verifySessionInvitation(invitationId: string): Promise<{
+    invitation: ContractInvitationRecord;
+    contract: InvitationContractLookup;
+  }> {
+    const invitation = await this.invitations.findById(invitationId);
+    if (!invitation || invitation.revokedAt) {
+      throw new InvalidInvitationError();
+    }
+    if (invitation.expiresAt.getTime() <= Date.now()) {
+      if (!invitation.completedAt) {
+        await this.invitations.expireContractForInvitation?.(invitation.id);
+      }
+      throw new InvalidInvitationError();
+    }
+    const contract = await this.contracts.findInvitationContract(
+      invitation.contractId
+    );
+    if (
+      !contract ||
+      contract.clientId !== invitation.clientId ||
+      !ACTIVE_CONTRACT_STATUSES.has(contract.status)
+    ) {
+      throw new InvalidInvitationError();
+    }
+    return { invitation, contract };
+  }
+
   async verify(token: string): Promise<{
     invitation: ContractInvitationRecord;
     contract: InvitationContractLookup;

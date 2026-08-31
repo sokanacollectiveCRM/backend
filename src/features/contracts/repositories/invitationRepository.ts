@@ -1,3 +1,4 @@
+import { signingAccessSessionRepository } from '../repositories/signingAccessSessionRepository';
 import {
   ContractInvitationRecord,
   CreateInvitationInput,
@@ -89,6 +90,10 @@ export class InvitationRepository {
            AND revoked_at IS NULL
            AND completed_at IS NULL`,
         [contractId]
+      );
+      await signingAccessSessionRepository.revokeAllForContractInTransaction(
+        contractId,
+        client
       );
       return this.create(input, client);
     });
