@@ -89,7 +89,9 @@ describe('InvitationService', () => {
     expect(second.invitation.revokedAt).toBeNull();
   });
 
-  it('rejects an expired active invitation', async () => {
+  it('rejects an expired active invitation and expires the unsigned contract', async () => {
+    const expireContractForInvitation = jest.fn();
+    repository.expireContractForInvitation = expireContractForInvitation;
     const service = new InvitationService(repository, contracts);
     const issued = await service.issue('contract-1', 'client-1');
     issued.invitation.expiresAt = new Date(Date.now() - 1);
@@ -97,5 +99,51 @@ describe('InvitationService', () => {
     await expect(service.verify(issued.token)).rejects.toBeInstanceOf(
       InvalidInvitationError
     );
+    expect(expireContractForInvitation).toHaveBeenCalledWith(
+      issued.invitation.id
+    );
+  });
+
+  it('rejects an expired completed invitation without expiring the signed contract', async () => {
+    const expireContractForInvitation = jest.fn();
+    repository.expireContractForInvitation = expireContractForInvitation;
+    const service = new InvitationService(repository, contracts);
+    const issued = await service.issue('contract-1', 'client-1');
+    issued.invitation.completedAt = new Date();
+    issued.invitation.expiresAt = new Date(Date.now() - 1);
+
+    await expect(service.verify(issued.token)).rejects.toBeInstanceOf(
+      InvalidInvitationError
+    );
+    expect(expireContractForInvitation).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invitation at the exact expiration time', async () => {
+    const service = new InvitationService(repository, contracts);
+    const issued = await service.issue('contract-1', 'client-1');
+    const expiresAt = new Date('2026-08-31T12:00:00.000Z');
+    issued.invitation.expiresAt = expiresAt;
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(expiresAt.getTime());
+
+    await expect(service.verify(issued.token)).rejects.toBeInstanceOf(
+      InvalidInvitationError
+    );
+    nowSpy.mockRestore();
+  });
+
+  it('allows a completed invitation before expiration for confirmation retries', async () => {
+    const service = new InvitationService(repository, contracts);
+    const issued = await service.issue('contract-1', 'client-1');
+    issued.invitation.completedAt = new Date();
+    contracts.findInvitationContract.mockResolvedValue({
+      id: 'contract-1',
+      clientId: 'client-1',
+      status: 'signed',
+    });
+
+    await expect(service.verify(issued.token)).resolves.toMatchObject({
+      invitation: { id: issued.invitation.id },
+      contract: { id: 'contract-1', status: 'signed' },
+    });
   });
 });

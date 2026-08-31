@@ -128,11 +128,10 @@ export class InvitationService {
     if (invitation.revokedAt) {
       throw new InvalidInvitationError();
     }
-    if (
-      !invitation.completedAt &&
-      invitation.expiresAt.getTime() <= Date.now()
-    ) {
-      await this.invitations.expireContractForInvitation?.(invitation.id);
+    if (invitation.expiresAt.getTime() <= Date.now()) {
+      if (!invitation.completedAt) {
+        await this.invitations.expireContractForInvitation?.(invitation.id);
+      }
       throw new InvalidInvitationError();
     }
 
