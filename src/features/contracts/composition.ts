@@ -18,6 +18,7 @@ import { NativeContractPdfService } from './pdf/pdfService';
 import { gcsPdfObjectStorage } from './pdf/templateLoader';
 import { contractRepository } from './repositories/contractRepository';
 import { invitationRepository } from './repositories/invitationRepository';
+import { signingAccessSessionRepository } from './repositories/signingAccessSessionRepository';
 import { signingSessionRepository } from './repositories/signingSessionRepository';
 import { templateRepository } from './repositories/templateRepository';
 import { createAdminContractRoutes } from './routes/adminContractRoutes';
@@ -33,6 +34,7 @@ import {
   PostgresRateLimitStore,
   RateLimitService,
 } from './services/rateLimitService';
+import { SigningAccessSessionService } from './services/signingAccessSessionService';
 import {
   SignedPdfFinalizer,
   SigningSessionService,
@@ -145,22 +147,33 @@ const contractService = new ContractService(
   nativeContracts.signingBaseUrl
 );
 
+const rateLimitService = new RateLimitService(
+  new PostgresRateLimitStore(),
+  nativeContracts.rateLimitHmacSecret,
+  nativeContracts.rateLimitAttempts,
+  nativeContracts.rateLimitWindowSeconds
+);
+
+const signingAccessSessionService = new SigningAccessSessionService(
+  invitationService,
+  signingAccessSessionRepository,
+  rateLimitService
+);
+
 const signingService = new SigningSessionService(
   invitationService,
   signingSessionRepository,
-  new RateLimitService(
-    new PostgresRateLimitStore(),
-    nativeContracts.rateLimitHmacSecret,
-    nativeContracts.rateLimitAttempts,
-    nativeContracts.rateLimitWindowSeconds
-  ),
+  rateLimitService,
   finalizer,
   { signedReadUrl: getSignedReadUrl, download: downloadObject },
   nativeContracts.pdfUrlTtlSeconds
 );
 
 export const nativeContractController = new ContractController(contractService);
-export const nativeSigningController = new SigningController(signingService);
+export const nativeSigningController = new SigningController(
+  signingService,
+  signingAccessSessionService
+);
 export const nativeAdminContractRoutes = createAdminContractRoutes(
   nativeContractController
 );

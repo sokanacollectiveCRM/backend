@@ -1,5 +1,9 @@
 import { createHash } from 'crypto';
+import express from 'express';
+import request from 'supertest';
 
+import { SigningController } from '../controllers/signingController';
+import { createSigningRoutes } from '../routes/signingRoutes';
 import {
   ContractInvitationRecord,
   InvalidInvitationError,
@@ -8,14 +12,42 @@ import {
 } from '../services/invitationService';
 import { RateLimitService } from '../services/rateLimitService';
 import {
+  InvalidSigningAccessSessionError,
+  SigningAccessSessionService,
+  VerifiedSigningContext,
+} from '../services/signingAccessSessionService';
+import {
+  SIGNING_SESSION_DOCUMENT_PATH,
   SigningInputError,
   SigningSessionRepository,
   SigningSessionService,
 } from '../services/signingSessionService';
 
+const INVITATION_SECRET = 'a'.repeat(43);
+const INVITATION_ID = '11111111-1111-4111-8111-111111111111';
+const INVITATION_TOKEN = `${INVITATION_ID}.${INVITATION_SECRET}`;
+const SESSION_SECRET = 'b'.repeat(43);
+const SESSION_ID = '22222222-2222-4222-8222-222222222222';
+const SESSION_TOKEN = `${SESSION_ID}.${SESSION_SECRET}`;
+
+function verifiedContext(
+  overrides: Partial<VerifiedSigningContext> = {}
+): VerifiedSigningContext {
+  return {
+    sessionId: SESSION_ID,
+    invitationId: INVITATION_ID,
+    contractId: 'contract-1',
+    clientId: 'client-1',
+    invitationExpiresAt: new Date(Date.now() + 60_000),
+    sessionExpiresAt: new Date(Date.now() + 60_000),
+    ...overrides,
+  };
+}
+
 describe('SigningSessionService', () => {
   const invitations = {
     verify: jest.fn(),
+    verifySessionInvitation: jest.fn(),
   };
   const rateLimits = {
     assertAllowed: jest.fn(),
@@ -33,13 +65,12 @@ describe('SigningSessionService', () => {
     documents.signedReadUrl
       .mockReset()
       .mockResolvedValue('https://signed.test/document');
-    invitations.verify.mockResolvedValue({
+    invitations.verifySessionInvitation.mockResolvedValue({
       invitation: {
-        id: 'invitation-1',
+        id: INVITATION_ID,
         expiresAt: new Date(Date.now() + 60_000),
       },
-      contract: { id: 'contract-1', clientId: 'client-1' },
-      tokenFingerprint: 'fingerprint',
+      contract: { id: 'contract-1', clientId: 'client-1', status: 'viewed' },
     });
     rateLimits.assertAllowed.mockResolvedValue(undefined);
     finalizer.finalize.mockResolvedValue({
@@ -107,7 +138,7 @@ describe('SigningSessionService', () => {
     };
   });
 
-  it('falls back to the invitation-protected PDF route when URL signing fails', async () => {
+  it('falls back to the session-protected PDF route when URL signing fails', async () => {
     documents.signedReadUrl.mockRejectedValueOnce(
       new Error('signBlob unavailable')
     );
@@ -119,8 +150,8 @@ describe('SigningSessionService', () => {
       documents
     );
 
-    await expect(service.get('invitation.token')).resolves.toMatchObject({
-      pdfUrl: '/signing/invitation.token/document',
+    await expect(service.get(verifiedContext())).resolves.toMatchObject({
+      pdfUrl: SIGNING_SESSION_DOCUMENT_PATH,
     });
   });
 
@@ -132,13 +163,13 @@ describe('SigningSessionService', () => {
       finalizer,
       documents
     );
-    const result = await service.saveProgress('token', ['signature']);
+    const result = await service.saveProgress(verifiedContext(), ['signature']);
 
     expect(result.progress[0].completedAt).toMatch(/Z$/);
     const persisted = repository.saveProgress.mock.calls[0][2][0];
     expect(persisted.completedAt).toBeInstanceOf(Date);
     await expect(
-      service.saveProgress('token', ['unknown'])
+      service.saveProgress(verifiedContext(), ['unknown'])
     ).rejects.toBeInstanceOf(SigningInputError);
   });
 
@@ -166,7 +197,7 @@ describe('SigningSessionService', () => {
     );
 
     await expect(
-      service.complete('token', {
+      service.complete(verifiedContext(), {
         initials: 'C',
         consent: true,
         signature: { type: 'typed', text: 'Client' },
@@ -175,6 +206,22 @@ describe('SigningSessionService', () => {
     ).resolves.toEqual(existing);
     expect(finalizer.finalize).not.toHaveBeenCalled();
     expect(repository.finalizeCompletion).not.toHaveBeenCalled();
+  });
+
+  it('denies cross-client contract access via context binding', async () => {
+    const service = new SigningSessionService(
+      invitations as any,
+      repository,
+      rateLimits as any,
+      finalizer,
+      documents
+    );
+
+    await expect(
+      service.get(
+        verifiedContext({ clientId: 'other-client', contractId: 'contract-1' })
+      )
+    ).rejects.toBeInstanceOf(SigningInputError);
   });
 });
 
@@ -303,14 +350,11 @@ describe('SigningSessionService with InvitationService', () => {
     const issued = await invitationService.issue('contract-1', 'client-1');
     issued.invitation.completedAt = new Date();
     issued.invitation.expiresAt = new Date(Date.now() - 1);
-    const service = createService();
+    createService();
 
-    await expect(service.get(issued.token)).rejects.toBeInstanceOf(
-      InvalidInvitationError
-    );
-    await expect(service.getDocument(issued.token)).rejects.toBeInstanceOf(
-      InvalidInvitationError
-    );
+    await expect(
+      invitationService.verifySessionInvitation(issued.invitation.id)
+    ).rejects.toBeInstanceOf(InvalidInvitationError);
     expect(sessionRepository.getContract).not.toHaveBeenCalled();
     expect(documents.download).not.toHaveBeenCalled();
     expect(
@@ -338,12 +382,15 @@ describe('SigningSessionService with InvitationService', () => {
     const service = createService();
 
     await expect(
-      service.complete(issued.token, {
-        initials: 'C',
-        consent: true,
-        signature: { type: 'typed', text: 'Client' },
-        completedFieldIds: ['signature'],
-      })
+      service.complete(
+        verifiedContext({ invitationId: issued.invitation.id }),
+        {
+          initials: 'C',
+          consent: true,
+          signature: { type: 'typed', text: 'Client' },
+          completedFieldIds: ['signature'],
+        }
+      )
     ).resolves.toEqual(existing);
     expect(finalizer.finalize).not.toHaveBeenCalled();
     expect(sessionRepository.finalizeCompletion).not.toHaveBeenCalled();
@@ -370,5 +417,86 @@ describe('RateLimitService', () => {
     expect(keys).toContain('invitation:invitation-1');
     expect(keys).toContain('token:token-hash');
     expect(keys.some((key) => key.includes('203.0.113.10'))).toBe(false);
+  });
+});
+
+describe('signing routes security', () => {
+  const signing = {
+    get: jest.fn().mockResolvedValue({
+      contractId: 'contract-1',
+      pdfUrl: SIGNING_SESSION_DOCUMENT_PATH,
+    }),
+    saveProgress: jest.fn(),
+    getDocument: jest.fn().mockResolvedValue(Buffer.from('pdf')),
+    complete: jest.fn(),
+  };
+  const accessSessions = {
+    exchange: jest.fn().mockResolvedValue({
+      sessionToken: SESSION_TOKEN,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    }),
+    authorize: jest.fn().mockResolvedValue(verifiedContext()),
+  };
+  const controller = new SigningController(
+    signing as any,
+    accessSessions as any
+  );
+  const app = express();
+  app.use(express.json());
+  app.use('/signing', createSigningRoutes(controller));
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('exchanges invitations over POST without putting credentials in the URL', async () => {
+    const response = await request(app)
+      .post('/signing/session/exchange')
+      .send({ invitation: INVITATION_TOKEN })
+      .expect(200);
+
+    expect(response.body.sessionToken).toBe(SESSION_TOKEN);
+    expect(accessSessions.exchange).toHaveBeenCalledWith(
+      INVITATION_TOKEN,
+      expect.any(Object)
+    );
+    expect(JSON.stringify(response.body)).not.toContain(INVITATION_SECRET);
+  });
+
+  it('serves session routes with cache and referrer protections', async () => {
+    const response = await request(app)
+      .get('/signing/session')
+      .set('X-Signing-Session', SESSION_TOKEN)
+      .expect(200, {
+        contractId: 'contract-1',
+        pdfUrl: SIGNING_SESSION_DOCUMENT_PATH,
+      });
+
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.headers['referrer-policy']).toBe('no-referrer');
+    expect(signing.get).toHaveBeenCalled();
+  });
+
+  it('rejects legacy token-bearing routes with 410', async () => {
+    const response = await request(app)
+      .get(`/signing/${encodeURIComponent(INVITATION_TOKEN)}`)
+      .expect(410);
+
+    expect(response.body.code).toBe('LEGACY_SIGNING_ROUTE');
+    expect(JSON.stringify(response.body)).not.toContain(INVITATION_SECRET);
+    expect(signing.get).not.toHaveBeenCalled();
+  });
+
+  it('does not echo session tokens in error bodies', async () => {
+    accessSessions.authorize.mockRejectedValueOnce(
+      new InvalidSigningAccessSessionError()
+    );
+
+    const response = await request(app)
+      .get('/signing/session')
+      .set('X-Signing-Session', SESSION_TOKEN)
+      .expect(401);
+
+    expect(JSON.stringify(response.body)).not.toContain(SESSION_SECRET);
   });
 });

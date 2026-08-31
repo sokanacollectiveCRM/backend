@@ -66,18 +66,26 @@ describe('native contract routes', () => {
       .expect(200, { contracts: [] });
   });
 
-  it('serves invitation routes without a session and prevents referrer caching', async () => {
+  it('serves session routes without a session cookie and prevents referrer caching', async () => {
     const signingController = {
-      get: handler({ contractId: 'contract-1' }),
-      document: handler({}),
-      progress: handler({ saved: true }),
-      complete: handler({ status: 'signed' }),
+      exchange: (_req: any, res: any) =>
+        res.json({
+          sessionToken: 'session.token',
+          expiresAt: new Date().toISOString(),
+        }),
+      get: (_req: any, res: any) => res.json({ contractId: 'contract-1' }),
+      document: (_req: any, res: any) => res.send(Buffer.from('pdf')),
+      progress: (_req: any, res: any) => res.json({ saved: true }),
+      complete: (_req: any, res: any) => res.json({ status: 'signed' }),
+      legacyUnavailable: (_req: any, res: any) =>
+        res.status(410).json({ code: 'LEGACY_SIGNING_ROUTE' }),
     } as any;
     const app = express();
     app.use('/signing', createSigningRoutes(signingController));
 
     const response = await request(app)
-      .get('/signing/invitation-token')
+      .get('/signing/session')
+      .set('X-Signing-Session', 'session.token')
       .expect(200, { contractId: 'contract-1' });
     expect(response.headers['cache-control']).toBe('no-store');
     expect(response.headers['referrer-policy']).toBe('no-referrer');

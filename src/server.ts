@@ -65,7 +65,12 @@ const corsOptions = {
     return callback(new Error('Not allowed by CORS'));
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Token'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Session-Token',
+    'X-Signing-Session',
+  ],
   credentials: true, // Required for cookie (sb-access-token) and Bearer auth cross-origin
   maxAge: 86400,
 };

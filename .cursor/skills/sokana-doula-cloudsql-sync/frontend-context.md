@@ -2,6 +2,44 @@
 
 This file is intentionally updateable as frontend work finishes.
 
+## Preflight Update 2026-08-31 (Signing credential session exchange)
+
+### Task
+
+- Remove invitation credentials from HTTP request URLs; exchange fragment
+  credentials for short-lived signing sessions.
+
+### Files Scanned
+
+- `frontend-crm/src/features/public-signing/signingApi.ts`
+- `frontend-crm/src/features/public-signing/PublicSigningPage.tsx`
+- `frontend-crm/src/features/public-signing/PublicSigningEntry.tsx`
+- `frontend-crm/src/features/public-signing/SigningPdf.tsx`
+- `frontend-crm/src/Routes.tsx`
+- `backend/src/features/contracts/routes/signingRoutes.ts`
+- `backend/src/features/contracts/controllers/signingController.ts`
+
+### Contract Findings
+
+- Frontend previously called `/signing/:token` on the backend directly.
+- PDF fallback URLs embedded invitation tokens in paths.
+- Cross-origin frontend/backend requires header-based session transport, not
+  cookies.
+
+### Required Compatibility
+
+- `POST /signing/session/exchange` body: `{ invitation: string }`
+- Session ops: `GET /signing/session`, `/signing/session/document`,
+  `POST /signing/session/progress`, `POST /signing/session/complete`
+- Header: `X-Signing-Session` (or `Authorization: Signing <token>`)
+- Email links: `{signingBaseUrl}#invitation=<credential>`
+- Legacy backend token routes return 410 `LEGACY_SIGNING_ROUTE`
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
 ## Preflight Update 2026-08-31 (CRM navigation + signed link redirect)
 
 ### Task
