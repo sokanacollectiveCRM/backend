@@ -10,6 +10,12 @@ import { signNowService } from '../services/signNowService';
 
 const router = Router();
 
+router.use((_req, res, next) => {
+  res.setHeader('Deprecation', 'true');
+  res.setHeader('Link', '</api/contracts/drafts>; rel="successor-version"');
+  next();
+});
+
 interface SignNowRequest extends Request {
   body: {
     documentId?: string;

@@ -26,7 +26,10 @@ import {
   normalizeClientPatch,
   splitClientPatch,
 } from '../constants/phiFields';
-import { PortalEligibilitySnapshot } from '../constants/portalEligibility';
+import {
+  PortalEligibilitySnapshot,
+  resolveBillingPath,
+} from '../constants/portalEligibility';
 import { normalizeStaffReferralOperationalPatch } from '../constants/referralSource';
 import {
   AuthenticationError,
@@ -90,6 +93,9 @@ export class ClientController {
     'Commercial Insurance',
     'Private Insurance',
     'Medicaid',
+    'I am unable to pay / Full Support Option',
+    'No Payment Required',
+    'Not sure / Need help figuring this out',
   ]);
 
   private static readonly BILLING_FIELDS = new Set([
@@ -490,7 +496,7 @@ export class ClientController {
     if (!ClientController.BILLING_PAYMENT_METHODS.has(paymentMethodRaw)) {
       return {
         message:
-          'payment_method must be one of: Self-Pay, Commercial Insurance, Private Insurance, Medicaid',
+          'payment_method must be one of: Self-Pay, Commercial Insurance, Private Insurance, Medicaid, I am unable to pay / Full Support Option, No Payment Required, Not sure / Need help figuring this out',
       };
     }
 
@@ -557,7 +563,8 @@ export class ClientController {
       self_pay_card_info: null,
     };
 
-    if (paymentMethodRaw === 'Self-Pay') {
+    const billingPath = resolveBillingPath(paymentMethodRaw);
+    if (billingPath !== 'insurance' && billingPath !== 'medicaid') {
       return {
         value: {
           ...billingValue,
@@ -1904,7 +1911,10 @@ export class ClientController {
           return;
         }
 
-        if (validatedBilling.value.payment_method !== 'Self-Pay') {
+        const billingPath = resolveBillingPath(
+          validatedBilling.value.payment_method
+        );
+        if (billingPath === 'insurance' || billingPath === 'medicaid') {
           const hasInsuranceCard = await this.requireInsuranceCardForBilling(
             targetClientId,
             res
@@ -2668,7 +2678,8 @@ export class ClientController {
         return;
       }
 
-      if (validated.value.payment_method !== 'Self-Pay') {
+      const billingPath = resolveBillingPath(validated.value.payment_method);
+      if (billingPath === 'insurance' || billingPath === 'medicaid') {
         try {
           const hasInsuranceCard = await this.hasInsuranceCardDocument(
             resolved.clientId

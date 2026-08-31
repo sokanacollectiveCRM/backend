@@ -1,4 +1,3 @@
-import crypto from 'crypto';
 import { Request, Response, Router } from 'express';
 
 import { logger } from '../common/utils/logger';
@@ -7,6 +6,9 @@ import {
   toSafeClientErrorBody,
   toSafeProviderError,
 } from '../common/utils/safeLogging';
+import { nativeContracts } from '../config/env';
+import { queryCloudSql } from '../db/cloudSqlPool';
+import { normalizeContractPayload } from '../features/contracts/domain/normalization';
 import authMiddleware from '../middleware/authMiddleware';
 import authorizeRoles from '../middleware/authorizeRoles';
 import { SignNowService } from '../services/signNowService';
@@ -24,6 +26,13 @@ const requireAdmin = (req: any, res: any, next: any) =>
 // Security bug fix (PR 4): contract signing tooling requires admin session.
 router.use(authMiddleware);
 router.use(requireAdmin);
+router.use((req, res, next) => {
+  if (req.path !== '/generate-contract') {
+    res.setHeader('Deprecation', 'true');
+    res.setHeader('Link', '</api/contracts/drafts>; rel="successor-version"');
+  }
+  next();
+});
 
 interface ContractSigningRequest extends Request {
   body: SignNowContractData;
@@ -159,80 +168,105 @@ router.post(
   '/generate-contract',
   async (req: ContractSigningRequest, res: Response): Promise<void> => {
     try {
-      const contractData = req.body;
-
-      // Validate required fields
-      if (
-        !contractData.clientName ||
-        !contractData.clientEmail ||
-        !contractData.totalInvestment ||
-        !contractData.depositAmount
-      ) {
-        res.status(400).json({
+      if (!nativeContracts.enabled) {
+        res.status(503).json({
           success: false,
-          error:
-            'clientName, clientEmail, totalInvestment, and depositAmount are required',
+          error: 'Native contract creation is disabled',
         });
         return;
       }
-
-      // Generate contract ID if not provided
-      const contractId = contractData.contractId || crypto.randomUUID();
-
-      // Prepare contract data
-      const finalContractData: SignNowContractData = {
-        contractId,
-        clientName: contractData.clientName,
-        clientEmail: contractData.clientEmail,
-        serviceType: contractData.serviceType || 'Postpartum Doula Services',
-        totalInvestment: contractData.totalInvestment,
-        depositAmount: contractData.depositAmount,
-        remainingBalance:
-          contractData.remainingBalance ||
-          (
-            parseFloat(contractData.totalInvestment.replace(/[$,]/g, '')) -
-            parseFloat(contractData.depositAmount.replace(/[$,]/g, ''))
-          ).toFixed(2),
-        contractDate:
-          contractData.contractDate || new Date().toLocaleDateString(),
-        dueDate:
-          contractData.dueDate ||
-          new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-            .toISOString()
-            .split('T')[0],
-        startDate:
-          contractData.startDate || new Date().toISOString().split('T')[0],
-        endDate:
-          contractData.endDate ||
-          new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
-            .toISOString()
-            .split('T')[0],
-
-        // Include Postpartum fields if they exist
-        ...(contractData.totalHours && { totalHours: contractData.totalHours }),
-        ...(contractData.hourlyRate && { hourlyRate: contractData.hourlyRate }),
-        ...(contractData.overnightFee && {
-          overnightFee: contractData.overnightFee,
-        }),
+      const normalized = normalizeContractPayload(req.body);
+      if (!normalized.clientEmail || !normalized.clientName) {
+        res.status(400).json({
+          success: false,
+          error: 'clientName and clientEmail are required',
+        });
+        return;
+      }
+      type ClientRow = {
+        id: string;
+        first_name: string | null;
+        last_name: string | null;
+        email: string;
       };
-
-      logger.info(
-        { service: 'signnow', operation: 'generate_contract' },
-        'Starting complete contract workflow'
+      const hasValidClientId =
+        typeof normalized.clientId === 'string' &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          normalized.clientId
+        );
+      const { rows } = hasValidClientId
+        ? await queryCloudSql<ClientRow>(
+            `SELECT id, first_name, last_name, email
+             FROM public.phi_clients
+             WHERE id = $1::uuid
+             LIMIT 1`,
+            [normalized.clientId]
+          )
+        : await queryCloudSql<ClientRow>(
+            `SELECT id, first_name, last_name, email
+             FROM public.phi_clients
+             WHERE lower(email) = lower($1)
+             LIMIT 1`,
+            [normalized.clientEmail]
+          );
+      const client = rows[0];
+      if (!client) {
+        res.status(404).json({
+          success: false,
+          error: 'Client not found',
+        });
+        return;
+      }
+      const clientName =
+        [client.first_name, client.last_name]
+          .filter(Boolean)
+          .join(' ')
+          .trim() || normalized.clientName;
+      // Lazily compose only on the enabled native path.
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const {
+        nativeContractService,
+      } = require('../features/contracts/composition');
+      const draft = await nativeContractService.createLegacyDraft(
+        {
+          ...normalized,
+          clientId: client.id,
+          clientName,
+          clientEmail: client.email,
+        },
+        String((req as any).user?.id || '')
       );
-      const result = await processContractWithSignNow(finalContractData);
-
+      const contract = await nativeContractService.send(
+        draft.id,
+        String((req as any).user?.id || '')
+      );
       res.json({
-        success: result.success,
-        message: result.success
-          ? `Contract generated and sent via SignNow to ${result.clientEmail}`
-          : 'Contract generation failed',
-        data: result,
+        success: true,
+        message: 'Contract generated and sent for signature',
+        data: {
+          success: true,
+          contractId: contract.id,
+          clientName,
+          clientEmail: client.email,
+          docxPath: '',
+          pdfPath: '',
+          signNow: {
+            documentId: '',
+            invitationSent: true,
+            status: 'invitation_sent',
+          },
+          emailDelivery: {
+            provider: 'native',
+            sent: true,
+            message: 'Signing invitation sent',
+          },
+        },
       });
+      return;
     } catch (error: unknown) {
       logger.error(
-        toSafeProviderError('signnow', 'generate_contract', error),
-        'Contract generation workflow failed'
+        toSafeProviderError('native_contracts', 'generate_contract', error),
+        'Native contract generation workflow failed'
       );
       // Security bug fix (PR 3): remove stack / provider payload from client response.
       res

@@ -14,6 +14,7 @@ import {
   FEATURE_QUICKBOOKS,
   IS_PRODUCTION,
   getAllowedOrigins,
+  nativeContracts,
 } from './config/env';
 import { authController } from './index';
 import { validateBody } from './middleware/validateRequest';
@@ -44,6 +45,9 @@ const app: Express = express();
 installProductionConsoleGuard();
 
 app.disable('x-powered-by');
+// Cloud Run terminates TLS at one trusted proxy hop; req.ip is persisted only
+// to the restricted contract audit table and is never logged or returned.
+app.set('trust proxy', 1);
 app.use(helmet());
 
 // ---- Helper to normalize ESM/CJS route modules ----
@@ -83,6 +87,9 @@ app.use(cookieParser());
 // Capture raw body for provider webhook HMAC (SignNow / Intuit).
 app.use(
   express.json({
+    // Drawn contract signatures are capped after base64 decoding; keep the
+    // transport ceiling only large enough for that bounded payload.
+    limit: '512kb',
     verify: (req, _res, buf, encoding) => {
       try {
         const rawReq = req as express.Request & { rawBody?: Buffer };
@@ -119,6 +126,12 @@ app.use('/api/admin', asMiddleware(adminRoutes));
 app.use('/api/doulas', asMiddleware(doulaRoutes));
 app.use('/email', asMiddleware(emailRoutes));
 app.use('/requestService', asMiddleware(requestRouter));
+if (nativeContracts.enabled) {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const native = require('./features/contracts/composition');
+  // Client-owned routes must precede generic client /:id handlers.
+  app.use('/api/clients', asMiddleware(native.nativeClientContractRoutes));
+}
 app.use('/clients', asMiddleware(clientRoutes));
 // Deprecated singular / fewer-used aliases — keep mounted; measure usage (PR 7).
 app.use(
@@ -160,6 +173,12 @@ app.use('/api/contract', asMiddleware(contractRoutes));
 // Frontend Contracts page: GET/POST /contracts/templates (Supabase storage)
 app.use('/contracts', asMiddleware(contractTemplateRoutes));
 app.use('/api/contracts', asMiddleware(contractTemplateRoutes));
+if (nativeContracts.enabled) {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const native = require('./features/contracts/composition');
+  app.use('/api/contracts', asMiddleware(native.nativeAdminContractRoutes));
+  app.use('/signing', asMiddleware(native.nativeSigningRoutes));
+}
 app.use('/api/contract-signing', asMiddleware(contractSigningRoutes));
 app.use('/api/dashboard', asMiddleware(dashboardRoutes));
 app.use('/api/pdf-contract', asMiddleware(pdfContractRoutes));

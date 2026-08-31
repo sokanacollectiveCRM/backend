@@ -1,9 +1,10 @@
 import { Response } from 'express';
+
 import { ClientController } from '../controllers/clientController';
-import { ClientUseCase } from '../usecase/clientUseCase';
-import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
 import { ClientRepository } from '../repositories/interface/clientRepository';
+import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
 import { AuthRequest, ROLE } from '../types';
+import { ClientUseCase } from '../usecase/clientUseCase';
 import * as sensitiveAccess from '../utils/sensitiveAccess';
 
 jest.mock('../utils/sensitiveAccess');
@@ -89,6 +90,24 @@ describe('Client billing endpoints', () => {
     jest.clearAllMocks();
   });
 
+  it.each([
+    'I am unable to pay / Full Support Option',
+    'No Payment Required',
+    'Not sure / Need help figuring this out',
+  ])('accepts %s without insurance details', (paymentMethod) => {
+    const result = (clientController as any).validateBillingPayload({
+      payment_method: paymentMethod,
+    });
+
+    expect(result.message).toBeUndefined();
+    expect(result.value).toMatchObject({
+      payment_method: paymentMethod,
+      insurance_provider: null,
+      insurance_member_id: null,
+      self_pay_card_info: null,
+    });
+  });
+
   it('updates staff/admin billing and clears insurance fields for Self-Pay', async () => {
     const updatedAt = '2026-03-24T12:00:00.000Z';
     mockClientRepository.updateClientBilling!.mockResolvedValue({
@@ -123,20 +142,23 @@ describe('Client billing endpoints', () => {
 
     await clientController.updateClientBilling(req, mockResponse as Response);
 
-    expect(mockClientRepository.updateClientBilling).toHaveBeenCalledWith(clientId, {
-      payment_method: 'Self-Pay',
-      insurance: null,
-      insurance_provider: null,
-      insurance_member_id: null,
-      ...nullPrimaryInsuranceHolderFields,
-      policy_number: null,
-      insurance_phone_number: null,
-      has_secondary_insurance: false,
-      secondary_insurance_provider: null,
-      secondary_insurance_member_id: null,
-      secondary_policy_number: null,
-      self_pay_card_info: 'Visa ending 4242',
-    });
+    expect(mockClientRepository.updateClientBilling).toHaveBeenCalledWith(
+      clientId,
+      {
+        payment_method: 'Self-Pay',
+        insurance: null,
+        insurance_provider: null,
+        insurance_member_id: null,
+        ...nullPrimaryInsuranceHolderFields,
+        policy_number: null,
+        insurance_phone_number: null,
+        has_secondary_insurance: false,
+        secondary_insurance_provider: null,
+        secondary_insurance_member_id: null,
+        secondary_policy_number: null,
+        self_pay_card_info: 'Visa ending 4242',
+      }
+    );
     expect(mockResponse.json).toHaveBeenCalledWith({
       success: true,
       data: {
@@ -197,20 +219,23 @@ describe('Client billing endpoints', () => {
 
     await clientController.updateClientBilling(req, mockResponse as Response);
 
-    expect(mockClientRepository.updateClientBilling).toHaveBeenCalledWith(clientId, {
-      payment_method: 'Commercial Insurance',
-      insurance: 'Blue Cross Card Upload',
-      insurance_provider: 'Aetna',
-      insurance_member_id: 'MEM-123',
-      ...primaryInsuranceDetails,
-      policy_number: 'POL-456',
-      insurance_phone_number: '800-555-1212',
-      has_secondary_insurance: true,
-      secondary_insurance_provider: 'Blue Shield Secondary',
-      secondary_insurance_member_id: 'SEC-789',
-      secondary_policy_number: 'SEC-POL-456',
-      self_pay_card_info: null,
-    });
+    expect(mockClientRepository.updateClientBilling).toHaveBeenCalledWith(
+      clientId,
+      {
+        payment_method: 'Commercial Insurance',
+        insurance: 'Blue Cross Card Upload',
+        insurance_provider: 'Aetna',
+        insurance_member_id: 'MEM-123',
+        ...primaryInsuranceDetails,
+        policy_number: 'POL-456',
+        insurance_phone_number: '800-555-1212',
+        has_secondary_insurance: true,
+        secondary_insurance_provider: 'Blue Shield Secondary',
+        secondary_insurance_member_id: 'SEC-789',
+        secondary_policy_number: 'SEC-POL-456',
+        self_pay_card_info: null,
+      }
+    );
     expect(mockResponse.status).not.toHaveBeenCalledWith(400);
     expect(mockResponse.json).toHaveBeenCalledWith({
       success: true,
@@ -220,9 +245,12 @@ describe('Client billing endpoints', () => {
         insurance_provider: 'Aetna',
         insurance_member_id: 'MEM-123',
         ...primaryInsuranceDetails,
-        insurancePolicyHolderName: primaryInsuranceDetails.insurance_policy_holder_name,
-        insurancePolicyHolderDob: primaryInsuranceDetails.insurance_policy_holder_dob,
-        insurancePolicyHolderRelationship: primaryInsuranceDetails.insurance_policy_holder_relationship,
+        insurancePolicyHolderName:
+          primaryInsuranceDetails.insurance_policy_holder_name,
+        insurancePolicyHolderDob:
+          primaryInsuranceDetails.insurance_policy_holder_dob,
+        insurancePolicyHolderRelationship:
+          primaryInsuranceDetails.insurance_policy_holder_relationship,
         insurancePlanType: primaryInsuranceDetails.insurance_plan_type,
         policy_number: 'POL-456',
         insurance_phone_number: '800-555-1212',
@@ -258,7 +286,8 @@ describe('Client billing endpoints', () => {
     expect(mockResponse.status).toHaveBeenCalledWith(400);
     expect(mockResponse.json).toHaveBeenCalledWith({
       success: false,
-      error: 'An insurance card upload is required before saving insurance billing',
+      error:
+        'An insurance card upload is required before saving insurance billing',
       code: 'VALIDATION_ERROR',
     });
     expect(mockClientRepository.updateClientBilling).not.toHaveBeenCalled();
@@ -298,20 +327,23 @@ describe('Client billing endpoints', () => {
 
     await clientController.updateClientBilling(req, mockResponse as Response);
 
-    expect(mockClientRepository.updateClientBilling).toHaveBeenCalledWith(clientId, {
-      payment_method: 'Private Insurance',
-      insurance: 'Blue Cross',
-      insurance_provider: 'Blue Cross',
-      insurance_member_id: 'MEM-123',
-      ...primaryInsuranceDetails,
-      policy_number: 'POL-456',
-      insurance_phone_number: null,
-      has_secondary_insurance: false,
-      secondary_insurance_provider: null,
-      secondary_insurance_member_id: null,
-      secondary_policy_number: null,
-      self_pay_card_info: null,
-    });
+    expect(mockClientRepository.updateClientBilling).toHaveBeenCalledWith(
+      clientId,
+      {
+        payment_method: 'Private Insurance',
+        insurance: 'Blue Cross',
+        insurance_provider: 'Blue Cross',
+        insurance_member_id: 'MEM-123',
+        ...primaryInsuranceDetails,
+        policy_number: 'POL-456',
+        insurance_phone_number: null,
+        has_secondary_insurance: false,
+        secondary_insurance_provider: null,
+        secondary_insurance_member_id: null,
+        secondary_policy_number: null,
+        self_pay_card_info: null,
+      }
+    );
     expect(mockResponse.json).toHaveBeenCalledWith({
       success: true,
       data: {
@@ -320,9 +352,12 @@ describe('Client billing endpoints', () => {
         insurance_provider: 'Blue Cross',
         insurance_member_id: 'MEM-123',
         ...primaryInsuranceDetails,
-        insurancePolicyHolderName: primaryInsuranceDetails.insurance_policy_holder_name,
-        insurancePolicyHolderDob: primaryInsuranceDetails.insurance_policy_holder_dob,
-        insurancePolicyHolderRelationship: primaryInsuranceDetails.insurance_policy_holder_relationship,
+        insurancePolicyHolderName:
+          primaryInsuranceDetails.insurance_policy_holder_name,
+        insurancePolicyHolderDob:
+          primaryInsuranceDetails.insurance_policy_holder_dob,
+        insurancePolicyHolderRelationship:
+          primaryInsuranceDetails.insurance_policy_holder_relationship,
         insurancePlanType: primaryInsuranceDetails.insurance_plan_type,
         policy_number: 'POL-456',
         insurance_phone_number: null,
@@ -480,20 +515,23 @@ describe('Client billing endpoints', () => {
 
     await clientController.updateClientBilling(req, mockResponse as Response);
 
-    expect(mockClientRepository.updateClientBilling).toHaveBeenCalledWith(clientId, {
-      payment_method: 'Self-Pay',
-      insurance: null,
-      insurance_provider: null,
-      insurance_member_id: null,
-      ...nullPrimaryInsuranceHolderFields,
-      policy_number: null,
-      insurance_phone_number: null,
-      has_secondary_insurance: false,
-      secondary_insurance_provider: null,
-      secondary_insurance_member_id: null,
-      secondary_policy_number: null,
-      self_pay_card_info: null,
-    });
+    expect(mockClientRepository.updateClientBilling).toHaveBeenCalledWith(
+      clientId,
+      {
+        payment_method: 'Self-Pay',
+        insurance: null,
+        insurance_provider: null,
+        insurance_member_id: null,
+        ...nullPrimaryInsuranceHolderFields,
+        policy_number: null,
+        insurance_phone_number: null,
+        has_secondary_insurance: false,
+        secondary_insurance_provider: null,
+        secondary_insurance_member_id: null,
+        secondary_policy_number: null,
+        self_pay_card_info: null,
+      }
+    );
     expect(mockResponse.status).not.toHaveBeenCalledWith(400);
     expect(mockResponse.json).toHaveBeenCalledWith({
       success: true,
@@ -532,7 +570,8 @@ describe('Client billing endpoints', () => {
     expect(mockResponse.status).toHaveBeenCalledWith(400);
     expect(mockResponse.json).toHaveBeenCalledWith({
       success: false,
-      error: 'insurance_member_id is required when payment_method is not Self-Pay',
+      error:
+        'insurance_member_id is required when payment_method is not Self-Pay',
       code: 'VALIDATION_ERROR',
     });
   });
@@ -557,7 +596,8 @@ describe('Client billing endpoints', () => {
     expect(mockResponse.status).toHaveBeenCalledWith(400);
     expect(mockResponse.json).toHaveBeenCalledWith({
       success: false,
-      error: 'insurance_plan_type is required when payment_method is not Self-Pay',
+      error:
+        'insurance_plan_type is required when payment_method is not Self-Pay',
       code: 'VALIDATION_ERROR',
     });
   });
@@ -589,9 +629,12 @@ describe('Client billing endpoints', () => {
         insurance: 'State Medicaid',
         insurance_provider: 'State Medicaid',
         insurance_member_id: 'MCD-1',
-        insurance_policy_holder_name: primaryInsuranceDetails.insurance_policy_holder_name,
-        insurance_policy_holder_dob: primaryInsuranceDetails.insurance_policy_holder_dob,
-        insurance_policy_holder_relationship: primaryInsuranceDetails.insurance_policy_holder_relationship,
+        insurance_policy_holder_name:
+          primaryInsuranceDetails.insurance_policy_holder_name,
+        insurance_policy_holder_dob:
+          primaryInsuranceDetails.insurance_policy_holder_dob,
+        insurance_policy_holder_relationship:
+          primaryInsuranceDetails.insurance_policy_holder_relationship,
         insurance_plan_type: 'Medicaid',
       },
       user: { id: 'admin-user-id', role: ROLE.ADMIN } as any,
@@ -641,20 +684,23 @@ describe('Client billing endpoints', () => {
 
     await clientController.updateClientBilling(req, mockResponse as Response);
 
-    expect(mockClientRepository.updateClientBilling).toHaveBeenCalledWith(clientId, {
-      payment_method: 'Self-Pay',
-      insurance: null,
-      insurance_provider: null,
-      insurance_member_id: null,
-      ...nullPrimaryInsuranceHolderFields,
-      policy_number: null,
-      insurance_phone_number: null,
-      has_secondary_insurance: false,
-      secondary_insurance_provider: null,
-      secondary_insurance_member_id: null,
-      secondary_policy_number: null,
-      self_pay_card_info: 'Visa ending 4242',
-    });
+    expect(mockClientRepository.updateClientBilling).toHaveBeenCalledWith(
+      clientId,
+      {
+        payment_method: 'Self-Pay',
+        insurance: null,
+        insurance_provider: null,
+        insurance_member_id: null,
+        ...nullPrimaryInsuranceHolderFields,
+        policy_number: null,
+        insurance_phone_number: null,
+        has_secondary_insurance: false,
+        secondary_insurance_provider: null,
+        secondary_insurance_member_id: null,
+        secondary_policy_number: null,
+        self_pay_card_info: 'Visa ending 4242',
+      }
+    );
     expect(mockResponse.status).not.toHaveBeenCalledWith(400);
     expect(mockResponse.json).toHaveBeenCalledWith({
       success: true,

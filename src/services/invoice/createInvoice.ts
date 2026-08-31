@@ -1,10 +1,9 @@
 // src/features/quickbooks/services/invoice/createInvoiceService.ts
-
-import { sendInvoiceEmailToCustomer } from '../../services/invoice/sendInvoiceEmail';
 import { queryCloudSql } from '../../db/cloudSqlPool';
+import { upsertInvoiceToCloudSql } from '../../repositories/cloudSqlInvoiceWriteRepository';
+import { sendInvoiceEmailToCustomer } from '../../services/invoice/sendInvoiceEmail';
 import buildInvoicePayload from './buildInvoicePayload';
 import createInvoiceInQuickBooks from './createInvoiceInQuickBooks';
-import { upsertInvoiceToCloudSql } from '../../repositories/cloudSqlInvoiceWriteRepository';
 
 export interface CreateInvoiceParams {
   userId: string;
@@ -12,6 +11,8 @@ export interface CreateInvoiceParams {
   lineItems: any[];
   dueDate: string;
   memo?: string;
+  /** Stable QuickBooks request id used to deduplicate retryable creates. */
+  requestId?: string;
 }
 
 /**
@@ -20,7 +21,8 @@ export interface CreateInvoiceParams {
 export default async function createInvoiceService(
   params: CreateInvoiceParams
 ): Promise<any> {
-  const { userId, internalCustomerId, lineItems, dueDate, memo } = params;
+  const { userId, internalCustomerId, lineItems, dueDate, memo, requestId } =
+    params;
 
   if (!userId || !internalCustomerId) {
     throw new Error('userId and internalCustomerId are required');
@@ -44,27 +46,33 @@ export default async function createInvoiceService(
 
   const cust = rows[0];
   if (!cust?.qbo_customer_id) {
-    throw new Error(`No QuickBooks customer found for ${internalCustomerId} (missing qbo_customer_id on phi_clients)`);
+    throw new Error(
+      `No QuickBooks customer found for ${internalCustomerId} (missing qbo_customer_id on phi_clients)`
+    );
   }
 
   const qboCustomerId = cust.qbo_customer_id;
-  const customerName = [cust.first_name, cust.last_name].filter(Boolean).join(' ').trim() || null;
+  const customerName =
+    [cust.first_name, cust.last_name].filter(Boolean).join(' ').trim() || null;
   const customerEmail = cust.email || null;
-  console.log('📋 Customer found (Cloud SQL):', { customerName, customerEmail });
+  console.log('📋 Customer found (Cloud SQL):', {
+    customerName,
+    customerEmail,
+  });
 
-  // 2) Build the payload using the QBO ID 
+  // 2) Build the payload using the QBO ID
   console.log('🔧 Building invoice payload...');
   const payload = buildInvoicePayload(qboCustomerId, {
     lineItems,
     dueDate,
     memo,
-    customerEmail: customerEmail || ''
+    customerEmail: customerEmail || '',
   });
 
   // 3) Send it to QuickBooks
   console.log('📤 Creating invoice in QuickBooks...');
-  const invoice = await createInvoiceInQuickBooks(payload);
-  
+  const invoice = await createInvoiceInQuickBooks(payload, requestId);
+
   // 4) Persist the ledger row to Cloud SQL (phi_invoices). QuickBooks remains source-of-truth for the invoice object.
   console.log('💾 Saving invoice to Cloud SQL (phi_invoices)...');
   await upsertInvoiceToCloudSql({ internalCustomerId, invoice });
@@ -79,7 +87,7 @@ export default async function createInvoiceService(
         customerEmail,
         lineItems,
         dueDate,
-        memo
+        memo,
       });
       console.log('✅ Invoice email sent successfully to:', customerEmail);
     } catch (emailError) {

@@ -146,6 +146,77 @@ export const contractNotifications = {
   get frontendUrl(): string {
     return optionalEnv('FRONTEND_URL') ?? 'http://localhost:3001';
   },
+  get signedAdminNotificationEmail(): string {
+    return (
+      optionalEnv('CONTRACT_SIGNED_ADMIN_NOTIFICATION_EMAIL') ??
+      optionalEnv('CONTRACT_SIGNED_COPY_INTERNAL_EMAIL') ??
+      'hello@sokanacollective.com'
+    );
+  },
+};
+
+function positiveIntegerEnv(name: string, fallback: number): number {
+  const value = Number.parseInt(optionalEnv(name) ?? '', 10);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+/** Provider-neutral contract signing configuration. */
+export const nativeContracts = {
+  get enabled(): boolean {
+    const value = (
+      optionalEnv('NATIVE_CONTRACTS_ENABLED') ?? 'false'
+    ).toLowerCase();
+    return value === 'true' || value === '1';
+  },
+  get signingBaseUrl(): string {
+    return (
+      optionalEnv('CONTRACT_SIGNING_BASE_URL') ??
+      `${contractNotifications.frontendUrl}/signing`
+    ).replace(/\/+$/, '');
+  },
+  get invitationTtlHours(): number {
+    return positiveIntegerEnv('CONTRACT_INVITATION_TTL_HOURS', 72);
+  },
+  get pdfUrlTtlSeconds(): number {
+    return positiveIntegerEnv('CONTRACT_PDF_URL_TTL_SECONDS', 300);
+  },
+  get rateLimitHmacSecret(): string {
+    const value = optionalEnv('SIGNING_RATE_LIMIT_HMAC_SECRET');
+    if (value) return value;
+    if (IS_PRODUCTION) {
+      throw new Error(
+        'Missing required environment variable: SIGNING_RATE_LIMIT_HMAC_SECRET'
+      );
+    }
+    return 'local-native-contract-rate-limit-secret';
+  },
+  get rateLimitAttempts(): number {
+    return positiveIntegerEnv('SIGNING_RATE_LIMIT_ATTEMPTS', 30);
+  },
+  get rateLimitWindowSeconds(): number {
+    return positiveIntegerEnv('SIGNING_RATE_LIMIT_WINDOW_SECONDS', 60);
+  },
+  get drawnSignatureMaxBytes(): number {
+    return positiveIntegerEnv('CONTRACT_DRAWN_SIGNATURE_MAX_BYTES', 256 * 1024);
+  },
+  get outboxPollMs(): number {
+    return positiveIntegerEnv('CONTRACT_OUTBOX_POLL_MS', 5000);
+  },
+  get outboxEnabled(): boolean {
+    const value = (
+      optionalEnv('CONTRACT_OUTBOX_ENABLED') ?? 'false'
+    ).toLowerCase();
+    return value === 'true' || value === '1';
+  },
+  get outboxLeaseSeconds(): number {
+    return positiveIntegerEnv('CONTRACT_OUTBOX_LEASE_SECONDS', 60);
+  },
+  get outboxBatchSize(): number {
+    return positiveIntegerEnv('CONTRACT_OUTBOX_BATCH_SIZE', 10);
+  },
+  get outboxMaxAttempts(): number {
+    return positiveIntegerEnv('CONTRACT_OUTBOX_MAX_ATTEMPTS', 10);
+  },
 };
 
 /** PR 8 intake feature-package cutover / shadow window. */

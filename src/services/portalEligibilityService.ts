@@ -3,6 +3,7 @@ import {
   PortalEligibilitySnapshot,
   computeAllowedActions,
   computePortalEligibility,
+  isClientDepositRequired,
   resolveBillingPath,
 } from '../constants/portalEligibility';
 import { getPool } from '../db/cloudSqlPool';
@@ -246,7 +247,10 @@ export class PortalEligibilityService {
       if (!snapshot.is_eligible) {
         return {
           eligible: false,
-          reason: this.blockerMessage(snapshot.primary_portal_blocker),
+          reason: this.blockerMessage(
+            snapshot.primary_portal_blocker,
+            snapshot.billing_path
+          ),
           snapshot,
         };
       }
@@ -265,11 +269,14 @@ export class PortalEligibilityService {
   }
 
   private blockerMessage(
-    blocker: PortalEligibilitySnapshot['primary_portal_blocker']
+    blocker: PortalEligibilitySnapshot['primary_portal_blocker'],
+    billingPath: BillingPath
   ): string {
     switch (blocker) {
       case 'contract_unsigned':
-        return 'Invite available after contract is signed and deposit is paid.';
+        return isClientDepositRequired(billingPath)
+          ? 'Invite available after contract is signed and deposit is paid.'
+          : 'Invite available after contract is signed and billing readiness is satisfied.';
       case 'deposit_unpaid':
         return 'Invite available after contract is signed and deposit is paid.';
       case 'missing_card_on_file':

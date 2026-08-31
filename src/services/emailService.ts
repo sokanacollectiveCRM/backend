@@ -18,6 +18,44 @@ export interface ContractInitiatedBillingEmailInput {
   installmentCount?: number | null;
 }
 
+export interface NativeContractInvitationEmailInput {
+  clientEmail: string;
+  clientName: string;
+  contractTitle: string;
+  signingUrl: string;
+  expiresAt: Date;
+}
+
+export interface SignedContractCopyEmailInput {
+  clientEmail: string;
+  clientName: string;
+  contractTitle: string;
+  contractId: string;
+  pdf: Buffer;
+}
+
+export interface AdminContractSignedNotificationInput {
+  clientName: string;
+  contractType: string;
+  contractId: string;
+  contractTotal: string;
+  signedAt: string;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(
+    /[&<>"']/g,
+    (char) =>
+      ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      })[char] as string
+  );
+}
+
 export class NodemailerService implements EmailService {
   private transporter: nodemailer.Transporter;
 
@@ -64,13 +102,10 @@ export class NodemailerService implements EmailService {
   ): Promise<void> {
     // Check if we're in test mode
     if (process.env.USE_TEST_EMAIL === 'true') {
-      console.log('Test email mode enabled - email not sent');
-      console.log({
-        to,
-        subject,
-        text,
-        html: html ? 'HTML content available' : 'No HTML content',
-      });
+      logger.info(
+        { service: 'email', operation: 'test_send', status: 200 },
+        'Test email mode enabled; email not sent'
+      );
       return;
     }
 
@@ -176,6 +211,135 @@ Payment Schedule Link: ${paymentScheduleLink}`;
         from: `Sokana Billing <${contractNotifications.fromEmail}>`,
       }
     );
+  }
+
+  async sendNativeContractInvitation(
+    input: NativeContractInvitationEmailInput
+  ): Promise<void> {
+    const safeName = escapeHtml(input.clientName);
+    const safeTitle = escapeHtml(input.contractTitle);
+    const safeUrl = escapeHtml(input.signingUrl);
+    const expiration = input.expiresAt.toISOString();
+    await this.sendEmail(
+      input.clientEmail,
+      `Please review and sign: ${input.contractTitle}`,
+      `Hello ${input.clientName},\n\nPlease review and sign ${input.contractTitle} using this secure link:\n${input.signingUrl}\n\nThis link expires at ${expiration}.\n\nSokana Collective`,
+      `<p>Hello ${safeName},</p><p>Please review and sign <strong>${safeTitle}</strong>.</p><p><a href="${safeUrl}">Review and sign contract</a></p><p>This secure link expires at ${escapeHtml(expiration)}.</p><p>Sokana Collective</p>`
+    );
+  }
+
+  async sendAdminContractSignedNotification(
+    input: AdminContractSignedNotificationInput
+  ): Promise<void> {
+    if (process.env.USE_TEST_EMAIL === 'true') {
+      logger.info(
+        {
+          service: 'email',
+          operation: 'test_admin_contract_signed',
+          status: 200,
+        },
+        'Test email mode enabled; admin contract-signed notification not sent'
+      );
+      return;
+    }
+
+    const paymentScheduleLink = getLimitedBillingViewUrl(input.contractId);
+    const safeName = escapeHtml(input.clientName);
+    const safeType = escapeHtml(input.contractType);
+    const safeSignedAt = escapeHtml(input.signedAt);
+    const subject = `Contract signed: ${input.clientName}`;
+    const text = `A client contract has been signed.
+
+Client: ${input.clientName}
+Contract Type: ${input.contractType}
+Contract Total: ${input.contractTotal}
+Signed At: ${input.signedAt}
+Contract ID: ${input.contractId}
+Billing View: ${paymentScheduleLink}`;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #333;">Contract signed</h2>
+        <p>A client has completed signing a contract.</p>
+        <ul style="list-style: none; padding: 0; margin: 20px 0;">
+          <li style="margin: 10px 0;"><strong>Client:</strong> ${safeName}</li>
+          <li style="margin: 10px 0;"><strong>Contract Type:</strong> ${safeType}</li>
+          <li style="margin: 10px 0;"><strong>Contract Total:</strong> ${escapeHtml(input.contractTotal)}</li>
+          <li style="margin: 10px 0;"><strong>Signed At:</strong> ${safeSignedAt}</li>
+          <li style="margin: 10px 0;"><strong>Contract ID:</strong> ${escapeHtml(input.contractId)}</li>
+        </ul>
+        <p style="color: #666; font-size: 14px;">
+          Billing View:
+          <a href="${paymentScheduleLink}">${paymentScheduleLink}</a>
+        </p>
+        <p style="margin-top: 30px;">Sokana Collective</p>
+      </div>
+    `;
+
+    await this.sendEmail(
+      contractNotifications.signedAdminNotificationEmail,
+      subject,
+      text,
+      html,
+      {
+        from: `Sokana Billing <${contractNotifications.fromEmail}>`,
+      }
+    );
+  }
+
+  async sendSignedContractCopy(
+    input: SignedContractCopyEmailInput
+  ): Promise<void> {
+    if (process.env.USE_TEST_EMAIL === 'true') {
+      logger.info(
+        { service: 'email', operation: 'test_signed_copy', status: 200 },
+        'Test email mode enabled; signed copy not sent'
+      );
+      return;
+    }
+
+    const safeName = escapeHtml(input.clientName);
+    const safeTitle = escapeHtml(input.contractTitle);
+    const internalCopyEmail = (
+      process.env.CONTRACT_SIGNED_COPY_INTERNAL_EMAIL ||
+      'hello@sokanacollective.com'
+    ).trim();
+    try {
+      await this.transporter.sendMail({
+        from:
+          process.env.EMAIL_FROM || 'Sokana CRM <hello@sokanacollective.com>',
+        to: input.clientEmail,
+        bcc:
+          internalCopyEmail &&
+          internalCopyEmail.toLowerCase() !== input.clientEmail.toLowerCase()
+            ? internalCopyEmail
+            : undefined,
+        subject: `Your signed ${input.contractTitle}`,
+        text: `Hello ${input.clientName},\n\nAttached is your completed ${input.contractTitle}.\n\nSokana Collective`,
+        html: `<p>Hello ${safeName},</p><p>Attached is your completed <strong>${safeTitle}</strong>.</p><p>Sokana Collective</p>`,
+        attachments: [
+          {
+            filename: `sokana-contract-${input.contractId}.pdf`,
+            content: input.pdf,
+            contentType: 'application/pdf',
+          },
+        ],
+      });
+      logger.info(
+        { service: 'email', operation: 'send_signed_copy', status: 200 },
+        'Signed contract copy sent'
+      );
+    } catch {
+      logger.error(
+        {
+          service: 'email',
+          operation: 'send_signed_copy',
+          errorCode: 'EMAIL_SEND_FAILURE',
+        },
+        'Failed to send signed contract copy'
+      );
+      throw new Error('Failed to send signed contract copy');
+    }
   }
 
   async sendInvoiceEmail(

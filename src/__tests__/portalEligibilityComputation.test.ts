@@ -2,6 +2,7 @@ import {
   computeAllowedActions,
   computePortalBlockers,
   computePortalEligibility,
+  isClientDepositRequired,
   isPaymentAuthorizationRequired,
   resolveBillingPath,
   selectPrimaryPortalBlocker,
@@ -16,6 +17,7 @@ describe('portal eligibility computation', () => {
 
     it('maps self pay', () => {
       expect(resolveBillingPath('Self-Pay')).toBe('self_pay');
+      expect(resolveBillingPath('Out of Pocket')).toBe('self_pay');
     });
 
     it('maps medicaid and full support', () => {
@@ -23,6 +25,8 @@ describe('portal eligibility computation', () => {
       expect(
         resolveBillingPath('I am unable to pay / Full Support Option')
       ).toBe('full_support');
+      expect(resolveBillingPath('No Payment Required')).toBe('full_support');
+      expect(resolveBillingPath('Payment Waived')).toBe('full_support');
     });
 
     it('returns unknown for empty values', () => {
@@ -39,6 +43,14 @@ describe('portal eligibility computation', () => {
     it('does not require authorization for medicaid or full support', () => {
       expect(isPaymentAuthorizationRequired('medicaid')).toBe(false);
       expect(isPaymentAuthorizationRequired('full_support')).toBe(false);
+    });
+
+    it('requires a client deposit only for self pay', () => {
+      expect(isClientDepositRequired('self_pay')).toBe(true);
+      expect(isClientDepositRequired('insurance')).toBe(false);
+      expect(isClientDepositRequired('medicaid')).toBe(false);
+      expect(isClientDepositRequired('full_support')).toBe(false);
+      expect(isClientDepositRequired('unknown')).toBe(false);
     });
   });
 
@@ -62,7 +74,7 @@ describe('portal eligibility computation', () => {
     it('flags missing card for insurance/self pay only', () => {
       const insuranceBlockers = computePortalBlockers({
         contract_signed: true,
-        deposit_paid: true,
+        deposit_paid: false,
         billing_path: 'insurance',
         card_on_file: false,
       });
@@ -100,22 +112,22 @@ describe('portal eligibility computation', () => {
       expect(result.portal_blockers).toContain('contract_unsigned');
     });
 
-    it('is not eligible with signed contract but unpaid deposit', () => {
+    it('does not require a client deposit for Medicaid', () => {
       const result = computePortalEligibility({
         contract_signed: true,
         deposit_paid: false,
         billing_path: 'medicaid',
         card_on_file: false,
       });
-      expect(result.is_eligible).toBe(false);
-      expect(result.primary_portal_blocker).toBe('deposit_unpaid');
+      expect(result.is_eligible).toBe(true);
+      expect(result.primary_portal_blocker).toBeNull();
     });
 
     it('allows medicaid/full support without stored card', () => {
       expect(
         computePortalEligibility({
           contract_signed: true,
-          deposit_paid: true,
+          deposit_paid: false,
           billing_path: 'medicaid',
           card_on_file: false,
         }).is_eligible
@@ -124,7 +136,7 @@ describe('portal eligibility computation', () => {
       expect(
         computePortalEligibility({
           contract_signed: true,
-          deposit_paid: true,
+          deposit_paid: false,
           billing_path: 'full_support',
           card_on_file: false,
         }).is_eligible

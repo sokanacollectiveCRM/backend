@@ -1,3 +1,4 @@
+import { isClientDepositRequired } from '../constants/portalEligibility';
 import { queryCloudSql } from '../db/cloudSqlPool';
 import createInvoiceService from './invoice/createInvoice';
 import { portalEligibilityService } from './portalEligibilityService';
@@ -49,6 +50,32 @@ export class ContractSignatureCompletionService {
     );
 
     const contract = contracts.rows[0];
+    return this.finalizeContractRow(contract, 'signnow_status_sync', true);
+  }
+
+  async finalizeSignedContract(
+    contractId: string
+  ): Promise<ContractSignatureCompletionResult> {
+    const contracts = await queryCloudSql<ContractRow>(
+      `SELECT id AS contract_id, client_id, status
+       FROM public.phi_contracts
+       WHERE id = $1
+       LIMIT 1`,
+      [contractId]
+    );
+
+    return this.finalizeContractRow(
+      contracts.rows[0],
+      'native_contract_signature',
+      false
+    );
+  }
+
+  private async finalizeContractRow(
+    contract: ContractRow | undefined,
+    eventSource: string,
+    markSigned: boolean
+  ): Promise<ContractSignatureCompletionResult> {
     if (!contract) {
       return {
         contract_id: null,
@@ -62,7 +89,18 @@ export class ContractSignatureCompletionService {
     }
 
     const alreadySigned = contract.status === 'signed';
-    if (!alreadySigned) {
+    if (!alreadySigned && !markSigned) {
+      return {
+        contract_id: contract.contract_id,
+        client_id: contract.client_id,
+        contract_marked_signed: false,
+        deposit_invoice_created: false,
+        deposit_invoice_id: null,
+        payment_link: null,
+        reason: 'contract_not_signed',
+      };
+    }
+    if (!alreadySigned && markSigned) {
       await queryCloudSql(
         `UPDATE public.phi_contracts
          SET status = 'signed',
@@ -76,9 +114,21 @@ export class ContractSignatureCompletionService {
       contract.client_id,
       {
         force_contract_signed: true,
-        event_source: 'signnow_status_sync',
+        event_source: eventSource,
       }
     );
+
+    if (!isClientDepositRequired(snapshot.billing_path)) {
+      return {
+        contract_id: contract.contract_id,
+        client_id: contract.client_id,
+        contract_marked_signed: !alreadySigned,
+        deposit_invoice_created: false,
+        deposit_invoice_id: null,
+        payment_link: null,
+        reason: 'client_deposit_not_required',
+      };
+    }
 
     const installmentRows = await queryCloudSql<DepositInstallmentRow>(
       `SELECT
@@ -120,6 +170,18 @@ export class ContractSignatureCompletionService {
       };
     }
 
+    if (Number(depositInstallment.amount) === 0) {
+      return {
+        contract_id: contract.contract_id,
+        client_id: contract.client_id,
+        contract_marked_signed: !alreadySigned,
+        deposit_invoice_created: false,
+        deposit_invoice_id: null,
+        payment_link: null,
+        reason: 'zero_deposit_amount',
+      };
+    }
+
     if (
       !snapshot.deposit_paid &&
       snapshot.primary_portal_blocker === 'deposit_unpaid'
@@ -133,6 +195,7 @@ export class ContractSignatureCompletionService {
         internalCustomerId: contract.client_id,
         dueDate,
         memo: `Contract deposit invoice for contract ${contract.contract_id}`,
+        requestId: `native-contract:${contract.contract_id}:deposit-invoice:v1`,
         lineItems: [
           {
             DetailType: 'SalesItemLineDetail',

@@ -81,6 +81,7 @@ type BaseContractRow = {
   created_at: string | null;
   sent_at: string | null;
   signed_at: string | null;
+  signing_provider: string | null;
 };
 
 type InstallmentRow = {
@@ -136,35 +137,51 @@ function deriveBillingResponsibility(row: BaseContractRow): string | null {
 }
 
 function derivePaymentMethodSummary(row: BaseContractRow): string | null {
-  return humanizeLabel(row.payment_method)
-    ?? (row.self_pay_card_info ? 'Card on file' : null);
+  return (
+    humanizeLabel(row.payment_method) ??
+    (row.self_pay_card_info ? 'Card on file' : null)
+  );
 }
 
 function deriveInsuranceCoverageType(row: BaseContractRow): string | null {
-  return humanizeLabel(row.insurance_plan_type)
-    ?? humanizeLabel(row.insurance_provider)
-    ?? humanizeLabel(row.insurance);
+  return (
+    humanizeLabel(row.insurance_plan_type) ??
+    humanizeLabel(row.insurance_provider) ??
+    humanizeLabel(row.insurance)
+  );
 }
 
 function deriveDeductiblePaymentMethod(row: BaseContractRow): string | null {
-  if (!(row.insurance_provider || row.insurance || row.insurance_plan_type)) return null;
+  if (!(row.insurance_provider || row.insurance || row.insurance_plan_type))
+    return null;
   return derivePaymentMethodSummary(row);
 }
 
-function inferInstallmentIssue(
-  installment: { status: string; dueDate: string | null; amount: number }
-): { paymentIssueType: string | null; paymentIssueSummary: string | null } {
-  const normalizedStatus = String(installment.status || '').trim().toLowerCase();
+function inferInstallmentIssue(installment: {
+  status: string;
+  dueDate: string | null;
+  amount: number;
+}): { paymentIssueType: string | null; paymentIssueSummary: string | null } {
+  const normalizedStatus = String(installment.status || '')
+    .trim()
+    .toLowerCase();
   const dueDate = installment.dueDate ? new Date(installment.dueDate) : null;
-  const isPastDue = dueDate != null && !Number.isNaN(dueDate.getTime()) && dueDate.getTime() < Date.now();
+  const isPastDue =
+    dueDate != null &&
+    !Number.isNaN(dueDate.getTime()) &&
+    dueDate.getTime() < Date.now();
 
   if (normalizedStatus === 'failed') {
     return {
       paymentIssueType: 'card_declined',
-      paymentIssueSummary: 'A scheduled payment attempt failed and needs follow-up.',
+      paymentIssueSummary:
+        'A scheduled payment attempt failed and needs follow-up.',
     };
   }
-  if (normalizedStatus === 'overdue' || (normalizedStatus === 'pending' && isPastDue)) {
+  if (
+    normalizedStatus === 'overdue' ||
+    (normalizedStatus === 'pending' && isPastDue)
+  ) {
     return {
       paymentIssueType: 'past_due',
       paymentIssueSummary: `Payment of ${installment.amount.toFixed(2)} is past due.`,
@@ -195,11 +212,14 @@ function inferSummaryIssue(row: BaseContractRow): {
   paymentIssueType: string | null;
   paymentIssueSummary: string | null;
 } {
-  const invoiceStatus = String(row.invoice_status || '').trim().toLowerCase();
+  const invoiceStatus = String(row.invoice_status || '')
+    .trim()
+    .toLowerCase();
   if (invoiceStatus === 'failed') {
     return {
       paymentIssueType: 'card_declined',
-      paymentIssueSummary: 'The latest invoice/payment record shows a failed payment status.',
+      paymentIssueSummary:
+        'The latest invoice/payment record shows a failed payment status.',
     };
   }
 
@@ -208,7 +228,8 @@ function inferSummaryIssue(row: BaseContractRow): {
     if (!Number.isNaN(dueDate.getTime()) && dueDate.getTime() < Date.now()) {
       return {
         paymentIssueType: 'past_due',
-        paymentIssueSummary: 'A scheduled payment due date has passed and needs follow-up.',
+        paymentIssueSummary:
+          'A scheduled payment due date has passed and needs follow-up.',
       };
     }
   }
@@ -219,18 +240,64 @@ function inferSummaryIssue(row: BaseContractRow): {
   };
 }
 
-async function queryBaseContracts(contractId?: string): Promise<BaseContractRow[]> {
-  const contractFilterSql = contractId ? 'WHERE pc.id = $1::uuid' : '';
-  const params = contractId ? [contractId] : [];
+async function queryBaseContracts(
+  contractId?: string,
+  filters?: {
+    status?: string;
+    since?: string;
+    signingProvider?: 'native' | 'legacy';
+  }
+): Promise<BaseContractRow[]> {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  let paramIndex = 1;
+
+  if (contractId) {
+    conditions.push(`pc.id = $${paramIndex++}::uuid`);
+    params.push(contractId);
+  }
+  if (filters?.status) {
+    conditions.push(
+      `LOWER(COALESCE(pc.status::text, '')) = LOWER($${paramIndex++})`
+    );
+    params.push(filters.status);
+  }
+  if (filters?.since) {
+    conditions.push(
+      `COALESCE(pc.created_at, pc.inserted_at)::date >= $${paramIndex++}::date`
+    );
+    params.push(filters.since);
+  }
+  if (filters?.signingProvider === 'native') {
+    conditions.push(`pc.signing_provider = 'native'`);
+  } else if (filters?.signingProvider === 'legacy') {
+    conditions.push(`COALESCE(pc.signing_provider, '') <> 'native'`);
+  }
+
+  const contractFilterSql =
+    conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   const sql = `
     SELECT
       pc.id AS contract_id,
       pc.client_id AS client_id,
       NULLIF(TRIM(CONCAT(COALESCE(c.first_name, ''), ' ', COALESCE(c.last_name, ''))), '') AS client_name,
       NULLIF(c.email, '') AS client_email,
-      COALESCE(NULLIF(c.service_needed, ''), 'Contract') AS contract_type,
-      COALESCE(NULLIF(to_jsonb(pc)->>'status', ''), 'pending') AS contract_status,
-      COALESCE(NULLIF(to_jsonb(ps)->>'total_amount', ''), '0') AS total_amount,
+      COALESCE(
+        NULLIF(pc.field_snapshot->>'serviceType', ''),
+        NULLIF(c.service_needed, ''),
+        'Contract'
+      ) AS contract_type,
+      COALESCE(NULLIF(pc.status::text, ''), 'pending') AS contract_status,
+      COALESCE(
+        NULLIF(to_jsonb(ps)->>'total_amount', '')::numeric,
+        CASE
+          WHEN pc.signing_provider = 'native'
+            AND pc.field_snapshot ? 'pricing'
+          THEN (pc.field_snapshot->'pricing'->>'totalCents')::numeric / 100
+          ELSE 0
+        END,
+        0
+      )::text AS total_amount,
       NULLIF(to_jsonb(ps)->>'deposit_amount', '') AS deposit_amount,
       NULLIF(to_jsonb(ps)->>'schedule_name', '') AS payment_schedule,
       (
@@ -255,16 +322,25 @@ async function queryBaseContracts(contractId?: string): Promise<BaseContractRow[
       NULLIF(to_jsonb(inv)->>'qbo_invoice_id', '') AS qbo_invoice_id,
       COALESCE(
         NULLIF(to_jsonb(pc)->>'inserted_at', ''),
-        NULLIF(to_jsonb(pc)->>'created_at', '')
+        NULLIF(to_jsonb(pc)->>'created_at', ''),
+        to_char(pc.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
       ) AS created_at,
       NULLIF(to_jsonb(csi)->>'sent_at', '') AS sent_at,
       COALESCE(
         NULLIF(to_jsonb(csi)->>'signed_at', ''),
-        CASE WHEN COALESCE(NULLIF(to_jsonb(pc)->>'status', ''), '') = 'signed'
-          THEN COALESCE(NULLIF(to_jsonb(pc)->>'updated_at', ''), NULLIF(to_jsonb(pc)->>'inserted_at', ''), NULLIF(to_jsonb(pc)->>'created_at', ''))
+        to_char(pc.signed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+        CASE WHEN COALESCE(NULLIF(pc.status::text, ''), '') = 'signed'
+          THEN COALESCE(
+            to_char(pc.signed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+            NULLIF(to_jsonb(pc)->>'updated_at', ''),
+            NULLIF(to_jsonb(pc)->>'inserted_at', ''),
+            NULLIF(to_jsonb(pc)->>'created_at', ''),
+            to_char(pc.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+          )
           ELSE NULL
         END
-      ) AS signed_at
+      ) AS signed_at,
+      pc.signing_provider AS signing_provider
     FROM public.phi_contracts pc
     LEFT JOIN public.phi_clients c ON c.id = pc.client_id
     LEFT JOIN public.payment_schedules ps ON ps.contract_id = pc.id
@@ -282,10 +358,7 @@ async function queryBaseContracts(contractId?: string): Promise<BaseContractRow[
     ) inv ON TRUE
     LEFT JOIN public.contract_signnow_integration csi ON csi.contract_id = pc.id
     ${contractFilterSql}
-    ORDER BY COALESCE(
-      NULLIF(to_jsonb(pc)->>'inserted_at', ''),
-      NULLIF(to_jsonb(pc)->>'created_at', '')
-    ) DESC NULLS LAST, pc.id DESC
+    ORDER BY COALESCE(pc.signed_at, pc.created_at, pc.updated_at) DESC NULLS LAST, pc.id DESC
   `;
 
   try {
@@ -293,29 +366,45 @@ async function queryBaseContracts(contractId?: string): Promise<BaseContractRow[
     return rows;
   } catch (error) {
     const message = String((error as Error)?.message || '');
-    if (message.includes('contract_signnow_integration') && message.includes('does not exist')) {
-      const fallbackSql = sql.replace(
-        "LEFT JOIN public.contract_signnow_integration csi ON csi.contract_id = pc.id",
-        ''
-      ).replace(/NULLIF\(to_jsonb\(csi\)->>'sent_at', ''\) AS sent_at,/, "NULL::text AS sent_at,")
-       .replace(
-         /COALESCE\(\s*NULLIF\(to_jsonb\(csi\)->>'signed_at', ''\),[\s\S]*?\) AS signed_at/,
-         `CASE WHEN COALESCE(NULLIF(to_jsonb(pc)->>'status', ''), '') = 'signed'
+    if (
+      message.includes('contract_signnow_integration') &&
+      message.includes('does not exist')
+    ) {
+      const fallbackSql = sql
+        .replace(
+          'LEFT JOIN public.contract_signnow_integration csi ON csi.contract_id = pc.id',
+          ''
+        )
+        .replace(
+          /NULLIF\(to_jsonb\(csi\)->>'sent_at', ''\) AS sent_at,/,
+          'NULL::text AS sent_at,'
+        )
+        .replace(
+          /COALESCE\(\s*NULLIF\(to_jsonb\(csi\)->>'signed_at', ''\),[\s\S]*?\) AS signed_at/,
+          `CASE WHEN COALESCE(NULLIF(to_jsonb(pc)->>'status', ''), '') = 'signed'
             THEN COALESCE(NULLIF(to_jsonb(pc)->>'updated_at', ''), NULLIF(to_jsonb(pc)->>'inserted_at', ''), NULLIF(to_jsonb(pc)->>'created_at', ''))
             ELSE NULL
           END AS signed_at`
-       );
-      const { rows } = await queryCloudSql<BaseContractRow>(fallbackSql, params);
+        );
+      const { rows } = await queryCloudSql<BaseContractRow>(
+        fallbackSql,
+        params
+      );
       return rows;
     }
-    if (message.includes('phi_contracts') && (message.includes('does not exist') || message.includes('relation'))) {
+    if (
+      message.includes('phi_contracts') &&
+      (message.includes('does not exist') || message.includes('relation'))
+    ) {
       return [];
     }
     throw error;
   }
 }
 
-async function queryInstallments(contractId: string): Promise<LimitedContractInstallment[]> {
+async function queryInstallments(
+  contractId: string
+): Promise<LimitedContractInstallment[]> {
   const sql = `
     SELECT
       pi.payment_number,
@@ -354,15 +443,26 @@ async function queryInstallments(contractId: string): Promise<LimitedContractIns
     });
   } catch (error) {
     const message = String((error as Error)?.message || '');
-    if (message.includes('payment_installments') && (message.includes('does not exist') || message.includes('relation'))) {
+    if (
+      message.includes('payment_installments') &&
+      (message.includes('does not exist') || message.includes('relation'))
+    ) {
       return [];
     }
     throw error;
   }
 }
 
-export async function listLimitedBillingContracts(): Promise<LimitedContractBillingSummary[]> {
-  const rows = await queryBaseContracts();
+export interface LimitedBillingListFilters {
+  status?: string;
+  since?: string;
+  signingProvider?: 'native' | 'legacy';
+}
+
+export async function listLimitedBillingContracts(
+  filters?: LimitedBillingListFilters
+): Promise<LimitedContractBillingSummary[]> {
+  const rows = await queryBaseContracts(undefined, filters);
   return rows.map((row) => {
     const issue = inferSummaryIssue(row);
     return {
@@ -384,6 +484,9 @@ export async function listLimitedBillingContracts(): Promise<LimitedContractBill
       invoiceStatus: row.invoice_status,
       quickBooksSyncStatus: inferQuickBooksSyncStatus(row.qbo_invoice_id),
       limitedViewUrl: getLimitedBillingViewUrl(row.contract_id),
+      createdAt: toIsoDate(row.created_at),
+      signedAt: toIsoDate(row.signed_at),
+      signingProvider: row.signing_provider === 'native' ? 'native' : 'legacy',
     };
   });
 }
@@ -403,7 +506,8 @@ export async function getLimitedBillingContractById(
     contractType: row.contract_type || 'Contract',
     contractStatus: row.contract_status || 'pending',
     totalAmount: parseAmount(row.total_amount),
-    depositAmount: row.deposit_amount != null ? parseAmount(row.deposit_amount) : null,
+    depositAmount:
+      row.deposit_amount != null ? parseAmount(row.deposit_amount) : null,
     installmentCount: row.installment_count,
     paymentSchedule: row.payment_schedule,
     billingResponsibility: deriveBillingResponsibility(row),
