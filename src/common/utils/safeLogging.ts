@@ -73,6 +73,11 @@ export const createSafeRequestLogger =
   (req: Request, res: Response, next: NextFunction): void => {
     const startedAt = process.hrtime.bigint();
     const correlationId = safeRequestId(req.get('x-request-id'));
+    (
+      req as Request & {
+        correlationId?: string;
+      }
+    ).correlationId = correlationId;
     res.setHeader('x-request-id', correlationId);
 
     res.once('finish', () => {

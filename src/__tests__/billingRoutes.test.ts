@@ -1,6 +1,22 @@
-let currentUser:
-  | { id: string; role: string; email: string }
-  | null = { id: 'billing-user-id', role: 'billing', email: 'billing@sokanacollective.com' };
+import express from 'express';
+import request from 'supertest';
+
+import billingRoutes from '../routes/billingRoutes';
+import {
+  getBillingContractDocument,
+  getBillingContractDownloadLink,
+} from '../services/billingContractDownloadService';
+import { sendBillingReminderEmail } from '../services/billingReminderService';
+import {
+  getLimitedBillingContractById,
+  listLimitedBillingContracts,
+} from '../services/limitedBillingContractsService';
+
+let currentUser: { id: string; role: string; email: string } | null = {
+  id: 'billing-user-id',
+  role: 'billing',
+  email: 'billing@sokanacollective.com',
+};
 
 jest.mock('../middleware/authMiddleware', () => ({
   __esModule: true,
@@ -32,14 +48,19 @@ jest.mock('../services/billingReminderService', () => ({
   },
 }));
 
-import express from 'express';
-import request from 'supertest';
-import billingRoutes from '../routes/billingRoutes';
-import {
-  getLimitedBillingContractById,
-  listLimitedBillingContracts,
-} from '../services/limitedBillingContractsService';
-import { sendBillingReminderEmail } from '../services/billingReminderService';
+jest.mock('../services/billingContractDownloadService', () => ({
+  getBillingContractDownloadLink: jest.fn(),
+  getBillingContractDocument: jest.fn(),
+  BillingContractDownloadError: class BillingContractDownloadError extends Error {
+    status: number;
+    code: string;
+    constructor(message: string, status: number, code: string) {
+      super(message);
+      this.status = status;
+      this.code = code;
+    }
+  },
+}));
 
 describe('billing routes', () => {
   const app = express();
@@ -48,7 +69,11 @@ describe('billing routes', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    currentUser = { id: 'billing-user-id', role: 'billing', email: 'billing@sokanacollective.com' };
+    currentUser = {
+      id: 'billing-user-id',
+      role: 'billing',
+      email: 'billing@sokanacollective.com',
+    };
   });
 
   it('allows billing role to access GET /api/billing/contracts', async () => {
@@ -67,7 +92,9 @@ describe('billing routes', () => {
       },
     ]);
 
-    const response = await request(app).get('/api/billing/contracts').expect(200);
+    const response = await request(app)
+      .get('/api/billing/contracts')
+      .expect(200);
     expect(response.body.success).toBe(true);
     expect(response.body.meta).toMatchObject({ count: 1 });
     expect(response.body.data[0]).toMatchObject({
@@ -115,7 +142,9 @@ describe('billing routes', () => {
       limitedViewUrl: 'https://crm.example.com/billing/contracts/contract-1',
     });
 
-    const response = await request(app).get('/api/billing/contracts/contract-1').expect(200);
+    const response = await request(app)
+      .get('/api/billing/contracts/contract-1')
+      .expect(200);
     expect(response.body.success).toBe(true);
     expect(response.body.data).toMatchObject({
       contractId: 'contract-1',
@@ -134,8 +163,50 @@ describe('billing routes', () => {
     expect(response.body.data.pregnancy_number).toBeUndefined();
   });
 
+  it('allows billing role to access GET /api/billing/contracts/:contractId/download', async () => {
+    (getBillingContractDownloadLink as jest.Mock).mockResolvedValue({
+      url: 'https://storage.example.com/signed-contract.pdf?token=abc',
+      expiresInSeconds: 300,
+    });
+
+    const response = await request(app)
+      .get('/api/billing/contracts/contract-1/download')
+      .expect(200);
+
+    expect(getBillingContractDownloadLink).toHaveBeenCalledWith('contract-1', {
+      type: 'user',
+      id: 'billing-user-id',
+    });
+    expect(response.body.success).toBe(true);
+    expect(response.body.data).toEqual({
+      url: 'https://storage.example.com/signed-contract.pdf?token=abc',
+      expiresInSeconds: 300,
+    });
+  });
+
+  it('allows billing role to stream GET /api/billing/contracts/:contractId/document', async () => {
+    (getBillingContractDocument as jest.Mock).mockResolvedValue({
+      bytes: Buffer.from('%PDF-1.4 test'),
+      fileName: 'signed-contract-contract-1.pdf',
+    });
+
+    const response = await request(app)
+      .get('/api/billing/contracts/contract-1/document')
+      .expect(200);
+
+    expect(getBillingContractDocument).toHaveBeenCalledWith('contract-1');
+    expect(response.headers['content-type']).toContain('application/pdf');
+    expect(response.headers['content-disposition']).toContain('inline');
+    expect(Buffer.isBuffer(response.body)).toBe(true);
+    expect(response.body.toString('utf8', 0, 8)).toBe('%PDF-1.4');
+  });
+
   it('blocks non-admin non-billing users', async () => {
-    currentUser = { id: 'doula-user-id', role: 'doula', email: 'doula@example.com' };
+    currentUser = {
+      id: 'doula-user-id',
+      role: 'doula',
+      email: 'doula@example.com',
+    };
     await request(app).get('/api/billing/contracts').expect(403);
   });
 

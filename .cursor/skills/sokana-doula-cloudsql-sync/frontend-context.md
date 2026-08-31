@@ -2,6 +2,271 @@
 
 This file is intentionally updateable as frontend work finishes.
 
+## Preflight Update 2026-08-31 (CRM navigation + signed link redirect)
+
+### Task
+
+- Fix admin confusion: billing email link should land on signed contract page
+  after login; sidebar should not point template editor; completed signing links
+  should not reopen signing flow.
+
+### Files Scanned
+
+- `frontend-crm/src/common/data/sidebar-data.ts`
+- `frontend-crm/src/common/components/routes/ProtectedRoutes.tsx`
+- `frontend-crm/src/features/auth/Login.tsx`
+- `frontend-crm/src/features/public-signing/PublicSigningPage.tsx`
+
+### Contract Findings
+
+- Sidebar **Contracts** linked to `/contracts` (template editor), not
+  `/billing/contracts` (signed client contracts).
+- Login always redirected to `/`, dropping deep links from admin email.
+- Reopening a completed signing URL still loaded signing UI until manually
+  leaving.
+
+### Required Compatibility
+
+- `PrivateRoute` preserves `?next=` for post-login redirect.
+- Signed sessions redirect public signing page to `/contract-signed`.
+
+## Preflight Update 2026-08-31 (Admin signed contract PDF in CRM)
+
+### Task
+
+- Let admin/billing staff open the signed contract PDF from the CRM billing
+  contract page.
+
+### Files Scanned
+
+- `frontend-crm/src/features/billing-portal/BillingContractDetailPage.tsx`
+- `frontend-crm/src/features/billing-portal/billingPortalApi.ts`
+- `backend/src/routes/billingRoutes.ts`
+- `backend/src/services/billingContractDownloadService.ts`
+- `backend/src/features/contracts/services/contractService.ts`
+
+### Contract Findings
+
+- Admin signed notification email links to `/billing/contracts/:contractId`
+  (payment schedule only).
+- Backend already had `GET /api/contracts/:id/download` (admin-only, unwrapped
+  JSON).
+- Added `GET /api/billing/contracts/:contractId/download` returning ApiResponse
+  `{ url, expiresInSeconds }` for admin + billing roles.
+
+### Required Compatibility
+
+- CRM button calls billing download endpoint and opens returned URL in a new
+  tab.
+- Button shown when `contractStatus === 'signed'` or `signedAt` is set.
+
+## Preflight Update 2026-08-31 (Signature font + completion certificate)
+
+### Task
+
+- Align frontend typed-signature preview with backend PDF font (Great Vibes).
+- Replace technical PDF evidence appendix with client-friendly completion
+  certificate.
+
+### Files Scanned
+
+- `frontend-crm/src/features/public-signing/signingDisplay.ts`
+- `frontend-crm/src/index.css`
+- `frontend-crm/src/pages/ContractSignedPage.tsx`
+- `frontend-crm/public/fonts/GreatVibes-Regular.ttf`
+- `backend/src/features/contracts/pdf/renderer.ts`
+
+### Contract Findings
+
+- After FINISH, browser should navigate to `/contract-signed` (green success
+  card), not stay on the PDF viewer.
+- The last PDF page was a technical audit dump (`Contract Completion Evidence`
+  with SHA-256 hashes) — not intended as the primary client web UX; audit data
+  remains in GCS metadata and `contract_events`.
+- PDF appendix now reads as a short **Certificate of Completion** for client
+  records.
+
+### Required Compatibility
+
+- Self-hosted `/fonts/GreatVibes-Regular.ttf` matches backend embedded font.
+- No API changes.
+
+## Preflight Update 2026-08-31 (Typed signature PDF font)
+
+### Task
+
+- Typed signatures on completed PDFs should render in cursive/script, matching
+  the signing UI preview.
+
+### Files Scanned
+
+- `frontend-crm/src/features/public-signing/signingDisplay.ts`
+- `frontend-crm/src/features/public-signing/SigningPdf.tsx`
+- `backend/src/features/contracts/pdf/renderer.ts`
+
+### Contract Findings
+
+- Frontend preview uses `TYPED_SIGNATURE_FONT` (Segoe Script / cursive stack).
+- Backend previously stamped typed signatures with `HelveticaOblique`, which
+  reads as plain italic text on the PDF.
+
+### Required Compatibility
+
+- No API change; typed signature payload unchanged (`{ type: 'typed', text }`).
+
+## Preflight Update 2026-08-31 (Signing FINISH 500 fix)
+
+### Task
+
+- Fix `POST /signing/:token/complete` returning 500 when FINISH is pressed after
+  all fields are completed.
+
+### Files Scanned
+
+- `frontend-crm/src/features/public-signing/PublicSigningPage.tsx`
+- `frontend-crm/src/features/public-signing/signingApi.ts`
+- `backend/src/features/contracts/pdf/renderer.ts`
+- `backend/src/features/contracts/composition.ts`
+
+### Contract Findings
+
+- Frontend sends `completedFieldIds` with every applied manifest field
+  (signature, initials, date).
+- Backend PDF completion passed those ids through as `acknowledgedFieldIds`;
+  renderer rejected non-acknowledgment ids and threw before persisting the
+  signed PDF.
+
+### Drift Risk
+
+- Low after backend fix; frontend payload shape is correct and unchanged.
+
+### Required Compatibility
+
+- `completeSigning` body: `{ signature, consent, initials, completedFieldIds }`
+  — all required manifest field ids in `completedFieldIds`.
+
+## Preflight Update 2026-08-30 (Nancy temporary administrator password)
+
+### Task
+
+- Generate and set a temporary Identity Platform password for Nancy Cowans.
+
+### Files Scanned
+
+- `frontend-crm/src/common/contexts/UserContext.tsx`
+- `frontend-crm/src/features/auth/Login.tsx`
+- `frontend-crm/src/features/auth/ResetPassword.tsx`
+- `backend/scripts/migrate-admin-auth-to-identity.ts`
+
+### Contract Findings
+
+- Administrator password authentication is handled by Google Identity Platform.
+- Nancy must sign in through the existing login flow and can later replace the
+  temporary password through the standard reset flow.
+
+### Drift Risk
+
+- Updating a Supabase credential would not affect the active Identity Platform
+  administrator login.
+
+### Required Compatibility
+
+- Update only `nancy@sokanacollective.com` in project `sokana-private-data`.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+- [x] Password generated and set for Nancy's Identity Platform account
+
+### Handoff inbox
+
+- `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`
+
+## Preflight Update 2026-08-30 (post-reset login redirect)
+
+### Task
+
+- Ensure Nancy is redirected to login after successfully resetting her password.
+
+### Files Scanned
+
+- `frontend-crm/src/common/contexts/UserContext.tsx`
+- `frontend-crm/src/features/auth/ResetPassword.tsx`
+- `frontend-crm/src/features/auth/Login.tsx`
+
+### Contract Findings
+
+- Identity reset requests use `/login` as the Firebase post-reset continue URL.
+- The custom reset form also calls `navigate('/login', { replace: true })` after
+  a successful password update.
+
+### Drift Risk
+
+- Changing the Identity continue URL away from `/login` could return users to an
+  already-consumed reset code.
+
+### Required Compatibility
+
+- Preserve `/login` as the successful post-reset destination.
+
+### Action
+
+- [x] Context updated
+- [x] No implementation changes needed
+
+### Handoff inbox
+
+- `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`
+
+## Preflight Update 2026-08-30 (Nancy administrator reset resend)
+
+### Task
+
+- Send Nancy Cowans a fresh Google Identity Platform administrator
+  password-reset email.
+
+### Files Scanned
+
+- `frontend-crm/src/common/contexts/UserContext.tsx`
+- `frontend-crm/src/features/auth/Login.tsx`
+- `frontend-crm/src/features/auth/ResetPassword.tsx`
+- `backend/scripts/migrate-admin-auth-to-identity.ts`
+
+### Contract Findings
+
+- Identity reset links are single-use and expire.
+- The frontend accepts Firebase `mode=resetPassword&oobCode=...` links and
+  forwards links landing on `/login` to `/auth/reset-password`.
+- Migration resends generate a fresh Identity Platform link with production
+  `/auth/reset-password` as the continue URL and deliver it through Sokana
+  email.
+
+### Drift Risk
+
+- Reusing a prior reset email produces the expired/already-used error.
+- A localhost continue URL would make a valid production reset unusable.
+
+### Required Compatibility
+
+- Send only a newly generated link for `nancy@sokanacollective.com` and retain
+  the production frontend continue URL.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+### Handoff inbox
+
+- `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`
+
 ## Preflight Update 2026-08-28 (Identity reset link oobCode redirect)
 
 ### Task
@@ -826,6 +1091,156 @@ Use this checklist at the top of every new preflight entry:
   browser DevTools; CI `check:sensitive-logging` blocks regression.
 - **Required Compatibility**: Keep toast/user-visible errors; never log response
   bodies. Export/download flows must not console-log CSV/JSON payloads.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-30 (Contract Billing to Portal Workflow)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Make client invoicing respect insurance/self-pay/no-payment
+  billing paths and document contract-to-portal account creation end to end.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`; the user explicitly
+  prioritized contract billing and onboarding.
+- **Files Scanned**:
+  - `frontend-crm/src/features/clients/components/dialog/EnhancedContractDialog.tsx`
+  - `frontend-crm/src/common/utils/createContract.ts`
+  - `backend/src/routes/contractSigningRoutes.ts`
+  - `backend/src/features/contracts/services/contractService.ts`
+  - `backend/src/services/contractSignatureCompletionService.ts`
+  - `backend/src/services/portalEligibilityService.ts`
+  - `backend/src/constants/portalEligibility.ts`
+  - `backend/src/services/portalInviteService.ts`
+- **Contract Findings**: Contract creation now sends the selected client ID and
+  resolves it authoritatively in Cloud SQL, with email lookup retained for
+  legacy callers. Billing path is stored on `phi_clients.payment_method`; the
+  current completion path does not explicitly gate QuickBooks invoices by that
+  path, and portal blockers currently require a deposit for every billing path.
+- **Drift Risk**: Trusting a browser payment flag or treating insurance,
+  Medicaid, full-support, and no-payment clients as self-pay can generate an
+  incorrect client invoice and block portal invitation.
+- **Required Compatibility**: Derive billing path from Cloud SQL, create client
+  deposit invoices only for self-pay, treat no-payment labels as full-support,
+  preserve insurance card-on-file rules, and keep portal account creation behind
+  authoritative eligibility.
+- **Action**: Context updated; implement fail-closed invoice guards, scenario
+  tests, and an end-to-end workflow document.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-30 (Labor Initial Placement)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Align labor-contract initials immediately after each rendered
+  financial amount.
+- **Files Scanned**:
+  - `backend/scripts/seed-native-contract-templates.ts`
+  - `backend/src/features/contracts/pdf/coordinates.ts`
+  - `frontend-crm/src/features/public-signing/SigningPdf.tsx`
+  - `frontend-crm/src/features/public-signing/signingFields.ts`
+- **Contract Findings**: The frontend maps normalized top-left manifest
+  coordinates directly and accurately. The current labor manifest uses
+  placeholder-width x positions, leaving initial boxes displaced from the much
+  shorter rendered dollar values.
+- **Drift Risk**: Frontend offsets would break other templates and signed PDF
+  output. Mutating an existing template version would also invalidate frozen
+  contract assumptions.
+- **Required Compatibility**: Publish a new labor template version with smaller
+  boxes directly after the three rendered amounts and restore the closer date
+  position; retain prior versions for existing contracts.
+- **Action**: Context updated; add and verify final labor template v4 after
+  visual feedback on v3.
+- **Frontend UX Follow-up**: Initial fields are tightly grouped on the financial
+  lines, so rendering a floating label for every incomplete initial creates
+  overlapping, repetitive banners. Suppress visual initial banners while
+  preserving the yellow boxes, guided scrolling, titles, and ARIA labels.
+- **Modal/Exit Follow-up**: The adoption dialog currently blocks outside clicks
+  and Escape without an open-state callback, which also leaves its close button
+  ineffective. Allow normal dialog dismissal and register a native
+  `beforeunload` warning while an unsigned, continuable session is open.
+- **Signed Copy Follow-up**: Completed PDFs remain private in GCS and the signer
+  receives an attached copy through the post-signing outbox. Add a private
+  internal BCC for `hello@sokanacollective.com`; the frontend download remains
+  backed by short-lived protected document access.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-30 (Local Native Signing Connectivity)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Restore the emailed public signing page after a local API
+  connection refusal.
+- **Files Scanned**:
+  - `frontend-crm/src/features/public-signing/signingApi.ts`
+  - `frontend-crm/src/features/public-signing/PublicSigningPage.tsx`
+  - `frontend-crm/src/api/http.ts`
+- **Contract Findings**: Public signing requests use the shared API base URL;
+  the running frontend is resolving that URL to `http://localhost:5050`.
+- **Drift Risk**: Running the backend on port 8080 while the frontend targets
+  port 5050 makes every invitation appear unavailable before token validation.
+- **Required Compatibility**: Keep this local backend on port 5050 for the
+  current frontend session; preserve unauthenticated token-based requests.
+- **Action**: Context updated; restart the backend on port 5050 and verify the
+  public signing endpoint is reachable.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-30 (Native signing invitation resend)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Revoke the prior test invitation and email a fresh native
+  signing link to the existing test contract recipient.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-25-full-supabase-exit-launch-ready.md`,
+  `2026-08-10-backend-architecture-boundary-refactor.md`; the user explicitly
+  prioritized this resend.
+- **Files Scanned**:
+  - `frontend-crm/src/features/public-signing/signingApi.ts`
+  - `frontend-crm/src/features/public-signing/PublicSigningPage.tsx`
+  - `backend/src/features/contracts/services/contractService.ts`
+  - `backend/src/features/contracts/controllers/contractController.ts`
+- **Contract Findings**: The frontend reads the bearer token from the
+  `/signing/:token` route and calls public signing APIs without auth cookies.
+  Backend resend accepts only active contracts, atomically revokes prior
+  invitations, and emails the newly generated token.
+- **Drift Risk**: Reusing or exposing an old bearer token would bypass the
+  intended revocation model.
+- **Required Compatibility**: Preserve the localhost frontend signing base URL
+  and use the native resend operation so only the newest emailed link remains
+  valid.
+- **Action**: Context updated; no implementation change needed.
+
+## Preflight Update 2026-08-29 (Native Contract Signing UI)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Add the public frontend route needed to open emailed native
+  contract invitations and complete signing without the CRM creation workflow.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-25-full-supabase-exit-launch-ready.md`,
+  `2026-08-10-backend-architecture-boundary-refactor.md`; the user explicitly
+  prioritized the native signing test.
+- **Files Scanned**:
+  - `frontend-crm/src/Routes.tsx`
+  - `frontend-crm/src/pages/ContractSignedPage.tsx`
+  - `frontend-crm/src/common/utils/createContract.ts`
+  - `backend/src/features/contracts/routes/signingRoutes.ts`
+  - `backend/src/features/contracts/controllers/signingController.ts`
+  - `backend/src/features/contracts/validation/schemas.ts`
+- **Contract Findings**: The frontend has no `/signing/:token` route. The public
+  backend returns a PDF URL, ordered signing manifest, progress, consent,
+  expiry, and `canContinue`; progress and completion accept field IDs while
+  contract identity, signer identity, coordinates, and timestamps remain
+  server-authoritative.
+- **Drift Risk**: A frontend that invents field coordinates or required IDs,
+  logs the URL token, sends client timestamps, or uses authenticated API helpers
+  for the public route would weaken the backend security model or break signing.
+- **Required Compatibility**: Use `/signing/:token`, render backend-provided
+  normalized coordinates in order, submit only completed field IDs, initials,
+  consent, and typed/drawn signature, avoid token logging/storage, and navigate
+  to `/contract-signed?contract_id=...` after success.
+- **Action**: Context updated; implement and verify the public signing page in
+  the frontend repository.
 - **Context Updated**: yes
 - **Implementation Started After Gate**: yes
 
@@ -3269,6 +3684,32 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 - **Context Updated**: yes
 - **Implementation Started After Gate**: no
 
+## Preflight Update 2026-08-30 (Enable native contracts locally)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Enable the existing native contract workflow in local
+  development after validating its database and template prerequisites.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-25-full-supabase-exit-launch-ready.md`,
+  `2026-08-10-backend-architecture-boundary-refactor.md`; the user explicitly
+  requested this local contract-workflow action.
+- **Files Scanned**:
+  - `frontend-crm/src/common/utils/createContract.ts`
+  - `frontend-crm/src/features/clients/components/dialog/EnhancedContractDialog.tsx`
+  - `backend/src/routes/contractSigningRoutes.ts`
+  - `backend/src/config/env.ts`
+  - `backend/.env.example`
+- **Contract Findings**: The CRM immediately calls the native compatibility
+  endpoint, which returns 503 while `NATIVE_CONTRACTS_ENABLED` is false.
+- **Drift Risk**: Enabling the route without the migration and active canonical
+  PDF template will replace the clear 503 with a database or template failure.
+- **Required Compatibility**: Keep outbox processing disabled for this local
+  smoke test unless downstream email and billing side effects are intentional.
+- **Action**: Context updated; validate prerequisites, enable only the local
+  native-contract flag, restart the backend, and smoke-check health.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
 ## Preflight Update 2026-08-19 (Phase 4 private IP production cutover)
 
 - **Gate Result**: `run_preflight`
@@ -3457,3 +3898,168 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
   production reset links to the other 3 (`reset_sent=3`, SMTP status 200).
   Production auth evidence confirms session, MFA, `/auth/me`, and dashboard
   success for the completed admin. The remaining 3 require recipient action.
+
+## Preflight Update 2026-08-29 (Native Contract Module)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Replace SignNow for newly created contracts with a native,
+  provider-neutral, single-client-signer backend module.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-25-full-supabase-exit-launch-ready.md`,
+  `2026-08-10-backend-architecture-boundary-refactor.md`; the user explicitly
+  prioritized the native contract implementation.
+- **Files Scanned**:
+  - `frontend-crm/src/common/utils/createContract.ts`
+  - `frontend-crm/src/features/clients/components/dialog/EnhancedContractDialog.tsx`
+  - `frontend-crm/src/features/client-dashboard/components/ClientContractsTab.tsx`
+  - `frontend-crm/src/features/billing-portal/billingPortalApi.ts`
+  - `frontend-crm/src/features/billing-portal/types.ts`
+  - `frontend-crm/src/features/contracts/ContractRoutes.tsx`
+  - `frontend-crm/src/pages/ContractSignedPage.tsx`
+  - `frontend-crm/src/Routes.tsx`
+  - `frontend-crm/src/api/http.ts`
+- **Contract Findings**:
+  - Active creation posts a flat payload to
+    `POST /api/contract-signing/generate-contract`; a legacy helper can post a
+    nested `contractData` payload.
+  - Creation expects top-level `{ success, message, data }` and reads
+    `data.contractId`; transitional `data.signNow` and `data.emailDelivery`
+    fields remain in the TypeScript contract.
+  - Billing contract endpoints require canonical `{ success, data }` responses
+    and dollar-denominated amounts.
+  - The unmounted client contracts tab accepts an array or `{ contracts }` and
+    treats contract monetary values as cents.
+  - Existing auth sends bearer and `X-Session-Token` credentials; admin and
+    client role behavior must remain unchanged.
+- **Drift Risk**: Removing the legacy creation envelope, changing monetary
+  units, trusting a client-supplied client ID, or mounting `/me/contracts`
+  behind the generic `/:id` route would break current frontend assumptions or
+  ownership enforcement.
+- **Required Compatibility**: Keep the legacy generate-contract route as a
+  native adapter, accept both payload shapes, preserve billing/client units,
+  mount client contract routes before generic client routes, and return only
+  short-lived/protected document access.
+- **Action**: Context updated; implementation starts with additive Cloud SQL
+  schema and provider-neutral domain boundaries.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-30 (Guided contract creation and send)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Safely create and send a real native contract invitation,
+  beginning with environment, client, billing-path, and side-effect validation.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-25-full-supabase-exit-launch-ready.md`,
+  `2026-08-10-backend-architecture-boundary-refactor.md`; contract execution is
+  awaiting an explicit environment/recipient choice before any side effect.
+- **Files Scanned**:
+  - `frontend-crm/src/common/utils/createContract.ts`
+  - `frontend-crm/src/features/clients/components/dialog/EnhancedContractDialog.tsx`
+  - `backend/src/routes/contractSigningRoutes.ts`
+  - `backend/src/features/contracts/routes/adminContractRoutes.ts`
+  - `backend/src/features/contracts/validation/schemas.ts`
+  - `backend/docs/CONTRACT_TO_PORTAL_WORKFLOW.md`
+- **Contract Findings**: The active CRM sends the selected Cloud SQL client ID
+  and a flat pricing payload to authenticated
+  `POST /api/contract-signing/generate-contract`. That compatibility endpoint
+  creates and immediately sends the native contract; the canonical API supports
+  separate `POST /api/contracts/drafts` and `POST /api/contracts/:id/send`.
+- **Drift Risk**: Clicking the CRM send action is not a preview. It creates an
+  immutable sent contract and emails an expiring signing invitation. Later
+  signing may trigger outbox email and eligible self-pay invoice effects.
+- **Required Compatibility**: Use the authoritative Cloud SQL client record and
+  payment method, verify native-contract/outbox environment flags before send,
+  and preserve the existing `{ success, message, data.contractId }` response.
+- **Action**: Context updated; no contract will be created until the user
+  confirms environment, recipient, and pricing/payment details.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: no
+
+## Preflight Update 2026-08-30 (Labor initials placement)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Move labor-contract initials fields so they do not obscure
+  total, deposit, or balance values in the public signing view.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-25-full-supabase-exit-launch-ready.md`,
+  `2026-08-10-backend-architecture-boundary-refactor.md`; the user explicitly
+  prioritized correcting the active contract-signing flow.
+- **Files Scanned**:
+  - `frontend-crm/src/features/public-signing/SigningPdf.tsx`
+  - `frontend-crm/src/features/public-signing/signingFields.ts`
+  - `backend/scripts/seed-native-contract-templates.ts`
+  - `backend/src/features/contracts/pdf/coordinates.ts`
+  - `backend/src/features/contracts/pdf/fieldPreview.ts`
+  - `backend/src/features/contracts/__tests__/laborSupportTemplateV2.test.ts`
+- **Contract Findings**: Frontend overlays correctly apply normalized top-left
+  coordinates. The active labor v4 manifest places all three initials boxes
+  inside their corresponding financial snapshot boxes.
+- **Drift Risk**: Mutating v4 would violate immutable template-version
+  expectations and would not alter already-frozen sent contracts.
+- **Required Compatibility**: Register a new active labor template version, keep
+  v4 available for existing contracts, and assert that each initials box has a
+  positive horizontal gap from its financial value.
+- **Action**: Context updated; implementation starts with an additive v5 seed,
+  coordinate tests, preview verification, and local template activation.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-30 (Initials beside rendered amounts)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Place labor-contract initials immediately after each rendered
+  dollar amount instead of on top of the amount or trailing line text.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-25-full-supabase-exit-launch-ready.md`,
+  `2026-08-10-backend-architecture-boundary-refactor.md`; user prioritized the
+  active signing UI correction.
+- **Files Scanned**:
+  - `frontend-crm/src/features/public-signing/SigningPdf.tsx`
+  - `frontend-crm/src/features/public-signing/signingFields.ts`
+  - `backend/src/features/contracts/pdf/renderer.ts`
+  - `backend/src/features/contracts/services/contractService.ts`
+  - `backend/scripts/seed-native-contract-templates.ts`
+- **Contract Findings**: Frontend overlays use frozen snapshot coordinates from
+  contract creation. Fixed template v5 coordinates were too far right because
+  snapshot amount boxes are wider than the rendered currency text.
+- **Drift Risk**: Adjusting only the template would still fail for variable
+  amounts; completion stamping must use the same per-contract coordinates as the
+  signing UI.
+- **Required Compatibility**: Compute initials placement from actual pricing at
+  draft creation, persist it in `field_snapshot`, and reuse those coordinates
+  when stamping the completed PDF.
+- **Action**: Context updated; implementation started with dynamic placement
+  helper, contract snapshot integration, and completion renderer merge.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-08-31 (Post-signing success + emails)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: After native contract signing, show a success page, email the
+  client a signed PDF copy, and notify admin that the contract was signed.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-25-full-supabase-exit-launch-ready.md`,
+  `2026-08-10-backend-architecture-boundary-refactor.md`; user prioritized the
+  active signing completion UX.
+- **Files Scanned**:
+  - `frontend-crm/src/features/public-signing/PublicSigningPage.tsx`
+  - `frontend-crm/src/pages/ContractSignedPage.tsx`
+  - `backend/src/features/contracts/services/signingSessionService.ts`
+  - `backend/src/features/contracts/repositories/signingSessionRepository.ts`
+  - `backend/src/features/contracts/services/outboxService.ts`
+  - `backend/src/services/emailService.ts`
+- **Contract Findings**: Frontend already navigates to `/contract-signed` after
+  `POST /signing/:token/complete`. Backend queues `signed_copy_email` on
+  completion, but local dev had `CONTRACT_OUTBOX_ENABLED=false`, so emails were
+  not being delivered.
+- **Drift Risk**: Email delivery must not roll back a successful signature
+  transaction; admin notification must remain separate from the client PDF copy.
+- **Required Compatibility**: Keep completion response shape unchanged; send
+  client PDF + admin notification synchronously when outbox is disabled, and via
+  outbox when enabled in production.
+- **Action**: Context updated; backend adds admin notification + synchronous
+  local delivery fallback; frontend success page copy updated.
+- **Context Updated**: yes
+- **Implementation Started After Gate**: yes

@@ -65,6 +65,40 @@ export async function uploadObject(
   });
 }
 
+export interface UploadedObjectMetadata {
+  generation: string | null;
+  size: number | null;
+}
+
+/**
+ * Upload a private object and return the immutable GCS generation used as
+ * evidence that later reads reference the exact stored bytes.
+ */
+export async function uploadObjectWithMetadata(
+  objectName: string,
+  data: Buffer,
+  contentType: string,
+  options: { upsert?: boolean; metadata?: Record<string, string> } = {}
+): Promise<UploadedObjectMetadata> {
+  const file = getDocumentsBucket().file(objectName);
+  await file.save(data, {
+    contentType,
+    resumable: false,
+    ...(options.upsert === false
+      ? { preconditionOpts: { ifGenerationMatch: 0 } }
+      : {}),
+    metadata: {
+      cacheControl: 'private, max-age=0',
+      metadata: options.metadata,
+    },
+  });
+  const [metadata] = await file.getMetadata();
+  return {
+    generation: metadata.generation ? String(metadata.generation) : null,
+    size: metadata.size ? Number(metadata.size) : null,
+  };
+}
+
 export async function deleteObject(objectName: string): Promise<void> {
   await getDocumentsBucket().file(objectName).delete({ ignoreNotFound: true });
 }

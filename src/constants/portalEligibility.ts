@@ -88,7 +88,11 @@ export function resolveBillingPath(
 
   if (
     normalized.includes('unable to pay') ||
-    normalized.includes('full support')
+    normalized.includes('full support') ||
+    normalized.includes('no payment') ||
+    normalized.includes('no client payment') ||
+    normalized.includes('payment waived') ||
+    normalized.includes('complimentary')
   ) {
     return 'full_support';
   }
@@ -96,6 +100,7 @@ export function resolveBillingPath(
   if (
     normalized.includes('self-pay') ||
     normalized.includes('self pay') ||
+    normalized.includes('out of pocket') ||
     normalized === 'self_pay'
   ) {
     return 'self_pay';
@@ -118,6 +123,11 @@ export function isPaymentAuthorizationRequired(
   return billingPath === 'insurance' || billingPath === 'self_pay';
 }
 
+/** Only self-pay clients receive client-facing deposit invoices. */
+export function isClientDepositRequired(billingPath: BillingPath): boolean {
+  return billingPath === 'self_pay';
+}
+
 export interface ComputePortalEligibilityInput {
   contract_signed: boolean;
   deposit_paid: boolean;
@@ -136,7 +146,7 @@ export function computePortalBlockers(
   if (!input.contract_signed) {
     blockers.push('contract_unsigned');
   }
-  if (!input.deposit_paid) {
+  if (isClientDepositRequired(input.billing_path) && !input.deposit_paid) {
     blockers.push('deposit_unpaid');
   }
 

@@ -1,3 +1,8 @@
+import { queryCloudSql } from '../db/cloudSqlPool';
+import { contractSignatureCompletionService } from '../services/contractSignatureCompletionService';
+import createInvoiceService from '../services/invoice/createInvoice';
+import { portalEligibilityService } from '../services/portalEligibilityService';
+
 jest.mock('../db/cloudSqlPool', () => ({
   queryCloudSql: jest.fn(),
 }));
@@ -13,11 +18,6 @@ jest.mock('../services/portalEligibilityService', () => ({
   },
 }));
 
-import { queryCloudSql } from '../db/cloudSqlPool';
-import createInvoiceService from '../services/invoice/createInvoice';
-import { portalEligibilityService } from '../services/portalEligibilityService';
-import { contractSignatureCompletionService } from '../services/contractSignatureCompletionService';
-
 describe('ContractSignatureCompletionService', () => {
   const contractId = 'contract-1';
   const clientId = 'client-1';
@@ -30,30 +30,52 @@ describe('ContractSignatureCompletionService', () => {
   it('marks a completed contract signed and creates the deposit invoice once', async () => {
     (queryCloudSql as jest.Mock)
       .mockResolvedValueOnce({
-        rows: [{ contract_id: contractId, client_id: clientId, status: 'pending_signature' }],
+        rows: [
+          {
+            contract_id: contractId,
+            client_id: clientId,
+            status: 'pending_signature',
+          },
+        ],
       })
       .mockResolvedValueOnce({ rows: [], rowCount: 1 })
       .mockResolvedValueOnce({
-        rows: [{ id: 'inst-1', amount: '150.00', due_date: '2026-07-08', qbo_invoice_id: null }],
+        rows: [
+          {
+            id: 'inst-1',
+            amount: '150.00',
+            due_date: '2026-07-08',
+            qbo_invoice_id: null,
+          },
+        ],
       })
       .mockResolvedValueOnce({ rows: [], rowCount: 1 });
 
-    (portalEligibilityService.computeAndPersist as jest.Mock).mockResolvedValue({
-      deposit_paid: false,
-      primary_portal_blocker: 'deposit_unpaid',
-    });
+    (portalEligibilityService.computeAndPersist as jest.Mock).mockResolvedValue(
+      {
+        deposit_paid: false,
+        primary_portal_blocker: 'deposit_unpaid',
+        billing_path: 'self_pay',
+      }
+    );
 
     (createInvoiceService as jest.Mock).mockResolvedValue({
       Id: 'qbo-inv-1',
       invoiceLink: 'https://pay.example/deposit',
     });
 
-    const result = await contractSignatureCompletionService.finalizeSignedDocument(documentId);
+    const result =
+      await contractSignatureCompletionService.finalizeSignedDocument(
+        documentId
+      );
 
-    expect(portalEligibilityService.computeAndPersist).toHaveBeenCalledWith(clientId, {
-      force_contract_signed: true,
-      event_source: 'signnow_status_sync',
-    });
+    expect(portalEligibilityService.computeAndPersist).toHaveBeenCalledWith(
+      clientId,
+      {
+        force_contract_signed: true,
+        event_source: 'signnow_status_sync',
+      }
+    );
     expect(createInvoiceService).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'system-contract-signature',
@@ -79,18 +101,33 @@ describe('ContractSignatureCompletionService', () => {
   it('does not create a duplicate invoice when the deposit installment is already linked', async () => {
     (queryCloudSql as jest.Mock)
       .mockResolvedValueOnce({
-        rows: [{ contract_id: contractId, client_id: clientId, status: 'signed' }],
+        rows: [
+          { contract_id: contractId, client_id: clientId, status: 'signed' },
+        ],
       })
       .mockResolvedValueOnce({
-        rows: [{ id: 'inst-1', amount: '150.00', due_date: '2026-07-08', qbo_invoice_id: 'qbo-inv-1' }],
+        rows: [
+          {
+            id: 'inst-1',
+            amount: '150.00',
+            due_date: '2026-07-08',
+            qbo_invoice_id: 'qbo-inv-1',
+          },
+        ],
       });
 
-    (portalEligibilityService.computeAndPersist as jest.Mock).mockResolvedValue({
-      deposit_paid: false,
-      primary_portal_blocker: 'deposit_unpaid',
-    });
+    (portalEligibilityService.computeAndPersist as jest.Mock).mockResolvedValue(
+      {
+        deposit_paid: false,
+        primary_portal_blocker: 'deposit_unpaid',
+        billing_path: 'self_pay',
+      }
+    );
 
-    const result = await contractSignatureCompletionService.finalizeSignedDocument(documentId);
+    const result =
+      await contractSignatureCompletionService.finalizeSignedDocument(
+        documentId
+      );
 
     expect(createInvoiceService).not.toHaveBeenCalled();
     expect(result).toEqual(
@@ -101,5 +138,66 @@ describe('ContractSignatureCompletionService', () => {
         reason: 'deposit_invoice_exists',
       })
     );
+  });
+
+  it.each(['insurance', 'medicaid', 'full_support', 'unknown'])(
+    'does not create a client deposit invoice for %s billing',
+    async (billingPath) => {
+      (queryCloudSql as jest.Mock).mockResolvedValueOnce({
+        rows: [
+          { contract_id: contractId, client_id: clientId, status: 'signed' },
+        ],
+      });
+      (
+        portalEligibilityService.computeAndPersist as jest.Mock
+      ).mockResolvedValue({
+        deposit_paid: false,
+        primary_portal_blocker: null,
+        billing_path: billingPath,
+      });
+
+      const result =
+        await contractSignatureCompletionService.finalizeSignedContract(
+          contractId
+        );
+
+      expect(queryCloudSql).toHaveBeenCalledTimes(1);
+      expect(createInvoiceService).not.toHaveBeenCalled();
+      expect(result.reason).toBe('client_deposit_not_required');
+    }
+  );
+
+  it('skips an invalid legacy zero-dollar deposit installment', async () => {
+    (queryCloudSql as jest.Mock)
+      .mockResolvedValueOnce({
+        rows: [
+          { contract_id: contractId, client_id: clientId, status: 'signed' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'inst-zero',
+            amount: '0.00',
+            due_date: '2026-07-08',
+            qbo_invoice_id: null,
+          },
+        ],
+      });
+    (portalEligibilityService.computeAndPersist as jest.Mock).mockResolvedValue(
+      {
+        deposit_paid: false,
+        primary_portal_blocker: 'deposit_unpaid',
+        billing_path: 'self_pay',
+      }
+    );
+
+    const result =
+      await contractSignatureCompletionService.finalizeSignedContract(
+        contractId
+      );
+
+    expect(createInvoiceService).not.toHaveBeenCalled();
+    expect(result.reason).toBe('zero_deposit_amount');
   });
 });
