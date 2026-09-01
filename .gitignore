@@ -13,3 +13,4 @@ generated/
 *.log
 *.tmp
 *.temp
+tmp/

@@ -401,7 +401,6 @@ export class SigningSessionRepository {
       ...(isClientDepositRequired(resolveBillingPath(contract.payment_method))
         ? (['quickbooks_deposit_invoice'] as const)
         : []),
-      'client_portal_notification',
     ] as const;
     for (const type of outboxTypes) {
       await outbox.enqueue(
