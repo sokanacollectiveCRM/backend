@@ -56,6 +56,11 @@ function escapeHtml(value: string): string {
   );
 }
 
+const SAFE_MAIL_CONTENT_OPTIONS = {
+  disableFileAccess: true,
+  disableUrlAccess: true,
+} as const;
+
 export class NodemailerService implements EmailService {
   private transporter: nodemailer.Transporter;
 
@@ -111,6 +116,7 @@ export class NodemailerService implements EmailService {
 
     try {
       const mailOptions = {
+        ...SAFE_MAIL_CONTENT_OPTIONS,
         from:
           options?.from ||
           process.env.EMAIL_FROM ||
@@ -306,6 +312,7 @@ Billing View: ${paymentScheduleLink}`;
     ).trim();
     try {
       await this.transporter.sendMail({
+        ...SAFE_MAIL_CONTENT_OPTIONS,
         from:
           process.env.EMAIL_FROM || 'Sokana CRM <hello@sokanacollective.com>',
         to: input.clientEmail,
@@ -426,6 +433,7 @@ The Sokana Team`;
 
     try {
       const mailOptions = {
+        ...SAFE_MAIL_CONTENT_OPTIONS,
         from: process.env.EMAIL_FROM || 'Sokana CRM <noreply@sokanacrm.org>',
         to,
         subject,

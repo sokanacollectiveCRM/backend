@@ -90,6 +90,8 @@ async function main(): Promise<void> {
   });
 
   const mailOptions = {
+    disableFileAccess: true,
+    disableUrlAccess: true,
     from: smtp.from,
     to,
     subject,

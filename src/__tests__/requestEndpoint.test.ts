@@ -965,6 +965,8 @@ describe('Request Endpoint Tests', () => {
       );
 
       expect(mockTransporter.sendMail).toHaveBeenCalledWith({
+        disableFileAccess: true,
+        disableUrlAccess: true,
         from: expect.any(String),
         to: 'test@example.com',
         subject: 'Test Subject',
