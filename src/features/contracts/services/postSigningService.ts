@@ -70,7 +70,6 @@ export class PostSigningService {
         'signed_copy_email',
         'portal_eligibility',
         'quickbooks_deposit_invoice',
-        'client_portal_notification',
       ];
       const queued: ContractOutboxType[] = [];
       for (const type of types) {

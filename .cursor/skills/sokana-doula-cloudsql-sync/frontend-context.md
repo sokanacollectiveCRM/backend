@@ -2,6 +2,55 @@
 
 This file is intentionally updateable as frontend work finishes.
 
+## Preflight Update 2026-08-31 (Nightly Playwright E2E stub alignment)
+
+### Task
+
+- Fix nightly Playwright failures by aligning E2E stubs with current canonical
+  API shapes, cookie-mode auth, and UI copy.
+
+### Files Scanned
+
+- `frontend-crm/e2e/ticket3-client-status-interviewed.spec.ts`
+- `frontend-crm/e2e/ticket4-notes-visibility-toggle.spec.ts`
+- `frontend-crm/e2e/ticket5-doula-view-admin-notes.spec.ts`
+- `frontend-crm/e2e/portal-eligibility-actions.spec.ts`
+- `frontend-crm/e2e/portfolio/workflows/captureCrm.ts`
+- `frontend-crm/e2e/clients-leads-customers-tabs.spec.ts`
+- `frontend-crm/e2e/fixtures/httpStubs.ts`
+- `frontend-crm/src/features/clients/components/dialog/LeadProfileModal.tsx`
+- `frontend-crm/src/features/doula-dashboard/DoulaDashboardRoutes.tsx`
+- `frontend-crm/src/features/doula-dashboard/components/ActivitiesTab.tsx`
+- `frontend-crm/src/api/doulas/doulaService.ts`
+- `frontend-crm/src/features/integrations/QuickBooksConnect.tsx`
+
+### Contract Findings
+
+- Client list/detail E2E stubs must use `{ success: true, data }` + snake_case
+  against `http://localhost:5050/clients`.
+- Cookie auth uses `GET /auth/me` (not `/api/auth/me`).
+- Doula activities live at `/doula-dashboard/activities/:clientId` and call
+  `/api/doulas/clients/:id/activities`; visibility toggle requires UUID ids.
+- LeadProfileModal no longer exposes "Send $1 verification invoice";
+  card-on-file status comes from `GET /api/payment-methods/:id`.
+- QuickBooks page heading is `QuickBooks` (not "QuickBooks Integration").
+
+### Drift Risk
+
+- Nightly full Playwright suite fails when stubs still use legacy
+  `{ clients: [] }` wrappers or removed UI affordances.
+
+### Required Compatibility
+
+- Keep canonical ApiResponse wrappers in E2E stubs.
+- Prefer shared helpers in `e2e/helpers/e2eApiStubs.ts` and
+  `e2e/helpers/doulaE2eStubs.ts`.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
 ## Preflight Update 2026-08-31 (Signing credential session exchange)
 
 ### Task
@@ -4072,6 +4121,30 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 - **Context Updated**: yes
 - **Implementation Started After Gate**: yes
 
+## Preflight Update 2026-08-31 (upload contract templates to GCS)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Upload newly added local `templates/` PDFs/DOCX to GCS
+  `contract-templates/` for admin Contracts page list/preview.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-25-full-supabase-exit-launch-ready.md`,
+  `2026-08-10-backend-architecture-boundary-refactor.md`; user explicitly
+  requested template storage upload.
+- **Files Scanned**:
+  - `backend/src/services/supabaseContractService.ts`
+  - `backend/src/routes/contractTemplateRoutes.ts`
+  - `backend/src/services/gcs/documentStorage.ts`
+- **Contract Findings**: Admin Contracts page lists templates via
+  `GET /contracts/templates`; storage paths are flat filenames under
+  `contract-templates/` (e.g. `Labor Support Agreement.pdf`).
+- **Drift Risk**: Low for list/preview; native signing still requires separate
+  seed manifests in `contract_template_versions`.
+- **Required Compatibility**: Keep flat filename keys so existing
+  signed-url/download routes continue to work.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started
+
 ## Preflight Update 2026-08-31 (Post-signing success + emails)
 
 - **Gate Result**: `run_preflight`
@@ -4101,3 +4174,33 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
   local delivery fallback; frontend success page copy updated.
 - **Context Updated**: yes
 - **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-09-01 (automatic portal invite after eligibility)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Automatically email portal set-password invites when contract
+  signing and billing-path payment readiness satisfy backend eligibility; no
+  manual admin Invite click required.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-25-full-supabase-exit-launch-ready.md`,
+  `2026-08-10-backend-architecture-boundary-refactor.md`; user requested
+  automatic portal invite behavior.
+- **Files Scanned**:
+  - `frontend-crm/src/features/clients/components/portal-invite-modal.tsx`
+  - `frontend-crm/src/lib/portalEligibility.ts`
+  - `backend/src/services/portalEligibilityService.ts`
+  - `backend/src/services/portalAutoInviteService.ts`
+  - `backend/src/features/contracts/services/postSigningService.ts`
+- **Contract Findings**: Frontend still exposes manual Invite for admins;
+  backend now auto-sends invite on `portal_unlocked` using the same eligibility
+  oracle (`signed` + deposit when self-pay + card when insurance/self-pay).
+  Manual invite/resend endpoints unchanged.
+- **Drift Risk**: FE eligibility heuristics may still differ from backend
+  `client_onboarding_readiness`; admin UI should continue to trust API readiness
+  fields over local `isPortalEligible()` when showing Invite state.
+- **Required Compatibility**: Keep `POST /api/admin/clients/:id/portal/invite`
+  and response shape; add no FE requirement for auto-invite (email is
+  backend-only).
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started

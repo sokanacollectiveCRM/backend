@@ -176,6 +176,25 @@ export class PortalEligibilityService {
         event_type: 'portal_unlocked',
         event_source: options?.event_source ?? 'portal_eligibility_service',
       });
+
+      try {
+        const { tryAutoPortalInvite } = await import(
+          './portalAutoInviteService'
+        );
+        await tryAutoPortalInvite(clientId, {
+          eventSource: options?.event_source ?? 'portal_eligibility_service',
+        });
+      } catch (error: unknown) {
+        const message =
+          error instanceof Error ? error.message : 'portal_auto_invite_failed';
+        console.error('Auto portal invite failed', { clientId, message });
+        await clientOnboardingReadinessRepository.recordEvent({
+          client_id: clientId,
+          event_type: 'portal_auto_invite_failed',
+          event_source: options?.event_source ?? 'portal_eligibility_service',
+          payload: { error: message },
+        });
+      }
     } else if (previousEligible && !snapshot.is_eligible) {
       await clientOnboardingReadinessRepository.recordEvent({
         client_id: clientId,

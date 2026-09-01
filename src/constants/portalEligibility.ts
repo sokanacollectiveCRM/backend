@@ -40,6 +40,8 @@ export const ONBOARDING_EVENT_TYPES = [
   'portal_locked',
   'portal_unlocked',
   'portal_eligibility_computed',
+  'portal_auto_invite_sent',
+  'portal_auto_invite_failed',
   /** @deprecated Historical audit compatibility only. */
   'verification_invoice_paid_no_stored_method',
 ] as const;
