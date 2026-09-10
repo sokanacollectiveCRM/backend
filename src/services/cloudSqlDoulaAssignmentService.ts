@@ -1,9 +1,11 @@
-import { getPool } from '../db/cloudSqlPool';
 import { normalizeAssignmentServices } from '../constants/assignmentServices';
+import { getPool } from '../db/cloudSqlPool';
 
 export type DoulaAssignmentRole = 'primary' | 'backup';
 
-export function normalizeDoulaAssignmentRole(raw: unknown): DoulaAssignmentRole | null {
+export function normalizeDoulaAssignmentRole(
+  raw: unknown
+): DoulaAssignmentRole | null {
   if (typeof raw !== 'string') return null;
   const normalized = raw.trim().toLowerCase();
   if (normalized === 'primary' || normalized === 'backup') {
@@ -91,6 +93,7 @@ export class CloudSqlDoulaAssignmentService {
       SELECT 1
       FROM public.doula_assignments
       WHERE client_id = $1::uuid AND doula_id = $2::uuid
+        AND status = 'active'
       LIMIT 1
       `,
       [clientId, doulaId]
@@ -108,7 +111,9 @@ export class CloudSqlDoulaAssignmentService {
   ): Promise<CloudSqlAssignmentResult> {
     const normalizedServices = normalizeAssignmentServices(services);
     if (!normalizedServices) {
-      throw new Error('services must be a non-empty array of valid service names');
+      throw new Error(
+        'services must be a non-empty array of valid service names'
+      );
     }
 
     const { rows } = await getPool().query<{
@@ -121,11 +126,30 @@ export class CloudSqlDoulaAssignmentService {
       updated_at: Date;
     }>(
       `
-      INSERT INTO public.doula_assignments (client_id, doula_id, notes, role, services, assigned_at)
-      VALUES ($1::uuid, $2::uuid, $3, $4, $5::text[], NOW())
+      INSERT INTO public.doula_assignments (
+        client_id, doula_id, notes, role, services, assigned_at,
+        assigned_by, status, ended_at
+      )
+      VALUES ($1::uuid, $2::uuid, $3, $4, $5::text[], NOW(), $6::uuid, 'active', NULL)
+      ON CONFLICT (client_id, doula_id) DO UPDATE SET
+        notes = EXCLUDED.notes,
+        role = EXCLUDED.role,
+        services = EXCLUDED.services,
+        assigned_at = NOW(),
+        assigned_by = EXCLUDED.assigned_by,
+        status = 'active',
+        ended_at = NULL,
+        updated_at = NOW()
       RETURNING client_id, doula_id, services, assigned_at, notes, role, updated_at
       `,
-      [clientId, doulaId, notes ?? null, role ?? null, normalizedServices]
+      [
+        clientId,
+        doulaId,
+        notes ?? null,
+        role ?? null,
+        normalizedServices,
+        assignedBy ?? null,
+      ]
     );
 
     const row = rows[0];
@@ -147,9 +171,11 @@ export class CloudSqlDoulaAssignmentService {
   async unassignDoula(clientId: string, doulaId: string): Promise<boolean> {
     const result = await getPool().query(
       `
-      DELETE FROM public.doula_assignments
+      UPDATE public.doula_assignments
+      SET status = 'cancelled', ended_at = NOW(), updated_at = NOW()
       WHERE client_id = $1::uuid
         AND doula_id = $2::uuid
+        AND status = 'active'
       `,
       [clientId, doulaId]
     );
@@ -182,6 +208,7 @@ export class CloudSqlDoulaAssignmentService {
       FROM public.doula_assignments da
       LEFT JOIN public.doulas d ON d.id = da.doula_id
       WHERE da.client_id = $1::uuid
+        AND da.status = 'active'
       ORDER BY da.assigned_at DESC NULLS LAST
       `,
       [clientId]

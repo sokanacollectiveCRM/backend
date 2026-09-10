@@ -2,7 +2,9 @@ import { getPool } from '../db/cloudSqlPool';
 
 export type DoulaAssignmentRole = 'primary' | 'backup';
 
-function normalizeDoulaAssignmentRole(raw: unknown): DoulaAssignmentRole | null {
+function normalizeDoulaAssignmentRole(
+  raw: unknown
+): DoulaAssignmentRole | null {
   if (typeof raw !== 'string') return null;
   const normalized = raw.trim().toLowerCase();
   if (normalized === 'primary' || normalized === 'backup') {
@@ -97,8 +99,13 @@ interface DoulaDbRow {
 
 function isMissingAvailabilityTableError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
-  const message = String((error as { message?: string }).message || '').toLowerCase();
-  return message.includes('doula_availability') && (message.includes('does not exist') || message.includes('relation'));
+  const message = String(
+    (error as { message?: string }).message || ''
+  ).toLowerCase();
+  return (
+    message.includes('doula_availability') &&
+    (message.includes('does not exist') || message.includes('relation'))
+  );
 }
 
 interface DoulaAssignmentDbRow {
@@ -125,7 +132,9 @@ interface DoulaAssignmentDbRow {
 function isMissingServicesColumnError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const code = String((error as { code?: string }).code || '');
-  const message = String((error as { message?: string }).message || '').toLowerCase();
+  const message = String(
+    (error as { message?: string }).message || ''
+  ).toLowerCase();
   return (
     code === '42703' &&
     message.includes('services') &&
@@ -136,7 +145,9 @@ function isMissingServicesColumnError(error: unknown): boolean {
 function isMissingBirthOutcomesColumnError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const code = String((error as { code?: string }).code || '');
-  const message = String((error as { message?: string }).message || '').toLowerCase();
+  const message = String(
+    (error as { message?: string }).message || ''
+  ).toLowerCase();
   return (
     code === '42703' &&
     (message.includes('birth_outcomes_induction') ||
@@ -188,7 +199,9 @@ function mapAssignmentRow(row: DoulaAssignmentDbRow): DoulaAssignmentRowDto {
   };
 }
 
-function buildDoulasWhere(query: Pick<DoulaListQuery, 'q' | 'availableFrom' | 'availableTo'>): {
+function buildDoulasWhere(
+  query: Pick<DoulaListQuery, 'q' | 'availableFrom' | 'availableTo'>
+): {
   whereClause: string;
   values: string[];
 } {
@@ -198,7 +211,9 @@ function buildDoulasWhere(query: Pick<DoulaListQuery, 'q' | 'availableFrom' | 'a
   if (query.q) {
     values.push(query.q);
     const idx = values.length;
-    where.push(`(d.full_name ILIKE '%' || $${idx} || '%' OR d.email ILIKE '%' || $${idx} || '%')`);
+    where.push(
+      `(d.full_name ILIKE '%' || $${idx} || '%' OR d.email ILIKE '%' || $${idx} || '%')`
+    );
   }
 
   if (query.availableFrom && query.availableTo) {
@@ -223,8 +238,11 @@ function buildDoulasWhere(query: Pick<DoulaListQuery, 'q' | 'availableFrom' | 'a
   };
 }
 
-function buildAssignmentsWhere(filters: DoulaAssignmentsQuery): { whereClause: string; values: string[] } {
-  const where: string[] = [];
+function buildAssignmentsWhere(filters: DoulaAssignmentsQuery): {
+  whereClause: string;
+  values: string[];
+} {
+  const where: string[] = [`da.status = 'active'`];
   const values: string[] = [];
 
   if (filters.clientId) {
@@ -259,12 +277,16 @@ function buildAssignmentsWhere(filters: DoulaAssignmentsQuery): { whereClause: s
 
   if (filters.dateFrom) {
     values.push(filters.dateFrom);
-    where.push(`(da.assigned_at IS NOT NULL AND da.assigned_at >= $${values.length}::date)`);
+    where.push(
+      `(da.assigned_at IS NOT NULL AND da.assigned_at >= $${values.length}::date)`
+    );
   }
 
   if (filters.dateTo) {
     values.push(filters.dateTo);
-    where.push(`(da.assigned_at IS NOT NULL AND da.assigned_at < ($${values.length}::date + interval '1 day'))`);
+    where.push(
+      `(da.assigned_at IS NOT NULL AND da.assigned_at < ($${values.length}::date + interval '1 day'))`
+    );
   }
 
   return {
@@ -274,7 +296,9 @@ function buildAssignmentsWhere(filters: DoulaAssignmentsQuery): { whereClause: s
 }
 
 export class DoulasService {
-  async listDoulas(query: DoulaListQuery): Promise<{ data: DoulaRowDto[]; count: number }> {
+  async listDoulas(
+    query: DoulaListQuery
+  ): Promise<{ data: DoulaRowDto[]; count: number }> {
     const pool = getPool();
     const { whereClause, values } = buildDoulasWhere(query);
 
@@ -305,7 +329,7 @@ export class DoulasService {
           av.end_at AS availability_end_at,
           d.updated_at
         FROM public.doulas d
-        LEFT JOIN public.doula_assignments da ON da.doula_id = d.id
+        LEFT JOIN public.doula_assignments da ON da.doula_id = d.id AND da.status = 'active'
         LEFT JOIN LATERAL (
           SELECT doula_id, reason, start_at, end_at
           FROM public.doula_availability av
@@ -364,9 +388,14 @@ export class DoulasService {
         fullName: row.full_name,
         email: row.email,
         phone: row.phone,
-        assignmentsCount: query.includeCounts ? toNumber(row.assignments_count) : null,
+        assignmentsCount: query.includeCounts
+          ? toNumber(row.assignments_count)
+          : null,
         schedulingUrl: row.scheduling_url ?? null,
-        availabilityStatus: row.availability_status === 'unavailable' ? 'unavailable' : 'available',
+        availabilityStatus:
+          row.availability_status === 'unavailable'
+            ? 'unavailable'
+            : 'available',
         currentAvailabilityReason: row.availability_reason ?? null,
         currentAvailabilityStart: toIso(row.availability_start_at),
         currentAvailabilityEnd: toIso(row.availability_end_at),
@@ -377,15 +406,23 @@ export class DoulasService {
     } catch (error) {
       if (!isMissingAvailabilityTableError(error)) throw error;
 
-      const legacyWhere = query.availableFrom || query.availableTo
-        ? buildDoulasWhere({ q: query.q, availableFrom: undefined, availableTo: undefined })
-        : { whereClause, values };
+      const legacyWhere =
+        query.availableFrom || query.availableTo
+          ? buildDoulasWhere({
+              q: query.q,
+              availableFrom: undefined,
+              availableTo: undefined,
+            })
+          : { whereClause, values };
       const legacyCountSql = `
         SELECT COUNT(*)::int AS count
         FROM public.doulas d
         ${legacyWhere.whereClause}
       `;
-      const legacyCountRes = await pool.query<CountRow>(legacyCountSql, legacyWhere.values);
+      const legacyCountRes = await pool.query<CountRow>(
+        legacyCountSql,
+        legacyWhere.values
+      );
       const legacyDataSql = query.includeCounts
         ? `
           SELECT
@@ -401,7 +438,7 @@ export class DoulasService {
             NULL::timestamptz AS availability_end_at,
             d.updated_at
           FROM public.doulas d
-          LEFT JOIN public.doula_assignments da ON da.doula_id = d.id
+          LEFT JOIN public.doula_assignments da ON da.doula_id = d.id AND da.status = 'active'
           ${legacyWhere.whereClause}
           GROUP BY d.id, d.full_name, d.email, d.phone, d.scheduling_url, d.updated_at
           ORDER BY d.full_name ASC
@@ -434,7 +471,9 @@ export class DoulasService {
         fullName: row.full_name,
         email: row.email,
         phone: row.phone,
-        assignmentsCount: query.includeCounts ? toNumber(row.assignments_count) : null,
+        assignmentsCount: query.includeCounts
+          ? toNumber(row.assignments_count)
+          : null,
         schedulingUrl: row.scheduling_url ?? null,
         availabilityStatus: 'available',
         currentAvailabilityReason: null,
@@ -446,7 +485,9 @@ export class DoulasService {
     }
   }
 
-  async listDoulaAssignments(query: DoulaAssignmentsQuery): Promise<{ data: DoulaAssignmentRowDto[]; count: number }> {
+  async listDoulaAssignments(
+    query: DoulaAssignmentsQuery
+  ): Promise<{ data: DoulaAssignmentRowDto[]; count: number }> {
     const pool = getPool();
     const { whereClause, values } = buildAssignmentsWhere(query);
     const sortClause =
@@ -545,17 +586,33 @@ export class DoulasService {
 
     let dataRes;
     try {
-      dataRes = await pool.query<DoulaAssignmentDbRow>(dataSql, [...values, query.limit, query.offset]);
+      dataRes = await pool.query<DoulaAssignmentDbRow>(dataSql, [
+        ...values,
+        query.limit,
+        query.offset,
+      ]);
     } catch (error) {
       if (isMissingServicesColumnError(error)) {
         try {
-          dataRes = await pool.query<DoulaAssignmentDbRow>(dataSqlNoServices, [...values, query.limit, query.offset]);
+          dataRes = await pool.query<DoulaAssignmentDbRow>(dataSqlNoServices, [
+            ...values,
+            query.limit,
+            query.offset,
+          ]);
         } catch (innerError) {
           if (!isMissingBirthOutcomesColumnError(innerError)) throw innerError;
-          dataRes = await pool.query<DoulaAssignmentDbRow>(legacyDataSql, [...values, query.limit, query.offset]);
+          dataRes = await pool.query<DoulaAssignmentDbRow>(legacyDataSql, [
+            ...values,
+            query.limit,
+            query.offset,
+          ]);
         }
       } else if (isMissingBirthOutcomesColumnError(error)) {
-        dataRes = await pool.query<DoulaAssignmentDbRow>(legacyDataSql, [...values, query.limit, query.offset]);
+        dataRes = await pool.query<DoulaAssignmentDbRow>(legacyDataSql, [
+          ...values,
+          query.limit,
+          query.offset,
+        ]);
       } else {
         throw error;
       }
@@ -566,13 +623,17 @@ export class DoulasService {
     return { data, count };
   }
 
-  async getDoulaAssignment(clientId: string, doulaId: string): Promise<DoulaAssignmentRowDto | null> {
+  async getDoulaAssignment(
+    clientId: string,
+    doulaId: string
+  ): Promise<DoulaAssignmentRowDto | null> {
     const pool = getPool();
     const baseJoin = `
       FROM public.doula_assignments da
       JOIN public.doulas d ON d.id = da.doula_id
       JOIN public.phi_clients pc ON pc.id = da.client_id
       WHERE da.client_id = $1::uuid AND da.doula_id = $2::uuid
+        AND da.status = 'active'
       LIMIT 1
     `;
     const sql = `
@@ -644,17 +705,29 @@ export class DoulasService {
 
     let rows: DoulaAssignmentDbRow[];
     try {
-      ({ rows } = await pool.query<DoulaAssignmentDbRow>(sql, [clientId, doulaId]));
+      ({ rows } = await pool.query<DoulaAssignmentDbRow>(sql, [
+        clientId,
+        doulaId,
+      ]));
     } catch (error) {
       if (isMissingServicesColumnError(error)) {
         try {
-          ({ rows } = await pool.query<DoulaAssignmentDbRow>(sqlNoServices, [clientId, doulaId]));
+          ({ rows } = await pool.query<DoulaAssignmentDbRow>(sqlNoServices, [
+            clientId,
+            doulaId,
+          ]));
         } catch (innerError) {
           if (!isMissingBirthOutcomesColumnError(innerError)) throw innerError;
-          ({ rows } = await pool.query<DoulaAssignmentDbRow>(legacySql, [clientId, doulaId]));
+          ({ rows } = await pool.query<DoulaAssignmentDbRow>(legacySql, [
+            clientId,
+            doulaId,
+          ]));
         }
       } else if (isMissingBirthOutcomesColumnError(error)) {
-        ({ rows } = await pool.query<DoulaAssignmentDbRow>(legacySql, [clientId, doulaId]));
+        ({ rows } = await pool.query<DoulaAssignmentDbRow>(legacySql, [
+          clientId,
+          doulaId,
+        ]));
       } else {
         throw error;
       }
@@ -716,6 +789,7 @@ export class DoulasService {
       SET ${setClauses.join(', ')}
       WHERE client_id = $${clientParamIdx}::uuid
         AND doula_id = $${doulaParamIdx}::uuid
+        AND status = 'active'
       RETURNING
         client_id,
         (SELECT first_name FROM public.phi_clients WHERE id = client_id) AS client_first_name,
@@ -760,7 +834,9 @@ export class DoulasService {
       }
       if (input.assignedAt !== undefined) {
         legacyValues.push(input.assignedAt ?? null);
-        legacySetClauses.push(`assigned_at = $${legacyValues.length}::timestamp`);
+        legacySetClauses.push(
+          `assigned_at = $${legacyValues.length}::timestamp`
+        );
       }
       if (input.role !== undefined) {
         legacyValues.push(input.role ?? null);
@@ -785,6 +861,7 @@ export class DoulasService {
         SET ${legacySetClauses.join(', ')}
         WHERE client_id = $${clientParam}::uuid
           AND doula_id = $${doulaParam}::uuid
+          AND status = 'active'
         RETURNING
           client_id,
           (SELECT first_name FROM public.phi_clients WHERE id = client_id) AS client_first_name,
@@ -803,7 +880,10 @@ export class DoulasService {
           updated_at
       `;
 
-      ({ rows } = await pool.query<DoulaAssignmentDbRow>(legacySql, legacyValues));
+      ({ rows } = await pool.query<DoulaAssignmentDbRow>(
+        legacySql,
+        legacyValues
+      ));
     }
 
     return rows[0] ? mapAssignmentRow(rows[0]) : null;

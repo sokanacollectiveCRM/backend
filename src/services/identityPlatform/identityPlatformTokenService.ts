@@ -1,12 +1,9 @@
 import { AuthenticationError } from '../../domains/errors';
 import { User } from '../../entities/User';
-import { UserRepository } from '../../repositories/interface/userRepository';
 import { getFirebaseAuth } from './firebaseAdmin';
 import { loadUserFromIdentityClaims } from './loadUserFromIdentity';
 
 export class IdentityPlatformTokenService {
-  constructor(private userRepository?: UserRepository) {}
-
   async verifyIdToken(idToken: string): Promise<{
     uid: string;
     email: string | null;
@@ -30,6 +27,6 @@ export class IdentityPlatformTokenService {
     if (!claims.email) {
       throw new AuthenticationError('Identity token is missing email');
     }
-    return loadUserFromIdentityClaims(claims, this.userRepository);
+    return loadUserFromIdentityClaims(claims);
   }
 }

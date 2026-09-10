@@ -68,7 +68,7 @@ export function mapIntakeResponseToRequestForm(
     response.secondary_insurance_provider,
     response.secondary_insurance_member_id,
     response.secondary_policy_number,
-    response.self_pay_card_info,
+    undefined,
     response.demographics_multi
   );
 

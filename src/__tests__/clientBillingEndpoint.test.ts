@@ -104,7 +104,6 @@ describe('Client billing endpoints', () => {
       payment_method: paymentMethod,
       insurance_provider: null,
       insurance_member_id: null,
-      self_pay_card_info: null,
     });
   });
 
@@ -123,7 +122,6 @@ describe('Client billing endpoints', () => {
       secondary_insurance_provider: null,
       secondary_insurance_member_id: null,
       secondary_policy_number: null,
-      self_pay_card_info: 'Visa ending 4242',
       updated_at: updatedAt,
     } as any);
 
@@ -135,7 +133,6 @@ describe('Client billing endpoints', () => {
         insurance_member_id: 'MID-1',
         policy_number: 'POL-1',
         insurance_phone_number: '800-555-1212',
-        self_pay_card_info: 'Visa ending 4242',
       },
       user: { id: 'admin-user-id', role: ROLE.ADMIN } as any,
     } as unknown as AuthRequest;
@@ -156,7 +153,6 @@ describe('Client billing endpoints', () => {
         secondary_insurance_provider: null,
         secondary_insurance_member_id: null,
         secondary_policy_number: null,
-        self_pay_card_info: 'Visa ending 4242',
       }
     );
     expect(mockResponse.json).toHaveBeenCalledWith({
@@ -174,7 +170,6 @@ describe('Client billing endpoints', () => {
         secondary_insurance_provider: null,
         secondary_insurance_member_id: null,
         secondary_policy_number: null,
-        self_pay_card_info: 'Visa ending 4242',
         updated_at: updatedAt,
       },
     });
@@ -195,7 +190,6 @@ describe('Client billing endpoints', () => {
       secondary_insurance_provider: 'Blue Shield Secondary',
       secondary_insurance_member_id: 'SEC-789',
       secondary_policy_number: 'SEC-POL-456',
-      self_pay_card_info: null,
       updated_at: updatedAt,
     } as any);
 
@@ -233,7 +227,6 @@ describe('Client billing endpoints', () => {
         secondary_insurance_provider: 'Blue Shield Secondary',
         secondary_insurance_member_id: 'SEC-789',
         secondary_policy_number: 'SEC-POL-456',
-        self_pay_card_info: null,
       }
     );
     expect(mockResponse.status).not.toHaveBeenCalledWith(400);
@@ -258,7 +251,6 @@ describe('Client billing endpoints', () => {
         secondary_insurance_provider: 'Blue Shield Secondary',
         secondary_insurance_member_id: 'SEC-789',
         secondary_policy_number: 'SEC-POL-456',
-        self_pay_card_info: null,
         updated_at: updatedAt,
       },
     });
@@ -308,7 +300,6 @@ describe('Client billing endpoints', () => {
       secondary_insurance_provider: null,
       secondary_insurance_member_id: null,
       secondary_policy_number: null,
-      self_pay_card_info: null,
       updated_at: updatedAt,
     } as any);
 
@@ -341,7 +332,6 @@ describe('Client billing endpoints', () => {
         secondary_insurance_provider: null,
         secondary_insurance_member_id: null,
         secondary_policy_number: null,
-        self_pay_card_info: null,
       }
     );
     expect(mockResponse.json).toHaveBeenCalledWith({
@@ -365,7 +355,6 @@ describe('Client billing endpoints', () => {
         secondary_insurance_provider: null,
         secondary_insurance_member_id: null,
         secondary_policy_number: null,
-        self_pay_card_info: null,
         updated_at: updatedAt,
       },
     });
@@ -389,7 +378,6 @@ describe('Client billing endpoints', () => {
       secondary_insurance_provider: null,
       secondary_insurance_member_id: null,
       secondary_policy_number: null,
-      self_pay_card_info: null,
       updated_at: updatedAt,
     } as any);
 
@@ -421,7 +409,6 @@ describe('Client billing endpoints', () => {
         secondary_insurance_provider: null,
         secondary_insurance_member_id: null,
         secondary_policy_number: null,
-        self_pay_card_info: null,
         updated_at: updatedAt,
       },
     });
@@ -431,7 +418,6 @@ describe('Client billing endpoints', () => {
     mockClientRepository.getClientBilling!.mockResolvedValue({
       id: clientId,
       payment_method: 'Self-Pay',
-      self_pay_card_info: 'Cash note',
       updated_at: '2026-03-24T14:30:00.000Z',
     } as any);
 
@@ -457,7 +443,6 @@ describe('Client billing endpoints', () => {
         secondary_insurance_provider: null,
         secondary_insurance_member_id: null,
         secondary_policy_number: null,
-        self_pay_card_info: 'Cash note',
         updated_at: '2026-03-24T14:30:00.000Z',
       },
     });
@@ -501,7 +486,6 @@ describe('Client billing endpoints', () => {
       secondary_insurance_provider: null,
       secondary_insurance_member_id: null,
       secondary_policy_number: null,
-      self_pay_card_info: null,
       updated_at: updatedAt,
     } as any);
 
@@ -529,7 +513,6 @@ describe('Client billing endpoints', () => {
         secondary_insurance_provider: null,
         secondary_insurance_member_id: null,
         secondary_policy_number: null,
-        self_pay_card_info: null,
       }
     );
     expect(mockResponse.status).not.toHaveBeenCalledWith(400);
@@ -548,7 +531,6 @@ describe('Client billing endpoints', () => {
         secondary_insurance_provider: null,
         secondary_insurance_member_id: null,
         secondary_policy_number: null,
-        self_pay_card_info: null,
         updated_at: updatedAt,
       },
     });
@@ -618,7 +600,6 @@ describe('Client billing endpoints', () => {
       secondary_insurance_provider: null,
       secondary_insurance_member_id: null,
       secondary_policy_number: null,
-      self_pay_card_info: null,
       updated_at: updatedAt,
     } as any);
 
@@ -668,7 +649,6 @@ describe('Client billing endpoints', () => {
       secondary_insurance_provider: null,
       secondary_insurance_member_id: null,
       secondary_policy_number: null,
-      self_pay_card_info: 'Visa ending 4242',
       updated_at: updatedAt,
     } as any);
 
@@ -676,7 +656,6 @@ describe('Client billing endpoints', () => {
       params: { id: clientId },
       body: {
         payment_method: 'Self-Pay',
-        self_pay_card_info: 'Visa ending 4242',
         zip_code: 'invalid-zip',
       },
       user: { id: 'client-auth-id', role: ROLE.CLIENT } as any,
@@ -698,7 +677,6 @@ describe('Client billing endpoints', () => {
         secondary_insurance_provider: null,
         secondary_insurance_member_id: null,
         secondary_policy_number: null,
-        self_pay_card_info: 'Visa ending 4242',
       }
     );
     expect(mockResponse.status).not.toHaveBeenCalledWith(400);
@@ -717,7 +695,6 @@ describe('Client billing endpoints', () => {
         secondary_insurance_provider: null,
         secondary_insurance_member_id: null,
         secondary_policy_number: null,
-        self_pay_card_info: 'Visa ending 4242',
         updated_at: updatedAt,
       },
     });

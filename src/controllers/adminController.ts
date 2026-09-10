@@ -8,7 +8,6 @@ import {
 } from '../constants/assignmentServices';
 import { ClientRepository } from '../repositories/interface/clientRepository';
 import { UserRepository } from '../repositories/interface/userRepository';
-import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
 import {
   CloudSqlDoulaAssignmentService,
   normalizeDoulaAssignmentRole,
@@ -22,19 +21,17 @@ export class AdminController {
   private emailController: EmailController;
   private userRepository: UserRepository;
   private clientRepository: ClientRepository;
-  private assignmentRepository: SupabaseAssignmentRepository;
   private cloudSqlAssignmentService: CloudSqlDoulaAssignmentService;
   private cloudSqlTeamService = new CloudSqlTeamService();
 
   constructor(
     userRepository: UserRepository,
     clientRepository: ClientRepository,
-    assignmentRepository: SupabaseAssignmentRepository
+    _assignmentRepository?: unknown
   ) {
     this.emailController = new EmailController();
     this.userRepository = userRepository;
     this.clientRepository = clientRepository;
-    this.assignmentRepository = assignmentRepository;
     this.cloudSqlAssignmentService = new CloudSqlDoulaAssignmentService();
   }
 

@@ -10,10 +10,10 @@ import { CloudSqlActivityRepository } from './repositories/cloudSqlActivityRepos
 import { CloudSqlClientRepository } from './repositories/cloudSqlClientRepository';
 import { DoulaDocumentRepository } from './repositories/doulaDocumentRepository';
 import { RequestFormRepository } from './repositories/requestFormRepository';
-import { SupabaseAssignmentRepository } from './repositories/supabaseAssignmentRepository';
 import { SupabaseUserRepository } from './repositories/supabaseUserRepository';
 import { RequestFormService } from './services/RequestFormService';
 import { ClientDocumentUploadService } from './services/clientDocumentUploadService';
+import { CloudSqlDoulaAssignmentService } from './services/cloudSqlDoulaAssignmentService';
 import { DoulaDocumentCompletenessService } from './services/doulaDocumentCompletenessService';
 import { DoulaDocumentUploadService } from './services/doulaDocumentUploadService';
 import { IdentityPlatformTokenService } from './services/identityPlatform/identityPlatformTokenService';
@@ -33,7 +33,7 @@ const requestRepository = new RequestFormRepository(supabase);
 // Client data comes only from Cloud SQL (sokana_private). Supabase is auth only.
 const clientRepository = new CloudSqlClientRepository();
 const activityRepository = new CloudSqlActivityRepository(supabase);
-const assignmentRepository = new SupabaseAssignmentRepository(supabase);
+const assignmentRepository = new CloudSqlDoulaAssignmentService();
 const doulaDocumentRepository = new DoulaDocumentRepository(supabase);
 const clientDocumentRepository = new ClientDocumentRepository(supabase);
 
@@ -41,7 +41,7 @@ const clientDocumentRepository = new ClientDocumentRepository(supabase);
 // Services (External Integrations)
 //-----------------------------------------------
 const authService = new SupabaseAuthService(supabase, userRepository);
-const identityTokenService = new IdentityPlatformTokenService(userRepository);
+const identityTokenService = new IdentityPlatformTokenService();
 const requestService = new RequestFormService(requestRepository);
 const contractService = new SupabaseContractService(supabase);
 const doulaDocumentUploadService = new DoulaDocumentUploadService();

@@ -133,6 +133,7 @@ async function queryRows(
       FROM public.doula_assignments da
       JOIN public.doulas d ON d.id = da.doula_id
       WHERE da.client_id = c.id
+        AND da.status = 'active'
     ) assigned_doulas ON TRUE
     LEFT JOIN LATERAL (
       SELECT trim(to_char(SUM(EXTRACT(EPOCH FROM (h.end_time - h.start_time))) / 3600.0, 'FM999999990.##')) AS total_hours

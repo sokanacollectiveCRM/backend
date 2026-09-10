@@ -105,7 +105,6 @@ describe('Client billing/profile validation split', () => {
       secondary_insurance_provider: null,
       secondary_insurance_member_id: null,
       secondary_policy_number: null,
-      self_pay_card_info: 'Visa ending 4242',
       updated_at: updatedAt,
     } as any);
 
@@ -134,14 +133,12 @@ describe('Client billing/profile validation split', () => {
       insurance_provider: null,
       insurance_member_id: null,
       policy_number: null,
-      self_pay_card_info: 'Visa ending 4242',
     } as any);
 
     const req = {
       params: { id: clientId },
       body: {
         payment_method: 'Self-Pay',
-        self_pay_card_info: 'Visa ending 4242',
         zip_code: 'invalid-zip',
       },
       user: { id: 'client-auth-id', role: ROLE.CLIENT } as any,
@@ -163,7 +160,6 @@ describe('Client billing/profile validation split', () => {
         secondary_insurance_provider: null,
         secondary_insurance_member_id: null,
         secondary_policy_number: null,
-        self_pay_card_info: 'Visa ending 4242',
       }
     );
     expect(mockClientRepository.updateClientOperational).not.toHaveBeenCalled();
@@ -172,7 +168,6 @@ describe('Client billing/profile validation split', () => {
       success: true,
       data: expect.objectContaining({
         payment_method: 'Self-Pay',
-        self_pay_card_info: 'Visa ending 4242',
         updated_at: updatedAt,
       }),
     });
@@ -348,7 +343,6 @@ describe('Client billing/profile validation split', () => {
       secondary_insurance_provider: 'Kaiser Secondary',
       secondary_insurance_member_id: 'SEC-12345',
       secondary_policy_number: 'SEC-POL-1',
-      self_pay_card_info: null,
     } as any);
 
     mockClientRepository.findClientDetailedById!.mockResolvedValue({
@@ -367,7 +361,6 @@ describe('Client billing/profile validation split', () => {
         secondary_insurance_provider: 'Kaiser Secondary',
         secondary_insurance_member_id: 'SEC-12345',
         secondary_policy_number: 'SEC-POL-1',
-        self_pay_card_info: null,
         services_interested: ['Labor Support', 'Postpartum Support'],
         service_support_details: 'Night support preferred',
         service_specifics: 'First baby',

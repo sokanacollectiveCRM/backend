@@ -3,6 +3,7 @@ import { NextFunction, Response } from 'express';
 import { logger } from '../common/utils/logger';
 import { SAFE_INTERNAL_ERROR_MESSAGE } from '../common/utils/safeLogging';
 import { authService, identityTokenService } from '../index';
+import { isCurrentAccountActive } from '../security/accountAccess';
 import { recordAuthTransport } from '../security/authTransportTelemetry';
 import { ApiErrorCode } from '../security/errorCodes';
 import {
@@ -183,6 +184,26 @@ const authMiddleware = async (
       res.status(401).json({
         error: 'Invalid or expired session token',
         code: ApiErrorCode.UNAUTHENTICATED,
+      });
+      return;
+    }
+
+    if (!(await isCurrentAccountActive(user_entity))) {
+      logger.warn(
+        {
+          service: 'backend-authn',
+          event: 'inactive_account_denied',
+          userId: String(user_entity.id || ''),
+          role: String(user_entity.role || '').toLowerCase(),
+          method: req.method,
+          path: req.path,
+          status: 403,
+        },
+        'Inactive account denied'
+      );
+      res.status(403).json({
+        error: 'Account is inactive',
+        code: ApiErrorCode.FORBIDDEN,
       });
       return;
     }

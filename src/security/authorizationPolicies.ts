@@ -15,6 +15,8 @@ export type AccessDecision = 'allow' | 'deny';
 export const STAFF_ROLES = ['admin', 'billing', 'doula'] as const;
 export const ADMIN_ONLY = ['admin'] as const;
 export const ADMIN_BILLING = ['admin', 'billing'] as const;
+/** Organization-wide financial data is restricted to administrative/finance staff. */
+export const FINANCIAL_ROLES = ADMIN_BILLING;
 export const ADMIN_DOULA = ['admin', 'doula'] as const;
 export const ADMIN_DOULA_CLIENT = ['admin', 'doula', 'client'] as const;
 export const ADMIN_BILLING_DOULA = ['admin', 'billing', 'doula'] as const;

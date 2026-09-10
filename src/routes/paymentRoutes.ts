@@ -10,8 +10,6 @@ import authorizeRoles from '../middleware/authorizeRoles';
 import { listPaymentsFromCloudSql } from '../repositories/cloudSqlPaymentRepository';
 import {
   ADMIN_BILLING,
-  ADMIN_BILLING_DOULA,
-  ADMIN_DOULA_CLIENT,
   ADMIN_ONLY,
   decideClientResourceAccess,
   forbiddenBody,
@@ -66,13 +64,13 @@ const listPaymentsHandler = async (
 router.get(
   '/',
   authMiddleware,
-  requireRoles(ADMIN_BILLING_DOULA),
+  requireRoles(ADMIN_BILLING),
   listPaymentsHandler
 );
 router.get(
   '',
   authMiddleware,
-  requireRoles(ADMIN_BILLING_DOULA),
+  requireRoles(ADMIN_BILLING),
   listPaymentsHandler
 );
 
@@ -147,7 +145,7 @@ async function assertContractPaymentAccess(
 router.get(
   '/contract/:contractId/summary',
   authMiddleware,
-  requireRoles(ADMIN_DOULA_CLIENT),
+  requireRoles(['admin', 'billing', 'client']),
   async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const { contractId } = req.params;
@@ -168,7 +166,7 @@ router.get(
 router.get(
   '/contract/:contractId/schedule',
   authMiddleware,
-  requireRoles(ADMIN_DOULA_CLIENT),
+  requireRoles(['admin', 'billing', 'client']),
   async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const { contractId } = req.params;
@@ -189,7 +187,7 @@ router.get(
 router.get(
   '/contract/:contractId/history',
   authMiddleware,
-  requireRoles(ADMIN_DOULA_CLIENT),
+  requireRoles(['admin', 'billing', 'client']),
   async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const { contractId } = req.params;
@@ -268,7 +266,7 @@ router.put(
 router.get(
   '/status/:status',
   authMiddleware,
-  requireRoles(ADMIN_BILLING_DOULA),
+  requireRoles(ADMIN_BILLING),
   async (req: Request, res: Response): Promise<void> => {
     try {
       const { status } = req.params;

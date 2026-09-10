@@ -131,6 +131,12 @@ describe('Client doula assignment access (HIPAA-13B)', () => {
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({ success: true })
       );
+      const payload = (mockResponse.json as jest.Mock).mock.calls[0][0];
+      expect(payload.data).not.toHaveProperty('payment_method');
+      expect(payload.data).not.toHaveProperty('insurance_provider');
+      expect(payload.data).not.toHaveProperty('insurance_member_id');
+      expect(payload.data).not.toHaveProperty('self_pay_card_info');
+      expect(payload.data).not.toHaveProperty('qbo_customer_id');
     });
 
     it('returns 404 for unassigned doula without leaking operational fields', async () => {

@@ -17,16 +17,14 @@ import { ActivityDTO } from '../dto/response/ActivityDTO';
 import { ActivityMapper } from '../mappers/ActivityMapper';
 import { DoulaDocumentRepository } from '../repositories/doulaDocumentRepository';
 import { ActivityRepository } from '../repositories/interface/activityRepository';
-import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
-import { SupabaseUserRepository } from '../repositories/supabaseUserRepository';
 import { CloudSqlTeamService } from '../services/cloudSqlTeamService';
 import type { TeamMemberDto } from '../services/cloudSqlTeamService';
 import { DoulaAvailabilityService } from '../services/doulaAvailabilityService';
 import { DoulaDocumentCompletenessService } from '../services/doulaDocumentCompletenessService';
 import { DoulaDocumentIdResolver } from '../services/doulaDocumentIdResolver';
 import { DoulaDocumentUploadService } from '../services/doulaDocumentUploadService';
+import { CloudSqlIdentityUserService } from '../services/identityPlatform/cloudSqlIdentityUserService';
 import supabase from '../supabase';
-import { getSupabaseAdmin } from '../supabase';
 import { AuthRequest } from '../types';
 import { ClientUseCase } from '../usecase/clientUseCase';
 import { UserUseCase } from '../usecase/userUseCase';
@@ -38,8 +36,6 @@ import {
 
 export class DoulaController {
   private documentRepository: DoulaDocumentRepository;
-  private assignmentRepository: SupabaseAssignmentRepository;
-  private userRepository: SupabaseUserRepository;
   private activityRepository: ActivityRepository;
   private uploadService: DoulaDocumentUploadService;
   private completenessService: DoulaDocumentCompletenessService;
@@ -51,16 +47,14 @@ export class DoulaController {
 
   constructor(
     documentRepository: DoulaDocumentRepository,
-    assignmentRepository: SupabaseAssignmentRepository,
-    userRepository: SupabaseUserRepository,
+    _assignmentRepository: unknown,
+    _userRepository: unknown,
     activityRepository: ActivityRepository,
     uploadService: DoulaDocumentUploadService,
     userUseCase: UserUseCase,
     clientUseCase: ClientUseCase
   ) {
     this.documentRepository = documentRepository;
-    this.assignmentRepository = assignmentRepository;
-    this.userRepository = userRepository;
     this.activityRepository = activityRepository;
     this.uploadService = uploadService;
     this.completenessService = new DoulaDocumentCompletenessService(
@@ -108,28 +102,15 @@ export class DoulaController {
     );
     if (!unresolvedIds.length) return dtos;
 
-    const supabase = getSupabaseAdmin();
+    const identityUsers = new CloudSqlIdentityUserService();
     const resolved = new Map<string, { name: string; role?: string }>();
 
     await Promise.all(
       unresolvedIds.map(async (id) => {
         try {
-          const { data, error } = await supabase.auth.admin.getUserById(id);
-          if (error || !data?.user) return;
-          const meta =
-            (data.user.user_metadata as Record<string, unknown> | undefined) ||
-            {};
-          const appMeta =
-            (data.user.app_metadata as Record<string, unknown> | undefined) ||
-            {};
-          const first = String(meta.first_name ?? meta.firstname ?? '').trim();
-          const last = String(meta.last_name ?? meta.lastname ?? '').trim();
-          const full = `${first} ${last}`.trim();
-          const email = String(data.user.email || '').trim();
-          const role =
-            String(meta.role ?? appMeta.role ?? '').trim() || undefined;
-          const name = full || email || 'Staff member';
-          resolved.set(id, { name, role });
+          const staff = await identityUsers.findStaffByIdentifier(id);
+          if (!staff) return;
+          resolved.set(id, { name: staff.name, role: staff.role });
         } catch {
           // leave as Staff member on lookup failures
         }

@@ -1,18 +1,17 @@
 /**
  * Sensitive Data Access Authorization Helper
- * 
+ *
  * HIPAA COMPLIANCE:
  * - Implements strict authorization gating for PHI access
  * - Uses fail-closed principle (deny on error)
  * - Does NOT log user IDs or client IDs in error cases
- * 
+ *
  * Authorization Rules (Appendix H):
  * - admin: Always authorized to view PHI
  * - doula: Authorized ONLY if assigned to the client
  * - All other roles: Denied
  */
-
-import supabase from '../supabase';
+import { getPool } from '../db/cloudSqlPool';
 
 /**
  * User object from auth middleware.
@@ -36,18 +35,18 @@ export interface SensitiveAccessResult {
  * Check if a user is authorized to access sensitive/PHI data for a client.
  * Returns both the authorization result and the list of assigned client IDs
  * (needed for PHI Broker authorization).
- * 
+ *
  * Rules:
  * - admin => true (always)
  * - doula => true ONLY if assigned to the client
  * - other => false
- * 
+ *
  * IMPORTANT: Fails closed (returns false) on any error.
- * 
+ *
  * @param user - The authenticated user from req.user
  * @param clientId - The client ID to check access for
  * @returns SensitiveAccessResult with canAccess flag and assignedClientIds
- * 
+ *
  * HIPAA: Does not log user/client IDs in error cases
  */
 export async function canAccessSensitive(
@@ -78,26 +77,20 @@ export async function canAccessSensitive(
 
 /**
  * Get all client IDs assigned to a doula.
- * 
+ *
  * @param doulaId - The doula's user ID
  * @returns Array of assigned client IDs (empty on error - fail closed)
  */
 async function getDoulaAssignedClientIds(doulaId: string): Promise<string[]> {
   try {
-    const { data, error } = await supabase
-      .from('assignments')
-      .select('client_id')
-      .eq('doula_id', doulaId)
-      .eq('status', 'active');
-
-    if (error) {
-      // HIPAA: Do not log user IDs
-      console.error('[SensitiveAccess] Assignment lookup failed');
-      // Fail closed
-      return [];
-    }
-
-    return data?.map(row => row.client_id) || [];
+    const { rows } = await getPool().query<{ client_id: string }>(
+      `SELECT client_id
+         FROM public.doula_assignments
+        WHERE doula_id = $1::uuid
+          AND status = 'active'`,
+      [doulaId]
+    );
+    return rows.map((row) => row.client_id);
   } catch (error) {
     // HIPAA: Do not log error details
     console.error('[SensitiveAccess] Assignment check error');
@@ -109,7 +102,7 @@ async function getDoulaAssignedClientIds(doulaId: string): Promise<string[]> {
 /**
  * Type guard to check if a role can potentially access sensitive data.
  * Admin and doula roles may have access (subject to assignment check for doulas).
- * 
+ *
  * @param role - The user's role
  * @returns true if the role can potentially access sensitive data
  */

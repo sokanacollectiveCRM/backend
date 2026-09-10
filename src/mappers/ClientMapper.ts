@@ -1,11 +1,11 @@
-import { Client } from '../entities/Client';
-import { ClientListItemDTO } from '../dto/response/ClientListItemDTO';
-import { ClientDetailDTO } from '../dto/response/ClientDetailDTO';
 import { logger } from '../common/utils/logger';
+import { ClientDetailDTO } from '../dto/response/ClientDetailDTO';
+import { ClientListItemDTO } from '../dto/response/ClientListItemDTO';
+import { Client } from '../entities/Client';
 
 /**
  * Maps Client entity to DTOs for API responses.
- * 
+ *
  * HIPAA COMPLIANCE:
  * - toListItemDTO() and toDetailDTO() return ONLY operational fields (non-PHI)
  * - PHI fields are merged separately via PHI Broker response (in controller)
@@ -17,23 +17,26 @@ export class ClientMapper {
   /**
    * Maps a Client entity to ClientListItemDTO for list responses.
    * Returns ONLY operational fields - NO PHI.
-   * 
+   *
    * Allowed fields (non-PHI):
    * - id, first_name, last_name (identifiers)
    * - email, phone_number (PII - needed for ops, redact in logs)
    * - status, portal_status (workflow state)
    * - invited_at, updated_at (timestamps)
    * - is_eligible (computed flag)
-   * 
+   *
    * NEVER include: health_history, due_date, allergies, medical info, etc.
-   * 
+   *
    * @param entity - The Client entity from the database
    * @param isEligible - Optional eligibility flag (computed externally)
    * @returns Flat DTO with snake_case fields, non-PHI only
    */
-  static toListItemDTO(entity: Client, isEligible?: boolean): ClientListItemDTO {
+  static toListItemDTO(
+    entity: Client,
+    isEligible?: boolean
+  ): ClientListItemDTO {
     const user = entity.user;
-    
+
     // ONLY operational fields - no PHI
     return {
       id: entity.id,
@@ -41,11 +44,15 @@ export class ClientMapper {
       first_name: user?.firstname || user?.first_name || '',
       last_name: user?.lastname || user?.last_name || '',
       email: user?.email,
-      phone_number: entity.phoneNumber || user?.phone_number || user?.mobile_phone,
+      phone_number:
+        entity.phoneNumber || user?.phone_number || user?.mobile_phone,
       bio: user?.bio || undefined,
       city: user?.city || undefined,
       state: user?.state || undefined,
-      zipCode: user?.zip_code != null && user?.zip_code !== -1 ? String(user.zip_code) : undefined,
+      zipCode:
+        user?.zip_code != null && user?.zip_code !== -1
+          ? String(user.zip_code)
+          : undefined,
       country: user?.country || undefined,
       status: entity.status,
       service_needed: entity.serviceNeeded,
@@ -64,12 +71,12 @@ export class ClientMapper {
   /**
    * Maps raw client row data to ClientDetailDTO for single-item responses.
    * Returns ONLY operational fields - NO PHI.
-   * 
+   *
    * Flat mapping only - no nested objects, no legacy compatibility.
    * Output matches ClientDetailDTO exactly.
-   * 
+   *
    * NEVER include: health_history, due_date, allergies, medical info, etc.
-   * 
+   *
    * @param row - Raw row data from getClientById() with explicit columns
    * @param isEligible - Optional eligibility flag (computed externally)
    * @returns Flat DTO with snake_case fields, non-PHI only
@@ -123,7 +130,10 @@ export class ClientMapper {
     // ONLY operational fields - no PHI
     // PHI fields are merged separately from PHI Broker response (in controller)
     const phone_number = row.phone_number ?? undefined;
-    logger.info({ msg: '[ClientMapper] toDetailDTO', dto_phone_from_row: phone_number != null ? '(set)' : '(undefined)' });
+    logger.info({
+      msg: '[ClientMapper] toDetailDTO',
+      dto_phone_from_row: phone_number != null ? '(set)' : '(undefined)',
+    });
     return {
       id: row.id,
       client_number: row.client_number ?? undefined,
@@ -149,24 +159,29 @@ export class ClientMapper {
       insurance: row.insurance ?? undefined,
       insurance_provider: row.insurance_provider ?? undefined,
       insurance_member_id: row.insurance_member_id ?? undefined,
-      insurance_policy_holder_name: row.insurance_policy_holder_name ?? undefined,
+      insurance_policy_holder_name:
+        row.insurance_policy_holder_name ?? undefined,
       insurance_policy_holder_dob:
         row.insurance_policy_holder_dob instanceof Date
           ? row.insurance_policy_holder_dob.toISOString().slice(0, 10)
           : (row.insurance_policy_holder_dob ?? undefined),
-      insurance_policy_holder_relationship: row.insurance_policy_holder_relationship ?? undefined,
+      insurance_policy_holder_relationship:
+        row.insurance_policy_holder_relationship ?? undefined,
       insurance_plan_type: row.insurance_plan_type ?? undefined,
       policy_number: row.policy_number ?? undefined,
       insurance_phone_number: row.insurance_phone_number ?? undefined,
       has_secondary_insurance: row.has_secondary_insurance ?? undefined,
-      secondary_insurance_provider: row.secondary_insurance_provider ?? undefined,
-      secondary_insurance_member_id: row.secondary_insurance_member_id ?? undefined,
+      secondary_insurance_provider:
+        row.secondary_insurance_provider ?? undefined,
+      secondary_insurance_member_id:
+        row.secondary_insurance_member_id ?? undefined,
       secondary_policy_number: row.secondary_policy_number ?? undefined,
-      self_pay_card_info: row.self_pay_card_info ?? undefined,
       is_eligible: isEligible,
       matched_at: row.matched_at ?? undefined,
       qbo_customer_id: row.qbo_customer_id ?? undefined,
-      quickbooks_sync_status: row.quickbooks_sync_status ?? (row.qbo_customer_id ? 'link_stale' : 'not_linked'),
+      quickbooks_sync_status:
+        row.quickbooks_sync_status ??
+        (row.qbo_customer_id ? 'link_stale' : 'not_linked'),
       quickbooks_last_checked_at: row.quickbooks_last_checked_at
         ? new Date(row.quickbooks_last_checked_at).toISOString()
         : undefined,

@@ -356,7 +356,7 @@ export class CloudSqlClientRepository implements ClientRepository {
     doulaId: string
   ): Promise<string[]> {
     const { rows } = await queryCloudSql<{ client_id: string }>(
-      `SELECT client_id FROM public.doula_assignments WHERE doula_id = $1::uuid`,
+      `SELECT client_id FROM public.doula_assignments WHERE doula_id = $1::uuid AND status = 'active'`,
       [doulaId]
     );
     return rows.map((r) => r.client_id);

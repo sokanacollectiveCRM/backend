@@ -21,7 +21,7 @@ async function resolveAuthorizedClientId(
     throw new PaymentMethodServiceError('unauthorized', 401, 'Unauthorized');
   }
 
-  if (req.user.role === 'admin') {
+  if (req.user.role === 'admin' || req.user.role === 'billing') {
     return clientId;
   }
 
@@ -46,21 +46,6 @@ async function resolveAuthorizedClientId(
       );
     }
     return ownClientId;
-  }
-
-  if (req.user.role === 'doula') {
-    const allowed = await assignmentService.assignmentExists(
-      clientId,
-      req.user.id
-    );
-    if (!allowed) {
-      throw new PaymentMethodServiceError(
-        'forbidden',
-        403,
-        'Not authorized for this client'
-      );
-    }
-    return clientId;
   }
 
   throw new PaymentMethodServiceError(

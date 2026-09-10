@@ -1,8 +1,9 @@
 import express from 'express';
 import { z } from 'zod';
+
+import { paymentMethodController } from '../controllers/paymentMethodController';
 import authMiddleware from '../middleware/authMiddleware';
 import authorizeRoles from '../middleware/authorizeRoles';
-import { paymentMethodController } from '../controllers/paymentMethodController';
 
 const router = express.Router();
 
@@ -16,7 +17,8 @@ router.use(authMiddleware);
 
 router.post(
   '/',
-  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula', 'client']),
+  (req, res, next) =>
+    authorizeRoles(req, res, next, ['admin', 'billing', 'client']),
   (req, res, next) => {
     const parsed = savePaymentMethodSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -36,7 +38,8 @@ router.post(
 
 router.get(
   '/:clientId',
-  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula', 'client']),
+  (req, res, next) =>
+    authorizeRoles(req, res, next, ['admin', 'billing', 'client']),
   (req, res) => paymentMethodController.getPaymentMethod(req, res)
 );
 

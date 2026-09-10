@@ -3,23 +3,43 @@
  * GET /api/financial/reconciliation — JSON
  * GET /api/financial/reconciliation/csv — CSV export
  */
-
 import express, { Request, Response } from 'express';
+
 import authMiddleware from '../middleware/authMiddleware';
 import authorizeRoles from '../middleware/authorizeRoles';
-import { runReconciliation, ReconciliationRow } from '../services/reconciliationService';
+import { FINANCIAL_ROLES } from '../security/authorizationPolicies';
+import {
+  ReconciliationRow,
+  runReconciliation,
+} from '../services/reconciliationService';
 
 const router = express.Router();
 
-function getFilters(req: Request): { limit?: number; invoice_status?: string; date_from?: string; date_to?: string } {
-  const limit = req.query.limit != null ? Math.min(Math.max(1, Number(req.query.limit)), 1000) : undefined;
-  const invoice_status = typeof req.query.invoice_status === 'string' ? req.query.invoice_status : undefined;
-  const date_from = typeof req.query.date_from === 'string' ? req.query.date_from : undefined;
-  const date_to = typeof req.query.date_to === 'string' ? req.query.date_to : undefined;
+function getFilters(req: Request): {
+  limit?: number;
+  invoice_status?: string;
+  date_from?: string;
+  date_to?: string;
+} {
+  const limit =
+    req.query.limit != null
+      ? Math.min(Math.max(1, Number(req.query.limit)), 1000)
+      : undefined;
+  const invoice_status =
+    typeof req.query.invoice_status === 'string'
+      ? req.query.invoice_status
+      : undefined;
+  const date_from =
+    typeof req.query.date_from === 'string' ? req.query.date_from : undefined;
+  const date_to =
+    typeof req.query.date_to === 'string' ? req.query.date_to : undefined;
   return { limit, invoice_status, date_from, date_to };
 }
 
-const reconciliationHandler = async (req: Request, res: Response): Promise<void> => {
+const reconciliationHandler = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const filters = getFilters(req);
     const { data, summary } = await runReconciliation(filters);
@@ -37,9 +57,10 @@ const reconciliationHandler = async (req: Request, res: Response): Promise<void>
 router.get(
   '/reconciliation',
   authMiddleware,
-  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
+  (req, res, next) => authorizeRoles(req, res, next, [...FINANCIAL_ROLES]),
   (req: Request, res: Response) => {
-    const format = req.query.format === 'csv' || req.path.toLowerCase().endsWith('/csv');
+    const format =
+      req.query.format === 'csv' || req.path.toLowerCase().endsWith('/csv');
     if (format) {
       return reconciliationCsv(req, res);
     }
@@ -50,7 +71,7 @@ router.get(
 router.get(
   '/reconciliation/csv',
   authMiddleware,
-  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
+  (req, res, next) => authorizeRoles(req, res, next, [...FINANCIAL_ROLES]),
   reconciliationCsv
 );
 
@@ -78,7 +99,8 @@ async function reconciliationCsv(req: Request, res: Response): Promise<void> {
     const escape = (v: string | number | null | undefined): string => {
       if (v == null) return '';
       const s = String(v);
-      if (s.includes(',') || s.includes('"') || s.includes('\n')) return `"${s.replace(/"/g, '""')}"`;
+      if (s.includes(',') || s.includes('"') || s.includes('\n'))
+        return `"${s.replace(/"/g, '""')}"`;
       return s;
     };
 
@@ -95,7 +117,7 @@ async function reconciliationCsv(req: Request, res: Response): Promise<void> {
       (r.payment_ids ?? []).join(';'),
       (r.payment_customers ?? []).join(';'),
       (r.payment_amounts ?? []).join(';'),
-      (r.payment_created_dates ?? []).map((d) => (d ?? '')).join(';'),
+      (r.payment_created_dates ?? []).map((d) => d ?? '').join(';'),
     ];
 
     const lines: string[] = [headers.join(',')];
@@ -110,20 +132,32 @@ async function reconciliationCsv(req: Request, res: Response): Promise<void> {
     lines.push('invoices,total_pending_count,' + summary.total_pending_count);
     lines.push('invoices,total_paid_count,' + summary.total_paid_count);
     if (summary.invoice_status_breakdown) {
-      Object.entries(summary.invoice_status_breakdown).forEach(([status, count]) => {
-        lines.push(`invoices,status_breakdown,${status},${count}`);
-      });
+      Object.entries(summary.invoice_status_breakdown).forEach(
+        ([status, count]) => {
+          lines.push(`invoices,status_breakdown,${status},${count}`);
+        }
+      );
     }
     lines.push('payments,payment_total_amount,' + summary.payment_total_amount);
     lines.push('payments,payment_count,' + summary.payment_count);
-    lines.push('payments,payment_total_pending_amount,' + summary.payment_total_pending_amount);
-    lines.push('payments,payment_total_paid_amount,' + summary.payment_total_paid_amount);
-    lines.push('payments,payment_pending_count,' + summary.payment_pending_count);
+    lines.push(
+      'payments,payment_total_pending_amount,' +
+        summary.payment_total_pending_amount
+    );
+    lines.push(
+      'payments,payment_total_paid_amount,' + summary.payment_total_paid_amount
+    );
+    lines.push(
+      'payments,payment_pending_count,' + summary.payment_pending_count
+    );
     lines.push('payments,payment_paid_count,' + summary.payment_paid_count);
 
     const csv = lines.join('\n');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="reconciliation.csv"');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="reconciliation.csv"'
+    );
     res.send(csv);
   } catch (error) {
     const err = error as Error;

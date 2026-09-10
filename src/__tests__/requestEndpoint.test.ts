@@ -107,7 +107,6 @@ describe('Request Endpoint Tests', () => {
     secondary_insurance_provider: null,
     secondary_insurance_member_id: null,
     secondary_policy_number: null,
-    self_pay_card_info: null,
     annual_income: IncomeLevel.FROM_45000_TO_64999,
     service_needed: ServiceTypes.LABOR_SUPPORT,
     service_specifics: 'Need overnight support',
@@ -252,7 +251,6 @@ describe('Request Endpoint Tests', () => {
         home_youth_count: '0',
         service_needed: ServiceTypes.LABOR_SUPPORT,
         payment_method: 'Self-Pay',
-        self_pay_card_info: 'Visa ending 4242',
         referral_source: 'Google',
         referral_source_other: '',
         provider_type: ProviderType.OB,
@@ -603,7 +601,6 @@ describe('Request Endpoint Tests', () => {
           policy_number: 'POL-67890',
           insurance_phone_number: '800-555-1212',
           has_secondary_insurance: false,
-          self_pay_card_info: null,
         })
       );
     });
@@ -622,7 +619,6 @@ describe('Request Endpoint Tests', () => {
         secondary_insurance_provider: null,
         secondary_insurance_member_id: null,
         secondary_policy_number: null,
-        self_pay_card_info: null,
       };
 
       jest
@@ -664,7 +660,6 @@ describe('Request Endpoint Tests', () => {
         policy_number: 'Should be cleared',
         insurance_phone_number: '800-555-1212',
         insurance: 'Should be cleared',
-        self_pay_card_info: 'Visa ending 4242',
       };
 
       jest
@@ -684,7 +679,6 @@ describe('Request Endpoint Tests', () => {
           secondary_insurance_provider: null,
           secondary_insurance_member_id: null,
           secondary_policy_number: null,
-          self_pay_card_info: 'Visa ending 4242',
         })
       );
     });
@@ -897,7 +891,6 @@ describe('Request Endpoint Tests', () => {
         secondary_insurance_provider: 'Should be cleared',
         secondary_insurance_member_id: 'Should be cleared',
         secondary_policy_number: 'Should be cleared',
-        self_pay_card_info: 'Visa ending 4242',
       });
 
       expect(result).toEqual(
@@ -916,7 +909,6 @@ describe('Request Endpoint Tests', () => {
           secondary_insurance_provider: null,
           secondary_insurance_member_id: null,
           secondary_policy_number: null,
-          self_pay_card_info: 'Visa ending 4242',
         })
       );
 
@@ -939,7 +931,7 @@ describe('Request Endpoint Tests', () => {
       expect(params[57]).toBeNull();
       expect(params[58]).toBeNull();
       expect(params[59]).toBeNull();
-      expect(params[60]).toBe('Visa ending 4242');
+      expect(params[60]).toBeNull();
       expect(params[61]).toBe('lead');
       expect(params[62]).toBe(mockFormData.service_needed);
       expect(params[63]).toBe('not_invited');

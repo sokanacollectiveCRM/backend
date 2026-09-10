@@ -47,7 +47,6 @@ import {
   ClientDocumentRepository,
 } from '../repositories/clientDocumentRepository';
 import { ClientRepository } from '../repositories/interface/clientRepository';
-import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
 import { ClientDocumentUploadService } from '../services/clientDocumentUploadService';
 import {
   CloudSqlDoulaAssignmentService,
@@ -55,6 +54,7 @@ import {
 } from '../services/cloudSqlDoulaAssignmentService';
 import { syncMatchedClientToQuickBooks } from '../services/customer/syncMatchedClientToQuickBooks';
 import { DoulaAvailabilityService } from '../services/doulaAvailabilityService';
+import { CloudSqlIdentityUserService } from '../services/identityPlatform/cloudSqlIdentityUserService';
 import {
   PhiBrokerError,
   fetchClientPhi,
@@ -65,7 +65,6 @@ import {
   PortalEligibilityService,
   portalEligibilityService,
 } from '../services/portalEligibilityService';
-import { getSupabaseAdmin } from '../supabase';
 import { AuthRequest } from '../types';
 import { ClientUseCase } from '../usecase/clientUseCase';
 import { mergePortalEligibilityFields } from '../utils/portalEligibilityResponse';
@@ -156,7 +155,6 @@ export class ClientController {
   }
 
   private clientUseCase: ClientUseCase;
-  private assignmentRepository: SupabaseAssignmentRepository;
   private clientRepository: ClientRepository;
   private eligibilityService: PortalEligibilityService;
   private cloudSqlAssignmentService: CloudSqlDoulaAssignmentService;
@@ -166,13 +164,12 @@ export class ClientController {
 
   constructor(
     clientUseCase: ClientUseCase,
-    assignmentRepository: SupabaseAssignmentRepository,
+    _assignmentRepository: unknown,
     clientRepository: ClientRepository,
     clientDocumentRepository?: ClientDocumentRepository,
     clientDocumentUploadService?: ClientDocumentUploadService
   ) {
     this.clientUseCase = clientUseCase;
-    this.assignmentRepository = assignmentRepository;
     this.clientRepository = clientRepository;
     this.eligibilityService = portalEligibilityService;
     this.cloudSqlAssignmentService = new CloudSqlDoulaAssignmentService();
@@ -276,6 +273,30 @@ export class ClientController {
     return profile;
   }
 
+  /** Remove finance/insurance fields from operational responses for doulas. */
+  private minimizeDoulaClientResponse(
+    role: unknown,
+    value: Record<string, any>
+  ): Record<string, any> {
+    if (role !== 'doula') return value;
+    const minimized = { ...value };
+    for (const field of ClientController.BILLING_FIELDS)
+      delete minimized[field];
+    for (const field of [
+      'qbo_customer_id',
+      'quickbooks_sync_status',
+      'quickbooks_last_checked_at',
+      'quickbooks_last_synced_at',
+      'is_card_on_file',
+      'card_brand',
+      'card_last4',
+      'card_exp_month',
+      'card_exp_year',
+    ])
+      delete minimized[field];
+    return minimized;
+  }
+
   private hasProfileAddressFields(input: Record<string, any>): boolean {
     return ['address_line1', 'address', 'city', 'state', 'country'].some(
       (field) => Object.prototype.hasOwnProperty.call(input, field)
@@ -327,7 +348,6 @@ export class ClientController {
       secondary_insurance_provider: row.secondary_insurance_provider ?? null,
       secondary_insurance_member_id: row.secondary_insurance_member_id ?? null,
       secondary_policy_number: row.secondary_policy_number ?? null,
-      self_pay_card_info: row.self_pay_card_info ?? null,
       updated_at: row.updated_at ?? null,
     };
     normalized.insurancePolicyHolderName =
@@ -526,7 +546,12 @@ export class ClientController {
     const secondaryPolicyNumber = this.trimNullableString(
       input.secondary_policy_number
     );
-    const selfPayCardInfo = this.trimNullableString(input.self_pay_card_info);
+    if (this.trimNullableString(input.self_pay_card_info)) {
+      return {
+        message:
+          'self_pay_card_info is deprecated; use the tokenized payment-method endpoint',
+      };
+    }
     const insurance = this.trimNullableString(input.insurance);
     const insurancePolicyHolderName = this.trimNullableString(
       input.insurance_policy_holder_name
@@ -560,7 +585,6 @@ export class ClientController {
       secondary_insurance_provider: null,
       secondary_insurance_member_id: null,
       secondary_policy_number: null,
-      self_pay_card_info: null,
     };
 
     const billingPath = resolveBillingPath(paymentMethodRaw);
@@ -574,7 +598,6 @@ export class ClientController {
           secondary_insurance_provider: null,
           secondary_insurance_member_id: null,
           secondary_policy_number: null,
-          self_pay_card_info: selfPayCardInfo ?? null,
         },
       };
     }
@@ -679,7 +702,11 @@ export class ClientController {
     req: AuthRequest,
     clientId: string
   ): Promise<{ status?: number; body?: ReturnType<typeof ApiResponse.error> }> {
-    if (req.user?.role === 'client') {
+    if (
+      req.user?.role === 'client' ||
+      req.user?.role === 'admin' ||
+      req.user?.role === 'billing'
+    ) {
       return {};
     }
 
@@ -1179,28 +1206,15 @@ export class ClientController {
     );
     if (!unresolvedIds.length) return dtos;
 
-    const supabase = getSupabaseAdmin();
+    const identityUsers = new CloudSqlIdentityUserService();
     const resolved = new Map<string, { name: string; role?: string }>();
 
     await Promise.all(
       unresolvedIds.map(async (id) => {
         try {
-          const { data, error } = await supabase.auth.admin.getUserById(id);
-          if (error || !data?.user) return;
-          const meta =
-            (data.user.user_metadata as Record<string, unknown> | undefined) ||
-            {};
-          const appMeta =
-            (data.user.app_metadata as Record<string, unknown> | undefined) ||
-            {};
-          const first = String(meta.first_name ?? meta.firstname ?? '').trim();
-          const last = String(meta.last_name ?? meta.lastname ?? '').trim();
-          const full = `${first} ${last}`.trim();
-          const email = String(data.user.email || '').trim();
-          const role =
-            String(meta.role ?? appMeta.role ?? '').trim() || undefined;
-          const name = full || email || 'Staff member';
-          resolved.set(id, { name, role });
+          const staff = await identityUsers.findStaffByIdentifier(id);
+          if (!staff) return;
+          resolved.set(id, { name: staff.name, role: staff.role });
         } catch {
           // leave as Staff member on lookup failures
         }
@@ -1467,7 +1481,6 @@ export class ClientController {
         merged.secondary_insurance_member_id =
           u?.secondary_insurance_member_id ?? null;
         merged.secondary_policy_number = u?.secondary_policy_number ?? null;
-        merged.self_pay_card_info = u?.self_pay_card_info ?? null;
         merged.referral_source = u?.referral_source ?? null;
         merged.referral_name = u?.referral_name ?? null;
         merged.referral_email = u?.referral_email ?? null;
@@ -1514,9 +1527,17 @@ export class ClientController {
           { clientId: targetClientId, source: 'cloud_sql', phi: 'included' },
           '[Client] detail response'
         );
-        res.json(ApiResponse.success(merged));
+        res.json(
+          ApiResponse.success(
+            this.minimizeDoulaClientResponse(req.user?.role, merged)
+          )
+        );
       } catch {
-        res.json(ApiResponse.success(dto));
+        res.json(
+          ApiResponse.success(
+            this.minimizeDoulaClientResponse(req.user?.role, dto)
+          )
+        );
       }
     } catch (error) {
       const err = this.handleError(error, res);
@@ -1775,6 +1796,10 @@ export class ClientController {
       const billingPatch = this.extractBillingPatch(normalizedRaw);
       const profilePatch = this.stripBillingPatch(normalizedRaw);
       const billingFieldsPresent = Object.keys(billingPatch).length > 0;
+      if (req.user?.role === 'doula' && billingFieldsPresent) {
+        res.status(403).json(ApiResponse.error('Forbidden', 'FORBIDDEN'));
+        return;
+      }
 
       const profilePatchForValidation = { ...profilePatch };
       if (
@@ -2083,7 +2108,6 @@ export class ClientController {
           response.secondary_insurance_member_id =
             u?.secondary_insurance_member_id ?? null;
           response.secondary_policy_number = u?.secondary_policy_number ?? null;
-          response.self_pay_card_info = u?.self_pay_card_info ?? null;
           response.referral_source = u?.referral_source ?? null;
           response.referral_name = u?.referral_name ?? null;
           response.referral_email = u?.referral_email ?? null;
@@ -2172,7 +2196,11 @@ export class ClientController {
         '[Client] update response composition'
       );
 
-      res.json(ApiResponse.success(response));
+      res.json(
+        ApiResponse.success(
+          this.minimizeDoulaClientResponse(req.user?.role, response)
+        )
+      );
     } catch (error) {
       logger.error(
         { errorMessage: (error as Error)?.message },

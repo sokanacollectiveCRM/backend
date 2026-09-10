@@ -179,14 +179,14 @@ clientRoutes.put(
 clientRoutes.get(
   '/:id/billing',
   authMiddleware,
-  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'billing']),
   (req, res) => clientController.getClientBilling(req, res)
 );
 
 clientRoutes.put(
   '/:id/billing',
   authMiddleware,
-  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'billing']),
   (req, res) => clientController.updateClientBilling(req, res)
 );
 

@@ -47,6 +47,14 @@ export function normalizePublicIntakeSubmission(
 ): RequestFormData {
   const raw = (formData ?? {}) as Record<string, any>;
 
+  // Reject before any other validation and never include the supplied value in
+  // the error. This legacy field must not become a card-data ingestion path.
+  if (trimNullableString(raw.self_pay_card_info)) {
+    throw new ValidationError(
+      'self_pay_card_info is deprecated; payment cards must use the tokenized provider flow'
+    );
+  }
+
   if (!raw.firstname || !raw.lastname) {
     throw new ValidationError(
       'Missing required fields: first name and last name'
@@ -142,7 +150,6 @@ export function normalizePublicIntakeSubmission(
     raw.secondary_insurance_member_id
   );
   const secondaryPolicyNumber = trimNullableString(raw.secondary_policy_number);
-  const selfPayCardInfo = trimNullableString(raw.self_pay_card_info);
   const insurancePolicyHolderName = trimNullableString(
     raw.insurance_policy_holder_name
   );
@@ -247,7 +254,6 @@ export function normalizePublicIntakeSubmission(
       requiresInsurance && hasSecondaryInsurance === true
         ? (secondaryPolicyNumber ?? null)
         : null,
-    self_pay_card_info: !requiresInsurance ? (selfPayCardInfo ?? null) : null,
     annual_income: raw.annual_income,
     service_needed: raw.service_needed,
     service_specifics: raw.service_specifics,

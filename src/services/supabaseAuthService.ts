@@ -35,7 +35,10 @@ async function enrichStaffProfileFromCloudSql(user: User): Promise<User> {
     user.bio = member.bio ?? user.bio;
     user.profile_picture =
       (member.profile_picture as any) ?? user.profile_picture;
-    user.account_status = (member.account_status as any) ?? user.account_status;
+    if (member.role === 'doula') {
+      user.account_status =
+        (member.account_status as any) ?? user.account_status;
+    }
     return user;
   } catch {
     return user;
