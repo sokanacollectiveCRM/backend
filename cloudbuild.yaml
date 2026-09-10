@@ -51,3 +51,7 @@ steps:
       - sokana-private-api
       - --image=us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/backend/sokana-private-api:$COMMIT_SHA
       - --region=us-central1
+
+# Required for builds using the trigger's explicitly configured service account.
+options:
+  logging: CLOUD_LOGGING_ONLY
