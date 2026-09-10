@@ -1,5 +1,7 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from '@supabase/supabase-js';
+
 import { supabase as supabaseConfig } from './config/env';
+import { createBackendSupabaseClient as createClient } from './services/createBackendSupabaseClient';
 
 let supabaseClient: SupabaseClient | null = null;
 
@@ -10,7 +12,11 @@ function initSupabase(): SupabaseClient {
   const supabaseKey = supabaseConfig.serviceRoleKey;
 
   supabaseClient = createClient(supabaseUrl, supabaseKey, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
   });
 
   return supabaseClient;

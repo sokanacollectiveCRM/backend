@@ -1,4 +1,6 @@
-import { SupabaseClient, createClient } from '@supabase/supabase-js';
+import { SupabaseClient } from '@supabase/supabase-js';
+
+import { createBackendSupabaseClient as createClient } from '../services/createBackendSupabaseClient';
 
 export interface Assignment {
   id: string;
@@ -60,7 +62,9 @@ export class SupabaseAssignmentRepository {
     assignedBy?: string,
     accessToken?: string
   ): Promise<Assignment> {
-    const client = accessToken ? this.createUserClient(accessToken) : this.supabaseClient;
+    const client = accessToken
+      ? this.createUserClient(accessToken)
+      : this.supabaseClient;
 
     const { data, error } = await client
       .from('assignments')
@@ -68,7 +72,7 @@ export class SupabaseAssignmentRepository {
         client_id: clientId,
         doula_id: doulaId,
         assigned_by: assignedBy,
-        status: 'active'
+        status: 'active',
       })
       .select()
       .single();
@@ -81,14 +85,16 @@ export class SupabaseAssignmentRepository {
 
       // If RLS error with user token, try with service role as fallback
       if (error.message.includes('row-level security') && accessToken) {
-        console.log('⚠️  RLS error with user token, retrying with service role...');
+        console.log(
+          '⚠️  RLS error with user token, retrying with service role...'
+        );
         const { data: retryData, error: retryError } = await this.supabaseClient
           .from('assignments')
           .insert({
             client_id: clientId,
             doula_id: doulaId,
             assigned_by: assignedBy,
-            status: 'active'
+            status: 'active',
           })
           .select()
           .single();
@@ -127,7 +133,8 @@ export class SupabaseAssignmentRepository {
   async getAssignedDoulas(clientId: string): Promise<AssignedDoula[]> {
     const { data, error } = await this.supabaseClient
       .from('assignments')
-      .select(`
+      .select(
+        `
         id,
         doula_id,
         assigned_at,
@@ -138,7 +145,8 @@ export class SupabaseAssignmentRepository {
           lastname,
           email
         )
-      `)
+      `
+      )
       .eq('client_id', clientId)
       .eq('status', 'active');
 
@@ -146,7 +154,7 @@ export class SupabaseAssignmentRepository {
       throw new Error(`Failed to fetch assigned doulas: ${error.message}`);
     }
 
-    return data.map(item => {
+    return data.map((item) => {
       const userRow = Array.isArray(item.users) ? item.users[0] : item.users;
       return {
         id: item.id,
@@ -160,7 +168,7 @@ export class SupabaseAssignmentRepository {
           email: userRow?.email,
           profile_picture: undefined, // column may not exist in users table
           bio: undefined,
-        }
+        },
       };
     });
   }
@@ -179,7 +187,7 @@ export class SupabaseAssignmentRepository {
       throw new Error(`Failed to fetch assigned clients: ${error.message}`);
     }
 
-    return data.map(a => a.client_id);
+    return data.map((a) => a.client_id);
   }
 
   /**
@@ -237,7 +245,7 @@ export class SupabaseAssignmentRepository {
       notes: data.notes,
       status: data.status,
       createdAt: new Date(data.created_at),
-      updatedAt: new Date(data.updated_at)
+      updatedAt: new Date(data.updated_at),
     };
   }
 }

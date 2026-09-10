@@ -2,8 +2,9 @@ import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 
-import { createClient } from '@supabase/supabase-js';
 import FormData from 'form-data';
+
+import { createBackendSupabaseClient as createClient } from './createBackendSupabaseClient';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',

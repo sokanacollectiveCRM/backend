@@ -1,5 +1,6 @@
-import { SupabaseClient, createClient } from '@supabase/supabase-js';
+import { SupabaseClient } from '@supabase/supabase-js';
 
+import { createBackendSupabaseClient as createClient } from '../services/createBackendSupabaseClient';
 import {
   GCS_PREFIX,
   getSignedReadUrl,

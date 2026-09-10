@@ -1,12 +1,17 @@
-import { createClient } from '@supabase/supabase-js';
 import { SupabaseUserRepository } from '../../repositories/supabaseUserRepository';
-import buildCustomerPayload, { BuildCustomerPayloadResult } from './buildCustomerPayload';
+import { createBackendSupabaseClient as createClient } from '../createBackendSupabaseClient';
+import buildCustomerPayload, {
+  BuildCustomerPayloadResult,
+} from './buildCustomerPayload';
 import createCustomerInQuickBooks from './createCustomerInQuickBooks';
 import saveQboCustomerId from './saveQboCustomerId';
 import upsertInternalCustomer from './upsertInternalCustomer';
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY)
-const userRepository = new SupabaseUserRepository(supabase)
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+);
+const userRepository = new SupabaseUserRepository(supabase);
 
 export interface CreateCustomerParams {
   internalCustomerId: string;
