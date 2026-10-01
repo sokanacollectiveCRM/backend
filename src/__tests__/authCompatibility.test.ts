@@ -14,6 +14,7 @@ import {
   setAuthoritativeRoleLookupForTests,
 } from '../security/resolveAuthoritativeRole';
 import {
+  LEGACY_SB_SESSION_COOKIE,
   LEGACY_SESSION_COOKIE,
   SESSION_COOKIE,
   clearSessionCookies,
@@ -113,7 +114,7 @@ describe('PR 6 authoritative roles', () => {
 });
 
 describe('PR 6 session token dual-support', () => {
-  it('prefers X-Session-Token over Bearer and cookies', () => {
+  it('prefers HttpOnly session cookies over headers', () => {
     const req: any = {
       headers: {
         'x-session-token': 'header-token',
@@ -125,12 +126,26 @@ describe('PR 6 session token dual-support', () => {
       },
     };
     expect(getSessionTokenAndSource(req)).toEqual({
-      token: 'header-token',
-      source: 'header',
+      token: 'cookie-token',
+      source: 'cookie',
     });
   });
 
-  it('falls back to Bearer, then sb-access-token, then legacy session cookie', () => {
+  it('falls back through legacy cookies, then Bearer, then header', () => {
+    expect(
+      getSessionTokenAndSource({
+        headers: {},
+        cookies: { [LEGACY_SB_SESSION_COOKIE]: 'legacy-sb-token' },
+      } as any)
+    ).toEqual({ token: 'legacy-sb-token', source: 'cookie' });
+
+    expect(
+      getSessionTokenAndSource({
+        headers: {},
+        cookies: { [LEGACY_SESSION_COOKIE]: 'legacy-token' },
+      } as any)
+    ).toEqual({ token: 'legacy-token', source: 'legacy_session_cookie' });
+
     expect(
       getSessionTokenAndSource({
         headers: { authorization: 'Bearer bearer-token' },
@@ -140,17 +155,10 @@ describe('PR 6 session token dual-support', () => {
 
     expect(
       getSessionTokenAndSource({
-        headers: {},
-        cookies: { [SESSION_COOKIE]: 'cookie-token' },
+        headers: { 'x-session-token': 'header-token' },
+        cookies: {},
       } as any)
-    ).toEqual({ token: 'cookie-token', source: 'cookie' });
-
-    expect(
-      getSessionTokenAndSource({
-        headers: {},
-        cookies: { [LEGACY_SESSION_COOKIE]: 'legacy-token' },
-      } as any)
-    ).toEqual({ token: 'legacy-token', source: 'legacy_session_cookie' });
+    ).toEqual({ token: 'header-token', source: 'header' });
 
     expect(
       getSessionToken({ headers: {}, cookies: {} } as any)
@@ -185,11 +193,17 @@ describe('PR 6 cookie helpers and transport telemetry', () => {
       path: '/',
       sameSite: 'lax',
     });
-    expect(cleared).toContain(LEGACY_SESSION_COOKIE);
+    expect(cleared).toEqual(
+      expect.arrayContaining([LEGACY_SB_SESSION_COOKIE, LEGACY_SESSION_COOKIE])
+    );
 
     clearSessionCookies(res);
     expect(cleared).toEqual(
-      expect.arrayContaining([SESSION_COOKIE, LEGACY_SESSION_COOKIE])
+      expect.arrayContaining([
+        SESSION_COOKIE,
+        LEGACY_SB_SESSION_COOKIE,
+        LEGACY_SESSION_COOKIE,
+      ])
     );
   });
 

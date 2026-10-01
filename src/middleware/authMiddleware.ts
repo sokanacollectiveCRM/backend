@@ -7,6 +7,7 @@ import { isCurrentAccountActive } from '../security/accountAccess';
 import { recordAuthTransport } from '../security/authTransportTelemetry';
 import { ApiErrorCode } from '../security/errorCodes';
 import {
+  LEGACY_SB_SESSION_COOKIE,
   LEGACY_SESSION_COOKIE,
   SESSION_COOKIE,
 } from '../security/sessionCookies';
@@ -27,7 +28,8 @@ export type SessionSource =
 /**
  * Resolve session token from request.
  * Priority (target + dual-support):
- *   X-Session-Token → Authorization Bearer → sb-access-token → legacy `session` cookie.
+ *   sokana_session_token → legacy sb-access-token → legacy `session` cookie →
+ *   X-Session-Token → Authorization Bearer.
  * Body/query tokens are not accepted for API auth (measured separately where seen).
  */
 export function getSessionToken(req: AuthRequest): string | undefined {
@@ -39,6 +41,22 @@ export function getSessionTokenAndSource(req: AuthRequest): {
   token?: string;
   source?: SessionSource;
 } {
+  if (req.cookies?.[SESSION_COOKIE]) {
+    return { token: req.cookies[SESSION_COOKIE], source: 'cookie' };
+  }
+  if (req.cookies?.[LEGACY_SB_SESSION_COOKIE]) {
+    recordAuthTransport('legacy.sb_access_token_cookie_seen', {
+      path: req.path,
+      method: req.method,
+    });
+    return { token: req.cookies[LEGACY_SB_SESSION_COOKIE], source: 'cookie' };
+  }
+  if (req.cookies?.[LEGACY_SESSION_COOKIE]) {
+    return {
+      token: req.cookies[LEGACY_SESSION_COOKIE],
+      source: 'legacy_session_cookie',
+    };
+  }
   const headerToken = req.headers[SESSION_HEADER] as string | undefined;
   if (headerToken && typeof headerToken === 'string' && headerToken.trim()) {
     return { token: headerToken.trim(), source: 'header' };
@@ -47,15 +65,6 @@ export function getSessionTokenAndSource(req: AuthRequest): {
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.slice(7).trim();
     if (token) return { token, source: 'bearer' };
-  }
-  if (req.cookies?.[SESSION_COOKIE]) {
-    return { token: req.cookies[SESSION_COOKIE], source: 'cookie' };
-  }
-  if (req.cookies?.[LEGACY_SESSION_COOKIE]) {
-    return {
-      token: req.cookies[LEGACY_SESSION_COOKIE],
-      source: 'legacy_session_cookie',
-    };
   }
   return {};
 }

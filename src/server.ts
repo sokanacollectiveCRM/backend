@@ -71,7 +71,7 @@ const corsOptions = {
     'X-Session-Token',
     'X-Signing-Session',
   ],
-  credentials: true, // Required for cookie (sb-access-token) and Bearer auth cross-origin
+  credentials: true, // Required for HttpOnly sokana_session_token cookie cross-origin
   maxAge: 86400,
 };
 

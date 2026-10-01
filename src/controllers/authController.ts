@@ -402,7 +402,7 @@ export class AuthController {
 
       // call useCase to retrieve current session and user
       const data = await this.authUseCase.handleOAuthCallback(code);
-      // Canonical session cookie (PR 6): sb-access-token, not legacy `session`.
+      // Canonical session cookie: sokana_session_token (HttpOnly).
       logger.info(
         { context: 'AuthController.handleOAuthCallback' },
         'Creating session cookie'

@@ -42,7 +42,7 @@ jest.mock('../middleware/authMiddleware', () => ({
   },
   getSessionToken: () => undefined,
   getSessionTokenAndSource: () => ({}),
-  SESSION_COOKIE: 'sb-access-token',
+  SESSION_COOKIE: 'sokana_session_token',
   SESSION_HEADER: 'x-session-token',
 }));
 

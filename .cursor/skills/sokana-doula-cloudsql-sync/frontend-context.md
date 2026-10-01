@@ -4101,3 +4101,33 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
   local delivery fallback; frontend success page copy updated.
 - **Context Updated**: yes
 - **Implementation Started After Gate**: yes
+
+## Preflight Update 2026-09-01 (HttpOnly session cookie auth)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Stop storing staff CRM session JWTs in localStorage; use
+  HttpOnly `sokana_session_token` cookie with `credentials: include` on all API
+  calls.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-25-full-supabase-exit-launch-ready.md`,
+  `2026-08-10-backend-architecture-boundary-refactor.md`
+- **Files Scanned**:
+  - `frontend-crm/src/api/http.ts`
+  - `frontend-crm/src/api/sessionAccessToken.ts`
+  - `frontend-crm/src/common/contexts/UserContext.tsx`
+  - `frontend-crm/src/features/auth/AuthCallback.tsx`
+  - `backend/src/security/sessionCookies.ts`
+  - `backend/src/middleware/authMiddleware.ts`
+  - `backend/src/controllers/authController.ts`
+- **Contract Findings**: `/auth/me`, login, logout unchanged response shapes;
+  session transport moves from `sokana.session-token` localStorage + headers to
+  cookie-first. Supabase client-portal mode still uses Supabase session Bearer
+  only.
+- **Drift Risk**: Cross-origin deployments must keep CORS `credentials: true`
+  and cookie `SameSite=lax`; legacy `sb-access-token` cookie still read during
+  migration window.
+- **Required Compatibility**: Manual Invite/resend and all CRM API routes
+  unchanged; only auth transport for staff cookie/identity modes.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started

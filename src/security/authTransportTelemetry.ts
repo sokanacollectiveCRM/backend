@@ -12,7 +12,8 @@ export type AuthTransportCounter =
   | 'legacy.login_json_token_returned'
   | 'legacy.body_access_token'
   | 'legacy.query_access_token'
-  | 'legacy.session_cookie_seen';
+  | 'legacy.session_cookie_seen'
+  | 'legacy.sb_access_token_cookie_seen';
 
 const counters = new Map<AuthTransportCounter, number>();
 
