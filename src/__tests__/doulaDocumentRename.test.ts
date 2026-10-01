@@ -1,6 +1,13 @@
 import { DoulaController } from '../controllers/doulaController';
 import type { AuthRequest } from '../types';
 
+jest.mock('../services/cloudSqlTeamService', () => ({
+  CloudSqlTeamService: jest.fn().mockImplementation(() => ({
+    getTeamMemberById: jest.fn().mockResolvedValue(null),
+    getDoulaByEmail: jest.fn().mockResolvedValue(null),
+  })),
+}));
+
 describe('DoulaController.renameDocument', () => {
   const ownerId = 'doula-owner-1';
   const otherDoulaId = 'doula-other-1';
@@ -45,7 +52,10 @@ describe('DoulaController.renameDocument', () => {
       updatedAt: now,
       status: 'uploaded',
     });
-    const controller = buildController({ getDocumentById, updateDocumentMetadata });
+    const controller = buildController({
+      getDocumentById,
+      updateDocumentMetadata,
+    });
     const req = {
       user: { id: ownerId, email: 'doula@example.com', role: 'doula' },
       params: { documentId },
@@ -91,7 +101,9 @@ describe('DoulaController.renameDocument', () => {
     await controller.renameDocument(req, res as any);
 
     expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.any(String) }));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: expect.any(String) })
+    );
   });
 
   it('returns 401 when user is not authenticated', async () => {
@@ -122,7 +134,10 @@ describe('DoulaController.renameDocument', () => {
       status: 'uploaded',
     });
     const updateDocumentMetadata = jest.fn();
-    const controller = buildController({ getDocumentById, updateDocumentMetadata });
+    const controller = buildController({
+      getDocumentById,
+      updateDocumentMetadata,
+    });
     const req = {
       user: { id: ownerId, email: 'doula@example.com', role: 'doula' },
       params: { documentId },
@@ -133,7 +148,9 @@ describe('DoulaController.renameDocument', () => {
     await controller.renameDocument(req, res as any);
 
     expect(res.status).toHaveBeenCalledWith(403);
-    expect(res.json).toHaveBeenCalledWith({ error: 'You do not have permission to rename this document' });
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'You do not have permission to rename this document',
+    });
     expect(updateDocumentMetadata).not.toHaveBeenCalled();
   });
 
@@ -174,7 +191,10 @@ describe('DoulaController.renameDocument', () => {
       updatedAt: new Date('2026-03-24T15:30:00.000Z'),
       status: 'uploaded',
     });
-    const controller = buildController({ getDocumentById, updateDocumentMetadata });
+    const controller = buildController({
+      getDocumentById,
+      updateDocumentMetadata,
+    });
     const req = {
       user: { id: ownerId, email: 'doula@example.com', role: 'doula' },
       params: { documentId },
@@ -214,6 +234,8 @@ describe('DoulaController.renameDocument', () => {
     await controller.renameDocument(req, res as any);
 
     expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.any(String) }));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: expect.any(String) })
+    );
   });
 });

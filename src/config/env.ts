@@ -241,23 +241,6 @@ export const gcsDocuments = {
   },
 };
 
-/** Auth IdP cutover: supabase (default) | identity_platform | dual */
-export const authProvider = {
-  get mode(): 'supabase' | 'identity_platform' | 'dual' {
-    const raw = (optionalEnv('AUTH_PROVIDER') ?? 'supabase').toLowerCase();
-    if (raw === 'identity_platform' || raw === 'dual') return raw;
-    return 'supabase';
-  },
-  get identityProjectId(): string {
-    return (
-      optionalEnv('IDENTITY_PLATFORM_PROJECT_ID') ??
-      optionalEnv('GCLOUD_PROJECT') ??
-      optionalEnv('GOOGLE_CLOUD_PROJECT') ??
-      'sokana-private-data'
-    );
-  },
-};
-
 // CORS: comma-separated FRONTEND_ORIGIN or legacy vars
 export function getAllowedOrigins(): string[] {
   const fromOrigin = (optionalEnv('FRONTEND_ORIGIN') ?? '')

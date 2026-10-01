@@ -6,9 +6,7 @@ import contractRoutes from '../routes/contractRoutes';
 import contractSigningRoutes from '../routes/contractSigningRoutes';
 import customersRoutes from '../routes/customersRoutes';
 import paymentRoutes from '../routes/paymentRoutes';
-import pdfContractRoutes from '../routes/pdfContractRoutes';
 import quickbooksRoutes from '../routes/quickbooksRoutes';
-import signNowRoutes from '../routes/signNowRoutes';
 import {
   decideClientResourceAccess,
   decideOwnershipAccess,
@@ -46,41 +44,6 @@ jest.mock('../middleware/authMiddleware', () => ({
   SESSION_HEADER: 'x-session-token',
 }));
 
-jest.mock('../services/signNowService', () => ({
-  SignNowService: jest.fn().mockImplementation(() => ({
-    testAuthentication: jest.fn().mockResolvedValue({ success: true }),
-    testTemplate: jest.fn().mockResolvedValue({ success: true }),
-    listTemplates: jest.fn().mockResolvedValue({ success: true }),
-    getTemplateFields: jest.fn().mockResolvedValue({ success: true }),
-    createPrefilledDocFromTemplate: jest
-      .fn()
-      .mockResolvedValue({ documentId: 'doc-1' }),
-    inspectDocumentFields: jest.fn().mockResolvedValue({ fields: [] }),
-    createInvitationClientPartner: jest
-      .fn()
-      .mockResolvedValue({ success: true }),
-    apiToken: 'test-token',
-  })),
-  signNowService: {
-    testAuthentication: jest.fn().mockResolvedValue({ success: true }),
-    testTemplate: jest.fn().mockResolvedValue({ success: true }),
-    listTemplates: jest.fn().mockResolvedValue({ success: true }),
-    getTemplateFields: jest.fn().mockResolvedValue({ success: true }),
-    createPrefilledDocFromTemplate: jest
-      .fn()
-      .mockResolvedValue({ documentId: 'doc-1' }),
-    inspectDocumentFields: jest.fn().mockResolvedValue({ fields: [] }),
-    createInvitationClientPartner: jest
-      .fn()
-      .mockResolvedValue({ success: true }),
-  },
-}));
-
-jest.mock('../controllers/signNowWebhookController', () => ({
-  signNowCallback: (_req: any, res: any) =>
-    res.status(200).json({ received: true }),
-}));
-
 jest.mock('../controllers/quickbooksWebhookController', () => ({
   quickBooksInvoicePaidWebhook: (_req: any, res: any) =>
     res.status(200).json({ received: true }),
@@ -89,7 +52,6 @@ jest.mock('../controllers/quickbooksWebhookController', () => ({
 // HMAC is covered in webhookAndOauthSecurity.test.ts. This suite only asserts
 // webhooks are not behind CRM session auth (dotenv secrets would otherwise 401).
 jest.mock('../security/webhookAuth', () => ({
-  requireSignNowWebhookAuth: (_req: any, _res: any, next: any) => next(),
   requireQuickBooksWebhookAuth: (_req: any, _res: any, next: any) => next(),
 }));
 
@@ -168,25 +130,6 @@ jest.mock('../services/postpartum/calculateContract', () => ({
   ValidationError: class ValidationError extends Error {},
 }));
 
-jest.mock('../utils/signNowContractProcessor', () => ({
-  processContractWithSignNow: jest.fn().mockResolvedValue({
-    success: true,
-    clientEmail: 'c@example.test',
-    emailDelivery: { message: 'ok' },
-  }),
-  checkSignNowDocumentStatus: jest.fn().mockResolvedValue({ success: true }),
-}));
-
-jest.mock('../utils/pdfContractProcessor', () => ({
-  getAvailableContractTemplates: jest
-    .fn()
-    .mockReturnValue(['labor_support_v1']),
-  processContractWithPdfTemplate: jest.fn().mockResolvedValue({ ok: true }),
-  validateContractDataForTemplate: jest
-    .fn()
-    .mockReturnValue({ valid: true, missingFields: [] }),
-}));
-
 async function listen(app: express.Application): Promise<Server> {
   const server = http.createServer(app);
   await new Promise<void>((resolve) => server.listen(0, resolve));
@@ -206,9 +149,7 @@ function buildApp(): express.Application {
   app.use(express.json());
   app.use('/api/payments', paymentRoutes);
   app.use('/api/contract-signing', contractSigningRoutes);
-  app.use('/api/signnow', signNowRoutes);
   app.use('/api/contract', contractRoutes);
-  app.use('/api/pdf-contract', pdfContractRoutes);
   app.use('/quickbooks/customers', customersRoutes);
   app.use('/quickbooks', quickbooksRoutes);
   app.use('/api/quickbooks', quickbooksRoutes);
@@ -293,12 +234,8 @@ describe('PR4 auth matrix HTTP', () => {
     ['GET', '/api/payments/overdue'],
     ['PUT', '/api/payments/payment/p1/status'],
     ['POST', '/api/payments/maintenance/daily'],
-    ['GET', '/api/contract-signing/test-auth'],
     ['POST', '/api/contract-signing/generate-contract'],
-    ['POST', '/api/signnow/test-auth'],
-    ['POST', '/api/signnow/send-client-partner'],
     ['POST', '/api/contract/postpartum/calculate'],
-    ['GET', '/api/pdf-contract/templates'],
     ['POST', '/quickbooks/customers'],
     ['GET', '/quickbooks/customers/invoiceable'],
     ['GET', '/quickbooks/status'],
@@ -312,14 +249,6 @@ describe('PR4 auth matrix HTTP', () => {
       );
     expect(res.status).toBe(401);
     expect(res.body.error).toMatch(/No session token provided/i);
-  });
-
-  it('keeps SignNow webhook off CRM session auth', async () => {
-    const res = await request(server)
-      .post('/api/signnow/callback')
-      .send({})
-      .expect(200);
-    expect(res.body).toEqual({ received: true });
   });
 
   it('keeps QuickBooks webhook publicly reachable on aliases', async () => {
@@ -349,17 +278,19 @@ describe('PR4 auth matrix HTTP', () => {
 
   it('denies doula on admin-only contract signing', async () => {
     currentUser = { id: 'd1', role: 'doula', email: 'd@test' };
-    const res = await request(server).get('/api/contract-signing/test-auth');
+    const res = await request(server).post(
+      '/api/contract-signing/generate-contract'
+    );
     expect(res.status).toBe(403);
   });
 
-  it('allows admin on contract signing and SignNow send', async () => {
+  it('allows admin to open native contract generation', async () => {
     currentUser = { id: 'a1', role: 'admin', email: 'admin@test' };
-    await request(server).get('/api/contract-signing/test-auth').expect(200);
-    await request(server)
-      .post('/api/signnow/send-client-partner')
-      .send({ client: { email: 'c@test', name: 'C' }, documentId: 'doc' })
-      .expect(200);
+    const res = await request(server)
+      .post('/api/contract-signing/generate-contract')
+      .send({});
+    expect(res.status).not.toBe(401);
+    expect(res.status).not.toBe(403);
   });
 
   it('allows billing on QB customers alias and denies client', async () => {
@@ -393,7 +324,6 @@ describe('PR4 auth matrix HTTP', () => {
       expect.arrayContaining([
         'GET /health',
         'POST /requestService/requestSubmission',
-        'POST /api/signnow/callback',
         'POST /quickbooks/webhooks/invoice-paid',
       ])
     );
@@ -401,8 +331,6 @@ describe('PR4 auth matrix HTTP', () => {
       expect.arrayContaining([
         '/api/payments',
         '/api/contract-signing',
-        '/api/signnow',
-        '/api/pdf-contract',
         '/api/contract',
       ])
     );

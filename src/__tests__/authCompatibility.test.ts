@@ -131,25 +131,18 @@ describe('PR 6 session token dual-support', () => {
     });
   });
 
-  it('falls back through legacy cookies, then Bearer, then header', () => {
+  it('ignores legacy Supabase cookies and reads Bearer, then header', () => {
     expect(
       getSessionTokenAndSource({
         headers: {},
         cookies: { [LEGACY_SB_SESSION_COOKIE]: 'legacy-sb-token' },
       } as any)
-    ).toEqual({ token: 'legacy-sb-token', source: 'cookie' });
-
-    expect(
-      getSessionTokenAndSource({
-        headers: {},
-        cookies: { [LEGACY_SESSION_COOKIE]: 'legacy-token' },
-      } as any)
-    ).toEqual({ token: 'legacy-token', source: 'legacy_session_cookie' });
+    ).toEqual({});
 
     expect(
       getSessionTokenAndSource({
         headers: { authorization: 'Bearer bearer-token' },
-        cookies: {},
+        cookies: { [LEGACY_SESSION_COOKIE]: 'legacy-token' },
       } as any)
     ).toEqual({ token: 'bearer-token', source: 'bearer' });
 

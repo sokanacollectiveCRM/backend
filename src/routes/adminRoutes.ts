@@ -1,17 +1,26 @@
 import express, { Router } from 'express';
+
 import { AdminController } from '../controllers/adminController';
 import { PortalController } from '../controllers/portalController';
+import {
+  assignmentRepository,
+  clientRepository,
+  doulaController,
+  userRepository,
+} from '../index';
 import authMiddleware from '../middleware/authMiddleware';
 import authorizeRoles from '../middleware/authorizeRoles';
-import { userRepository, clientRepository, assignmentRepository, doulaController } from '../index';
 import { PortalInviteService } from '../services/portalInviteService';
-import supabase from '../supabase';
 
 const adminRoutes: Router = express.Router();
-const adminController = new AdminController(userRepository, clientRepository, assignmentRepository);
+const adminController = new AdminController(
+  userRepository,
+  clientRepository,
+  assignmentRepository
+);
 
 // Portal invite service and controller
-const portalInviteService = new PortalInviteService(supabase);
+const portalInviteService = new PortalInviteService();
 const portalController = new PortalController(portalInviteService);
 
 // All admin routes require authentication and admin role

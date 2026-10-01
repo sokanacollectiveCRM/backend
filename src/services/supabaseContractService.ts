@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { SupabaseClient } from '@supabase/supabase-js';
 
+import { getPool } from '../db/cloudSqlPool';
 import { NotFoundError } from '../domains/errors';
 import { Contract } from '../entities/Contract';
 import { Template } from '../entities/Template';
@@ -43,14 +44,7 @@ export class SupabaseContractService implements ContractService {
     deposit?: string,
     generatedBy?: string
   ): Promise<Contract> {
-    const { data: templateUrl } = await this.supabaseClient
-      .from('contract_templates')
-      .select('storage_path')
-      .eq('id', templateId)
-      .maybeSingle();
-
-    const storagePath =
-      templateUrl?.storage_path || this.resolveStoragePath(templateId);
+    const storagePath = this.resolveStoragePath(templateId);
 
     let nodeBuffer: Buffer;
     try {
@@ -65,57 +59,43 @@ export class SupabaseContractService implements ContractService {
     const contractId = uuidv4();
     const filePath = `contracts/client_${clientId}/contract_${contractId}.pdf`;
 
-    const upload = await this.supabaseClient.storage
-      .from('contracts')
-      .upload(filePath, pdf, { contentType: 'application/pdf' });
+    const storedPath = objectPath(GCS_PREFIX.contracts, filePath);
+    await uploadObject(storedPath, pdf, 'application/pdf');
 
-    if (upload.error)
-      throw new Error('Contract upload failed: ' + upload.error.message);
-
-    const { data, error: insertError } = await this.supabaseClient
-      .from('contracts')
-      .insert([
-        {
-          id: contractId,
-          template_id: templateId,
-          template_name: fields.templateName || 'Untitled',
-          client_id: clientId,
-          note,
-          fee,
-          deposit,
-          status: 'created',
-          document_url: filePath,
-          generated_by: generatedBy,
-        },
-      ])
-      .select()
-      .single();
-
-    if (insertError)
-      throw new Error('Failed to insert contract: ' + insertError.message);
-
-    return data as Contract;
+    return {
+      id: contractId,
+      template_id: templateId,
+      template_name: fields.templateName || 'Untitled',
+      client_id: clientId,
+      note,
+      fee,
+      deposit,
+      status: 'created',
+      document_url: storedPath,
+      generated_by: generatedBy,
+      created_at: new Date(),
+      updated_at: new Date(),
+    } as unknown as Contract;
   }
 
   async fetchContractPDF(
     contractId: string
   ): Promise<{ buffer: Buffer; filename: string }> {
-    const { data, error } = await this.supabaseClient
-      .from('contracts')
-      .select('*')
-      .eq('id', contractId)
-      .single();
+    const { rows } = await getPool().query<{
+      unsigned_document_path: string | null;
+      signed_document_path: string | null;
+    }>(
+      `SELECT unsigned_document_path, signed_document_path
+       FROM public.phi_contracts
+       WHERE id = $1::uuid
+       LIMIT 1`,
+      [contractId]
+    );
+    const documentPath =
+      rows[0]?.signed_document_path || rows[0]?.unsigned_document_path;
+    if (!documentPath) throw new Error('Contract not found');
 
-    if (error || !data) throw new Error('Contract not found');
-
-    const { data: file, error: downloadError } =
-      await this.supabaseClient.storage
-        .from('contracts')
-        .download(data.document_url);
-
-    if (downloadError || !file) throw new Error('Failed to fetch PDF');
-
-    const buffer = Buffer.from(await file.arrayBuffer());
+    const buffer = await downloadObject(documentPath);
     const filename = `contract_${contractId}.pdf`;
 
     return { buffer, filename };

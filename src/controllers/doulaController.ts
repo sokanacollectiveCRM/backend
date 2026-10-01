@@ -24,7 +24,6 @@ import { DoulaDocumentCompletenessService } from '../services/doulaDocumentCompl
 import { DoulaDocumentIdResolver } from '../services/doulaDocumentIdResolver';
 import { DoulaDocumentUploadService } from '../services/doulaDocumentUploadService';
 import { CloudSqlIdentityUserService } from '../services/identityPlatform/cloudSqlIdentityUserService';
-import supabase from '../supabase';
 import { AuthRequest } from '../types';
 import { ClientUseCase } from '../usecase/clientUseCase';
 import { UserUseCase } from '../usecase/userUseCase';
@@ -67,6 +66,17 @@ export class DoulaController {
       this.cloudSqlTeamService
     );
     this.doulaAvailabilityService = new DoulaAvailabilityService();
+  }
+
+  private async resolveDocumentDoulaId(
+    req: AuthRequest
+  ): Promise<string | null> {
+    const userId = req.user?.id;
+    if (!userId) return null;
+    return this.documentIdResolver.resolveStorageDoulaId(
+      String(userId),
+      req.user?.email
+    );
   }
 
   private getFileExtension(fileName: string): string {
@@ -135,7 +145,7 @@ export class DoulaController {
    */
   async uploadDocument(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const doulaId = req.user?.id;
+      const doulaId = await this.resolveDocumentDoulaId(req);
       if (!doulaId) {
         res.status(401).json({ error: 'Unauthorized' });
         return;
@@ -186,53 +196,23 @@ export class DoulaController {
         await this.documentRepository.deleteDocument(existingDoc.id);
       }
 
-      // Get user's access token from request
-      const authHeader = req.headers.authorization;
-      const accessToken = authHeader?.split(' ')[1];
-
-      // Get auth user ID from token (this is what auth.uid() returns in storage policies)
-      // We need to use the auth user ID, not the users table ID, for the file path
-      let authUserId = doulaId; // Fallback to doulaId if we can't get auth ID
-      if (accessToken) {
-        try {
-          const {
-            data: { user: authUser },
-          } = await supabase.auth.getUser(accessToken);
-          if (authUser?.id) {
-            authUserId = authUser.id;
-          }
-        } catch (error) {
-          console.warn(
-            'Could not get auth user ID from token, using doulaId:',
-            error
-          );
-        }
-      }
-
-      // Upload file to Supabase Storage
-      // Use authUserId for the file path to match auth.uid() in storage policies
       const uploadedDoc = await this.uploadService.uploadDocument(
         file,
-        authUserId,
-        document_type,
-        accessToken
+        doulaId,
+        document_type
       );
 
-      // Save document record to database
-      // Pass accessToken so RLS policies can verify ownership
-      const document = await this.documentRepository.createDocument(
-        {
-          doulaId,
-          documentType: document_type,
-          fileName: uploadedDoc.fileName,
-          filePath: uploadedDoc.filePath, // Store file path instead of URL
-          fileSize: uploadedDoc.fileSize,
-          mimeType: uploadedDoc.mimeType,
-          expiresAt: expires_at ? new Date(expires_at) : undefined,
-          notes: notes || undefined,
-        },
-        accessToken
-      );
+      // Save document record with the service-role client. Session auth is Firebase.
+      const document = await this.documentRepository.createDocument({
+        doulaId,
+        documentType: document_type,
+        fileName: uploadedDoc.fileName,
+        filePath: uploadedDoc.filePath,
+        fileSize: uploadedDoc.fileSize,
+        mimeType: uploadedDoc.mimeType,
+        expiresAt: expires_at ? new Date(expires_at) : undefined,
+        notes: notes || undefined,
+      });
 
       // Generate signed URL for the response (valid for 1 hour)
       const signedUrl = await this.documentRepository.getSignedUrl(
@@ -267,7 +247,7 @@ export class DoulaController {
    */
   async getMyDocuments(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const doulaId = req.user?.id;
+      const doulaId = await this.resolveDocumentDoulaId(req);
       if (!doulaId) {
         res.status(401).json({ error: 'Unauthorized' });
         return;
@@ -365,7 +345,7 @@ export class DoulaController {
           success: true,
           documents: [],
           degraded: true,
-          source: 'supabase',
+          source: 'cloud_sql',
           reason: 'doula_documents_table_missing',
         });
         return;
@@ -594,7 +574,7 @@ export class DoulaController {
    */
   async renameDocument(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const doulaId = req.user?.id;
+      const doulaId = await this.resolveDocumentDoulaId(req);
       const { documentId } = req.params;
 
       if (!doulaId) {
@@ -748,7 +728,7 @@ export class DoulaController {
    */
   async deleteDocument(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const doulaId = req.user?.id;
+      const doulaId = await this.resolveDocumentDoulaId(req);
       const { documentId } = req.params;
 
       if (!doulaId) {

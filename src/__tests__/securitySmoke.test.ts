@@ -41,7 +41,6 @@ describe('security smoke (bounded baseline)', () => {
         'POST /login',
         'POST /auth/login',
         'POST /requestService/requestSubmission',
-        'POST /api/signnow/callback',
         'POST /quickbooks/webhooks/invoice-paid',
       ])
     );
@@ -54,7 +53,6 @@ describe('security smoke (bounded baseline)', () => {
         '/api/billing',
         '/api/payments',
         '/api/contract-signing',
-        '/api/signnow',
       ])
     );
   });

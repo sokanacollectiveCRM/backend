@@ -4,280 +4,107 @@ import { File as MulterFile } from 'multer';
 import { SupabaseClient } from '@supabase/supabase-js';
 
 import { queryCloudSql } from '../db/cloudSqlPool';
-import { Client } from '../entities/Client';
 import { WORK_ENTRY_ROW } from '../entities/Hours';
-import { NOTE } from '../entities/Note';
 import { User } from '../entities/User';
 import { UserRepository } from '../repositories/interface/userRepository';
+import {
+  CloudSqlTeamService,
+  TeamMemberDto,
+} from '../services/cloudSqlTeamService';
 import { ROLE } from '../types';
 import { HourType } from '../utils/hourTypes';
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export class SupabaseUserRepository implements UserRepository {
-  private supabaseClient: SupabaseClient;
+  private team = new CloudSqlTeamService();
 
   constructor(supabaseClient: SupabaseClient) {
-    this.supabaseClient = supabaseClient;
+    void supabaseClient;
+  }
+
+  private memberToUser(member: TeamMemberDto): User {
+    return new User({
+      id: member.id,
+      email: member.email,
+      firstname: member.firstname,
+      lastname: member.lastname,
+      created_at: new Date(member.created_at || Date.now()),
+      updated_at: new Date(member.updated_at || Date.now()),
+      role: member.role === 'admin' ? ROLE.ADMIN : ROLE.DOULA,
+      address: member.address ?? undefined,
+      city: member.city ?? undefined,
+      state: member.state as User['state'],
+      country: member.country ?? undefined,
+      zip_code: member.zip_code ? Number(member.zip_code) : undefined,
+      profile_picture:
+        member.profile_picture as unknown as User['profile_picture'],
+      account_status: member.account_status as User['account_status'],
+      bio: member.bio ?? undefined,
+    });
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    const { data, error } = await this.supabaseClient
-      .from('users')
-      .select('*')
-      .eq('email', email.toLowerCase().trim()) // Normalize email for comparison
-      .maybeSingle(); // Use maybeSingle() instead of single() to avoid errors when no row found
-
-    if (error) {
-      // Supabase auth-only: public.users may not exist; backend falls back to auth user. Don't log as error.
-      const isMissingTable =
-        error.code === 'PGRST205' ||
-        (error.message &&
-          error.message.includes("Could not find the table 'public.users'"));
-      if (!isMissingTable) {
-        console.error(`Error finding user by email ${email}:`, error);
-      }
-      return null;
-    }
-
-    if (!data) {
-      return null;
-    }
-
-    return this.mapToUser(data);
+    const member = await this.team.getStaffByEmail(email);
+    return member ? this.memberToUser(member) : null;
   }
 
   async findByRole(role: string): Promise<User[]> {
-    // Only select columns guaranteed to exist in users table.
-    // profile_picture and bio may not exist depending on migration state.
-    const { data, error } = await this.supabaseClient
-      .from('users')
-      .select('id, email, firstname, lastname, role, account_status')
-      .eq('role', role)
-      .order('firstname', { ascending: true });
-
-    if (error) {
-      throw new Error(`Failed to fetch ${role} users: ${error.message}`);
-    }
-
-    return data.map(this.mapToUser);
-  }
-
-  // async findClientsAll(): Promise<any> {
-  //   const { data, error } = await this.supabaseClient
-  //     .from('client_info')
-  //     .select('first_name, last_name, service_needed, requested, updated_at, status');
-
-  //   if (error) {
-  //     throw new Error(`Failed to fetch clients: ${error.message}`);
-  //   }
-
-  //   return data.map((client) => ({
-  //     firstName: client.first_name,
-  //     lastName: client.last_name,
-  //     serviceNeeded: client.service_needed,
-  //     requestedAt: new Date(client.requested), // Ensure it's a Date object
-  //     updatedAt: new Date(client.updated_at), // Ensure it's a Date object
-  //     status: client.status,
-  //   }));
-  // }
-
-  // infrastructure/repositories/SupabaseUserRepository.ts
-
-  // infrastructure/repositories/SupabaseUserRepository.ts
-
-  // infrastructure/repositories/SupabaseUserRepository.ts
-
-  // infrastructure/repositories/SupabaseUserRepository.ts
-
-  async findClientsAll(): Promise<any[]> {
-    const { data, error } = await this.supabaseClient.from('client_info')
-      .select(`
-      id,
-      user_id,
-      firstname,
-      lastname,
-      email,
-      service_needed,
-      requested,
-      updated_at,
-      status
-    `);
-
-    if (error) {
-      throw new Error(`Failed to fetch clients: ${error.message}`);
-    }
-
-    return (data as any[]).map((client) => ({
-      id: client.id,
-      userId: client.user_id, // expose the real UUID
-      firstName: client.firstname,
-      lastName: client.lastname,
-      email: client.email,
-      serviceNeeded: client.service_needed,
-      requestedAt: new Date(client.requested),
-      updatedAt: new Date(client.updated_at),
-      status: client.status,
-    }));
-  }
-
-  // Add this method inside the SupabaseUserRepository class
-
-  async updateClientStatusToCustomer(userId: string): Promise<void> {
-    const { error } = await this.supabaseClient
-      .from('client_info')
-      .update({ status: 'customer' }) // set the new status
-      .eq('user_id', userId); // match by user_id (UUID)
-
-    if (error) {
-      throw new Error(`Failed to update client status: ${error.message}`);
-    }
-  }
-  async findClientsById(id: string): Promise<any> {
-    const { data, error } = await this.supabaseClient
-      .from('client_info')
-      .select(
-        `
-      id,
-      firstname,
-      lastname,
-      email,
-      service_needed,
-      requested,
-      updated_at,
-      status,
-      user_id,
-      users!user_id (
-        id,
-        firstname,
-        lastname,
-        email
-      )
-    `
-      )
-      .eq('id', id);
-
-    if (error) {
-      throw new Error(`${error.message}`);
-    }
-
-    if (!data || data.length === 0) {
-      return null;
-    }
-
-    return this.mapToClient(data[0]);
-  }
-
-  async findClientsByDoula(doulaId: string): Promise<Client[]> {
-    const { data: assignments, error: assignmentsError } =
-      await this.supabaseClient
-        .from('assignments')
-        .select('client_id')
-        .eq('doula_id', doulaId)
-        .eq('status', 'active'); // Only get active assignments
-
-    if (assignmentsError) {
-      throw new Error(
-        `Failed to fetch assignments: ${assignmentsError.message}`
-      );
-    }
-
-    // Return if there are no assigned clients
-    if (!assignments || assignments.length === 0) {
-      return [];
-    }
-
-    // store out client ids into an array
-    const clientIds = assignments.map((assignment) => assignment.client_id);
-
-    // grab our users with full user data joined
-    const { data: clients, error: getClientsError } = await this.supabaseClient
-      .from('client_info')
-      .select(
-        `
-        *,
-        users!user_id (*)
-      `
-      )
-      .in('id', clientIds);
-
-    if (getClientsError) {
-      throw new Error(`Failed to fetch clients: ${getClientsError.message}`);
-    }
-
-    return clients.map((client) => this.mapToClient(client));
+    const members = await this.team.listTeamMembers();
+    return members
+      .filter((member) => member.role === role)
+      .map((member) => this.memberToUser(member));
   }
 
   async save(user: User): Promise<User> {
-    const { data, error } = await this.supabaseClient
-      .from('users')
-      .upsert(
-        {
-          id: user.id,
-          email: user.email,
-          firstname: user.firstname,
-          lastname: user.lastname,
-        },
-        { onConflict: 'email' }
-      )
-      .select()
-      .single();
-
-    if (error) {
-      throw new Error(error.message);
+    const existing = user.email
+      ? await this.team.getStaffByEmail(user.email)
+      : null;
+    if (!existing) {
+      throw new Error('Approved staff record not found');
     }
-
-    return this.mapToUser(data);
+    const updated = await this.team.updateTeamMember(existing.id, {
+      firstname: user.firstname || existing.firstname,
+      lastname: user.lastname || existing.lastname,
+    });
+    if (!updated) {
+      throw new Error('Approved staff record not found');
+    }
+    return this.memberToUser(updated);
   }
 
   async update(userId: string, fieldsToUpdate: Partial<User>): Promise<User> {
-    const { data: updatedUser, error: updatedUserError } =
-      await this.supabaseClient
-        .from('users')
-        .update(fieldsToUpdate)
-        .eq('id', userId)
-        .select()
-        .single();
-
-    if (updatedUserError) {
-      throw new Error(updatedUserError.message);
+    const updated = await this.team.updateTeamMember(userId, {
+      firstname: fieldsToUpdate.firstname,
+      lastname: fieldsToUpdate.lastname,
+      email: fieldsToUpdate.email,
+      phone_number: fieldsToUpdate.phone_number,
+      address: fieldsToUpdate.address,
+      city: fieldsToUpdate.city,
+      state: fieldsToUpdate.state ? String(fieldsToUpdate.state) : undefined,
+      country: fieldsToUpdate.country,
+      zip_code:
+        fieldsToUpdate.zip_code != null
+          ? String(fieldsToUpdate.zip_code)
+          : undefined,
+      account_status: fieldsToUpdate.account_status,
+      bio: fieldsToUpdate.bio,
+    });
+    if (!updated) {
+      throw new Error('Staff record not found');
     }
-    if (updatedUser) {
-      console.log(
-        `📋 Repository: Updated user data - Address: "${updatedUser.address}", City: "${updatedUser.city}", State: "${updatedUser.state}"`
-      );
-    }
-
-    return this.mapToUser(updatedUser);
+    return this.memberToUser(updated);
   }
 
   async findAll(): Promise<User[]> {
-    const { data, error } = await this.supabaseClient
-      .from('users')
-      .select('email, firstname, lastname')
-      .order('firstname', { ascending: true });
-
-    if (error) {
-      throw new Error(`Failed to fetch users: ${error.message}`);
-    }
-
-    return data.map(this.mapToUser);
+    const members = await this.team.listTeamMembers();
+    return members.map((member) => this.memberToUser(member));
   }
 
   async findAllTeamMembers(): Promise<User[]> {
-    try {
-      const { data, error } = await this.supabaseClient
-        .from('users')
-        .select('id, firstname, lastname, email, role, account_status')
-        .in('role', ['doula', 'admin']);
-
-      if (error) {
-        throw new Error(`Failed to retrieve team members: ${error.message}`);
-      }
-
-      const mappedUsers = data.map(this.mapToUser);
-      return mappedUsers;
-    } catch (err) {
-      throw new Error(`Failed to fetch team members: ${err.message}`);
-    }
+    const members = await this.team.listTeamMembers();
+    return members.map((member) => this.memberToUser(member));
   }
 
   async addMember(
@@ -286,42 +113,25 @@ export class SupabaseUserRepository implements UserRepository {
     userEmail: string,
     userRole: string
   ): Promise<User> {
-    try {
-      // Normalize email to lowercase for consistency
-      const normalizedEmail = userEmail.toLowerCase().trim();
-
-      const { data, error } = await this.supabaseClient
-        .from('users')
-        .insert([
-          {
-            firstname: firstname.trim(),
-            lastname: lastname.trim(),
-            email: normalizedEmail,
-            role: userRole,
-            account_status: 'pending', // Set account status to pending for new invites
-          },
-        ])
-        .select()
-        .single();
-
-      if (error) {
-        console.error(`Error adding member ${normalizedEmail}:`, error);
-        throw new Error(`Failed to add member: ${error.message}`);
-      }
-
-      if (!data) {
-        throw new Error('Failed to add member: No data returned from insert');
-      }
-
-      const user = this.mapToUser(data);
-      console.log(
-        `✅ Successfully added member: ${normalizedEmail}, ID: ${user.id}, Status: ${user.account_status}`
-      );
-      return user;
-    } catch (err: any) {
-      console.error(`Failed to add member ${userEmail}:`, err);
-      throw new Error(`Failed to add member: ${err.message}`);
-    }
+    const role = userRole === 'admin' ? 'admin' : 'doula';
+    const member = await this.team.addTeamMember({
+      firstname,
+      lastname,
+      email: userEmail,
+      role,
+    });
+    return this.memberToUser({
+      ...member,
+      fullName: `${member.firstname} ${member.lastname}`.trim(),
+      account_status: 'approved',
+      address: null,
+      city: null,
+      state: null,
+      country: null,
+      zip_code: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
   }
 
   async getHoursById(id: string): Promise<any> {
@@ -471,61 +281,13 @@ export class SupabaseUserRepository implements UserRepository {
   }
 
   async findById(id: string): Promise<User | null> {
-    const { data, error } = await this.supabaseClient
-      .from('users')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (error || !data) {
-      return null;
-    }
-
-    return this.mapToUser(data);
-  }
-
-  async findNoteByWorkLogId(id: string): Promise<NOTE | null> {
-    const { data, error } = await this.supabaseClient
-      .from('notes')
-      .select('*')
-      .eq('work_log_id', id);
-
-    if (error) {
-      console.log(
-        `Given this work_log_id: ${id} error finding note correspimonding to it: ${error.message}`
-      );
-    }
-
-    return data[0];
+    if (!UUID_RE.test(id)) return null;
+    const member = await this.team.getTeamMemberById(id);
+    return member ? this.memberToUser(member) : null;
   }
 
   async delete(id: string): Promise<void> {
-    console.log(
-      `🗄️  Repository: Attempting to delete user ${id} from database`
-    );
-
-    const { data, error } = await this.supabaseClient
-      .from('users')
-      .delete()
-      .eq('id', id)
-      .select(); // Select to get info about what was deleted
-
-    if (error) {
-      console.error(
-        `❌ Repository: Failed to delete user ${id}:`,
-        error.message
-      );
-      throw new Error(`Failed to delete user: ${error.message}`);
-    }
-
-    if (data && data.length > 0) {
-      const deletedUser = data[0];
-      console.log(
-        `✅ Repository: User ${id} (${deletedUser.email || 'N/A'}) deleted from database`
-      );
-    } else {
-      console.log(`⚠️  Repository: No user found with ID ${id} to delete`);
-    }
+    await this.team.deleteTeamMember(id);
   }
 
   async uploadProfilePicture(user: User, profilePicture: MulterFile) {
@@ -538,65 +300,6 @@ export class SupabaseUserRepository implements UserRepository {
     );
     // Persist relative GCS path; callers resolve to signed URLs on read.
     return relativePath;
-  }
-
-  // Helper to map database user to domain User
-  private mapToUser(data: any): User {
-    return new User({
-      id: data.id,
-      email: data.email,
-      firstname: data.firstname,
-      lastname: data.lastname,
-      created_at: new Date(data.created_at || Date.now()),
-      updated_at: new Date(data.updated_at || Date.now()),
-      role: data.role || ROLE.CLIENT,
-      address: data.address,
-      city: data.city,
-      state: data.state,
-      country: data.country,
-      zip_code: data.zip_code,
-      profile_picture: data.profile_picture,
-      account_status: data.account_status,
-      business: data.business,
-      bio: data.bio,
-    });
-  }
-
-  // Helper to map to client entity
-  private mapToClient(data: any): Client {
-    // If the user has created a profile, grab user data from users table. If not, grab details
-    // from the request form (client_info table).
-    const userData = data.users
-      ? {
-          id: data.users.user_id,
-          firstname: data.users.firstname,
-          lastname: data.users.lastname,
-          profile_picture: data.users,
-        }
-      : {
-          id: data.id,
-          firstname: data.firstname,
-          lastname: data.lastname,
-          profile_picture: '',
-        };
-
-    // if user doesn't exist (not approved), we fill fields from client_info table
-    const user = this.mapToUser({
-      id: userData.id ?? data.id,
-      firstname: userData.firstname,
-      lastname: userData.lastname,
-      profile_picture: userData.profile_picture,
-      role: 'client',
-    });
-
-    return new Client(
-      data.id,
-      user,
-      data.service_needed,
-      new Date(data.requested),
-      new Date(data.updated_at),
-      data.status
-    );
   }
 
   async addNewHours(

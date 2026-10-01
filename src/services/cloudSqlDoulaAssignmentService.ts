@@ -56,7 +56,7 @@ export class CloudSqlDoulaAssignmentService {
       `
       SELECT id
       FROM public.phi_clients
-      WHERE user_id = $1::uuid
+      WHERE user_id = $1
       LIMIT 1
       `,
       [authUserId]

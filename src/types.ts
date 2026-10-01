@@ -1,77 +1,78 @@
 import { Request } from 'express';
 import type { File as MulterFile } from 'multer';
+
 import { User } from './entities/User';
 
-export enum ServiceTypes{
-  LABOR_SUPPORT = "Labor Support",
-  POSTPARTUM_SUPPORT= "Postpartum Support",
-  PERINATAL_EDUCATION= "Perinatal Education",
-  FIRST_NIGHT = "First Night Care",
-  LACTATION_SUPPORT = "Lactation Support",
-  PHOTOGRAPHY = "Photography",
-  OTHER = "Other"
+export enum ServiceTypes {
+  LABOR_SUPPORT = 'Labor Support',
+  POSTPARTUM_SUPPORT = 'Postpartum Support',
+  PERINATAL_EDUCATION = 'Perinatal Education',
+  FIRST_NIGHT = 'First Night Care',
+  LACTATION_SUPPORT = 'Lactation Support',
+  PHOTOGRAPHY = 'Photography',
+  OTHER = 'Other',
 }
 
 export enum RequestStatus {
-  PENDING = "pending",
-  REVIEWING = "reviewing",
-  APPROVED = "approved",
-  REJECTED = "rejected",
-  COMPLETED = "completed"
+  PENDING = 'pending',
+  REVIEWING = 'reviewing',
+  APPROVED = 'approved',
+  REJECTED = 'rejected',
+  COMPLETED = 'completed',
 }
 
 export enum HomeType {
-  HOUSE = "House",
-  APARTMENT = "Apartment",
-  CONDO = "Condo",
-  TOWNHOUSE = "Townhouse",
-  OTHER = "Other"
+  HOUSE = 'House',
+  APARTMENT = 'Apartment',
+  CONDO = 'Condo',
+  TOWNHOUSE = 'Townhouse',
+  OTHER = 'Other',
 }
 
 export enum RelationshipStatus {
-  SINGLE = "Single",
-  MARRIED = "Married",
-  PARTNERED = "Partnered",
-  DIVORCED = "Divorced",
-  WIDOWED = "Widowed",
-  OTHER = "Other"
+  SINGLE = 'Single',
+  MARRIED = 'Married',
+  PARTNERED = 'Partnered',
+  DIVORCED = 'Divorced',
+  WIDOWED = 'Widowed',
+  OTHER = 'Other',
 }
 
 export enum ProviderType {
-  OB = "OB",
-  MIDWIFE = "Midwife",
-  FAMILY_PHYSICIAN = "Family Physician",
-  OTHER = "Other"
+  OB = 'OB',
+  MIDWIFE = 'Midwife',
+  FAMILY_PHYSICIAN = 'Family Physician',
+  OTHER = 'Other',
 }
 
 export enum ClientAgeRange {
-  UNDER_18 = "Under 18",
-  AGE_18_24 = "18-24",
-  AGE_25_34 = "25-34",
-  AGE_35_44 = "35-44",
-  AGE_45_54 = "45-54",
-  AGE_55_PLUS = "55+"
+  UNDER_18 = 'Under 18',
+  AGE_18_24 = '18-24',
+  AGE_25_34 = '25-34',
+  AGE_35_44 = '35-44',
+  AGE_45_54 = '45-54',
+  AGE_55_PLUS = '55+',
 }
 
-export enum Pronouns{
-  HE_HIM = "he/him",
-  SHE_HER = "she/her",
-  THEY_THEM = "they/them",
-  OTHER = "other",
+export enum Pronouns {
+  HE_HIM = 'he/him',
+  SHE_HER = 'she/her',
+  THEY_THEM = 'they/them',
+  OTHER = 'other',
 }
 
-export enum Sex{
-  MALE = "Male",
-  FEMALE = "Female"
+export enum Sex {
+  MALE = 'Male',
+  FEMALE = 'Female',
 }
 
-export enum IncomeLevel{
-  FROM_0_TO_24999 = "$0 - $24,999",
-  FROM_25000_TO_44999 = "$25,000 - $44,999",
-  FROM_45000_TO_64999 = "$45,000 - $64,999",
-  FROM_65000_TO_84999 = "$65,000 - $84,999",
-  FROM_85000_TO_99999 = "$85,000 - $99,999",
-  ABOVE_100000 = "$100,000 and above"
+export enum IncomeLevel {
+  FROM_0_TO_24999 = '$0 - $24,999',
+  FROM_25000_TO_44999 = '$25,000 - $44,999',
+  FROM_45000_TO_64999 = '$45,000 - $64,999',
+  FROM_65000_TO_84999 = '$65,000 - $84,999',
+  FROM_85000_TO_99999 = '$85,000 - $99,999',
+  ABOVE_100000 = '$100,000 and above',
 }
 
 export interface AuthRequest extends Request {
@@ -111,8 +112,7 @@ export interface SignupBody {
 }
 
 export interface LoginBody {
-  email: string;
-  password: string;
+  idToken: string;
 }
 
 export interface TokenBody {
@@ -133,8 +133,8 @@ export interface RequestFormData {
   lastname: string;
   email: string;
   phone_number: string;
-  preferred_contact_method?: string;  // Add this field
-  preferred_name?: string;             // Add this field
+  preferred_contact_method?: string; // Add this field
+  preferred_name?: string; // Add this field
   pronouns?: Pronouns;
   pronouns_other?: string;
   children_expected?: string;
@@ -330,19 +330,19 @@ export enum CLIENT_STATUS {
   CONTRACT = 'contract',
   ACTIVE = 'active',
   COMPLETE = 'complete',
-};
+}
 
 export enum ACCOUNT_STATUS {
-  PENDING = "pending",
-  APPROVED = "approved"
-};
+  PENDING = 'pending',
+  APPROVED = 'approved',
+}
 
 export enum ROLE {
-  ADMIN = "admin",
-  DOULA = "doula",
-  CLIENT = "client",
-  BILLING = "billing"
-};
+  ADMIN = 'admin',
+  DOULA = 'doula',
+  CLIENT = 'client',
+  BILLING = 'billing',
+}
 
 export type PortalStatus = 'not_invited' | 'invited' | 'active' | 'disabled';
 
@@ -366,54 +366,54 @@ export interface PortalInviteResult {
 }
 
 export enum STATE {
-  AL = "AL",
-  AK = "AK",
-  AZ = "AZ",
-  AR = "AR",
-  CA = "CA",
-  CO = "CO",
-  CT = "CT",
-  DE = "DE",
-  FL = "FL",
-  GA = "GA",
-  HI = "HI",
-  ID = "ID",
-  IL = "IL",
-  IN = "IN",
-  IA = "IA",
-  KS = "KS",
-  KY = "KY",
-  LA = "LA",
-  ME = "ME",
-  MD = "MD",
-  MA = "MA",
-  MI = "MI",
-  MN = "MN",
-  MS = "MS",
-  MO = "MO",
-  MT = "MT",
-  NE = "NE",
-  NV = "NV",
-  NH = "NH",
-  NJ = "NJ",
-  NM = "NM",
-  NY = "NY",
-  NC = "NC",
-  ND = "ND",
-  OH = "OH",
-  OK = "OK",
-  OR = "OR",
-  PA = "PA",
-  RI = "RI",
-  SC = "SC",
-  SD = "SD",
-  TN = "TN",
-  TX = "TX",
-  UT = "UT",
-  VT = "VT",
-  VA = "VA",
-  WA = "WA",
-  WV = "WV",
-  WI = "WI",
-  WY = "WY"
-};
+  AL = 'AL',
+  AK = 'AK',
+  AZ = 'AZ',
+  AR = 'AR',
+  CA = 'CA',
+  CO = 'CO',
+  CT = 'CT',
+  DE = 'DE',
+  FL = 'FL',
+  GA = 'GA',
+  HI = 'HI',
+  ID = 'ID',
+  IL = 'IL',
+  IN = 'IN',
+  IA = 'IA',
+  KS = 'KS',
+  KY = 'KY',
+  LA = 'LA',
+  ME = 'ME',
+  MD = 'MD',
+  MA = 'MA',
+  MI = 'MI',
+  MN = 'MN',
+  MS = 'MS',
+  MO = 'MO',
+  MT = 'MT',
+  NE = 'NE',
+  NV = 'NV',
+  NH = 'NH',
+  NJ = 'NJ',
+  NM = 'NM',
+  NY = 'NY',
+  NC = 'NC',
+  ND = 'ND',
+  OH = 'OH',
+  OK = 'OK',
+  OR = 'OR',
+  PA = 'PA',
+  RI = 'RI',
+  SC = 'SC',
+  SD = 'SD',
+  TN = 'TN',
+  TX = 'TX',
+  UT = 'UT',
+  VT = 'VT',
+  VA = 'VA',
+  WA = 'WA',
+  WV = 'WV',
+  WI = 'WI',
+  WY = 'WY',
+}

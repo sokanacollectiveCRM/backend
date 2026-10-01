@@ -68,7 +68,7 @@ describe('PR 7 Zod validateRequest', () => {
       .expect(400);
     expect(res.body.success).toBe(false);
     expect(res.body.code).toBe('VALIDATION_ERROR');
-    expect(res.body.error).toMatch(/email|password|required/i);
+    expect(res.body.error).toMatch(/idToken|required/i);
   });
 
   it('accepts valid login bodies and preserves handler success shape', async () => {
@@ -77,19 +77,17 @@ describe('PR 7 Zod validateRequest', () => {
     app.post('/auth/login', validateBody(loginBodySchema), (req, res) => {
       res.status(200).json({
         message: 'Login successful',
-        user: { email: req.body.email },
-        token: 'tok',
+        user: { idTokenPresent: Boolean(req.body.idToken) },
       });
     });
 
     const res = await request(app)
       .post('/auth/login')
-      .send({ email: 'a@example.com', password: 'secret' })
+      .send({ idToken: 'firebase-id-token' })
       .expect(200);
     expect(res.body).toEqual({
       message: 'Login successful',
-      user: { email: 'a@example.com' },
-      token: 'tok',
+      user: { idTokenPresent: true },
     });
   });
 

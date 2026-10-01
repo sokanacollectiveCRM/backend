@@ -405,118 +405,124 @@ export class RequestFormRepository {
     }
   }
 
+  private mapRequestRow(row: {
+    id: string;
+    status: string | null;
+    request_status: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    phone: string | null;
+    address_line1: string | null;
+    city: string | null;
+    state: string | null;
+    zip_code: string | null;
+    service_needed: string | null;
+    user_id: string | null;
+    requested_at: Date | string | null;
+    created_at: Date | string | null;
+    updated_at: Date | string | null;
+    client_number: string | null;
+  }): RequestFormResponse {
+    const created = row.created_at
+      ? new Date(row.created_at).toISOString()
+      : new Date().toISOString();
+    const workflow =
+      row.request_status ||
+      (row.status === 'lead' ? 'pending' : row.status) ||
+      'pending';
+    return {
+      id: row.id,
+      client_number: row.client_number ?? undefined,
+      status: workflow as RequestStatus,
+      requested: row.requested_at
+        ? new Date(row.requested_at).toISOString()
+        : created,
+      created_at: created,
+      updated_at: row.updated_at
+        ? new Date(row.updated_at).toISOString()
+        : created,
+      user_id: row.user_id ?? '',
+      firstname: row.first_name ?? '',
+      lastname: row.last_name ?? '',
+      email: row.email ?? '',
+      phone_number: row.phone ?? '',
+      address: row.address_line1 ?? '',
+      city: (row.city ?? '') as RequestFormResponse['city'],
+      state: (row.state ?? '') as RequestFormResponse['state'],
+      zip_code: row.zip_code ?? '',
+      service_needed: (row.service_needed ??
+        '') as RequestFormResponse['service_needed'],
+    };
+  }
+
+  private readonly requestSelect = `
+    id, status, request_status, first_name, last_name, email, phone,
+    address_line1, city, state, zip_code, service_needed, user_id,
+    requested_at, created_at, updated_at, client_number
+  `;
+
   async getUserRequests(userId: string): Promise<RequestFormResponse[]> {
-    try {
-      const { data, error } = await this.supabaseClient
-        .from('requests')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Supabase select error:', error);
-        throw new Error('Database query failed: ' + error.message);
-      }
-
-      return data as RequestFormResponse[];
-    } catch (error) {
-      console.error(error);
-      throw error;
-    }
+    const { rows } = await getPool().query(
+      `SELECT ${this.requestSelect}
+       FROM public.phi_clients
+       WHERE user_id = $1
+       ORDER BY created_at DESC`,
+      [userId]
+    );
+    return rows.map((row) => this.mapRequestRow(row));
   }
 
   async getRequestById(
     requestId: string,
     userId: string
   ): Promise<RequestFormResponse | null> {
-    try {
-      const { data, error } = await this.supabaseClient
-        .from('requests')
-        .select('*')
-        .eq('id', requestId)
-        .eq('user_id', userId)
-        .single();
-
-      if (error) {
-        if (error.code === 'PGRST116') {
-          return null; // No rows returned
-        }
-        console.error('Supabase select error:', error);
-        throw new Error('Database query failed: ' + error.message);
-      }
-
-      return data as RequestFormResponse;
-    } catch (error) {
-      console.error(error);
-      throw error;
-    }
+    const { rows } = await getPool().query(
+      `SELECT ${this.requestSelect}
+       FROM public.phi_clients
+       WHERE id = $1::uuid AND user_id = $2
+       LIMIT 1`,
+      [requestId, userId]
+    );
+    return rows[0] ? this.mapRequestRow(rows[0]) : null;
   }
 
   async getAllRequests(): Promise<RequestFormResponse[]> {
-    try {
-      const { data, error } = await this.supabaseClient
-        .from('requests')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Supabase select error:', error);
-        throw new Error('Database query failed: ' + error.message);
-      }
-
-      return data as RequestFormResponse[];
-    } catch (error) {
-      console.error(error);
-      throw error;
-    }
+    const { rows } = await getPool().query(
+      `SELECT ${this.requestSelect}
+       FROM public.phi_clients
+       ORDER BY created_at DESC`
+    );
+    return rows.map((row) => this.mapRequestRow(row));
   }
 
   async getRequestByIdAdmin(
     requestId: string
   ): Promise<RequestFormResponse | null> {
-    try {
-      const { data, error } = await this.supabaseClient
-        .from('requests')
-        .select('*')
-        .eq('id', requestId)
-        .single();
-
-      if (error) {
-        if (error.code === 'PGRST116') {
-          return null; // No rows returned
-        }
-        console.error('Supabase select error:', error);
-        throw new Error('Database query failed: ' + error.message);
-      }
-
-      return data as RequestFormResponse;
-    } catch (error) {
-      console.error(error);
-      throw error;
-    }
+    const { rows } = await getPool().query(
+      `SELECT ${this.requestSelect}
+       FROM public.phi_clients
+       WHERE id = $1::uuid
+       LIMIT 1`,
+      [requestId]
+    );
+    return rows[0] ? this.mapRequestRow(rows[0]) : null;
   }
 
   async updateRequestStatus(
     requestId: string,
     status: RequestStatus
   ): Promise<RequestFormResponse> {
-    try {
-      const { data, error } = await this.supabaseClient
-        .from('requests')
-        .update({ status })
-        .eq('id', requestId)
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Supabase update error:', error);
-        throw new Error('Database update failed: ' + error.message);
-      }
-
-      return data as RequestFormResponse;
-    } catch (error) {
-      console.error(error);
-      throw error;
+    const { rows } = await getPool().query(
+      `UPDATE public.phi_clients
+       SET request_status = $2, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1::uuid
+       RETURNING ${this.requestSelect}`,
+      [requestId, status]
+    );
+    if (!rows[0]) {
+      throw new Error('Database update failed: request not found');
     }
+    return this.mapRequestRow(rows[0]);
   }
 }

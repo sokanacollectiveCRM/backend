@@ -1,92 +1,23 @@
 import express, { Router } from 'express';
 
+import { queryCloudSql } from '../db/cloudSqlPool';
 import authMiddleware from '../middleware/authMiddleware';
 import authorizeRoles from '../middleware/authorizeRoles';
-import { queryCloudSql } from '../db/cloudSqlPool';
-import supabase from '../supabase';
 
 const dashboardRoutes: Router = express.Router();
 
-const isMissingRelationError = (error: {
-  code?: string;
-  message: string;
-}): boolean => {
-  if (!error) {
-    return false;
-  }
-
-  const missingRelationCodes = new Set([
-    '42P01',
-    'PGRST201',
-    'PGRST301',
-    'PGRST205',
-  ]);
-  if (error.code && missingRelationCodes.has(error.code)) {
-    return true;
-  }
-
-  return /relation .* does not exist/i.test(error.message || '');
-};
-
-const fetchCount = async (
-  table: string,
-  applyFilters?: (query: any) => any
+const countRows = async (
+  sql: string,
+  params: unknown[] = []
 ): Promise<number> => {
-  let query = supabase.from(table).select('id', { count: 'exact', head: true });
-
-  if (applyFilters) {
-    query = applyFilters(query);
-  }
-
-  const { count, error } = await query;
-
-  if (error) {
-    if (isMissingRelationError(error)) {
-      console.warn(`[dashboard] Table "${table}" missing. Returning count 0.`);
-      return 0;
-    }
-
-    console.error(`[dashboard] Failed counting table "${table}":`, error);
-    throw error;
-  }
-
-  return count ?? 0;
-};
-
-const fetchMonthlyRevenue = async (
-  sinceIso: string,
-  nowIso: string
-): Promise<number | null> => {
-  const { data, error } = await supabase
-    .from('payment_tracking')
-    .select('installment_amount, installment_status, due_date')
-    .gte('due_date', sinceIso)
-    .lte('due_date', nowIso)
-    .eq('installment_status', 'paid');
-
-  if (error) {
-    if (isMissingRelationError(error)) {
-      console.warn(
-        '[dashboard] Supabase payment_tracking missing, trying Cloud SQL...'
-      );
-      return fetchMonthlyRevenueFromCloudSql(sinceIso, nowIso);
-    }
-
-    console.error('[dashboard] Failed to compute monthly revenue:', error);
-    throw error;
-  }
-
-  if (!data) {
+  try {
+    const { rows } = await queryCloudSql<{ count: string }>(sql, params);
+    const count = Number(rows[0]?.count ?? 0);
+    return Number.isFinite(count) ? count : 0;
+  } catch (err) {
+    console.warn('[dashboard] Cloud SQL count failed:', err);
     return 0;
   }
-
-  return data.reduce(
-    (total: number, row: { installment_amount?: number | string | null }) => {
-      const value = Number(row?.installment_amount ?? 0);
-      return Number.isFinite(value) ? total + value : total;
-    },
-    0
-  );
 };
 
 const fetchMonthlyRevenueFromCloudSql = async (
@@ -104,138 +35,16 @@ const fetchMonthlyRevenueFromCloudSql = async (
     const total = parseFloat(rows[0]?.amount ?? '0');
     return Number.isFinite(total) ? total : 0;
   } catch (err) {
-    console.warn('[dashboard] Cloud SQL revenue fallback failed:', err);
+    console.warn('[dashboard] Cloud SQL revenue failed:', err);
     return null;
   }
 };
 
-dashboardRoutes.get(
-  '/stats',
-  authMiddleware,
-  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
-  async (_req, res) => {
-    const now = new Date();
-    const nowIso = now.toISOString();
-    const sevenDaysAgoIso = new Date(
-      now.getTime() - 7 * 24 * 60 * 60 * 1000
-    ).toISOString();
-    const thirtyDaysAheadIso = new Date(
-      now.getTime() + 30 * 24 * 60 * 60 * 1000
-    ).toISOString();
-    const thirtyDaysAgoIso = new Date(
-      now.getTime() - 30 * 24 * 60 * 60 * 1000
-    ).toISOString();
-
-    try {
-      const overdueNotesPromise = fetchCount('notes', (query) =>
-        query.lt('lastUpdatedAt', sevenDaysAgoIso)
-      ).catch((error) => {
-        console.warn(
-          '[dashboard] notes count unavailable, defaulting to 0:',
-          error
-        );
-        return 0;
-      });
-
-      const [
-        totalDoulas,
-        totalClients,
-        pendingContracts,
-        overdueNotes,
-        upcomingTasks,
-        monthlyRevenue,
-      ] = await Promise.all([
-        fetchCount('profiles', (query) => query.eq('role', 'doula')),
-        fetchCount('clients'),
-        fetchCount('contracts', (query) => query.neq('status', 'signed')),
-        overdueNotesPromise,
-        fetchCount('tasks', (query) =>
-          query.gte('dueDate', nowIso).lte('dueDate', thirtyDaysAheadIso)
-        ),
-        fetchMonthlyRevenue(thirtyDaysAgoIso, nowIso),
-      ]);
-
-      res.status(200).json({
-        totalDoulas,
-        totalClients,
-        pendingContracts,
-        overdueNotes,
-        upcomingTasks,
-        monthlyRevenue,
-      });
-    } catch (error) {
-      console.error('Failed to compute dashboard stats:', error);
-
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Unable to compute dashboard stats';
-
-      res.status(500).json({ error: message });
-    }
-  }
-);
-
-// GET /api/dashboard/calendar - Returns pregnancy due date events
-dashboardRoutes.get(
-  '/calendar',
-  authMiddleware,
-  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
-  async (_req, res) => {
-    try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayIso = today.toISOString().split('T')[0];
-
-      let events: { id: string; type: string; title: string; date: string; color: string }[] = [];
-
-      // Try Supabase client_info first
-      const { data, error } = await supabase
-        .from('client_info')
-        .select('id, first_name, last_name, due_date')
-        .not('due_date', 'is', null)
-        .gte('due_date', todayIso);
-
-      if (error) {
-        if (isMissingRelationError(error)) {
-          console.warn(
-            '[dashboard/calendar] Supabase client_info missing, trying Cloud SQL...'
-          );
-          events = await fetchCalendarEventsFromCloudSql(todayIso);
-        } else {
-          console.error('[dashboard/calendar] Failed to fetch due dates:', error);
-          throw error;
-        }
-      } else if (data && data.length > 0) {
-        events = data
-          .map((client: { id: string; first_name?: string; last_name?: string; due_date: string }) => ({
-            id: client.id,
-            type: 'pregnancyDueDate',
-            title:
-              `EDD – Baby Due (${client.first_name || ''} ${client.last_name || ''})`.trim(),
-            date: client.due_date,
-            color: '#34A853',
-          }))
-          .sort((a, b) => a.date.localeCompare(b.date));
-      }
-
-      res.status(200).json({ events });
-    } catch (error) {
-      console.error('Failed to fetch calendar events:', error);
-
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Unable to fetch calendar events';
-
-      res.status(500).json({ error: message });
-    }
-  }
-);
-
 const fetchCalendarEventsFromCloudSql = async (
   todayIso: string
-): Promise<{ id: string; type: string; title: string; date: string; color: string }[]> => {
+): Promise<
+  { id: string; type: string; title: string; date: string; color: string }[]
+> => {
   try {
     const { rows } = await queryCloudSql<{
       id: string;
@@ -258,9 +67,92 @@ const fetchCalendarEventsFromCloudSql = async (
       color: '#34A853',
     }));
   } catch (err) {
-    console.warn('[dashboard/calendar] Cloud SQL fallback failed:', err);
+    console.warn('[dashboard/calendar] Cloud SQL lookup failed:', err);
     return [];
   }
 };
+
+dashboardRoutes.get(
+  '/stats',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
+  async (_req, res) => {
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const sevenDaysAgoIso = new Date(
+      now.getTime() - 7 * 24 * 60 * 60 * 1000
+    ).toISOString();
+    const thirtyDaysAgoIso = new Date(
+      now.getTime() - 30 * 24 * 60 * 60 * 1000
+    ).toISOString();
+
+    try {
+      const [
+        totalDoulas,
+        totalClients,
+        pendingContracts,
+        overdueNotes,
+        monthlyRevenue,
+      ] = await Promise.all([
+        countRows('SELECT COUNT(*)::text AS count FROM public.doulas'),
+        countRows('SELECT COUNT(*)::text AS count FROM public.phi_clients'),
+        countRows(
+          `SELECT COUNT(*)::text AS count
+           FROM public.phi_contracts
+           WHERE status IS DISTINCT FROM 'signed'`
+        ),
+        countRows(
+          `SELECT COUNT(*)::text AS count
+           FROM public.client_activities
+           WHERE timestamp < $1::timestamptz`,
+          [sevenDaysAgoIso]
+        ),
+        fetchMonthlyRevenueFromCloudSql(thirtyDaysAgoIso, nowIso),
+      ]);
+
+      res.status(200).json({
+        totalDoulas,
+        totalClients,
+        pendingContracts,
+        overdueNotes,
+        upcomingTasks: 0,
+        monthlyRevenue,
+      });
+    } catch (error) {
+      console.error('Failed to compute dashboard stats:', error);
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unable to compute dashboard stats';
+
+      res.status(500).json({ error: message });
+    }
+  }
+);
+
+dashboardRoutes.get(
+  '/calendar',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
+  async (_req, res) => {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayIso = today.toISOString().split('T')[0];
+      const events = await fetchCalendarEventsFromCloudSql(todayIso);
+      res.status(200).json({ events });
+    } catch (error) {
+      console.error('Failed to fetch calendar events:', error);
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unable to fetch calendar events';
+
+      res.status(500).json({ error: message });
+    }
+  }
+);
 
 export default dashboardRoutes;

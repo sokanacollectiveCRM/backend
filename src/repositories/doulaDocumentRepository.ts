@@ -1,6 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 
-import { createBackendSupabaseClient as createClient } from '../services/createBackendSupabaseClient';
+import { queryCloudSql } from '../db/cloudSqlPool';
 import {
   GCS_PREFIX,
   getSignedReadUrl,
@@ -12,7 +12,7 @@ export interface DoulaDocument {
   doulaId: string;
   documentType: string;
   fileName: string;
-  filePath: string; // Store file path instead of URL for private buckets
+  filePath: string;
   fileSize?: number;
   mimeType?: string;
   uploadedAt: Date;
@@ -30,81 +30,74 @@ export interface CreateDoulaDocumentData {
   doulaId: string;
   documentType: string;
   fileName: string;
-  filePath: string; // Store file path instead of URL
+  filePath: string;
   fileSize?: number;
   mimeType?: string;
   expiresAt?: Date;
   notes?: string;
 }
 
+interface DoulaDocumentRow {
+  id: string;
+  doula_id: string;
+  document_type: string;
+  file_name: string;
+  file_path: string | null;
+  file_url?: string | null;
+  file_size: number | null;
+  mime_type: string | null;
+  uploaded_at: Date | string;
+  expires_at: Date | string | null;
+  status: string;
+  notes: string | null;
+  reviewed_at: Date | string | null;
+  reviewed_by: string | null;
+  rejection_reason: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
 export class DoulaDocumentRepository {
-  private supabaseClient: SupabaseClient;
-  private supabaseUrl: string;
-
   constructor(supabaseClient: SupabaseClient) {
-    this.supabaseClient = supabaseClient;
-    this.supabaseUrl = process.env.SUPABASE_URL || '';
+    void supabaseClient;
   }
 
-  /**
-   * Create a Supabase client with user's access token for RLS policies
-   */
-  private createUserClient(accessToken: string): SupabaseClient {
-    return createClient(this.supabaseUrl, process.env.SUPABASE_ANON_KEY || '', {
-      global: {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      },
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
-  }
+  async createDocument(data: CreateDoulaDocumentData): Promise<DoulaDocument> {
+    const { rows } = await queryCloudSql<DoulaDocumentRow>(
+      `
+      INSERT INTO public.doula_documents (
+        doula_id,
+        document_type,
+        file_name,
+        file_path,
+        file_size,
+        mime_type,
+        expires_at,
+        notes,
+        status
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'uploaded')
+      RETURNING *
+      `,
+      [
+        data.doulaId,
+        data.documentType,
+        data.fileName,
+        data.filePath,
+        data.fileSize ?? null,
+        data.mimeType ?? null,
+        data.expiresAt ?? null,
+        data.notes ?? null,
+      ]
+    );
 
-  /**
-   * Create a new doula document
-   * @param data - Document data
-   * @param accessToken - Optional user access token for RLS policies
-   */
-  async createDocument(
-    data: CreateDoulaDocumentData,
-    accessToken?: string
-  ): Promise<DoulaDocument> {
-    // Use user's token if provided (for RLS), otherwise use service role
-    const client = accessToken
-      ? this.createUserClient(accessToken)
-      : this.supabaseClient;
-
-    const { data: document, error } = await client
-      .from('doula_documents')
-      .insert({
-        doula_id: data.doulaId,
-        document_type: data.documentType,
-        file_name: data.fileName,
-        file_path: data.filePath, // Store file path instead of URL
-        file_size: data.fileSize,
-        mime_type: data.mimeType,
-        expires_at: data.expiresAt,
-        notes: data.notes,
-        status: 'uploaded',
-      })
-      .select()
-      .single();
-
-    if (error) {
-      throw new Error(`Failed to create document: ${error.message}`);
+    if (!rows[0]) {
+      throw new Error('Failed to create document: no row returned');
     }
 
-    return this.mapToDocument(document);
+    return this.mapToDocument(rows[0]);
   }
 
-  /**
-   * Generate a signed URL for a file path in private GCS.
-   * @param filePath - Relative path stored in DB
-   * @param expiresIn - Expiration time in seconds (default: 1 hour)
-   */
   async getSignedUrl(
     filePath: string,
     expiresIn: number = 3600
@@ -120,96 +113,61 @@ export class DoulaDocumentRepository {
     }
   }
 
-  /**
-   * Get all documents for a specific doula
-   */
   async getDocumentsByDoulaId(doulaId: string): Promise<DoulaDocument[]> {
-    const { data, error } = await this.supabaseClient
-      .from('doula_documents')
-      .select('*')
-      .eq('doula_id', doulaId)
-      .order('uploaded_at', { ascending: false });
-
-    if (error) {
-      throw new Error(`Failed to fetch documents: ${error.message}`);
-    }
-
-    return data.map((doc) => this.mapToDocument(doc));
+    const { rows } = await queryCloudSql<DoulaDocumentRow>(
+      `
+      SELECT *
+      FROM public.doula_documents
+      WHERE doula_id = $1
+      ORDER BY uploaded_at DESC
+      `,
+      [doulaId]
+    );
+    return rows.map((doc) => this.mapToDocument(doc));
   }
 
-  /**
-   * Get a specific document by ID
-   */
   async getDocumentById(documentId: string): Promise<DoulaDocument | null> {
-    const { data, error } = await this.supabaseClient
-      .from('doula_documents')
-      .select('*')
-      .eq('id', documentId)
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return null; // Document not found
-      }
-      throw new Error(`Failed to fetch document: ${error.message}`);
-    }
-
-    return this.mapToDocument(data);
+    const { rows } = await queryCloudSql<DoulaDocumentRow>(
+      `
+      SELECT *
+      FROM public.doula_documents
+      WHERE id = $1::uuid
+      LIMIT 1
+      `,
+      [documentId]
+    );
+    return rows[0] ? this.mapToDocument(rows[0]) : null;
   }
 
-  /**
-   * Update document status (admin review)
-   */
   async updateDocumentStatus(
     documentId: string,
     status: 'uploaded' | 'approved' | 'rejected',
     reviewedBy: string,
     rejectionReason?: string
   ): Promise<DoulaDocument> {
-    const updateData: Record<string, unknown> = {
-      status,
-      reviewed_at: new Date().toISOString(),
-      reviewed_by: reviewedBy,
-    };
-    if (rejectionReason !== undefined) {
-      updateData.rejection_reason = rejectionReason;
+    const { rows } = await queryCloudSql<DoulaDocumentRow>(
+      `
+      UPDATE public.doula_documents
+      SET status = $2,
+          reviewed_at = NOW(),
+          reviewed_by = $3,
+          rejection_reason = CASE WHEN $2 = 'approved' THEN NULL ELSE $4 END,
+          updated_at = NOW()
+      WHERE id = $1::uuid
+      RETURNING *
+      `,
+      [documentId, status, reviewedBy, rejectionReason ?? null]
+    );
+    if (!rows[0]) {
+      throw new Error('Failed to update document status: document not found');
     }
-    if (status === 'approved') {
-      updateData.rejection_reason = null;
-    }
-
-    const { data, error } = await this.supabaseClient
-      .from('doula_documents')
-      .update(updateData)
-      .eq('id', documentId)
-      .select()
-      .single();
-
-    if (error) {
-      throw new Error(`Failed to update document status: ${error.message}`);
-    }
-
-    return this.mapToDocument(data);
+    return this.mapToDocument(rows[0]);
   }
 
-  /**
-   * Get current (most recent) document per document type for a doula.
-   * Returns one document per type - the latest uploaded.
-   */
   async getCurrentDocumentsByDoulaId(
     doulaId: string
   ): Promise<DoulaDocument[]> {
-    const { data, error } = await this.supabaseClient
-      .from('doula_documents')
-      .select('*')
-      .eq('doula_id', doulaId)
-      .order('uploaded_at', { ascending: false });
-
-    if (error) {
-      throw new Error(`Failed to fetch documents: ${error.message}`);
-    }
-
-    const mapped = data.map((doc) => this.mapToDocument(doc));
+    const mapped = await this.getDocumentsByDoulaId(doulaId);
     const byType = new Map<string, DoulaDocument>();
     for (const doc of mapped) {
       if (!byType.has(doc.documentType)) {
@@ -219,55 +177,34 @@ export class DoulaDocumentRepository {
     return Array.from(byType.values());
   }
 
-  /**
-   * Delete a document
-   */
   async deleteDocument(documentId: string): Promise<void> {
-    const { error } = await this.supabaseClient
-      .from('doula_documents')
-      .delete()
-      .eq('id', documentId);
-
-    if (error) {
-      throw new Error(`Failed to delete document: ${error.message}`);
-    }
+    await queryCloudSql(
+      `
+      DELETE FROM public.doula_documents
+      WHERE id = $1::uuid
+      `,
+      [documentId]
+    );
   }
 
-  /**
-   * Update doula document metadata fields without moving storage object.
-   */
   async updateDocumentMetadata(
     documentId: string,
     updates: { fileName?: string; documentType?: string }
   ): Promise<DoulaDocument | null> {
-    const updateData: Record<string, unknown> = {};
-    if (typeof updates.fileName === 'string') {
-      updateData.file_name = updates.fileName;
-    }
-    if (typeof updates.documentType === 'string') {
-      updateData.document_type = updates.documentType;
-    }
-
-    const { data, error } = await this.supabaseClient
-      .from('doula_documents')
-      .update(updateData)
-      .eq('id', documentId)
-      .select('*')
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return null;
-      }
-      throw new Error(`Failed to update document metadata: ${error.message}`);
-    }
-
-    return this.mapToDocument(data);
+    const { rows } = await queryCloudSql<DoulaDocumentRow>(
+      `
+      UPDATE public.doula_documents
+      SET file_name = COALESCE($2, file_name),
+          document_type = COALESCE($3, document_type),
+          updated_at = NOW()
+      WHERE id = $1::uuid
+      RETURNING *
+      `,
+      [documentId, updates.fileName ?? null, updates.documentType ?? null]
+    );
+    return rows[0] ? this.mapToDocument(rows[0]) : null;
   }
 
-  /**
-   * Get current (most recent) document for a specific type and doula.
-   */
   async getCurrentDocumentByType(
     doulaId: string,
     documentType: string
@@ -276,33 +213,28 @@ export class DoulaDocumentRepository {
     return current.find((d) => d.documentType === documentType) ?? null;
   }
 
-  /**
-   * Check if a doula owns a document
-   */
   async isDocumentOwner(documentId: string, doulaId: string): Promise<boolean> {
     const document = await this.getDocumentById(documentId);
     return document !== null && document.doulaId === doulaId;
   }
 
-  /**
-   * Map database row to DoulaDocument object
-   */
-  private mapToDocument(data: any): DoulaDocument {
+  private mapToDocument(data: DoulaDocumentRow): DoulaDocument {
+    const status = data.status === 'pending' ? 'uploaded' : data.status;
     return {
       id: data.id,
       doulaId: data.doula_id,
       documentType: data.document_type,
       fileName: data.file_name,
-      filePath: data.file_path || data.file_url, // Support both for migration period
-      fileSize: data.file_size,
-      mimeType: data.mime_type,
+      filePath: data.file_path || data.file_url || '',
+      fileSize: data.file_size ?? undefined,
+      mimeType: data.mime_type ?? undefined,
       uploadedAt: new Date(data.uploaded_at),
       expiresAt: data.expires_at ? new Date(data.expires_at) : undefined,
-      status: data.status === 'pending' ? 'uploaded' : data.status,
-      notes: data.notes,
+      status: status as DoulaDocument['status'],
+      notes: data.notes ?? undefined,
       reviewedAt: data.reviewed_at ? new Date(data.reviewed_at) : undefined,
-      reviewedBy: data.reviewed_by,
-      rejectionReason: data.rejection_reason,
+      reviewedBy: data.reviewed_by ?? undefined,
+      rejectionReason: data.rejection_reason ?? undefined,
       createdAt: new Date(data.created_at),
       updatedAt: new Date(data.updated_at),
     };

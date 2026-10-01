@@ -17,24 +17,6 @@ export function getIdentityPlatformProjectId(): string {
   );
 }
 
-export function isIdentityPlatformConfigured(): boolean {
-  const provider = (optionalEnv('AUTH_PROVIDER') ?? 'supabase').toLowerCase();
-  return (
-    provider === 'identity_platform' ||
-    provider === 'dual' ||
-    optionalEnv('IDENTITY_PLATFORM_PROJECT_ID') !== undefined
-  );
-}
-
-export function getAuthProviderMode():
-  | 'supabase'
-  | 'identity_platform'
-  | 'dual' {
-  const raw = (optionalEnv('AUTH_PROVIDER') ?? 'supabase').toLowerCase();
-  if (raw === 'identity_platform' || raw === 'dual') return raw;
-  return 'supabase';
-}
-
 export function getFirebaseAuth(): admin.auth.Auth {
   if (!initialized) {
     const projectId = getIdentityPlatformProjectId();

@@ -1,5 +1,5 @@
 import type { File as MulterFile } from 'multer';
-import { Client } from '../../entities/Client';
+
 import { WORK_ENTRY, WORK_ENTRY_ROW } from '../../entities/Hours';
 import { User } from '../../entities/User';
 import { HourType } from '../../utils/hourTypes';
@@ -19,16 +19,6 @@ export interface UserRepository {
   findByRole(role: string): Promise<User[]>;
 
   /**
-   * Get all clients by Doula
-   */
-  findClientsByDoula(doulaId: string): Promise<Client[]>;
-
-  /**
-   * FOR SHOWCASE ONLY
-   */
-  findClientsAll(): Promise<any>;
-  
-  /**
    * Save a user to the repository
    */
   save(user: User): Promise<User>;
@@ -37,7 +27,7 @@ export interface UserRepository {
    * Update a user to the repository
    */
   update(userId: string, fieldsToUpdate: Partial<User>): Promise<User>;
-  
+
   /**
    * Get all users
    */
@@ -52,7 +42,7 @@ export interface UserRepository {
    * Find a user by ID
    */
   findById(id: string): Promise<User | null>;
-  
+
   /**
    * Delete a user
    */
@@ -61,19 +51,18 @@ export interface UserRepository {
   /**
    * Add a user
    */
-  addMember(firstname: string, lastname: string, userEmail: string, userRole: string): Promise<User>;
+  addMember(
+    firstname: string,
+    lastname: string,
+    userEmail: string,
+    userRole: string
+  ): Promise<User>;
 
   /**
    * Upload a user profile picture
    */
   uploadProfilePicture(user: User, profilePicture: MulterFile): Promise<string>;
 
-    /**
-   * Update the status for a client in client_info
-   */
-    updateClientStatusToCustomer(userId: string): Promise<void>;
-
-    
   /**
    * Get this user's work hours
    */
@@ -83,14 +72,25 @@ export interface UserRepository {
    * Get all work hours
    */
   getAllHours(): Promise<WORK_ENTRY[]>;
-  
+
   /**
-   * Add a new doula work session entry 
+   * Add a new doula work session entry
    */
-  addNewHours(doula_id: string, client_id: string, start_time: Date, end_time: Date, note: string, type: HourType): Promise<WORK_ENTRY_ROW>;
+  addNewHours(
+    doula_id: string,
+    client_id: string,
+    start_time: Date,
+    end_time: Date,
+    note: string,
+    type: HourType
+  ): Promise<WORK_ENTRY_ROW>;
 
   /**
    * Update the type for an existing work entry
    */
-  updateHourType(hourId: string, type: HourType, doulaId?: string): Promise<WORK_ENTRY_ROW | null>;
+  updateHourType(
+    hourId: string,
+    type: HourType,
+    doulaId?: string
+  ): Promise<WORK_ENTRY_ROW | null>;
 }

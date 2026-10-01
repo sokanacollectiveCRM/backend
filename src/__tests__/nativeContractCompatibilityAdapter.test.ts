@@ -4,7 +4,6 @@ import request from 'supertest';
 import { queryCloudSql } from '../db/cloudSqlPool';
 import { nativeContractService } from '../features/contracts/composition';
 import contractSigningRoutes from '../routes/contractSigningRoutes';
-import { processContractWithSignNow } from '../utils/signNowContractProcessor';
 
 jest.mock('../middleware/authMiddleware', () => ({
   __esModule: true,
@@ -24,20 +23,10 @@ jest.mock('../features/contracts/composition', () => ({
     send: jest.fn(),
   },
 }));
-jest.mock('../utils/signNowContractProcessor', () => ({
-  processContractWithSignNow: jest.fn(),
-  checkSignNowDocumentStatus: jest.fn(),
-}));
-jest.mock('../services/signNowService', () => ({
-  SignNowService: jest.fn(),
-}));
-
 const mockedQueryCloudSql = queryCloudSql as jest.Mock;
 const mockedCreateLegacyDraft =
   nativeContractService.createLegacyDraft as jest.Mock;
 const mockedSend = nativeContractService.send as jest.Mock;
-const mockedProcessContractWithSignNow =
-  processContractWithSignNow as jest.Mock;
 
 describe('legacy contract generation compatibility adapter', () => {
   beforeEach(() => {
@@ -80,7 +69,6 @@ describe('legacy contract generation compatibility adapter', () => {
       })
       .expect(200);
 
-    expect(mockedProcessContractWithSignNow).not.toHaveBeenCalled();
     expect(mockedCreateLegacyDraft).toHaveBeenCalledTimes(1);
     expect(mockedSend).toHaveBeenCalledTimes(1);
     expect(response.body).toMatchObject({
@@ -90,7 +78,7 @@ describe('legacy contract generation compatibility adapter', () => {
         docxPath: '',
         pdfPath: '',
         signNow: {
-          documentId: '',
+          documentId: '22222222-2222-4222-8222-222222222222',
           invitationSent: true,
         },
         emailDelivery: {

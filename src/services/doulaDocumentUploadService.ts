@@ -18,7 +18,7 @@ export interface UploadedDocument {
 
 /**
  * Doula document bytes live in private GCS under `doula-documents/`.
- * Metadata remains in the doula_documents table (Supabase/Cloud SQL path unchanged).
+ * Metadata is stored in Cloud SQL public.doula_documents.
  */
 export class DoulaDocumentUploadService {
   private resolveObjectName(filePath: string): string {

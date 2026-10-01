@@ -10,7 +10,6 @@ import { clientController, userController } from '../index';
 import authMiddleware from '../middleware/authMiddleware';
 import authorizeRoles from '../middleware/authorizeRoles';
 import { PortalInviteService } from '../services/portalInviteService';
-import supabase from '../supabase';
 
 const clientRoutes: Router = express.Router();
 const clientDocumentUpload = multer({
@@ -19,7 +18,7 @@ const clientDocumentUpload = multer({
 });
 
 // Portal controller for client portal endpoints
-const portalInviteService = new PortalInviteService(supabase);
+const portalInviteService = new PortalInviteService();
 const portalController = new PortalController(portalInviteService);
 
 // Team specific routes

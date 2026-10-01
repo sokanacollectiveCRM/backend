@@ -1,13 +1,25 @@
 import { ValidationError } from '../domains/errors';
-import { PortalInviteService } from '../services/portalInviteService';
 import { portalEligibilityService } from '../services/portalEligibilityService';
+import { PortalInviteService } from '../services/portalInviteService';
 
 const sendPortalInviteEmail = jest.fn();
+const mockGetUserByEmail = jest.fn();
+const mockCreateUser = jest.fn();
+const mockGeneratePasswordResetLink = jest.fn();
 
 jest.mock('../services/emailService', () => ({
   NodemailerService: jest.fn().mockImplementation(() => ({
     sendPortalInviteEmail,
   })),
+}));
+
+jest.mock('../services/identityPlatform/firebaseAdmin', () => ({
+  getFirebaseAuth: () => ({
+    getUserByEmail: (...args: unknown[]) => mockGetUserByEmail(...args),
+    createUser: (...args: unknown[]) => mockCreateUser(...args),
+    generatePasswordResetLink: (...args: unknown[]) =>
+      mockGeneratePasswordResetLink(...args),
+  }),
 }));
 
 jest.mock('../services/portalEligibilityService', () => ({
@@ -33,25 +45,6 @@ describe('PortalInviteService', () => {
     user_id: null,
   };
 
-  const createSupabaseClient = () =>
-    ({
-      auth: {
-        admin: {
-          createUser: jest.fn().mockResolvedValue({
-            data: { user: { id: authUserId } },
-            error: null,
-          }),
-          generateLink: jest.fn().mockResolvedValue({
-            data: { properties: { action_link: 'https://portal.example/set-password' } },
-            error: null,
-          }),
-          listUsers: jest.fn().mockResolvedValue({
-            data: { users: [] },
-          }),
-        },
-      },
-    }) as any;
-
   const createRepository = () => ({
     getClientById: jest.fn().mockResolvedValue(clientRecord),
     markInvited: jest.fn().mockResolvedValue({
@@ -67,33 +60,42 @@ describe('PortalInviteService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.FRONTEND_URL = 'https://portal.example/';
+    mockGetUserByEmail.mockRejectedValue({ code: 'auth/user-not-found' });
+    mockCreateUser.mockResolvedValue({ uid: authUserId });
+    mockGeneratePasswordResetLink.mockResolvedValue(
+      'https://firebase.example/action?mode=resetPassword&oobCode=code-1'
+    );
   });
 
   it('rejects blocked clients before auth or email providers are called', async () => {
-    const supabaseClient = createSupabaseClient();
     const repository = createRepository();
-    (portalEligibilityService.getInviteEligibility as jest.Mock).mockResolvedValue({
+    (
+      portalEligibilityService.getInviteEligibility as jest.Mock
+    ).mockResolvedValue({
       eligible: false,
       reason: 'Client is not portal eligible: missing card on file.',
     });
 
-    const service = new PortalInviteService(supabaseClient, repository as any);
+    const service = new PortalInviteService(repository as any);
 
-    await expect(service.inviteClientToPortal(clientId, adminUserId)).rejects.toThrow(
-      'Client is not portal eligible: missing card on file.'
+    await expect(
+      service.inviteClientToPortal(clientId, adminUserId)
+    ).rejects.toThrow('Client is not portal eligible: missing card on file.');
+
+    expect(portalEligibilityService.getInviteEligibility).toHaveBeenCalledWith(
+      clientId
     );
-
-    expect(portalEligibilityService.getInviteEligibility).toHaveBeenCalledWith(clientId);
-    expect(supabaseClient.auth.admin.createUser).not.toHaveBeenCalled();
-    expect(supabaseClient.auth.admin.generateLink).not.toHaveBeenCalled();
+    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(mockGeneratePasswordResetLink).not.toHaveBeenCalled();
     expect(sendPortalInviteEmail).not.toHaveBeenCalled();
     expect(repository.markInvited).not.toHaveBeenCalled();
   });
 
   it('sends an invite for eligible clients using server-side readiness', async () => {
-    const supabaseClient = createSupabaseClient();
     const repository = createRepository();
-    (portalEligibilityService.getInviteEligibility as jest.Mock).mockResolvedValue({
+    (
+      portalEligibilityService.getInviteEligibility as jest.Mock
+    ).mockResolvedValue({
       eligible: true,
       snapshot: {
         is_eligible: true,
@@ -104,28 +106,25 @@ describe('PortalInviteService', () => {
       },
     });
 
-    const service = new PortalInviteService(supabaseClient, repository as any);
+    const service = new PortalInviteService(repository as any);
     const result = await service.inviteClientToPortal(clientId, adminUserId);
 
-    expect(portalEligibilityService.getInviteEligibility).toHaveBeenCalledWith(clientId);
-    expect(supabaseClient.auth.admin.createUser).toHaveBeenCalledWith({
+    expect(portalEligibilityService.getInviteEligibility).toHaveBeenCalledWith(
+      clientId
+    );
+    expect(mockCreateUser).toHaveBeenCalledWith({
       email: 'jane@example.com',
-      email_confirm: false,
-      user_metadata: {
-        client_id: clientId,
-        role: 'client',
-      },
+      emailVerified: false,
+      displayName: 'Jane Doe',
     });
-    expect(supabaseClient.auth.admin.generateLink).toHaveBeenCalledWith({
-      type: 'recovery',
-      email: 'jane@example.com',
-      options: { redirectTo: 'https://portal.example/auth/set-password' },
-    });
-    expect(sendPortalInviteEmail).toHaveBeenCalledTimes(1);
+    expect(mockGeneratePasswordResetLink).toHaveBeenCalledWith(
+      'jane@example.com',
+      { url: 'https://portal.example/auth/set-password' }
+    );
     expect(sendPortalInviteEmail).toHaveBeenCalledWith(
       'jane@example.com',
       'Jane Doe',
-      'https://portal.example/set-password'
+      'https://portal.example/auth/set-password?mode=resetPassword&oobCode=code-1'
     );
     expect(repository.markInvited).toHaveBeenCalledWith(clientId, authUserId);
     expect(result).toEqual(
@@ -140,20 +139,21 @@ describe('PortalInviteService', () => {
   });
 
   it('rejects invites when the client has no email address', async () => {
-    const supabaseClient = createSupabaseClient();
     const repository = createRepository();
     repository.getClientById.mockResolvedValue({
       ...clientRecord,
       email: null,
     });
 
-    const service = new PortalInviteService(supabaseClient, repository as any);
+    const service = new PortalInviteService(repository as any);
 
-    await expect(service.inviteClientToPortal(clientId, adminUserId)).rejects.toBeInstanceOf(
-      ValidationError
-    );
+    await expect(
+      service.inviteClientToPortal(clientId, adminUserId)
+    ).rejects.toBeInstanceOf(ValidationError);
 
-    expect(portalEligibilityService.getInviteEligibility).not.toHaveBeenCalled();
+    expect(
+      portalEligibilityService.getInviteEligibility
+    ).not.toHaveBeenCalled();
     expect(sendPortalInviteEmail).not.toHaveBeenCalled();
   });
 });

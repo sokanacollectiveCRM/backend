@@ -10,7 +10,6 @@ import {
   ValidationError,
 } from '../domains/errors';
 import { getSessionToken } from '../middleware/authMiddleware';
-import { recordAuthTransport } from '../security/authTransportTelemetry';
 import { isStaffRole } from '../security/resolveAuthoritativeRole';
 import {
   clearSessionCookies,
@@ -18,15 +17,9 @@ import {
 } from '../security/sessionCookies';
 import { CloudSqlTeamService } from '../services/cloudSqlTeamService';
 import { EmailMfaChallengeService } from '../services/identityPlatform/emailMfaChallengeService';
+import { getFirebaseAuth } from '../services/identityPlatform/firebaseAdmin';
 import { IdentityPlatformTokenService } from '../services/identityPlatform/identityPlatformTokenService';
-import {
-  AuthRequest,
-  LoginBody,
-  PasswordResetBody,
-  SignupBody,
-  TokenBody,
-  UpdatePasswordBody,
-} from '../types';
+import { AuthRequest, LoginBody, SignupBody } from '../types';
 import { AuthUseCase } from '../usecase/authUseCase.js';
 
 export class AuthController {
@@ -78,29 +71,26 @@ export class AuthController {
   //
   // login()
   //
-  // Handles user login using email and password for authentication.
-  //
-  // returns:
-  //    User
-  //    Token
+  // Exchanges a Firebase ID token for an HttpOnly session cookie.
   //
   async login(
     req: Request<object, object, LoginBody>,
     res: Response
   ): Promise<void> {
     try {
-      const { email, password } = req.body;
-      // call useCase to grab the user and token
-      const result = await this.authUseCase.login(email, password);
-      setSessionCookie(res, result.token);
-      // Dual-support: keep JSON token for now; measure before retiring.
-      recordAuthTransport('legacy.login_json_token_returned', {
-        path: req.path,
-      });
+      const idToken = req.body?.idToken?.trim();
+      if (!idToken) {
+        res.status(400).json({ error: 'idToken is required' });
+        return;
+      }
+
+      const user = await this.identityTokenService.getUserFromIdToken(idToken);
+      const sessionCookie =
+        await this.identityTokenService.createSessionCookie(idToken);
+      setSessionCookie(res, sessionCookie);
       res.status(200).json({
         message: 'Login successful',
-        user: result.user.toJSON(),
-        token: result.token,
+        user: user.toJSON(),
       });
     } catch (loginError) {
       const error = this.handleError(loginError, res);
@@ -149,14 +139,8 @@ export class AuthController {
         return;
       }
 
-      // App-managed / Cloud SQL authoritative role (PR 6) — no user_metadata override.
-      // Prefer Identity Platform verify when AUTH_PROVIDER allows, else Supabase.
-      let appUser;
-      try {
-        appUser = await this.identityTokenService.getUserFromIdToken(token);
-      } catch {
-        appUser = await this.authUseCase.getMe(token);
-      }
+      const appUser =
+        await this.identityTokenService.getUserFromSessionToken(token);
       if (!appUser) {
         res.status(404).json({ error: 'User not found' });
         return;
@@ -256,14 +240,12 @@ export class AuthController {
         return;
       }
 
-      setSessionCookie(res, idToken);
-      recordAuthTransport('legacy.login_json_token_returned', {
-        path: req.path,
-      });
+      const sessionCookie =
+        await this.identityTokenService.createSessionCookie(idToken);
+      setSessionCookie(res, sessionCookie);
       res.status(200).json({
         message: 'Login successful',
         user: user.toJSON(),
-        token: idToken,
       });
     } catch (err: any) {
       const error = this.handleError(err, res);
@@ -309,9 +291,25 @@ export class AuthController {
   // returns:
   //    None
   //
-  async logout(_req: Request, res: Response): Promise<void> {
+  async logout(req: Request, res: Response): Promise<void> {
+    const token = getSessionToken(req as AuthRequest);
+    if (token) {
+      try {
+        const claims =
+          await this.identityTokenService.verifySessionOrIdToken(token);
+        await getFirebaseAuth().revokeRefreshTokens(claims.uid);
+      } catch (revokeError) {
+        logger.warn(
+          {
+            context: 'AuthController.logout',
+            errMessage:
+              revokeError instanceof Error ? revokeError.message : undefined,
+          },
+          'Session revocation skipped'
+        );
+      }
+    }
     clearSessionCookies(res);
-    await this.authUseCase.logout();
     logger.info({ context: 'AuthController.logout' }, 'Logged out');
     res.json({ message: 'Logged out successfully' });
   }
@@ -324,22 +322,10 @@ export class AuthController {
   // returns:
   //    None
   //
-  async verifyEmail(req: Request, res: Response): Promise<void> {
-    try {
-      const token_hash = req.query.token_hash as string;
-      const type = req.query.type as string;
-      // call useCase to return success, query params, and error message
-      const queryParams = await this.authUseCase.verifyEmail(token_hash, type);
-
-      // Redirect with tokens if verification is successful
-      return res.redirect(
-        `${process.env.FRONTEND_URL}/auth/callback?${queryParams}`
-      );
-    } catch (error) {
-      res.redirect(
-        `${process.env.FRONTEND_URL}/auth/callback?error=${error.message}`
-      );
-    }
+  async verifyEmail(_req: Request, res: Response): Promise<void> {
+    res.status(410).json({
+      error: 'Email verification links are no longer accepted.',
+    });
   }
 
   //
@@ -370,18 +356,7 @@ export class AuthController {
   //    url - OAuth URL
   //
   async googleAuth(_req: Request, res: Response): Promise<void> {
-    try {
-      logger.info(
-        { context: 'AuthController.googleAuth' },
-        'Starting google auth'
-      );
-      const redirectTo = `${process.env.FRONTEND_URL}/auth/callback`;
-      const url = await this.authUseCase.googleAuth(redirectTo);
-      res.json({ url });
-    } catch (googleAuthError) {
-      const error = this.handleError(googleAuthError, res);
-      res.status(error.status).json({ error: error.message });
-    }
+    res.status(410).json({ error: 'Google sign-in is not enabled' });
   }
 
   //
@@ -392,30 +367,11 @@ export class AuthController {
   // returns:
   //    none
   //
-  async handleOAuthCallback(req: Request, res: Response): Promise<void> {
-    try {
-      logger.info(
-        { service: 'supabase', operation: 'oauth_callback' },
-        'OAuth callback received'
-      );
-      const code = req.query.code as string;
-
-      // call useCase to retrieve current session and user
-      const data = await this.authUseCase.handleOAuthCallback(code);
-      // Canonical session cookie: sokana_session_token (HttpOnly).
-      logger.info(
-        { context: 'AuthController.handleOAuthCallback' },
-        'Creating session cookie'
-      );
-      setSessionCookie(res, data.session.access_token);
-      // Redirect to home page
-      res.redirect(`${process.env.FRONTEND_URL}`);
-    } catch (error) {
-      res.redirect(
-        `${process.env.FRONTEND_URL}/login?error=` +
-          encodeURIComponent(error.message)
-      );
-    }
+  async handleOAuthCallback(_req: Request, res: Response): Promise<void> {
+    res.redirect(
+      `${process.env.FRONTEND_URL}/login?error=` +
+        encodeURIComponent('Google sign-in is not enabled')
+    );
   }
 
   //
@@ -426,36 +382,10 @@ export class AuthController {
   // returns:
   //    users => user.toJSON()
   //
-  async handleToken(
-    req: Request<object, object, TokenBody>,
-    res: Response
-  ): Promise<void> {
-    try {
-      const { access_token } = req.body;
-
-      if (!access_token) {
-        res.status(401).json({ error: 'No access token provided' });
-        return;
-      }
-
-      recordAuthTransport('legacy.body_access_token', {
-        path: req.path,
-        method: req.method,
-      });
-
-      const user = await this.authUseCase.handleToken(access_token);
-
-      setSessionCookie(res, access_token);
-
-      res.json({ success: true, user: user.toJSON() });
-    } catch (handleTokenError) {
-      logger.error(
-        toSafeProviderError('supabase', 'handle_token', handleTokenError),
-        'Handle token failed'
-      );
-      // const error = this.handleError(handleTokenError, res);
-      // res.status(error.status).json({ error: error.message})
-    }
+  async handleToken(_req: Request, res: Response): Promise<void> {
+    res.status(410).json({
+      error: 'Legacy access-token sessions are no longer accepted.',
+    });
   }
 
   //
@@ -466,24 +396,10 @@ export class AuthController {
   // returns:
   //    None
   //
-  async requestPasswordReset(
-    req: Request<object, object, PasswordResetBody>,
-    res: Response
-  ): Promise<void> {
-    try {
-      const { email } = req.body;
-      const redirectTo = `${process.env.FRONTEND_URL}/auth/reset-password`;
-
-      // call useCase to redirect user to reset password and check for errors
-      await this.authUseCase.requestPasswordReset(email, redirectTo);
-
-      res
-        .status(200)
-        .json({ message: 'Password reset instructions sent to email' });
-    } catch (requestPasswordError) {
-      const error = this.handleError(requestPasswordError, res);
-      res.status(error.status).json({ error: error.message });
-    }
+  async requestPasswordReset(_req: Request, res: Response): Promise<void> {
+    res.status(410).json({
+      error: 'Password reset is handled by Firebase.',
+    });
   }
 
   //
@@ -494,26 +410,12 @@ export class AuthController {
   // returns:
   //    None
   //
-  async handlePasswordRecovery(req: Request, res: Response): Promise<void> {
-    try {
-      const token_hash = req.query.token_hash as string;
-      const type = req.query.type as string;
-
-      // call useCase to retrieve access and refresh tokens.
-      const queryParams = await this.authUseCase.handlePasswordRecovery(
-        token_hash,
-        type
-      );
-
-      const redirectUrl = `${process.env.FRONTEND_URL}/auth/reset-password?${queryParams.toString()}`;
-      res.redirect(redirectUrl);
-    } catch {
-      res.redirect(
-        `${process.env.FRONTEND_URL}/auth/reset-password?error=${encodeURIComponent(
-          'Failed to process password recovery'
-        )}`
-      );
-    }
+  async handlePasswordRecovery(_req: Request, res: Response): Promise<void> {
+    res.redirect(
+      `${process.env.FRONTEND_URL}/auth/reset-password?error=${encodeURIComponent(
+        'This reset link is no longer accepted. Request a new one.'
+      )}`
+    );
   }
 
   //
@@ -524,24 +426,10 @@ export class AuthController {
   // returns:
   //    user
   //
-  async updatePassword(
-    req: Request<object, object, UpdatePasswordBody>,
-    res: Response
-  ): Promise<void> {
-    try {
-      const { password } = req.body;
-      const token = req.headers.authorization?.split(' ')[1];
-
-      const user = await this.authUseCase.updatePassword(password, token);
-
-      res.status(200).json({
-        message: 'Password updated successfully',
-        user: user.toJSON(),
-      });
-    } catch (updatePasswordError) {
-      const error = this.handleError(updatePasswordError, res);
-      res.status(error.status).json({ error: error.message });
-    }
+  async updatePassword(_req: Request, res: Response): Promise<void> {
+    res.status(410).json({
+      error: 'Password updates are handled by Firebase.',
+    });
   }
 
   // Helper method to handle errors

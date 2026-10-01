@@ -2,17 +2,11 @@ import { NextFunction, Response } from 'express';
 
 import { logger } from '../common/utils/logger';
 import { SAFE_INTERNAL_ERROR_MESSAGE } from '../common/utils/safeLogging';
-import { authService, identityTokenService } from '../index';
+import { identityTokenService } from '../index';
 import { isCurrentAccountActive } from '../security/accountAccess';
 import { recordAuthTransport } from '../security/authTransportTelemetry';
 import { ApiErrorCode } from '../security/errorCodes';
-import {
-  LEGACY_SB_SESSION_COOKIE,
-  LEGACY_SESSION_COOKIE,
-  SESSION_COOKIE,
-} from '../security/sessionCookies';
-import { getAuthProviderMode } from '../services/identityPlatform/firebaseAdmin';
-import supabase from '../supabase';
+import { SESSION_COOKIE } from '../security/sessionCookies';
 import type { AuthRequest } from '../types';
 
 /** Cookie and header names for session token (canonical). */
@@ -27,10 +21,8 @@ export type SessionSource =
 
 /**
  * Resolve session token from request.
- * Priority (target + dual-support):
- *   sokana_session_token → legacy sb-access-token → legacy `session` cookie →
- *   X-Session-Token → Authorization Bearer.
- * Body/query tokens are not accepted for API auth (measured separately where seen).
+ * Priority: sokana_session_token cookie, then X-Session-Token, then Authorization Bearer.
+ * Body/query tokens are not accepted for API auth.
  */
 export function getSessionToken(req: AuthRequest): string | undefined {
   return getSessionTokenAndSource(req).token;
@@ -43,19 +35,6 @@ export function getSessionTokenAndSource(req: AuthRequest): {
 } {
   if (req.cookies?.[SESSION_COOKIE]) {
     return { token: req.cookies[SESSION_COOKIE], source: 'cookie' };
-  }
-  if (req.cookies?.[LEGACY_SB_SESSION_COOKIE]) {
-    recordAuthTransport('legacy.sb_access_token_cookie_seen', {
-      path: req.path,
-      method: req.method,
-    });
-    return { token: req.cookies[LEGACY_SB_SESSION_COOKIE], source: 'cookie' };
-  }
-  if (req.cookies?.[LEGACY_SESSION_COOKIE]) {
-    return {
-      token: req.cookies[LEGACY_SESSION_COOKIE],
-      source: 'legacy_session_cookie',
-    };
   }
   const headerToken = req.headers[SESSION_HEADER] as string | undefined;
   if (headerToken && typeof headerToken === 'string' && headerToken.trim()) {
@@ -139,54 +118,16 @@ const authMiddleware = async (
 
     recordTokenSource(source, req);
 
-    const mode = getAuthProviderMode();
-    let user_entity = null as Awaited<
-      ReturnType<typeof authService.getUserFromToken>
-    > | null;
-
-    const tryIdentity = mode === 'identity_platform' || mode === 'dual';
-    const trySupabase = mode === 'supabase' || mode === 'dual';
-
-    if (tryIdentity) {
-      try {
-        user_entity = await identityTokenService.getUserFromIdToken(token);
-      } catch {
-        // fall through to Supabase when dual / if IdP rejects
-      }
-    }
-
-    if (!user_entity && trySupabase) {
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser(token);
-
-      if (!error && user) {
-        user_entity = await authService.getUserFromToken(token);
-      } else if (mode === 'supabase') {
-        logger.warn(
-          {
-            context: 'authMiddleware',
-            path: req.path,
-            error: error?.message,
-            hasUser: !!user,
-          },
-          'Invalid or expired token'
-        );
-        res.status(401).json({
-          error: 'Invalid or expired session token',
-          code: ApiErrorCode.UNAUTHENTICATED,
-        });
-        return;
-      }
-    }
-
-    if (!user_entity) {
+    let user_entity;
+    try {
+      user_entity = await identityTokenService.getUserFromSessionToken(token);
+    } catch (verifyError) {
       logger.warn(
         {
           context: 'authMiddleware',
           path: req.path,
-          mode,
+          errMessage:
+            verifyError instanceof Error ? verifyError.message : undefined,
         },
         'Invalid or expired token'
       );

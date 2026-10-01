@@ -1,12 +1,12 @@
 import crypto from 'crypto';
 
 import { getPool } from '../db/cloudSqlPool';
-import { getSupabaseAdmin } from '../supabase';
 import { DoulaAvailabilityService } from './doulaAvailabilityService';
 import {
   resolveProfilePictureFields,
   resolveProfilePictureUrl,
 } from './gcs/profilePictureStorage';
+import { getFirebaseAuth } from './identityPlatform/firebaseAdmin';
 
 export interface TeamMemberDto {
   id: string;
@@ -243,6 +243,44 @@ export class CloudSqlTeamService {
     return this.listTeamMembers();
   }
 
+  async getStaffByEmail(email: string): Promise<TeamMemberDto | null> {
+    const doula = await this.getDoulaByEmail(email);
+    if (doula) return doula;
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) return null;
+    const pool = getPool();
+    const { rows } = await pool.query<AdminRow>(
+      `
+      SELECT id, full_name, first_name, last_name, email, phone, bio, profile_picture, address, city, state, country, zip_code, created_at, updated_at
+      FROM public.admins
+      WHERE lower(email) = $1
+      LIMIT 1
+      `,
+      [normalized]
+    );
+    return this.withResolvedProfilePicture(
+      rows[0] ? mapAdminRow(rows[0]) : null
+    );
+  }
+
+  async getDoulaByEmail(email: string): Promise<TeamMemberDto | null> {
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) return null;
+    const pool = getPool();
+    const { rows } = await pool.query<DoulaRow>(
+      `
+      SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, scheduling_url,
+             gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details,
+             created_at, updated_at
+      FROM public.doulas
+      WHERE lower(email) = $1
+      LIMIT 1
+      `,
+      [normalized]
+    );
+    return this.withResolvedProfilePicture(rows[0] ? mapRow(rows[0]) : null);
+  }
+
   async getTeamMemberById(id: string): Promise<TeamMemberDto | null> {
     const pool = getPool();
     const { rows } = await pool.query<DoulaRow>(
@@ -350,37 +388,20 @@ export class CloudSqlTeamService {
     role: TeamRole;
     phone_number: string | null;
   }> {
-    const supabaseAdmin = getSupabaseAdmin();
     const normalizedEmail = input.email.toLowerCase().trim();
     const normalizedRole = input.role;
     const tempPassword = crypto.randomBytes(18).toString('base64url');
+    const auth = getFirebaseAuth();
+    const createdAuth = await auth.createUser({
+      email: normalizedEmail,
+      password: tempPassword,
+      emailVerified: true,
+      displayName: `${input.firstname.trim()} ${input.lastname.trim()}`.trim(),
+    });
 
-    const { data: createdAuth, error: createAuthError } =
-      await supabaseAdmin.auth.admin.createUser({
-        email: normalizedEmail,
-        password: tempPassword,
-        email_confirm: true,
-        user_metadata: {
-          first_name: input.firstname.trim(),
-          last_name: input.lastname.trim(),
-          role: normalizedRole,
-        },
-        app_metadata: {
-          role: normalizedRole,
-        },
-      });
-
-    if (createAuthError || !createdAuth.user) {
-      throw new Error(
-        createAuthError?.message || 'Failed to create Supabase auth user'
-      );
-    }
-
-    const authUserId = createdAuth.user.id;
     try {
       if (normalizedRole === 'doula') {
         const doula = await this.addDoula({
-          id: authUserId,
           firstname: input.firstname,
           lastname: input.lastname,
           email: normalizedEmail,
@@ -398,7 +419,6 @@ export class CloudSqlTeamService {
       }
 
       const admin = await this.addAdmin({
-        id: authUserId,
         firstname: input.firstname,
         lastname: input.lastname,
         email: normalizedEmail,
@@ -413,7 +433,7 @@ export class CloudSqlTeamService {
         phone_number: admin.phone_number ?? null,
       };
     } catch (err) {
-      await supabaseAdmin.auth.admin.deleteUser(authUserId);
+      await auth.deleteUser(createdAuth.uid);
       throw err;
     }
   }

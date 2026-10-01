@@ -13,7 +13,8 @@ export const LEGACY_SB_SESSION_COOKIE = 'sb-access-token';
 /** Legacy cookie name previously set by OAuth / handleToken. */
 export const LEGACY_SESSION_COOKIE = 'session';
 
-const SESSION_MAX_AGE_MS = 3600 * 1000;
+/** Firebase session cookies allow 5 minutes to 14 days. */
+export const SESSION_MAX_AGE_MS = 60 * 60 * 1000;
 
 const LEGACY_COOKIE_NAMES = [
   LEGACY_SB_SESSION_COOKIE,

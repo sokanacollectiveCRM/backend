@@ -1,3 +1,4 @@
+import { getPool } from '../db/cloudSqlPool';
 import {
   Contract,
   ContractPayment,
@@ -306,59 +307,55 @@ export class ContractClientService {
   ): Promise<ContractWithClient | null> {
     console.log('🔍 Getting contract with client info:', contractId);
 
-    const { data, error } = await supabase
-      .from('contracts')
-      .select(
-        `
-        *,
-        client_info:client_id (
-          id,
-          first_name,
-          last_name,
-          email,
-          phone_number
-        ),
-        generated_by_user:generated_by (
-          id,
-          firstname,
-          lastname
-        ),
-        template:template_id (
-          id,
-          title,
-          storage_path,
-          fee,
-          deposit
-        )
+    const { rows } = await getPool().query<{
+      id: string;
+      client_id: string;
+      status: string;
+      created_at: Date;
+      updated_at: Date;
+      first_name: string | null;
+      last_name: string | null;
+      email: string | null;
+      phone: string | null;
+    }>(
       `
-      )
-      .eq('id', contractId)
-      .single();
-
-    if (error || !data) {
-      console.error('❌ Error getting contract:', error);
-      return null;
-    }
+      SELECT c.id, c.client_id, c.status, c.created_at, c.updated_at,
+             pc.first_name, pc.last_name, pc.email, pc.phone
+      FROM public.phi_contracts c
+      LEFT JOIN public.phi_clients pc ON pc.id = c.client_id
+      WHERE c.id = $1::uuid
+      LIMIT 1
+      `,
+      [contractId]
+    );
+    const data = rows[0];
+    if (!data) return null;
 
     return {
       contract: {
         id: data.id,
         client_id: data.client_id,
-        template_id: data.template_id,
-        template_name: data.template_name,
-        fee: data.fee,
-        deposit: data.deposit,
-        note: data.note,
-        document_url: data.document_url,
+        template_id: 0,
+        template_name: '',
+        fee: '',
+        deposit: '',
+        note: '',
+        document_url: '',
         status: data.status,
-        generated_by: data.generated_by,
+        generated_by: '',
         created_at: data.created_at,
         updated_at: data.updated_at,
       },
-      client_info: data.client_info,
-      generated_by_user: data.generated_by_user,
-      template: data.template,
-    } as ContractWithClient;
+      client_info: {
+        id: data.client_id,
+        first_name: data.first_name,
+        last_name: data.last_name,
+        email: data.email,
+        phone_number: data.phone,
+      },
+      generated_by_user: null,
+      template: null,
+    } as unknown as ContractWithClient;
   }
 
   /**

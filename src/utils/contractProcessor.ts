@@ -10,9 +10,10 @@ import { NodemailerService } from '../services/emailService';
 import {
   GCS_PREFIX,
   downloadObject,
+  getSignedReadUrl,
   objectPath,
+  uploadObject,
 } from '../services/gcs/documentStorage';
-import supabase from '../supabase';
 import { GENERATED_DIR, ensureDir } from './runtimePaths';
 
 /**
@@ -365,32 +366,9 @@ async function uploadToSupabaseStorage(
     // Read the file
     const fileBuffer = await fs.readFile(pdfPath);
     const fileName = `contract-${contractId}-signed.pdf`;
-
-    // Upload to Supabase Storage
-    const { data, error } = await supabase.storage
-      .from('contracts')
-      .upload(fileName, fileBuffer, {
-        contentType: 'application/pdf',
-        upsert: true,
-      });
-
-    if (error) {
-      throw new Error(`Supabase upload error: ${error.message}`);
-    }
-
-    console.log(`File uploaded to Supabase: ${fileName}`);
-
-    // Generate signed URL (valid for 1 hour)
-    const { data: urlData, error: urlError } = await supabase.storage
-      .from('contracts')
-      .createSignedUrl(fileName, 3600); // 1 hour in seconds
-
-    if (urlError) {
-      throw new Error(`Signed URL generation error: ${urlError.message}`);
-    }
-
-    console.log(`Signed URL generated: ${urlData.signedUrl}`);
-    return urlData.signedUrl;
+    const storedPath = objectPath(GCS_PREFIX.contracts, fileName);
+    await uploadObject(storedPath, fileBuffer, 'application/pdf', true);
+    return getSignedReadUrl(storedPath, 3600);
   } catch (error) {
     console.error('Error uploading to Supabase:', error);
     throw error;

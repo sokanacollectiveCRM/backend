@@ -4131,3 +4131,240 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 - **Action**:
   - [x] Context updated
   - [x] Implementation started
+
+## Preflight Update 2026-10-01 (Firebase-only auth)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Remove Supabase Auth and Dual Auth. Login uses the Firebase
+  client SDK, then `POST /auth/login` with `{ idToken }` so the API can set
+  HttpOnly `sokana_session_token` via `createSessionCookie`.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-25-full-supabase-exit-launch-ready.md`,
+  `2026-08-10-backend-architecture-boundary-refactor.md`. User explicitly
+  requested this auth refactor.
+- **Files Scanned**:
+  - `frontend-crm/src/common/contexts/UserContext.tsx`
+  - `frontend-crm/src/api/http.ts`
+  - `frontend-crm/src/api/config.ts`
+  - `frontend-crm/src/features/auth/Login.tsx`
+  - `frontend-crm/src/features/auth/ClientLogin.tsx`
+  - `frontend-crm/src/common/hooks/auth/useClientAuth.ts`
+  - `backend/src/middleware/authMiddleware.ts`
+  - `backend/src/controllers/authController.ts`
+  - `backend/src/config/env.ts`
+  - `backend/src/server.ts`
+  - `backend/src/security/sessionCookies.ts`
+  - `backend/src/services/identityPlatform/identityPlatformTokenService.ts`
+- **Contract Findings**: Login body is `{ idToken }`. Success sets
+  `sokana_session_token` and returns `{ message, user }` without the cookie
+  value. `/auth/me` stays an unwrapped user object. API calls use
+  `credentials: include` only.
+- **Drift Risk**: Middleware rejects Supabase JWTs. Requests must carry a
+  Firebase session cookie or Firebase ID token.
+- **Required Compatibility**: Cookie name `sokana_session_token`, HttpOnly,
+  `credentials: include`, CORS credentials. `verifySessionCookie` for the
+  cookie; `verifyIdToken` only for a raw Firebase ID token.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started
+
+## Preflight Update 2026-10-01 (Remove unused Stripe Supabase callers)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Stripe is unused. Remove the card-setup services that read
+  and update Supabase `customers` and `payment_methods`.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-25-full-supabase-exit-launch-ready.md`,
+  `2026-08-10-backend-architecture-boundary-refactor.md`. User asked to remove
+  these Stripe callers.
+- **Files Scanned**:
+  - `frontend-crm/src/features/billing/components/QuickBooksCardOnFileForm.tsx`
+  - `frontend-crm/src/api/services/clients.service.ts`
+  - `backend/src/services/payments/stripePaymentService.ts`
+  - `backend/src/services/stripePaymentService.ts`
+  - `backend/src/controllers/paymentController.ts`
+  - `backend/src/server.ts`
+- **Contract Findings**: CRM card-on-file uses QuickBooks
+  `/api/payment-methods`. Stripe save-card routes are not mounted.
+  `GET /api/payments` stays on Cloud SQL.
+- **Drift Risk**: None for the CRM card form. These Stripe modules are not on
+  the request path.
+- **Required Compatibility**: Keep QuickBooks payment-method routes and Cloud
+  SQL payment list.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started
+
+## Preflight Update 2026-10-01 (Confirm Cloud SQL before remaining Supabase removal)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Remove remaining Supabase callers only where the same API
+  already writes Cloud SQL, GCS, or Firebase.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-25-full-supabase-exit-launch-ready.md`,
+  `2026-08-10-backend-architecture-boundary-refactor.md`. User asked to confirm
+  Cloud SQL twins first.
+- **Files Scanned**:
+  - `backend/src/repositories/doulaDocumentRepository.ts`
+  - `backend/src/repositories/requestFormRepository.ts`
+  - `backend/src/repositories/supabaseUserRepository.ts`
+  - `backend/src/services/supabaseContractService.ts`
+  - `backend/src/services/paymentScheduleService.ts`
+  - `backend/src/services/simplePaymentService.ts`
+  - `backend/src/services/customer/createCustomer.ts`
+  - `backend/src/services/payments/ensureCustomerInQuickBooks.ts`
+  - `backend/src/services/cloudSqlTeamService.ts`
+  - `backend/src/routes/dashboardRoutes.ts`
+- **Contract Findings**: QuickBooks customer upserts, team invites, and
+  dashboard counts have Cloud SQL or Firebase replacements. Doula document
+  metadata, request status, user-repository signup writes, generated-contract
+  inserts, and contract-payment reads of `contracts` do not.
+- **Drift Risk**: Team invite row ids are Cloud SQL UUIDs, not Firebase UIDs.
+  Dashboard `upcomingTasks` is 0 because Cloud SQL has no tasks table.
+- **Required Compatibility**: Dashboard JSON shape stays
+  `{ totalDoulas, totalClients, pendingContracts, overdueNotes, upcomingTasks, monthlyRevenue }`
+  and `{ events }`.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started
+
+## Preflight Update 2026-10-01 (Doula document rows to Cloud SQL)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Move doula document metadata off Supabase `doula_documents`
+  onto Cloud SQL. File bytes stay in GCS.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-25-full-supabase-exit-launch-ready.md`,
+  `2026-08-10-backend-architecture-boundary-refactor.md`. User asked to do the
+  remaining callers one by one, starting with doula documents.
+- **Files Scanned**:
+  - `frontend-crm/src/api/doulas/doulaService.ts`
+  - `frontend-crm/src/features/doula-dashboard/components/DocumentsTab.tsx`
+  - `frontend-crm/src/features/teams/teams.tsx`
+  - `backend/src/repositories/doulaDocumentRepository.ts`
+  - `backend/src/repositories/clientDocumentRepository.ts`
+  - `backend/src/controllers/doulaController.ts`
+  - `backend/src/services/doulaDocumentIdResolver.ts`
+- **Contract Findings**: Frontend accepts `documentType` and `document_type`,
+  plus `fileName` / `file_name`. Completeness items use `document_type`,
+  `status`, `document_id`, `file_name`.
+- **Drift Risk**: New rows are stored under the Cloud SQL `doulas.id` resolved
+  by email. Existing Supabase rows are not copied by this change.
+- **Required Compatibility**: Keep both camelCase and snake_case document fields
+  in the JSON responses.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started
+
+## Preflight Update 2026-10-01 (Switch the four remaining Supabase flows)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Move portal invites, request inbox, signup user writes, and
+  older contract file lookups off Supabase.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-25-full-supabase-exit-launch-ready.md`,
+  `2026-08-10-backend-architecture-boundary-refactor.md`. User asked to switch
+  these four now.
+- **Files Scanned**:
+  - `frontend-crm/src/features/auth/SetPassword.tsx`
+  - `frontend-crm/src/features/auth/ResetPassword.tsx`
+  - `backend/src/services/portalInviteService.ts`
+  - `backend/src/repositories/requestFormRepository.ts`
+  - `backend/src/repositories/supabaseUserRepository.ts`
+  - `backend/src/services/contractClientService.ts`
+- **Contract Findings**: Portal set-password links now carry a Firebase
+  `oobCode` query param. Request status is `phi_clients.request_status`. Client
+  lifecycle stays on `phi_clients.status`.
+- **Drift Risk**: Old Supabase invite hash links no longer set a password.
+  Clients need a new invite.
+- **Required Compatibility**: Set-password page stays at `/auth/set-password`
+  and still redirects to `/auth/client-login`.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started
+
+## Preflight Update 2026-10-01 (Remove SignNow, keep native contracts)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Remove the SignNow integration. Keep the custom native
+  contract flow.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-25-full-supabase-exit-launch-ready.md`,
+  `2026-08-10-backend-architecture-boundary-refactor.md`. User asked to remove
+  SignNow and keep the custom contract config.
+- **Files Scanned**:
+  - `frontend-crm/src/common/utils/createContract.ts`
+  - `frontend-crm/src/features/clients/components/dialog/EnhancedContractDialog.tsx`
+  - `frontend-crm/src/features/contracts`
+  - `frontend-crm/src/features/public-signing`
+  - `backend/src/features/contracts`
+  - `backend/src/routes/contractSigningRoutes.ts`
+  - `backend/src/routes/contractRoutes.ts`
+  - `backend/src/server.ts`
+- **Contract Findings**: The dialog still posts to
+  `POST /api/contract-signing/generate-contract` and reads
+  `data.data.signNow.documentId`. That field is now the native contract id.
+  `POST /api/contract/postpartum/calculate` still returns `fields` for the
+  dialog preview.
+- **Drift Risk**: `/api/signnow` and `/api/pdf-contract` are unmounted. Old
+  SignNow document ids are no longer created.
+- **Required Compatibility**: Keep `generate-contract` response keys
+  `contractId`, `signNow.documentId`, and `emailDelivery`. Keep native routes
+  under `/api/contracts` and `/signing`.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started
+
+## Preflight Update 2026-10-01 (Delete leftover SignNow scripts)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Delete scripts that still call the SignNow HTTP API. Keep
+  native contracts and Firebase auth.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-25-full-supabase-exit-launch-ready.md`,
+  `2026-08-10-backend-architecture-boundary-refactor.md`. User asked to remove
+  those scripts and identify the next removal.
+- **Files Scanned**:
+  - `backend/scripts/`
+  - `frontend-crm/src/common/utils/createContract.ts`
+  - `backend/src/index.ts`
+  - `backend/src/services/supabaseAuthService.ts`
+- **Contract Findings**: No frontend screen calls these scripts. Contract
+  sending stays on `POST /api/contract-signing/generate-contract`.
+- **Drift Risk**: None for the CRM. `scripts/delete-legacy-signnow-contracts.ts`
+  stays because it deletes old Cloud SQL rows and does not call SignNow.
+- **Required Compatibility**: Keep Firebase session login and native contract
+  routes.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started
+
+## Preflight Update 2026-10-01 (Remove three leftover Supabase callers)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Remove dead Supabase Auth methods, unused client/note reads
+  on the user repository, and unused contract/payment Supabase modules. Keep
+  Firebase login and native contracts.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-25-full-supabase-exit-launch-ready.md`,
+  `2026-08-10-backend-architecture-boundary-refactor.md`. User asked to remove
+  these three only.
+- **Files Scanned**:
+  - `frontend-crm/src/common/contexts/UserContext.tsx`
+  - `backend/src/controllers/authController.ts`
+  - `backend/src/services/supabaseAuthService.ts`
+  - `backend/src/repositories/supabaseUserRepository.ts`
+  - `backend/src/services/contractService.ts`
+  - `backend/src/services/paymentScheduleService.ts`
+  - `backend/src/services/invoice/persistInvoiceToSupabase.ts`
+  - `backend/src/services/payments/syncPaymentToQuickBooks.ts`
+- **Contract Findings**: Login, session, and logout already use Firebase. Signup
+  still creates a Firebase user. Live invoices and payment schedules already use
+  Cloud SQL.
+- **Drift Risk**: The debug password-login endpoint no longer returns a Supabase
+  token.
+- **Required Compatibility**: Keep `POST /auth/login` with `{ idToken }` and the
+  HttpOnly `sokana_session_token` cookie.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started

@@ -76,16 +76,15 @@ export class DbAuthoritativeRoleLookup implements AuthoritativeRoleLookup {
     );
     if (doula.rowCount && doula.rowCount > 0) return 'doula';
 
-    if (idParam) {
-      const client = await pool.query(
-        `SELECT 1
-         FROM public.phi_clients
-         WHERE user_id = $1::uuid
-         LIMIT 1`,
-        [idParam]
-      );
-      if (client.rowCount && client.rowCount > 0) return 'client';
-    }
+    const client = await pool.query(
+      `SELECT 1
+       FROM public.phi_clients
+       WHERE user_id = $1
+          OR ($2::text IS NOT NULL AND lower(email) = $2::text)
+       LIMIT 1`,
+      [authUserId, normalizedEmail]
+    );
+    if (client.rowCount && client.rowCount > 0) return 'client';
 
     return null;
   }

@@ -32,9 +32,7 @@ import doulasRoutes from './routes/doulas';
 import financialRoutes from './routes/financialRoutes';
 import invoiceRoutes from './routes/invoiceRoutes';
 import paymentRoutes from './routes/paymentRoutes';
-import pdfContractRoutes from './routes/pdfContractRoutes';
 import requestRouter from './routes/requestRoute';
-import signNowRoutes from './routes/signNowRoutes';
 import userRoutes from './routes/specificUserRoutes';
 import { ApiErrorCode } from './security/errorCodes';
 import { loginBodySchema } from './security/requestSchemas';
@@ -186,13 +184,10 @@ if (nativeContracts.enabled) {
 }
 app.use('/api/contract-signing', asMiddleware(contractSigningRoutes));
 app.use('/api/dashboard', asMiddleware(dashboardRoutes));
-app.use('/api/pdf-contract', asMiddleware(pdfContractRoutes));
 app.use('/api/payments', asMiddleware(paymentRoutes));
 app.use('/api/invoices', asMiddleware(invoiceRoutes));
 app.use('/api/financial', asMiddleware(financialRoutes));
 app.use('/api/billing', asMiddleware(billingRoutes));
-app.use('/api/signnow', asMiddleware(signNowRoutes));
-
 // DEV-only debug routes — NEVER in production (no token/cookie endpoints)
 if (!IS_PRODUCTION && process.env.ENABLE_DEBUG_ENDPOINTS === 'true') {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
