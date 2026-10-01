@@ -9,6 +9,7 @@ import { optionalEnv } from '../../config/env';
 import { getPool } from '../../db/cloudSqlPool';
 import { AuthenticationError, ValidationError } from '../../domains/errors';
 import { NodemailerService } from '../emailService';
+import { IdentityPlatformTokenService } from './identityPlatformTokenService';
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
@@ -56,6 +57,21 @@ export interface MfaChallengeStartResult {
 
 export class EmailMfaChallengeService {
   private emailService = new NodemailerService();
+  private identityTokenService = new IdentityPlatformTokenService();
+
+  private async assertIdTokenMatchesChallenge(input: {
+    idToken: string;
+    authUid: string;
+    idTokenHash: string;
+  }): Promise<void> {
+    if (safeEqualHex(input.idTokenHash, hashValue(input.idToken))) {
+      return;
+    }
+    const claims = await this.identityTokenService.verifyIdToken(input.idToken);
+    if (claims.uid !== input.authUid) {
+      throw new AuthenticationError('Session mismatch; please sign in again');
+    }
+  }
 
   async startChallenge(input: {
     authUid: string;
@@ -156,9 +172,11 @@ export class EmailMfaChallengeService {
     if (row.attempts >= row.max_attempts) {
       throw new AuthenticationError('Too many verification attempts');
     }
-    if (!safeEqualHex(row.id_token_hash, hashValue(input.idToken))) {
-      throw new AuthenticationError('Session mismatch; please sign in again');
-    }
+    await this.assertIdTokenMatchesChallenge({
+      idToken: input.idToken,
+      authUid: row.auth_uid,
+      idTokenHash: row.id_token_hash,
+    });
 
     const codeOk = safeEqualHex(row.code_hash, hashValue(input.code.trim()));
     if (!codeOk) {
@@ -191,12 +209,24 @@ export class EmailMfaChallengeService {
       [input.challengeId]
     );
     const row = rows[0];
-    if (!row || row.consumed_at) {
+    if (!row) {
       throw new AuthenticationError('Invalid or expired challenge');
     }
-    if (!safeEqualHex(row.id_token_hash, hashValue(input.idToken))) {
-      throw new AuthenticationError('Session mismatch; please sign in again');
+
+    await this.assertIdTokenMatchesChallenge({
+      idToken: input.idToken,
+      authUid: row.auth_uid,
+      idTokenHash: row.id_token_hash,
+    });
+
+    if (row.consumed_at) {
+      return this.startChallenge({
+        authUid: row.auth_uid,
+        email: row.email,
+        idToken: input.idToken,
+      });
     }
+
     const createdAt = new Date(row.created_at).getTime();
     const remainingMs = RESEND_COOLDOWN_MS - (Date.now() - createdAt);
     if (remainingMs > 0) {

@@ -26,9 +26,12 @@ export function sessionCookieOptions(
   return {
     httpOnly: true,
     secure: IS_PRODUCTION,
-    sameSite: 'lax',
+    // Production CRM and API are on different Cloud Run hosts; cross-site XHR
+    // needs SameSite=None (+ Secure). Local dev uses lax on localhost.
+    sameSite: IS_PRODUCTION ? 'none' : 'lax',
     maxAge: SESSION_MAX_AGE_MS,
     path: '/',
+    ...(IS_PRODUCTION ? { partitioned: true } : {}),
     ...overrides,
   };
 }
@@ -46,5 +49,15 @@ export function clearSessionCookies(res: Response): void {
   res.clearCookie(SESSION_COOKIE, clearOpts);
   for (const name of LEGACY_COOKIE_NAMES) {
     res.clearCookie(name, clearOpts);
+  }
+  if (IS_PRODUCTION) {
+    const unpartitionedClear = sessionCookieOptions({
+      maxAge: undefined,
+      partitioned: false,
+    });
+    res.clearCookie(SESSION_COOKIE, unpartitionedClear);
+    for (const name of LEGACY_COOKIE_NAMES) {
+      res.clearCookie(name, unpartitionedClear);
+    }
   }
 }
