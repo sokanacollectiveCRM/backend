@@ -11,10 +11,6 @@ import {
   toSafeProviderError,
 } from '../common/utils/safeLogging';
 import {
-  ASSIGNMENT_SERVICE_CATALOG,
-  normalizeAssignmentServices,
-} from '../constants/assignmentServices';
-import {
   CLIENT_DOCUMENT_ALLOWED_EXTENSIONS,
   CLIENT_DOCUMENT_ALLOWED_MIME_TYPES,
   CLIENT_DOCUMENT_CATEGORY_BILLING,
@@ -45,6 +41,7 @@ import {
   quickBooksLinkRequestFromClientRow,
   shouldLinkQuickBooksCustomer,
 } from '../features/clients';
+import { assignDoulaOnClient } from '../features/matching';
 import { ActivityMapper } from '../mappers/ActivityMapper';
 import { ClientMapper } from '../mappers/ClientMapper';
 import {
@@ -53,10 +50,7 @@ import {
 } from '../repositories/clientDocumentRepository';
 import { ClientRepository } from '../repositories/interface/clientRepository';
 import { ClientDocumentUploadService } from '../services/clientDocumentUploadService';
-import {
-  CloudSqlDoulaAssignmentService,
-  normalizeDoulaAssignmentRole,
-} from '../services/cloudSqlDoulaAssignmentService';
+import { CloudSqlDoulaAssignmentService } from '../services/cloudSqlDoulaAssignmentService';
 import { syncMatchedClientToQuickBooks } from '../services/customer/syncMatchedClientToQuickBooks';
 import { DoulaAvailabilityService } from '../services/doulaAvailabilityService';
 import { CloudSqlIdentityUserService } from '../services/identityPlatform/cloudSqlIdentityUserService';
@@ -3044,92 +3038,44 @@ export class ClientController {
     try {
       const { id: clientId } = req.params;
       const { doulaId, role, services } = req.body;
-      const assignmentStart =
-        req.body?.assignmentStart ??
-        req.body?.assignment_start ??
-        req.body?.requestedStart ??
-        req.body?.requested_start;
-      const assignmentEnd =
-        req.body?.assignmentEnd ??
-        req.body?.assignment_end ??
-        req.body?.requestedEnd ??
-        req.body?.requested_end;
-
-      if (!clientId || !doulaId) {
-        res.status(400).json({ error: 'Missing clientId or doulaId' });
-        return;
-      }
-
-      const normalizedServices = normalizeAssignmentServices(services);
-      if (!normalizedServices) {
-        res.status(400).json({
-          error: `services is required and must contain one or more valid values: ${ASSIGNMENT_SERVICE_CATALOG.join(', ')}`,
-        });
-        return;
-      }
-
-      const normalizedRole =
-        role === undefined ? undefined : normalizeDoulaAssignmentRole(role);
-      if (role !== undefined && !normalizedRole) {
-        res.status(400).json({
-          error: "Invalid role. Allowed values are 'primary' or 'backup'",
-        });
-        return;
-      }
-
-      const alreadyAssigned =
-        await this.cloudSqlAssignmentService.assignmentExists(
+      const outcome = await assignDoulaOnClient(
+        {
+          assignmentExists: (id, doula) =>
+            this.cloudSqlAssignmentService.assignmentExists(id, doula),
+          getCurrentAvailabilityStatus: (doula) =>
+            this.doulaAvailabilityService.getCurrentAvailabilityStatus(doula),
+          assertDoulaAvailableForPeriod: (doula, start, end) =>
+            this.doulaAvailabilityService.assertDoulaAvailableForPeriod(
+              doula,
+              start,
+              end
+            ),
+          assignDoula: (id, doula, assignedBy, notes, assignmentRole, list) =>
+            this.cloudSqlAssignmentService.assignDoula(
+              id,
+              doula,
+              assignedBy,
+              notes,
+              assignmentRole,
+              list
+            ),
+        },
+        {
           clientId,
-          doulaId
-        );
-      if (alreadyAssigned) {
-        res
-          .status(409)
-          .json({ error: 'This doula is already assigned to this client' });
-        return;
-      }
-
-      const currentAvailability =
-        await this.doulaAvailabilityService.getCurrentAvailabilityStatus(
-          doulaId
-        );
-      if (currentAvailability.status === 'unavailable') {
-        const reason = currentAvailability.reason
-          ? ` (${currentAvailability.reason})`
-          : '';
-        res.status(409).json({
-          error: `Doula is currently unavailable${reason}. Unavailable from ${currentAvailability.startAt} to ${currentAvailability.endAt}.`,
-        });
-        return;
-      }
-
-      if (
-        (assignmentStart && !assignmentEnd) ||
-        (!assignmentStart && assignmentEnd)
-      ) {
-        res.status(400).json({
-          error: 'assignmentStart and assignmentEnd must be provided together',
-        });
-        return;
-      }
-
-      if (assignmentStart && assignmentEnd) {
-        await this.doulaAvailabilityService.assertDoulaAvailableForPeriod(
           doulaId,
-          new Date(assignmentStart),
-          new Date(assignmentEnd)
-        );
-      }
-
-      const assignment = await this.cloudSqlAssignmentService.assignDoula(
-        clientId,
-        doulaId,
-        req.user?.id,
-        undefined,
-        normalizedRole,
-        normalizedServices
+          role,
+          services,
+          body: req.body,
+          assignedBy: req.user?.id,
+        }
       );
 
+      if ('error' in outcome) {
+        res.status(outcome.status).json({ error: outcome.error });
+        return;
+      }
+
+      const { assignment } = outcome;
       res.json({
         success: true,
         assignment: {

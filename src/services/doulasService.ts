@@ -1,17 +1,10 @@
 import { getPool } from '../db/cloudSqlPool';
+import {
+  type DoulaAssignmentRole,
+  normalizeDoulaAssignmentRole,
+} from '../features/matching';
 
-export type DoulaAssignmentRole = 'primary' | 'backup';
-
-function normalizeDoulaAssignmentRole(
-  raw: unknown
-): DoulaAssignmentRole | null {
-  if (typeof raw !== 'string') return null;
-  const normalized = raw.trim().toLowerCase();
-  if (normalized === 'primary' || normalized === 'backup') {
-    return normalized;
-  }
-  return null;
-}
+export type { DoulaAssignmentRole };
 
 export interface DoulaListQuery {
   q?: string;

@@ -185,6 +185,36 @@ Runtime notes:
   `src/__tests__/clientStatusQuickBooksSyncCharacterization.test.ts` and
   `src/__tests__/syncMatchedClientToQuickBooks.test.ts`.
 
+## Matching package (`src/features/matching`)
+
+Fourth structural slice: the decisions for assigning a doula to a client.
+
+```text
+src/features/matching/
+  domain/assignment.ts                 # service catalog, role, window, messages
+  application/ports.ts                 # assignment store, availability, client/doula lookup
+  application/assignDoulaOnClient.ts   # POST /clients/:id/assign-doula
+  application/matchDoulaForAdmin.ts    # POST /admin/assignments/match
+  infrastructure/                      # Cloud SQL assignment store, doula availability
+  index.ts                             # public feature entrypoints
+```
+
+Runtime notes:
+
+- Both routes keep their controllers. Each controller passes its existing
+  services in as ports and maps the result to the same response.
+- The two routes still differ on purpose: client assign checks availability and
+  returns 409 for an existing assignment; admin match requires status `matching`
+  and an existing doula, returns 400 for an existing assignment, and sends match
+  email after the write.
+- `constants/assignmentServices.ts` and the role helper exported from
+  `services/cloudSqlDoulaAssignmentService.ts` forward to this package.
+- `CloudSqlDoulaAssignmentService` and `DoulaAvailabilityService` live in
+  `infrastructure/`. Their old `src/services/` paths are re-export shims, so
+  existing imports and Jest mocks keep working.
+- Behavior is pinned by
+  `src/__tests__/matchingAssignmentCharacterization.test.ts`.
+
 ## Target tree (incremental, not big-bang)
 
 ```text

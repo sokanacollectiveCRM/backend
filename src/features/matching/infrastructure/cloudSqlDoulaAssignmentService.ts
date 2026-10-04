@@ -1,0 +1,234 @@
+import { getPool } from '../../../db/cloudSqlPool';
+import {
+  type DoulaAssignmentRole,
+  normalizeAssignmentServices,
+  normalizeDoulaAssignmentRole,
+} from '../domain/assignment';
+
+export { normalizeDoulaAssignmentRole };
+export type { DoulaAssignmentRole };
+
+export interface CloudSqlAssignmentResult {
+  id: string;
+  clientId: string;
+  doulaId: string;
+  services: string[];
+  assignedAt: Date | null;
+  assignedBy?: string;
+  notes?: string;
+  role?: DoulaAssignmentRole | null;
+  status: 'active';
+  updatedAt: Date;
+}
+
+export interface CloudSqlDoulaRow {
+  id: string;
+  fullName: string;
+  email: string | null;
+}
+
+export interface CloudSqlAssignedDoula {
+  id: string;
+  doulaId: string;
+  services: string[];
+  assignedAt: Date | null;
+  role?: DoulaAssignmentRole | null;
+  status: 'active';
+  doula: {
+    id: string;
+    firstname: string;
+    lastname: string;
+    email: string;
+    phone_number?: string;
+    scheduling_url?: string | null;
+  };
+}
+
+export class CloudSqlDoulaAssignmentService {
+  async getClientIdByAuthUserId(authUserId: string): Promise<string | null> {
+    const { rows } = await getPool().query<{ id: string }>(
+      `
+      SELECT id
+      FROM public.phi_clients
+      WHERE user_id = $1
+      LIMIT 1
+      `,
+      [authUserId]
+    );
+    return rows[0]?.id ?? null;
+  }
+
+  async getDoulaById(doulaId: string): Promise<CloudSqlDoulaRow | null> {
+    const { rows } = await getPool().query<{
+      id: string;
+      full_name: string;
+      email: string | null;
+    }>(
+      `
+      SELECT id, full_name, email
+      FROM public.doulas
+      WHERE id = $1::uuid
+      `,
+      [doulaId]
+    );
+
+    if (!rows[0]) return null;
+
+    return {
+      id: rows[0].id,
+      fullName: rows[0].full_name,
+      email: rows[0].email,
+    };
+  }
+
+  async assignmentExists(clientId: string, doulaId: string): Promise<boolean> {
+    const { rowCount } = await getPool().query(
+      `
+      SELECT 1
+      FROM public.doula_assignments
+      WHERE client_id = $1::uuid AND doula_id = $2::uuid
+        AND status = 'active'
+      LIMIT 1
+      `,
+      [clientId, doulaId]
+    );
+    return (rowCount ?? 0) > 0;
+  }
+
+  async assignDoula(
+    clientId: string,
+    doulaId: string,
+    assignedBy?: string,
+    notes?: string,
+    role?: DoulaAssignmentRole,
+    services?: string[]
+  ): Promise<CloudSqlAssignmentResult> {
+    const normalizedServices = normalizeAssignmentServices(services);
+    if (!normalizedServices) {
+      throw new Error(
+        'services must be a non-empty array of valid service names'
+      );
+    }
+
+    const { rows } = await getPool().query<{
+      client_id: string;
+      doula_id: string;
+      services: string[] | null;
+      assigned_at: Date | null;
+      notes: string | null;
+      role: string | null;
+      updated_at: Date;
+    }>(
+      `
+      INSERT INTO public.doula_assignments (
+        client_id, doula_id, notes, role, services, assigned_at,
+        assigned_by, status, ended_at
+      )
+      VALUES ($1::uuid, $2::uuid, $3, $4, $5::text[], NOW(), $6::uuid, 'active', NULL)
+      ON CONFLICT (client_id, doula_id) DO UPDATE SET
+        notes = EXCLUDED.notes,
+        role = EXCLUDED.role,
+        services = EXCLUDED.services,
+        assigned_at = NOW(),
+        assigned_by = EXCLUDED.assigned_by,
+        status = 'active',
+        ended_at = NULL,
+        updated_at = NOW()
+      RETURNING client_id, doula_id, services, assigned_at, notes, role, updated_at
+      `,
+      [
+        clientId,
+        doulaId,
+        notes ?? null,
+        role ?? null,
+        normalizedServices,
+        assignedBy ?? null,
+      ]
+    );
+
+    const row = rows[0];
+    const normalizedRole = normalizeDoulaAssignmentRole(row.role);
+    return {
+      id: `${row.client_id}:${row.doula_id}`,
+      clientId: row.client_id,
+      doulaId: row.doula_id,
+      services: row.services ?? [],
+      assignedAt: row.assigned_at ? new Date(row.assigned_at) : null,
+      assignedBy,
+      notes: row.notes ?? undefined,
+      role: normalizedRole,
+      status: 'active',
+      updatedAt: new Date(row.updated_at),
+    };
+  }
+
+  async unassignDoula(clientId: string, doulaId: string): Promise<boolean> {
+    const result = await getPool().query(
+      `
+      UPDATE public.doula_assignments
+      SET status = 'cancelled', ended_at = NOW(), updated_at = NOW()
+      WHERE client_id = $1::uuid
+        AND doula_id = $2::uuid
+        AND status = 'active'
+      `,
+      [clientId, doulaId]
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async getAssignedDoulas(clientId: string): Promise<CloudSqlAssignedDoula[]> {
+    const { rows } = await getPool().query<{
+      client_id: string;
+      doula_id: string;
+      services: string[] | null;
+      assigned_at: Date | null;
+      role: string | null;
+      doula_email: string | null;
+      doula_phone: string | null;
+      full_name: string | null;
+      scheduling_url: string | null;
+    }>(
+      `
+      SELECT
+        da.client_id,
+        da.doula_id,
+        da.services,
+        da.assigned_at,
+        da.role,
+        d.email AS doula_email,
+        d.phone AS doula_phone,
+        d.full_name,
+        d.scheduling_url
+      FROM public.doula_assignments da
+      LEFT JOIN public.doulas d ON d.id = da.doula_id
+      WHERE da.client_id = $1::uuid
+        AND da.status = 'active'
+      ORDER BY da.assigned_at DESC NULLS LAST
+      `,
+      [clientId]
+    );
+
+    return rows.map((row) => {
+      const fullName = row.full_name || '';
+      const [first = '', ...rest] = fullName.trim().split(/\s+/);
+      const last = rest.join(' ');
+      const normalizedRole = normalizeDoulaAssignmentRole(row.role);
+      return {
+        id: `${row.client_id}:${row.doula_id}`,
+        doulaId: row.doula_id,
+        services: row.services ?? [],
+        assignedAt: row.assigned_at ? new Date(row.assigned_at) : null,
+        role: normalizedRole,
+        status: 'active',
+        doula: {
+          id: row.doula_id,
+          firstname: first,
+          lastname: last,
+          email: row.doula_email || '',
+          phone_number: row.doula_phone || undefined,
+          scheduling_url: row.scheduling_url ?? null,
+        },
+      };
+    });
+  }
+}

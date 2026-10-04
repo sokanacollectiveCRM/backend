@@ -4520,3 +4520,39 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 - **Action**:
   - [x] Context updated
   - [x] Implementation started
+
+## Preflight Update 2026-10-04 (matching feature: doula assignment)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Move doula assignment decisions into `src/features/matching`,
+  behind the existing client assign route and admin match route.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`. User asked for the next
+  business module after clients.
+- **Files Scanned**:
+  - `frontend-crm/src/api/clients/doulaAssignments.ts` (`assignDoula`,
+    `unassignDoula`)
+  - `frontend-crm/src/api/admin/adminService.ts` (`matchDoulaWithClient`)
+  - `frontend-crm/src/features/clients/components/DoulaAssignment.tsx`
+  - `frontend-crm/src/features/hours/components/DoulaListPage.tsx`
+  - `backend/src/controllers/clientController.ts` (`assignDoula`)
+  - `backend/src/controllers/adminController.ts` (`matchDoulaWithClient`)
+  - `backend/src/services/cloudSqlDoulaAssignmentService.ts`
+  - `backend/src/constants/assignmentServices.ts`
+- **Contract Findings**: Client assign is `POST /clients/:id/assign-doula` with
+  `{ doulaId, role?, services? }` and reads only success or an error string.
+  Admin match is `POST /admin/assignments/match` with
+  `{ clientId, doulaId, notes?, role? }` and reads `error` from a failed JSON
+  body. The admin client does not send `services`; the backend still requires
+  them.
+- **Drift Risk**: The two routes reject "already assigned" with different status
+  codes (409 vs 400) and different service-list error text. Those differences
+  stay.
+- **Required Compatibility**: Same paths, status codes, error strings, and
+  success bodies. Availability blocking stays on the client route only. Admin
+  match still requires status `matching`, an existing doula, and still sends
+  match email after a successful write.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started

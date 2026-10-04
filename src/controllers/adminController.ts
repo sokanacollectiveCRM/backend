@@ -2,16 +2,10 @@ import * as crypto from 'crypto';
 import { Response } from 'express';
 
 import { logger } from '../common/utils/logger';
-import {
-  ASSIGNMENT_SERVICE_CATALOG,
-  normalizeAssignmentServices,
-} from '../constants/assignmentServices';
+import { matchDoulaForAdmin } from '../features/matching';
 import { ClientRepository } from '../repositories/interface/clientRepository';
 import { UserRepository } from '../repositories/interface/userRepository';
-import {
-  CloudSqlDoulaAssignmentService,
-  normalizeDoulaAssignmentRole,
-} from '../services/cloudSqlDoulaAssignmentService';
+import { CloudSqlDoulaAssignmentService } from '../services/cloudSqlDoulaAssignmentService';
 import { CloudSqlTeamService } from '../services/cloudSqlTeamService';
 import { AuthRequest } from '../types';
 import { ACCOUNT_STATUS, CLIENT_STATUS, ROLE } from '../types';
@@ -133,89 +127,46 @@ export class AdminController {
   async matchDoulaWithClient(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { clientId, doulaId, notes, role, services } = req.body;
-
-      // Validate required fields
-      if (!clientId || !doulaId) {
-        res.status(400).json({
-          success: false,
-          error: 'Missing required fields: clientId and doulaId are required',
-        });
-        return;
-      }
-
-      const normalizedRole =
-        role === undefined ? undefined : normalizeDoulaAssignmentRole(role);
-      if (role !== undefined && !normalizedRole) {
-        res.status(400).json({
-          success: false,
-          error: "Invalid role. Allowed values are 'primary' or 'backup'",
-        });
-        return;
-      }
-
-      const normalizedServices = normalizeAssignmentServices(services);
-      if (!normalizedServices) {
-        res.status(400).json({
-          success: false,
-          error: `services is required and must include one or more values from: ${ASSIGNMENT_SERVICE_CATALOG.join(', ')}`,
-        });
-        return;
-      }
-
-      // Verify client exists and get their status
-      const client = await this.clientRepository.findById(clientId);
-      if (!client) {
-        res.status(404).json({
-          success: false,
-          error: 'Client not found',
-        });
-        return;
-      }
-
-      // Verify client is in 'matching' phase
-      if (client.status !== CLIENT_STATUS.MATCHING) {
-        res.status(400).json({
-          success: false,
-          error: `Client is not in matching phase. Current status: ${client.status}. Only clients with status 'matching' can be assigned to doulas.`,
-        });
-        return;
-      }
-
-      // Verify doula exists in Cloud SQL doulas table
-      const doula = await this.cloudSqlAssignmentService.getDoulaById(doulaId);
-      if (!doula) {
-        res.status(404).json({
-          success: false,
-          error: 'Doula not found',
-        });
-        return;
-      }
-
-      // Check if assignment already exists
-      const alreadyAssigned =
-        await this.cloudSqlAssignmentService.assignmentExists(
+      const outcome = await matchDoulaForAdmin(
+        {
+          findClient: (id) => this.clientRepository.findById(id),
+          getDoulaById: (id) => this.cloudSqlAssignmentService.getDoulaById(id),
+          assignmentExists: (id, doula) =>
+            this.cloudSqlAssignmentService.assignmentExists(id, doula),
+          assignDoula: (
+            id,
+            doula,
+            assignedBy,
+            assignmentNotes,
+            assignmentRole,
+            list
+          ) =>
+            this.cloudSqlAssignmentService.assignDoula(
+              id,
+              doula,
+              assignedBy,
+              assignmentNotes,
+              assignmentRole,
+              list
+            ),
+        },
+        {
           clientId,
-          doulaId
-        );
+          doulaId,
+          notes,
+          role,
+          services,
+          assignedBy: req.user?.id,
+        }
+      );
 
-      if (alreadyAssigned) {
-        res.status(400).json({
-          success: false,
-          error: 'This doula is already assigned to this client',
-        });
+      if ('body' in outcome) {
+        res.status(outcome.status).json(outcome.body);
         return;
       }
 
-      // Create the assignment in Cloud SQL
+      const { assignment, client, doula } = outcome;
       const adminId = req.user?.id;
-      const assignment = await this.cloudSqlAssignmentService.assignDoula(
-        clientId,
-        doulaId,
-        adminId,
-        typeof notes === 'string' ? notes : undefined,
-        normalizedRole,
-        normalizedServices
-      );
 
       // Send email notifications to doula and client
       try {

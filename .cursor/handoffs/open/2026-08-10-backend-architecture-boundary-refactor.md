@@ -444,6 +444,24 @@ architecture explicit from the first PR.
   idempotency/outbox item lands.
 - Verified: build clean, full suite 85 suites / 633 tests, security smoke 3/3.
 
+### Completion summary (matching assignment slice, 2026-10-04)
+
+- Status remains `in_progress`. Characterization first:
+  `src/__tests__/matchingAssignmentCharacterization.test.ts` pins both assign
+  routes: check order, status codes, error text, trimmed role, de-duplicated
+  services, window aliases, availability blocking, the matching-phase rule, and
+  that a failed match email still returns 201.
+- Added `src/features/matching/`: `domain/assignment.ts`,
+  `application/ports.ts`, `application/assignDoulaOnClient.ts`,
+  `application/matchDoulaForAdmin.ts`, `index.ts`.
+- Controllers now call the use cases. The service catalog and role helper are
+  re-exported from their old paths. No route, SQL, or response change.
+- `CloudSqlDoulaAssignmentService` and `DoulaAvailabilityService` moved into
+  `src/features/matching/infrastructure/`; old `src/services/` paths are
+  re-export shims.
+- Verified: typecheck and build clean, full suite 86 suites / 646 tests,
+  security smoke 3/3.
+
 ### Cloud Run safeguards (ongoing)
 
 - [ ] Keep `sokana-private-api` as same deployable service.
@@ -572,6 +590,10 @@ slice is explicitly approved.
 - [x] Move client status-change rules and the backend QuickBooks customer link
       into `src/features/clients` behind `PUT /clients/status` and the
       `syncMatchedClientToQuickBooks` façade. Characterization tests first.
+- [x] Move doula assignment decisions into `src/features/matching` behind the
+      client assign route and admin match route. Characterization tests first.
+- [x] Move matching Cloud SQL and availability adapters into
+      `src/features/matching/infrastructure`.
 - [ ] Backend as sole QuickBooks sync owner: add idempotency/outbox, then remove
       the frontend `syncQuickBooksCustomerFromClient` call (after pilot).
 - [ ] Move composition from the legacy root `src/index.ts` into `src/bootstrap`
