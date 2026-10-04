@@ -40,6 +40,11 @@ import {
 } from '../domains/errors';
 import { ActivityDTO } from '../dto/response/ActivityDTO';
 import { Client } from '../entities/Client';
+import {
+  parseClientStatusInput,
+  quickBooksLinkRequestFromClientRow,
+  shouldLinkQuickBooksCustomer,
+} from '../features/clients';
 import { ActivityMapper } from '../mappers/ActivityMapper';
 import { ClientMapper } from '../mappers/ClientMapper';
 import {
@@ -1575,7 +1580,8 @@ export class ClientController {
   //    Client with updatedAt timestamp (or ClientDetailDTO in canonical mode)
   //
   async updateClientStatus(req: AuthRequest, res: Response): Promise<void> {
-    const { clientId, status } = req.body;
+    const { clientId } = req.body;
+    const status = parseClientStatusInput(req.body.status);
     const readMode = process.env.SPLIT_DB_READ_MODE;
 
     // Require PRIMARY mode - shadow mode disabled
@@ -1599,7 +1605,7 @@ export class ClientController {
       return;
     }
 
-    if (!status || typeof status !== 'string' || status.trim() === '') {
+    if (status === null) {
       res
         .status(400)
         .json(
@@ -1624,7 +1630,7 @@ export class ClientController {
       const updatedRow =
         (await this.clientRepository.updateClientStatusCanonical?.(
           clientId,
-          status.trim()
+          status
         )) ?? null;
 
       if (!updatedRow) {
@@ -1638,18 +1644,12 @@ export class ClientController {
       const eligibility = await this.getPortalEligibilitySnapshot(clientId);
       const isEligible = eligibility?.is_eligible ?? false;
 
-      // When transitioning to 'matched', fire QB customer sync (non-blocking).
-      // QB may not be connected in all environments; failures are logged only.
-      const isMatchedConversion =
-        status.trim() === 'matched' || status.trim() === 'customer';
-      if (isMatchedConversion) {
-        syncMatchedClientToQuickBooks({
-          clientId,
-          firstName: updatedRow.first_name || '',
-          lastName: updatedRow.last_name || '',
-          email: updatedRow.email || '',
-          existingQboCustomerId: updatedRow.qbo_customer_id,
-        })
+      // Non-blocking: QB may not be connected in all environments, so
+      // failures are logged only.
+      if (shouldLinkQuickBooksCustomer(status)) {
+        syncMatchedClientToQuickBooks(
+          quickBooksLinkRequestFromClientRow(clientId, updatedRow)
+        )
           .then((result) => {
             logger.info(
               {

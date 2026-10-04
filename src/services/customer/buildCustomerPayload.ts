@@ -1,26 +1,9 @@
-export interface BuildCustomerPayloadResult {
-  fullName: string;
-  payload: {
-    GivenName: string;
-    FamilyName: string;
-    DisplayName: string;
-    PrimaryEmailAddr: { Address: string };
-  };
-}
+/**
+ * Compatibility shim — the QuickBooks customer payload rule lives in
+ * `src/features/clients/domain`. Prefer importing from `src/features/clients`.
+ */
+import { buildQuickBooksCustomerPayload } from '../../features/clients';
 
-export default function buildCustomerPayload(
-  firstName: string,
-  lastName: string,
-  email: string
-): BuildCustomerPayloadResult {
-  const fullName = `${firstName} ${lastName}`;
-  return {
-    fullName,
-    payload: {
-      GivenName: firstName,
-      FamilyName: lastName,
-      DisplayName: fullName,
-      PrimaryEmailAddr: { Address: email }
-    }
-  };
-}
+export type { QuickBooksCustomerDraft as BuildCustomerPayloadResult } from '../../features/clients';
+
+export default buildQuickBooksCustomerPayload;

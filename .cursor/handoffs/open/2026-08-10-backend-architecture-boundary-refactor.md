@@ -424,6 +424,26 @@ architecture explicit from the first PR.
   same methods and import path. Verified: build clean, full suite 83 suites /
   606 tests, security smoke 3/3.
 
+### Completion summary (clients status + QuickBooks link slice, 2026-10-04)
+
+- Status remains `in_progress`. Characterization first:
+  `src/__tests__/clientStatusQuickBooksSyncCharacterization.test.ts` pins
+  `PUT /clients/status` validation (400/404/501), trimmed status, the exact
+  case-sensitive `matched`/`customer` trigger, fields sent to the QuickBooks
+  link, non-blocking failure, and the `matched_at` stamp.
+  `syncMatchedClientToQuickBooks.test.ts` now asserts the real payload, stale
+  stored-id relink, and `Unknown`/`Client` defaults.
+- Added `src/features/clients/`: `domain/clientStatus.ts`,
+  `domain/quickBooksCustomer.ts`, `application/ports.ts`,
+  `application/linkClientToQuickBooksCustomer.ts`, `infrastructure/` (QuickBooks
+  customer directory, Cloud SQL link store), `composition.ts`.
+- `syncMatchedClientToQuickBooks` and `buildCustomerPayload` are now façades.
+  Controller and repository use the domain rules. No route, SQL, payload, or
+  response change.
+- The frontend still also syncs on `matched`; unchanged on purpose until the
+  idempotency/outbox item lands.
+- Verified: build clean, full suite 85 suites / 633 tests, security smoke 3/3.
+
 ### Cloud Run safeguards (ongoing)
 
 - [ ] Keep `sokana-private-api` as same deployable service.
@@ -549,6 +569,11 @@ slice is explicitly approved.
 - [x] Move those lookups into `src/features/portal/infrastructure` behind the
       existing `PortalEligibilityService` façade, after characterization tests
       pinned the I/O path.
+- [x] Move client status-change rules and the backend QuickBooks customer link
+      into `src/features/clients` behind `PUT /clients/status` and the
+      `syncMatchedClientToQuickBooks` façade. Characterization tests first.
+- [ ] Backend as sole QuickBooks sync owner: add idempotency/outbox, then remove
+      the frontend `syncQuickBooksCustomerFromClient` call (after pilot).
 - [ ] Move composition from the legacy root `src/index.ts` into `src/bootstrap`
       after the first feature slices are stable.
 

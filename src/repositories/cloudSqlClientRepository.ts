@@ -9,6 +9,7 @@ import { queryCloudSql } from '../db/cloudSqlPool';
 import { NotFoundError } from '../domains/errors';
 import { Client } from '../entities/Client';
 import { User } from '../entities/User';
+import { shouldStampMatchedAt } from '../features/clients';
 import { normalizeIntakeHomeTypes } from '../features/intake/domain/requestSubmissionDto';
 import { ROLE } from '../types';
 import {
@@ -569,8 +570,7 @@ export class CloudSqlClientRepository implements ClientRepository {
     clientId: string,
     status: string
   ): Promise<ClientOperationalRow | null> {
-    const isMatchedConversion = status === 'matched' || status === 'customer';
-    if (isMatchedConversion) {
+    if (shouldStampMatchedAt(status)) {
       await queryCloudSql(
         `UPDATE phi_clients
          SET status = $1, matched_at = COALESCE(matched_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP

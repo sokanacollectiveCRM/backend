@@ -4483,3 +4483,40 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 - **Action**:
   - [x] Context updated
   - [x] Implementation started
+
+## Preflight Update 2026-10-04 (clients feature: status + QuickBooks sync)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Move client status-change rules and the backend QuickBooks
+  customer link into `src/features/clients`, behind the existing
+  `PUT /clients/status` controller and `syncMatchedClientToQuickBooks` façade.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`. User asked for the next
+  business module after portal.
+- **Files Scanned**:
+  - `frontend-crm/src/api/services/clients.service.ts` (`updateClientStatus`)
+  - `frontend-crm/src/common/utils/updateClientStatus.ts`
+  - `frontend-crm/src/common/utils/syncQuickBooksCustomer.ts`
+  - `frontend-crm/src/features/pipeline/Pipeline.tsx`,
+    `features/profiles/Profile.tsx`,
+    `features/clients/components/users-columns.tsx`,
+    `features/clients/components/dialog/LeadProfileModal.tsx`
+  - `backend/src/controllers/clientController.ts` (`updateClientStatus`)
+  - `backend/src/repositories/cloudSqlClientRepository.ts`
+    (`updateClientStatusCanonical`)
+  - `backend/src/services/customer/syncMatchedClientToQuickBooks.ts`
+- **Contract Findings**: Frontend calls `PUT /clients/status` with
+  `{ clientId, status }` and reads the `ClientDetailDTO` from `data`. On
+  `matched` (and `customer` in `clients.service.ts`) the frontend also calls
+  `POST /quickbooks/customer` itself. The backend fires its own non-blocking
+  sync for `matched`/`customer`. Both paths look up an existing QuickBooks
+  customer before creating.
+- **Drift Risk**: Removing the frontend sync before backend idempotency/outbox
+  exists could drop syncs when the backend call fails silently. Not in scope.
+- **Required Compatibility**: Same request body, validation messages, status
+  codes (400/404/501), and response DTO. Same QuickBooks lookup order (stored id
+  → email → display name → create) and `phi_clients.qbo_customer_id` write.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started

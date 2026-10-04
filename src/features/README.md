@@ -158,6 +158,33 @@ Runtime notes:
   `primary_portal_blocker`, `allowed_actions`, and the payment-authorization
   flags.
 
+## Clients package (`src/features/clients`)
+
+Third structural slice: client status changes and the backend QuickBooks
+customer link.
+
+```text
+src/features/clients/
+  domain/clientStatus.ts         # status input, conversion statuses, matched_at rule
+  domain/quickBooksCustomer.ts   # payload, default names, identity rule, link methods
+  application/ports.ts           # QuickBooks customer directory, link store
+  application/linkClientToQuickBooksCustomer.ts  # stored id → email → name → create
+  infrastructure/                # QuickBooks Online lookups, Cloud SQL qbo_customer_id write
+  composition.ts                 # wires ports to adapters
+  index.ts                       # public feature entrypoints
+```
+
+Runtime notes:
+
+- `PUT /clients/status` stays in `clientController`; it uses the domain rules.
+- `services/customer/syncMatchedClientToQuickBooks.ts` and
+  `buildCustomerPayload.ts` are façades over this package.
+- The frontend still runs its own QuickBooks sync on `matched`. Remove it only
+  after backend idempotency/outbox exists.
+- Behavior is pinned by
+  `src/__tests__/clientStatusQuickBooksSyncCharacterization.test.ts` and
+  `src/__tests__/syncMatchedClientToQuickBooks.test.ts`.
+
 ## Target tree (incremental, not big-bang)
 
 ```text

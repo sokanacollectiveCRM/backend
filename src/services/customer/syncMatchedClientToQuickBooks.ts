@@ -1,19 +1,10 @@
 /**
- * Syncs a newly-matched CRM client to QuickBooks Online.
- *
- * Called non-blocking when a lead transitions to status = 'matched'.
- * Before creating, checks QB for an existing customer by email then by
- * display name to avoid duplicates. Only creates if no match is found.
- * Persists the QB Customer ID back to phi_clients for auditing.
+ * Legacy façade over the clients feature QuickBooks link.
+ * Called non-blocking when a client converts (`matched` / `customer`).
  */
-import buildCustomerPayload from './buildCustomerPayload';
-import createCustomerInQuickBooks from './createCustomerInQuickBooks';
-import saveQboCustomerIdToPhiClient from './saveQboCustomerIdToPhiClient';
-import findCustomerInQuickBooks, {
-  findCustomerInQuickBooksByDisplayName,
-  findCustomerInQuickBooksById,
-} from '../payments/findCustomerInQuickBooks';
 import { logger } from '../../common/utils/logger';
+import { linkClientToQuickBooksCustomer } from '../../features/clients';
+import { createClientsQuickBooksDeps } from '../../features/clients/composition';
 
 export interface SyncMatchedClientParams {
   clientId: string;
@@ -31,57 +22,46 @@ export interface SyncMatchedClientResult {
 export async function syncMatchedClientToQuickBooks(
   params: SyncMatchedClientParams
 ): Promise<SyncMatchedClientResult> {
-  const { clientId, firstName, lastName, email, existingQboCustomerId } = params;
+  const { clientId } = params;
+  const result = await linkClientToQuickBooksCustomer(
+    createClientsQuickBooksDeps(),
+    params
+  );
 
-  // 1. Trust an existing QB link only if the customer still exists in the connected company.
-  if (existingQboCustomerId) {
-    const existingById = await findCustomerInQuickBooksById(existingQboCustomerId);
-    if (existingById) {
-      logger.info({ clientId, existingQboCustomerId }, '[QB Sync] Client already has a valid QB customer ID; skipping');
-      return { qboCustomerId: existingById, alreadyExisted: true };
-    }
-
+  if (result.staleStoredId) {
     logger.warn(
-      { clientId, existingQboCustomerId },
-      '[QB Sync] Stored QB customer ID was not found in connected company; attempting relink/create'
+      { clientId, existingQboCustomerId: result.staleStoredId },
+      '[QB Sync] Stored QB customer ID was not found in connected company; relinked'
     );
   }
 
-  if (!firstName && !lastName && !email) {
-    throw new Error('Cannot sync QB customer: no name or email on client record');
+  const { qboCustomerId } = result;
+  switch (result.linkedBy) {
+    case 'stored_id':
+      logger.info(
+        { clientId, existingQboCustomerId: qboCustomerId },
+        '[QB Sync] Client already has a valid QB customer ID; skipping'
+      );
+      break;
+    case 'email':
+      logger.info(
+        { clientId, idByEmail: qboCustomerId },
+        '[QB Sync] Found existing QB customer by email; linking without creating'
+      );
+      break;
+    case 'display_name':
+      logger.info(
+        { clientId, idByName: qboCustomerId },
+        '[QB Sync] Found existing QB customer by name; linking without creating'
+      );
+      break;
+    case 'created':
+      logger.info(
+        { clientId, qboCustomerId },
+        '[QB Sync] QB customer created and ID saved to phi_clients'
+      );
+      break;
   }
 
-  const { fullName, payload } = buildCustomerPayload(
-    firstName || 'Unknown',
-    lastName || 'Client',
-    email || ''
-  );
-
-  // 2. Search QB by email first
-  if (email) {
-    const idByEmail = await findCustomerInQuickBooks(email);
-    if (idByEmail) {
-      logger.info({ clientId, idByEmail }, '[QB Sync] Found existing QB customer by email; linking without creating');
-      await saveQboCustomerIdToPhiClient(clientId, idByEmail);
-      return { qboCustomerId: idByEmail, alreadyExisted: true };
-    }
-  }
-
-  // 3. Search QB by display name (First Last)
-  const idByName = await findCustomerInQuickBooksByDisplayName(fullName);
-  if (idByName) {
-    logger.info({ clientId, idByName }, '[QB Sync] Found existing QB customer by name; linking without creating');
-    await saveQboCustomerIdToPhiClient(clientId, idByName);
-    return { qboCustomerId: idByName, alreadyExisted: true };
-  }
-
-  // 4. No existing QB customer found — create a new one
-  const qboCustomer = await createCustomerInQuickBooks(payload);
-  const qboCustomerId: string = qboCustomer.Id;
-
-  await saveQboCustomerIdToPhiClient(clientId, qboCustomerId);
-
-  logger.info({ clientId, qboCustomerId }, '[QB Sync] QB customer created and ID saved to phi_clients');
-
-  return { qboCustomerId, alreadyExisted: false };
+  return { qboCustomerId, alreadyExisted: result.alreadyExisted };
 }
