@@ -22,28 +22,34 @@ ends in `:<sha>`.
 
 ## Workflow
 
-1. Run the check from the backend repo root. `gcloud` writes to
-   `~/.config/gcloud`, so run it outside the sandbox
-   (`required_permissions: ["all"]`):
+1. Right after a push, start **one** background check that waits 10 minutes. Do
+   not poll in between; the shell completion notification reports the result.
+   Run from the backend repo root, outside the sandbox
+   (`required_permissions: ["all"]`, `block_until_ms: 0`), because `gcloud`
+   writes to `~/.config/gcloud`:
 
    ```bash
-   bash .cursor/skills/sokana-cloudrun-deploy-check/scripts/check-deploy.sh
+   bash .cursor/skills/sokana-cloudrun-deploy-check/scripts/check-deploy.sh --delay 600
    ```
 
-   Pass a commit to check something other than `origin/main`:
-   `check-deploy.sh c8e35a2`.
+   Tell the user the check will report in about 10 minutes, then continue with
+   other work or end the turn.
+
+   When the user asks for status later, or a push is older than 10 minutes, run
+   it without `--delay`. Pass a commit to check something other than
+   `origin/main`: `check-deploy.sh c8e35a2`.
 
 2. Read the exit code and the `RESULT:` line:
 
    | Exit | Meaning                                                          | Next step                                          |
    | ---- | ---------------------------------------------------------------- | -------------------------------------------------- |
    | 0    | Commit serves 100% of traffic and `/health` is 200               | Report deployed                                    |
-   | 1    | Build queued/working, or new revision not at 100%                | Wait about 2 minutes, run again                    |
+   | 1    | Build queued/working, or new revision not at 100%                | One more check with `--delay 300`                  |
    | 2    | Build failed, build passed but not deployed, or `/health` failed | Open the build log URL and report the failing step |
    | 3    | No gcloud auth, no build found, or service unreadable            | Fix setup (below)                                  |
 
-3. While pending, re-run every 2–3 minutes. The test gate alone takes several
-   minutes. Stop after about 20 minutes and report the build status and log URL.
+3. If the second check is still pending, stop and report the build status and
+   log URL instead of checking again.
 
 ## Setup problems
 
