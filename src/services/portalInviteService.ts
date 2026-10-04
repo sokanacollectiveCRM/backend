@@ -1,4 +1,5 @@
 import { ValidationError } from '../domains/errors';
+import { INVITE_BLOCKED_FALLBACK_MESSAGE } from '../features/portal';
 import {
   CloudSqlPortalRepository,
   PortalClientRecord,
@@ -40,10 +41,7 @@ export class PortalInviteService {
     const eligibility =
       await portalEligibilityService.getInviteEligibility(clientId);
     if (!eligibility.eligible) {
-      throw new Error(
-        eligibility.reason ||
-          'Invite available after contract is signed, deposit is paid, and billing readiness is satisfied.'
-      );
+      throw new Error(eligibility.reason || INVITE_BLOCKED_FALLBACK_MESSAGE);
     }
   }
 

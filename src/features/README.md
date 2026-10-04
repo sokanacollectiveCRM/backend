@@ -124,6 +124,40 @@ Runtime notes:
 - Compatibility shim: `src/intake/requestSubmissionDto.ts` re-exports domain
   helpers.
 
+## Portal package (`src/features/portal`)
+
+Portal eligibility is the **second** structural slice. The domain owns every
+eligibility decision. The service only loads facts and saves the result:
+
+```text
+src/features/portal/
+  domain/eligibility.ts         # billing path, blockers, eligibility, allowed actions
+  application/ports.ts          # facts reader, card reader, readiness store
+  application/portalEligibility.ts  # compute+persist, batch, invite eligibility
+  infrastructure/               # Cloud SQL facts, QuickBooks card, readiness store
+  composition.ts                # wires ports to adapters
+  index.ts                      # public feature entrypoints
+```
+
+Runtime notes:
+
+- Rules moved out of `src/constants/portalEligibility.ts`. That file is now a
+  re-export shim. Existing callers keep their import paths.
+- New code should import from `src/features/portal`.
+- Domain decides billing path, blockers, deposit/contract facts, paid
+  installment statuses, the signed-contract status, card-on-file fact mapping,
+  force overrides, invite blocker copy, the list cache-miss snapshot, allowed
+  actions, and lock/unlock transitions.
+- `PortalEligibilityService` is a thin façade over the application use cases.
+  Callers keep `src/services/portalEligibilityService` and its methods.
+- `composition.ts` is not exported from `index.ts`: the readiness repository
+  imports the barrel, so exporting adapters there would create a cycle.
+- Behavior is pinned by
+  `src/__tests__/portalEligibilityServiceCharacterization.test.ts`.
+- Client list/detail fields stay the same: `is_eligible`, `portal_blockers`,
+  `primary_portal_blocker`, `allowed_actions`, and the payment-authorization
+  flags.
+
 ## Target tree (incremental, not big-bang)
 
 ```text

@@ -2,6 +2,37 @@
 
 This file is intentionally updateable as frontend work finishes.
 
+## Preflight Update 2026-10-03
+
+### Task
+
+- Inventory CRM subscriptions for the accountant. No API or contract change.
+
+### Files Scanned
+
+- `backend/docs/HIPAA_TECHNICAL_PHI_INVENTORY.md` (vendor table)
+- `backend/docs/VERCEL_RETIREMENT_SIGNOFF.md`
+- `backend/cloudbuild.yaml`
+- `frontend-crm/cloudbuild.yaml`
+- `frontend-crm/package.json`
+
+### Contract Findings
+
+- No request or response contract change.
+
+### Drift Risk
+
+- None for this inventory.
+
+### Required Compatibility
+
+- None.
+
+### Action
+
+- [x] Context updated
+- [x] No implementation (information only)
+
 ## Preflight Update 2026-08-31 (Signing credential session exchange)
 
 ### Task
@@ -4365,6 +4396,90 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
   token.
 - **Required Compatibility**: Keep `POST /auth/login` with `{ idToken }` and the
   HttpOnly `sokana_session_token` cookie.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started
+
+## Preflight Update 2026-10-04 (portal eligibility domain slice)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Start the modular-monolith refactor at the approved next
+  slice: move portal eligibility pure rules into `src/features/portal` without
+  changing client API fields before the Oct 12 pilot.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`. User asked to start the
+  architecture refactor for the Oct 12 pilot.
+- **Files Scanned**:
+  - `frontend-crm/src/features/clients/utils/portalStatus.ts` (prior contract;
+    still prefers backend `is_eligible`)
+  - `frontend-crm/src/api/dto/client.dto.ts` (prior contract)
+  - `backend/src/constants/portalEligibility.ts`
+  - `backend/src/services/portalEligibilityService.ts`
+  - `backend/src/utils/portalEligibilityResponse.ts`
+  - `backend/src/features/intake/index.ts`
+  - `backend/src/features/README.md`
+- **Contract Findings**: Client list and detail still expose `is_eligible`,
+  `portal_blockers`, `primary_portal_blocker`, `billing_path`,
+  `payment_authorization_required`, `payment_authorization_satisfied`,
+  `card_on_file`, and `allowed_actions`. This slice only relocates the pure
+  computation.
+- **Drift Risk**: None for the CRM if the shim keeps the same function results.
+  Moving `PortalEligibilityService` SQL in the same change would risk invite and
+  readiness persistence before pilot.
+- **Required Compatibility**: Keep snake_case readiness fields on GET `/clients`
+  and GET `/clients/:id`. Keep legacy `qbo_customer_id` alongside
+  `qb_customer_id`.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started
+
+## Preflight Update 2026-10-04 (portal domain owns eligibility decisions)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Move remaining portal eligibility decisions out of
+  `PortalEligibilityService` into `src/features/portal/domain`. Keep client
+  response fields unchanged.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`. User asked the portal domain
+  to own the eligibility business functions still left in the service.
+- **Files Scanned**:
+  - `frontend-crm/src/features/clients/utils/portalStatus.ts` (prior contract)
+  - `backend/src/services/portalEligibilityService.ts`
+  - `backend/src/services/portalInviteService.ts`
+  - `backend/src/repositories/cloudSqlClientOnboardingReadinessRepository.ts`
+  - `backend/src/features/portal/domain/eligibility.ts`
+- **Contract Findings**: Invite blocker sentences and the list cache-miss
+  snapshot (`billing_path_unknown` only,
+  `payment_authorization_satisfied: false`) stay the same. Deposit resolution
+  still matches SQL `COALESCE`.
+- **Drift Risk**: Recomputing a missing readiness row with live blockers would
+  add `contract_unsigned` on client lists. That path stays the domain cache-miss
+  snapshot.
+- **Required Compatibility**: Keep snake_case readiness fields on GET `/clients`
+  and GET `/clients/:id`.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started
+
+## Preflight Update 2026-10-04 (portal infrastructure behind ports)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Characterize `PortalEligibilityService`, then move its Cloud
+  SQL and QuickBooks lookups into `src/features/portal/infrastructure` behind
+  ports. Same service methods and import path.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`.
+- **Files Scanned**: No changes needed for the frontend. Same contracts as the
+  2026-10-04 portal domain entries above.
+- **Contract Findings**: Client list/detail readiness fields, invite reasons,
+  and onboarding event types are unchanged.
+- **Drift Risk**: None for the CRM. Characterization tests pin the I/O path.
+- **Required Compatibility**: Keep `portalEligibilityService` methods:
+  `getOnboardingGates`, `computeAndPersist`, `getPortalEligibility`,
+  `getPortalEligibilityBatch`, `getInviteEligibility`.
 - **Action**:
   - [x] Context updated
   - [x] Implementation started

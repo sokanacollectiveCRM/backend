@@ -396,6 +396,34 @@ architecture explicit from the first PR.
   HIPAA attestation — next is BAA + risk analysis (see
   `docs/SECURITY_P0_HARDENING_SUMMARY.md`).
 
+### Completion summary (portal eligibility domain slice, 2026-10-04)
+
+- Status remains `in_progress`. Pure rules now live in
+  `src/features/portal/domain/eligibility.ts`. Public barrel:
+  `src/features/portal/index.ts`.
+- Compatibility shim: `src/constants/portalEligibility.ts` re-exports the domain
+  module. No route, SQL, or response-shape change.
+- Persistence, card-on-file, and invite gates were later moved behind ports (see
+  the infrastructure step below).
+- Next structural slice: client status / QuickBooks sync under
+  `src/features/clients`. Do not combine with auth transport or schema changes
+  before the Oct 12 pilot.
+- 2026-10-04 follow-up: domain now owns deposit/contract fact resolution,
+  paid-installment and signed-contract statuses, force overrides, card-on-file
+  fact mapping, invite blocker copy, the list cache-miss snapshot, allowed
+  actions on mapped rows, and lock/unlock transitions. Response fields
+  unchanged.
+- 2026-10-04 infrastructure step: characterization tests first
+  (`src/__tests__/portalEligibilityServiceCharacterization.test.ts`, 16 tests
+  pinning SQL params, upsert payload, computed/unlock/lock events, force flags,
+  verification-invoice precedence, list cache miss, invite reasons and error
+  prefix). Then added `application/ports.ts`,
+  `application/portalEligibility.ts`, `infrastructure/` (Cloud SQL facts reader,
+  QuickBooks card-on-file reader, Cloud SQL readiness store), and
+  `composition.ts`. `PortalEligibilityService` is now a thin façade with the
+  same methods and import path. Verified: build clean, full suite 83 suites /
+  606 tests, security smoke 3/3.
+
 ### Cloud Run safeguards (ongoing)
 
 - [ ] Keep `sokana-private-api` as same deployable service.
@@ -510,8 +538,17 @@ slice is explicitly approved.
       characterization and parity tests pass.
 - [ ] Replace temporary cross-feature infrastructure imports with application
       ports or public feature operations.
-- [ ] Move portal eligibility under `src/features/portal` as the second
-      structural slice.
+- [x] Move portal eligibility pure rules under `src/features/portal/domain`
+      while preserving `src/constants/portalEligibility.ts` as a re-export shim.
+      Client API fields unchanged.
+- [x] Portal domain owns the remaining eligibility decisions: deposit and
+      contract facts, paid-installment and signed-contract statuses, force
+      overrides, card-on-file fact mapping, invite copy, cache-miss snapshot,
+      allowed actions, and lock/unlock transitions. Service keeps SQL and
+      QuickBooks lookups only.
+- [x] Move those lookups into `src/features/portal/infrastructure` behind the
+      existing `PortalEligibilityService` façade, after characterization tests
+      pinned the I/O path.
 - [ ] Move composition from the legacy root `src/index.ts` into `src/bootstrap`
       after the first feature slices are stable.
 

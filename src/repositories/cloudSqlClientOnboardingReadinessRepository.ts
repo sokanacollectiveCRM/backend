@@ -1,10 +1,11 @@
+import { getPool } from '../db/cloudSqlPool';
 import {
   BillingPath,
   OnboardingEventType,
   PortalBlockerCode,
   PortalEligibilitySnapshot,
-} from '../constants/portalEligibility';
-import { getPool } from '../db/cloudSqlPool';
+  computeAllowedActions,
+} from '../features/portal';
 
 export interface ClientOnboardingReadinessRow {
   id: string;
@@ -90,11 +91,14 @@ export function mapReadinessRow(
     verification_invoice_id: row.verification_invoice_id ?? null,
     verification_invoice_sent_at: toIso(row.verification_invoice_sent_at),
     verification_invoice_paid_at: toIso(row.verification_invoice_paid_at),
-    allowed_actions: {
-      can_invite_to_portal: row.is_eligible,
-      can_mark_contract_signed: !row.contract_signed,
-      can_mark_deposit_paid: row.contract_signed && !row.deposit_paid,
-    },
+    allowed_actions: computeAllowedActions({
+      is_eligible: row.is_eligible,
+      contract_signed: row.contract_signed,
+      deposit_paid: row.deposit_paid,
+      primary_portal_blocker:
+        (row.primary_portal_blocker as PortalBlockerCode | null) ?? null,
+      payment_authorization_required: row.payment_authorization_required,
+    }),
   };
 }
 

@@ -1,12 +1,20 @@
 import {
+  applyFactOverride,
   computeAllowedActions,
   computePortalBlockers,
   computePortalEligibility,
+  inviteBlockerMessage,
   isClientDepositRequired,
+  isPaidInstallmentStatus,
   isPaymentAuthorizationRequired,
+  portalEligibilityTransition,
+  readinessNotYetComputedSnapshot,
   resolveBillingPath,
+  resolveCardOnFileFact,
+  resolveDepositPaid,
+  resolveOnboardingFacts,
   selectPrimaryPortalBlocker,
-} from '../constants/portalEligibility';
+} from '../features/portal';
 
 describe('portal eligibility computation', () => {
   describe('resolveBillingPath', () => {
@@ -175,6 +183,113 @@ describe('portal eligibility computation', () => {
       });
       expect(actions).not.toHaveProperty('can_send_verification_invoice');
       expect(actions.can_invite_to_portal).toBe(false);
+    });
+  });
+
+  describe('onboarding facts', () => {
+    it('treats a paid installment as deposit paid and ignores a missing legacy row', () => {
+      expect(
+        resolveDepositPaid({
+          installmentDepositPaid: true,
+          legacyPaymentExists: false,
+        })
+      ).toBe(true);
+    });
+
+    it('does not fall through to a legacy payment when the installment fact is false', () => {
+      expect(
+        resolveDepositPaid({
+          installmentDepositPaid: false,
+          legacyPaymentExists: true,
+        })
+      ).toBe(false);
+    });
+
+    it('uses a legacy payment only when the installment fact is absent', () => {
+      expect(
+        resolveDepositPaid({
+          installmentDepositPaid: null,
+          legacyPaymentExists: true,
+        })
+      ).toBe(true);
+    });
+
+    it('lets an explicit force flag override a resolved fact', () => {
+      expect(applyFactOverride(false, true)).toBe(true);
+      expect(applyFactOverride(true, false)).toBe(false);
+      expect(applyFactOverride(true, undefined)).toBe(true);
+    });
+
+    it('maps queried rows into contract, deposit, and billing path', () => {
+      expect(
+        resolveOnboardingFacts({
+          hasSignedContract: true,
+          installmentDepositPaid: false,
+          legacyPaymentExists: null,
+          paymentMethod: 'Self-Pay',
+          forceDepositPaid: true,
+        })
+      ).toEqual({
+        contract_signed: true,
+        deposit_paid: true,
+        billing_path: 'self_pay',
+        payment_method: 'Self-Pay',
+      });
+    });
+
+    it('counts only the domain paid-installment statuses', () => {
+      expect(isPaidInstallmentStatus('Paid')).toBe(true);
+      expect(isPaidInstallmentStatus('succeeded')).toBe(true);
+      expect(isPaidInstallmentStatus('completed')).toBe(true);
+      expect(isPaidInstallmentStatus('pending')).toBe(false);
+    });
+
+    it('uses the stored-method on-file flag as the eligibility card fact', () => {
+      expect(
+        resolveCardOnFileFact({
+          onFile: true,
+          paymentMethodReference: 'pm_1',
+        })
+      ).toEqual({
+        card_on_file: true,
+        qb_stored_payment_method_id: 'pm_1',
+      });
+    });
+  });
+
+  describe('invite copy and cache miss', () => {
+    it('explains a self-pay unsigned contract with the deposit requirement', () => {
+      expect(inviteBlockerMessage('contract_unsigned', 'self_pay')).toBe(
+        'Invite available after contract is signed and deposit is paid.'
+      );
+    });
+
+    it('explains a non-deposit unsigned contract without requiring a deposit', () => {
+      expect(inviteBlockerMessage('contract_unsigned', 'medicaid')).toBe(
+        'Invite available after contract is signed and billing readiness is satisfied.'
+      );
+    });
+
+    it('keeps the list cache-miss snapshot on billing path unknown only', () => {
+      expect(readinessNotYetComputedSnapshot()).toMatchObject({
+        is_eligible: false,
+        portal_blockers: ['billing_path_unknown'],
+        primary_portal_blocker: 'billing_path_unknown',
+        payment_authorization_satisfied: false,
+        allowed_actions: {
+          can_invite_to_portal: false,
+          can_mark_contract_signed: true,
+          can_mark_deposit_paid: false,
+        },
+      });
+    });
+  });
+
+  describe('eligibility transition', () => {
+    it('unlocks, locks, or stays unchanged', () => {
+      expect(portalEligibilityTransition(false, true)).toBe('unlocked');
+      expect(portalEligibilityTransition(true, false)).toBe('locked');
+      expect(portalEligibilityTransition(true, true)).toBe('unchanged');
     });
   });
 });
