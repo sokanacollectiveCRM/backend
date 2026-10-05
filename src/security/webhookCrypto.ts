@@ -1,5 +1,5 @@
 /**
- * Provider webhook HMAC helpers (SignNow + Intuit QuickBooks).
+ * Provider webhook HMAC helpers (Intuit QuickBooks).
  * Never logs secrets, signatures, or raw payloads.
  */
 import { createHmac, timingSafeEqual } from 'crypto';
@@ -59,25 +59,6 @@ export function verifyIntuitSignature(
   if (!signatureHeader || !verifierToken) return false;
   const expected = hmacSha256Base64(verifierToken, rawBody);
   return safeEqualString(expected, signatureHeader.trim());
-}
-
-/**
- * SignNow: HMAC-SHA256 of raw body with subscription secret_key.
- * Header: `X-SignNow-Signature`. Accept base64 or hex encodings used in the wild.
- */
-export function verifySignNowSignature(
-  rawBody: Buffer | string,
-  signatureHeader: string | undefined,
-  secret: string
-): boolean {
-  if (!signatureHeader || !secret) return false;
-  const provided = signatureHeader.trim();
-  const expectedBase64 = hmacSha256Base64(secret, rawBody);
-  const expectedHex = hmacSha256Hex(secret, rawBody);
-  return (
-    safeEqualString(expectedBase64, provided) ||
-    safeEqualString(expectedHex, provided)
-  );
 }
 
 /** Parse Intuit `intuit-created-time` (ISO) and reject outside skew window. */

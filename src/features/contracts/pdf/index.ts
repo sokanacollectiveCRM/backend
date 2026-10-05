@@ -1,6 +1,4 @@
-export * from './coordinates';
-export * from './hash';
-export * from './pdfService';
-export * from './renderer';
-export * from './templateLoader';
-export * from './types';
+/**
+ * Compatibility shim — PDF adapters live in `infrastructure/pdf`.
+ */
+export * from '../infrastructure/pdf';

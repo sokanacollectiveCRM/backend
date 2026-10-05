@@ -7,7 +7,13 @@ export interface Contract {
   deposit?: string;
   note?: string;
   document_url?: string;
-  status: 'draft' | 'pending_signature' | 'signed' | 'active' | 'completed' | 'cancelled';
+  status:
+    | 'draft'
+    | 'pending_signature'
+    | 'signed'
+    | 'active'
+    | 'completed'
+    | 'cancelled';
   generated_by: string; // References users.id
   created_at: string;
   updated_at: string;
@@ -19,21 +25,6 @@ export interface ContractTemplate {
   storage_path?: string;
   fee?: string;
   deposit?: string;
-}
-
-export interface ContractSignNowIntegration {
-  id: string;
-  contract_id: string;
-  signnow_document_id?: string;
-  signnow_envelope_id?: string;
-  signing_url?: string;
-  status: 'pending' | 'sent' | 'viewed' | 'signed' | 'completed' | 'declined';
-  sent_at?: string;
-  viewed_at?: string;
-  signed_at?: string;
-  completed_at?: string;
-  created_at: string;
-  updated_at: string;
 }
 
 export interface ContractPayment {

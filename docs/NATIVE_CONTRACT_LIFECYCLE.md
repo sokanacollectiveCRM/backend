@@ -1,8 +1,8 @@
 # Native contract lifecycle
 
 This is the backend contract for Sokana's provider-neutral signing flow. It
-applies only to rows whose `signing_provider` is `native`. Historical SignNow
-rows remain readable under their stored provider and status.
+applies only to rows whose `signing_provider` is `native`. Historical rows from
+retired e-sign vendors remain readable under their stored provider and status.
 
 ## Invariants
 
@@ -241,11 +241,7 @@ contract, and preserves this response envelope:
     "clientEmail": "<email>",
     "docxPath": "",
     "pdfPath": "",
-    "signNow": {
-      "documentId": "",
-      "invitationSent": true,
-      "status": "invitation_sent"
-    },
+    "invitationSent": true,
     "emailDelivery": {
       "provider": "native",
       "sent": true,

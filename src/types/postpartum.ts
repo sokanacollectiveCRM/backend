@@ -14,7 +14,7 @@ export interface PostpartumContractAmounts {
   installments_amounts: number[];
 }
 
-export interface SignNowPostpartumFields {
+export interface PostpartumContractFields {
   total_hours: string;
   deposit: string;
   hourly_rate_fee: string;
@@ -26,5 +26,5 @@ export const DEFAULT_CONFIG = {
   min_installments: 1,
   max_installments: 12,
   min_deposit_percent: 10,
-  max_deposit_percent: 50
+  max_deposit_percent: 50,
 };

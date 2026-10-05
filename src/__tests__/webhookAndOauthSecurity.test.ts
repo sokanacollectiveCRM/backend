@@ -6,16 +6,11 @@ import {
   resetOAuthStateStoreForTests,
   setOAuthStateStoreForTests,
 } from '../security/oauthStateStore';
-import {
-  requireQuickBooksWebhookAuth,
-  requireSignNowWebhookAuth,
-} from '../security/webhookAuth';
+import { requireQuickBooksWebhookAuth } from '../security/webhookAuth';
 import {
   hmacSha256Base64,
-  hmacSha256Hex,
   isWebhookTimestampFresh,
   verifyIntuitSignature,
-  verifySignNowSignature,
 } from '../security/webhookCrypto';
 import {
   MemoryWebhookEventStore,
@@ -33,16 +28,6 @@ describe('PR 5 webhook crypto', () => {
     expect(verifyIntuitSignature(payload, signature, secret)).toBe(true);
     expect(verifyIntuitSignature(payload, 'bogus', secret)).toBe(false);
     expect(verifyIntuitSignature(payload, signature, 'other')).toBe(false);
-  });
-
-  it('verifies SignNow base64 or hex HMAC signatures', () => {
-    expect(
-      verifySignNowSignature(payload, hmacSha256Base64(secret, payload), secret)
-    ).toBe(true);
-    expect(
-      verifySignNowSignature(payload, hmacSha256Hex(secret, payload), secret)
-    ).toBe(true);
-    expect(verifySignNowSignature(payload, 'nope', secret)).toBe(false);
   });
 
   it('rejects stale intuit-created-time timestamps', () => {
@@ -76,12 +61,12 @@ describe('PR 5 webhook event idempotency', () => {
   });
 
   it('claims once and treats replays as duplicates', async () => {
-    expect(
-      await claimWebhookEvent('signnow', 'signnow:doc-1:document.completed')
-    ).toBe('claimed');
-    expect(
-      await claimWebhookEvent('signnow', 'signnow:doc-1:document.completed')
-    ).toBe('duplicate');
+    expect(await claimWebhookEvent('contracts', 'contract:doc-1:signed')).toBe(
+      'claimed'
+    );
+    expect(await claimWebhookEvent('contracts', 'contract:doc-1:signed')).toBe(
+      'duplicate'
+    );
     expect(await claimWebhookEvent('quickbooks', 'qbo:invoice:99:paid')).toBe(
       'claimed'
     );
@@ -126,8 +111,6 @@ describe('PR 5 webhook auth middleware', () => {
   };
 
   const keys = [
-    'SIGNNOW_WEBHOOK_SECRET',
-    'SIGNNOW_BASIC_AUTH_TOKEN',
     'QB_WEBHOOK_VERIFIER_TOKEN',
     'INTUIT_WEBHOOK_VERIFIER_TOKEN',
   ] as const;
@@ -148,42 +131,6 @@ describe('PR 5 webhook auth middleware', () => {
         process.env[key] = saved[key];
       }
     }
-  });
-
-  it('rejects SignNow callbacks with bad signatures when secret is set', () => {
-    process.env.SIGNNOW_WEBHOOK_SECRET = 'sn-secret';
-    const body = Buffer.from(
-      '{"document_id":"d1","event":"document.completed"}'
-    );
-    const req: any = {
-      rawBody: body,
-      get: (name: string) =>
-        name.toLowerCase() === 'x-signnow-signature' ? 'invalid' : undefined,
-      headers: { 'x-signnow-signature': 'invalid' },
-    };
-    const res = createRes();
-    const next = jest.fn();
-    requireSignNowWebhookAuth(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  it('accepts SignNow callbacks with valid HMAC', () => {
-    process.env.SIGNNOW_WEBHOOK_SECRET = 'sn-secret';
-    const body = Buffer.from(
-      '{"document_id":"d1","event":"document.completed"}'
-    );
-    const signature = hmacSha256Base64('sn-secret', body);
-    const req: any = {
-      rawBody: body,
-      get: (name: string) =>
-        name.toLowerCase() === 'x-signnow-signature' ? signature : undefined,
-      headers: { 'x-signnow-signature': signature },
-    };
-    const res = createRes();
-    const next = jest.fn();
-    requireSignNowWebhookAuth(req, res, next);
-    expect(next).toHaveBeenCalled();
   });
 
   it('rejects QuickBooks webhooks with invalid intuit-signature when verifier is set', () => {

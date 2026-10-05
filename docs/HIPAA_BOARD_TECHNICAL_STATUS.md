@@ -89,7 +89,8 @@ critical/high findings above are not all closed.
 accepted. Code cannot prove any BAA.
 
 Still in the live data path without in-repo BAA evidence: Google Workspace /
-Gmail SMTP, SignNow, Intuit QuickBooks, Supabase Auth + Storage, CloudConvert.
+Gmail SMTP, Intuit QuickBooks, Supabase Auth + Storage, CloudConvert. Native
+signing is in-app.
 
 ### HIPAA-17 — Access / onboarding / offboarding
 
@@ -199,7 +200,7 @@ are equally blocking from a technical standpoint.
   `docs/VERCEL_RETIREMENT_SIGNOFF.md`).
 - Decide/approve Supabase Storage for client insurance-card files, or move bytes
   off Supabase.
-- Execute remaining BAAs (Workspace, SignNow, Intuit, Supabase, CloudConvert).
+- Execute remaining BAAs (Workspace, Intuit, Supabase, CloudConvert).
 - **Full Supabase exit (launch plan, 2026-08-25):** migrate Auth → GCP Identity
   Platform, files → GCS, leftover tables → Cloud SQL, then decommission Supabase
   — see `docs/SUPABASE_FULL_EXIT_LAUNCH_PLAN.md` and handoff

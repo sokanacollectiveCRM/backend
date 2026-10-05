@@ -18,7 +18,7 @@ const SENSITIVE = [
   'Bearer authorization-secret',
   'session=private-cookie',
   'oauth-code-secret',
-  'signnow-private-field',
+  'provider-private-field',
   'diagnosis=private-phi',
   'INS-998877',
   'due_date=2030-04-17',
@@ -76,7 +76,10 @@ describe('PR3 immediate containment', () => {
         status: 502,
         data: {
           errors: [
-            { message: 'provider-raw-payload', field: 'signnow-private-field' },
+            {
+              message: 'provider-raw-payload',
+              field: 'provider-private-field',
+            },
           ],
         },
       },
@@ -87,7 +90,7 @@ describe('PR3 immediate containment', () => {
     };
 
     const safe = toSafeProviderError(
-      'signnow',
+      'contracts',
       'send_invite',
       error,
       'corr_PR3'
@@ -97,7 +100,7 @@ describe('PR3 immediate containment', () => {
     expect(output).not.toContain('secret-stack');
     expect(safe).toEqual(
       expect.objectContaining({
-        service: 'signnow',
+        service: 'contracts',
         operation: 'send_invite',
         status: 502,
         errorCode: 'PROVIDER_HTTP_502',

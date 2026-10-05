@@ -325,9 +325,8 @@ async function queryBaseContracts(
         NULLIF(to_jsonb(pc)->>'created_at', ''),
         to_char(pc.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
       ) AS created_at,
-      NULLIF(to_jsonb(csi)->>'sent_at', '') AS sent_at,
+      NULL::text AS sent_at,
       COALESCE(
-        NULLIF(to_jsonb(csi)->>'signed_at', ''),
         to_char(pc.signed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
         CASE WHEN COALESCE(NULLIF(pc.status::text, ''), '') = 'signed'
           THEN COALESCE(
@@ -356,7 +355,6 @@ async function queryBaseContracts(
         NULLIF(to_jsonb(inv)->>'id', '') DESC NULLS LAST
       LIMIT 1
     ) inv ON TRUE
-    LEFT JOIN public.contract_signnow_integration csi ON csi.contract_id = pc.id
     ${contractFilterSql}
     ORDER BY COALESCE(pc.signed_at, pc.created_at, pc.updated_at) DESC NULLS LAST, pc.id DESC
   `;
@@ -366,32 +364,6 @@ async function queryBaseContracts(
     return rows;
   } catch (error) {
     const message = String((error as Error)?.message || '');
-    if (
-      message.includes('contract_signnow_integration') &&
-      message.includes('does not exist')
-    ) {
-      const fallbackSql = sql
-        .replace(
-          'LEFT JOIN public.contract_signnow_integration csi ON csi.contract_id = pc.id',
-          ''
-        )
-        .replace(
-          /NULLIF\(to_jsonb\(csi\)->>'sent_at', ''\) AS sent_at,/,
-          'NULL::text AS sent_at,'
-        )
-        .replace(
-          /COALESCE\(\s*NULLIF\(to_jsonb\(csi\)->>'signed_at', ''\),[\s\S]*?\) AS signed_at/,
-          `CASE WHEN COALESCE(NULLIF(to_jsonb(pc)->>'status', ''), '') = 'signed'
-            THEN COALESCE(NULLIF(to_jsonb(pc)->>'updated_at', ''), NULLIF(to_jsonb(pc)->>'inserted_at', ''), NULLIF(to_jsonb(pc)->>'created_at', ''))
-            ELSE NULL
-          END AS signed_at`
-        );
-      const { rows } = await queryCloudSql<BaseContractRow>(
-        fallbackSql,
-        params
-      );
-      return rows;
-    }
     if (
       message.includes('phi_contracts') &&
       (message.includes('does not exist') || message.includes('relation'))

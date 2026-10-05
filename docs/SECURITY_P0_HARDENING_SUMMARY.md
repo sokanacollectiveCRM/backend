@@ -27,10 +27,10 @@ gate.
 
 - Removed localhost debug telemetry (`127.0.0.1:7707`) from client assignment
   paths.
-- Redacted sensitive logs (tokens, SignNow field dumps, email password previews,
-  PHI-adjacent payloads).
+- Redacted sensitive logs (tokens, contract field dumps, email password
+  previews, PHI-adjacent payloads).
 - Stopped returning stacks and raw provider payloads on unexpected 500s.
-- Removed hardcoded SignNow API token from legacy service paths.
+- Removed hardcoded vendor e-sign API tokens from legacy service paths.
 
 ### PR 4 — Endpoint authorization
 
@@ -42,7 +42,7 @@ gate.
 
 ### PR 5 — Webhooks and OAuth
 
-- SignNow + QuickBooks webhook HMAC verification.
+- QuickBooks webhook HMAC verification.
 - Replay/idempotency via webhook event ledger.
 - Webhooks mounted outside user-session auth (provider auth retained).
 - QB OAuth state: cryptographically random, stored, expiring, single-use.
@@ -148,7 +148,7 @@ These are **compatibility**, not unfinished P0 blockers:
    money-adjacent writes).
 3. **Correlation IDs + safe audit events**.
 4. **Clarify deferred matrix notes** (e.g. `GET /api/payments` role nuance;
-   unmounted DocuSign/Stripe files).
+   unmounted Stripe files).
 5. **Shrink aliases** only after deprecation signal is clean.
 
 Do **not** treat folder refactors as security work.
@@ -225,8 +225,8 @@ Start with a **risk analysis** and **Business Associate Agreements**, then use
 this stack as evidence:
 
 1. **Execute BAAs** — Google Cloud (Cloud SQL, Cloud Run, GCS). Then vendors
-   that see PHI or auth: Supabase, SignNow, email, Stripe/QuickBooks if they
-   handle identifiers. No BAA → that vendor is out of scope or must be replaced.
+   that see PHI or auth: Supabase, email, Stripe/QuickBooks if they handle
+   identifiers. No BAA → that vendor is out of scope or must be replaced.
 2. **Define the PHI inventory** — `phi_clients` and related Cloud SQL tables,
    documents in storage, emails, contracts. Minimum necessary already started in
    DTOs (PHI omitted when unauthorized).

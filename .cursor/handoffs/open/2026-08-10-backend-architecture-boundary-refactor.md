@@ -116,7 +116,8 @@
       `documents`).
 - [ ] Consolidate/baseline historical migrations only after backup/restore
       proof.
-- [ ] Decide SignNow vs DocuSign support scope.
+- [x] Decide SignNow vs DocuSign support scope: both removed; native signing
+      only.
 - [ ] Remove obsolete repository/service/type implementations.
 - [ ] Consider shared generated contracts only after backend contracts
       stabilize.
@@ -159,8 +160,8 @@ ticket/PR per milestone and update this checklist as each is verified.
       validation and normalization rules; introduce application ports/adapters
       behind the existing route/controller façade; shadow-compare results; keep
       the old path available for one monitored release window.
-- [ ] **Later slices:** portal eligibility → client status/QuickBooks sync →
-      doula matching → contracts → billing → documents/PHI.
+- [x] **Later slices:** portal eligibility → client status/QuickBooks sync →
+      doula matching → contracts. Remaining: billing → documents/PHI.
 
 Ordering rule: establish the feature-package convention first, then complete the
 P0 security and quality gates before moving production files. This avoids mixing
@@ -462,6 +463,34 @@ architecture explicit from the first PR.
 - Verified: typecheck and build clean, full suite 86 suites / 646 tests,
   security smoke 3/3.
 
+### Completion summary (contracts slice, 2026-10-04)
+
+- Status remains `in_progress`. Characterization first:
+  `src/__tests__/contractsFeatureCharacterization.test.ts` pins
+  generate-contract 400/404/503 strings, postpartum calculate/410, native
+  `{ contract }` 201, client `Client not found`, legacy signing 410 body,
+  send/resend 409 strings, and signing consent validation.
+- Reshaped the existing package from technical-role folders into `domain/`,
+  `application/`, `http/`, and `infrastructure/`. Old folders are re-export
+  shims.
+- Folded live outside files behind the same mounts: template controller/use
+  case/GCS store, generate-contract + postpartum + template routes, signature
+  completion, and `contractClientService`. Old `src/controllers`, `src/routes`,
+  `src/services`, and `src/usecase` paths are shims.
+- Removed SignNow and DocuSign adapters, routes, unused processor helpers,
+  vendor docs/scripts, and the `docusign-esign` package. Generate-contract
+  returns `contractId` + `invitationSent`. Historical SQL columns stay. Frontend
+  `createContract.ts` and the contract dialog no longer use SignNow response
+  shapes.
+- Deleted unused `PostSigningService`, leftover PDF/DOCX analyzers, stale
+  `/api/signnow` and `/api/pdf-contract` inventory rows, and October-12 evidence
+  TSV snapshots.
+- Next structural slice: billing. Then documents, then finish
+  clients/portal/intake/auth/doulas, then `src/bootstrap` and `src/shared`.
+- Verified after vendor removal: typecheck and build clean, full suite 87 suites
+  / 655 tests, security smoke 3/3. Three SignNow webhook cases were removed with
+  the vendor adapter.
+
 ### Cloud Run safeguards (ongoing)
 
 - [ ] Keep `sokana-private-api` as same deployable service.
@@ -477,8 +506,7 @@ architecture explicit from the first PR.
 - Endpoint(s):
   - Preserve existing public routes and aliases during P0–P2 rollout.
   - Priority hardening surfaces: `paymentRoutes`, `contractSigningRoutes`,
-    `signNowRoutes`, SignNow/QB webhooks, auth token/cookie flows, public
-    request submission.
+    QuickBooks webhooks, auth token/cookie flows, public request submission.
 - Request/response:
   - Preserve existing response fields and status codes while introducing stable
     error codes.
@@ -535,8 +563,8 @@ feature; they are not top-level navigation categories.
 - Each `index.ts` exposes the feature's supported application/domain API.
 - Cross-feature consumers use the public API and must not import another
   feature's infrastructure.
-- Vendor names such as QuickBooks, SignNow, DocuSign, Stripe, and Supabase
-  belong below the feature infrastructure that owns the workflow.
+- Vendor names such as QuickBooks, Stripe, and Supabase belong below the feature
+  infrastructure that owns the workflow.
 - `bootstrap` only assembles dependencies and starts the application; it
   contains no business rules.
 - `shared` is restricted to domain-neutral config, HTTP, database, logging,
@@ -594,6 +622,10 @@ slice is explicitly approved.
       client assign route and admin match route. Characterization tests first.
 - [x] Move matching Cloud SQL and availability adapters into
       `src/features/matching/infrastructure`.
+- [x] Reshape `src/features/contracts` to domain/application/infrastructure/http
+      and fold the live outside controllers and services behind the same routes.
+      Characterization tests first. SignNow and DocuSign removed; native signing
+      only.
 - [ ] Backend as sole QuickBooks sync owner: add idempotency/outbox, then remove
       the frontend `syncQuickBooksCustomerFromClient` call (after pilot).
 - [ ] Move composition from the legacy root `src/index.ts` into `src/bootstrap`

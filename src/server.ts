@@ -87,7 +87,7 @@ if (!IS_PRODUCTION) {
 
 app.use(cookieParser());
 
-// Capture raw body for provider webhook HMAC (SignNow / Intuit).
+// Capture raw body for provider webhook HMAC (Intuit).
 app.use(
   express.json({
     // Drawn contract signatures are capped after base64 decoding; keep the

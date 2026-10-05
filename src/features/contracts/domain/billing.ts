@@ -1,7 +1,4 @@
-import {
-  BillingPath,
-  isClientDepositRequired,
-} from '../../../constants/portalEligibility';
+import { BillingPath, isClientDepositRequired } from '../../portal';
 import { isLaborContract } from './classification';
 import { ContractSnapshot } from './types';
 

@@ -102,17 +102,6 @@ export const stripe = {
   },
 };
 
-/** SignNow event-subscription HMAC secret (X-SignNow-Signature). */
-export const signNowWebhook = {
-  get secret(): string {
-    return (
-      optionalEnv('SIGNNOW_WEBHOOK_SECRET') ??
-      optionalEnv('SIGNNOW_BASIC_AUTH_TOKEN') ??
-      ''
-    );
-  },
-};
-
 /** Intuit webhook verifier token (intuit-signature HMAC). */
 export const quickBooksWebhook = {
   get verifierToken(): string {

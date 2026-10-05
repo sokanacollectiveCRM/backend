@@ -5,6 +5,7 @@
 ### Contract Calculation & Generation
 
 #### Calculate Contract Amounts
+
 ```http
 POST /api/contract/postpartum/calculate
 Content-Type: application/json
@@ -20,14 +21,15 @@ Content-Type: application/json
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
   "amounts": {
-    "total_amount": 4200.00,
-    "deposit_amount": 630.00,
-    "balance_amount": 3570.00,
-    "installments_amounts": [1785.00, 1785.00]
+    "total_amount": 4200.0,
+    "deposit_amount": 630.0,
+    "balance_amount": 3570.0,
+    "installments_amounts": [1785.0, 1785.0]
   },
   "fields": {
     "total_hours": "120",
@@ -40,6 +42,7 @@ Content-Type: application/json
 ```
 
 #### Send Contract for Signature
+
 ```http
 POST /api/contract/postpartum/send
 Content-Type: application/json
@@ -61,21 +64,19 @@ Content-Type: application/json
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
-  "message": "Contract created with prefilled values and sent to client via DocuSign",
+  "message": "Contract generated and sent for signature",
   "amounts": {
-    "total_amount": 4200.00,
-    "deposit_amount": 630.00,
-    "balance_amount": 3570.00,
-    "installments_amounts": [1785.00, 1785.00]
+    "total_amount": 4200.0,
+    "deposit_amount": 630.0,
+    "balance_amount": 3570.0,
+    "installments_amounts": [1785.0, 1785.0]
   },
-  "envelopeId": "envelope-12345",
-  "docusign": {
-    "envelopeId": "envelope-12345",
-    "status": "sent"
-  },
+  "contractId": "contract-12345",
+  "invitationSent": true,
   "prefilledValues": {
     "total_hours": "120",
     "hourly_rate_fee": "35.00",
@@ -89,11 +90,13 @@ Content-Type: application/json
 ### Payment Processing (After Contract Signing)
 
 #### Create Payment Intent
+
 ```http
 POST /api/stripe/contract/{contractId}/create-payment
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -109,11 +112,13 @@ POST /api/stripe/contract/{contractId}/create-payment
 ```
 
 #### Check Payment Status
+
 ```http
 GET /api/stripe/check-payment-status/{paymentIntentId}
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -127,11 +132,13 @@ GET /api/stripe/check-payment-status/{paymentIntentId}
 ```
 
 #### Get Next Payment for Contract
+
 ```http
 GET /api/stripe/contract/{contractId}/next-payment
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -139,7 +146,7 @@ GET /api/stripe/contract/{contractId}/next-payment
     "id": "payment-123",
     "contract_id": "contract-456",
     "payment_type": "deposit",
-    "amount": 630.00,
+    "amount": 630.0,
     "due_date": "2024-01-15",
     "status": "pending",
     "is_overdue": false
@@ -148,23 +155,25 @@ GET /api/stripe/contract/{contractId}/next-payment
 ```
 
 #### Get Payment Summary
+
 ```http
 GET /api/stripe/contract/{contractId}/payment-summary
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
   "data": {
-    "total_amount": 4200.00,
-    "deposit_amount": 630.00,
-    "balance_amount": 3570.00,
-    "total_paid": 630.00,
-    "total_due": 3570.00,
+    "total_amount": 4200.0,
+    "deposit_amount": 630.0,
+    "balance_amount": 3570.0,
+    "total_paid": 630.0,
+    "total_due": 3570.0,
     "installments_remaining": 2,
     "next_payment_due": "2024-02-15",
-    "next_payment_amount": 1785.00
+    "next_payment_amount": 1785.0
   }
 }
 ```
@@ -172,6 +181,7 @@ GET /api/stripe/contract/{contractId}/payment-summary
 ### Webhook Endpoint (for Stripe)
 
 #### Stripe Webhook
+
 ```http
 POST /api/stripe/webhook
 Content-Type: application/json
@@ -197,6 +207,7 @@ Stripe-Signature: t=1234567890,v1=signature
 ## 📋 Input Validation Rules
 
 ### Contract Input Validation
+
 - `total_hours`: Must be > 0
 - `hourly_rate`: Must be > 0
 - `deposit_type`: Must be "percent" or "flat"
@@ -207,12 +218,14 @@ Stripe-Signature: t=1234567890,v1=signature
 - `cadence`: "monthly" or "biweekly"
 
 ### Client Information Validation
+
 - `email`: Valid email format
 - `name`: Non-empty string
 
 ## 🔄 Complete Workflow Example
 
 ### 1. Calculate Contract
+
 ```javascript
 const response = await fetch('/api/contract/postpartum/calculate', {
   method: 'POST',
@@ -223,35 +236,41 @@ const response = await fetch('/api/contract/postpartum/calculate', {
     deposit_type: 'percent',
     deposit_value: 15,
     installments_count: 3,
-    cadence: 'monthly'
-  })
+    cadence: 'monthly',
+  }),
 });
 const result = await response.json();
 ```
 
 ### 2. Send Contract
+
 ```javascript
 const response = await fetch('/api/contract/postpartum/send', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
     contract_input: contractData,
-    client: { email: 'client@example.com', name: 'John Doe' }
-  })
+    client: { email: 'client@example.com', name: 'John Doe' },
+  }),
 });
 const result = await response.json();
 ```
 
 ### 3. Create Payment Intent (After Signing)
+
 ```javascript
-const response = await fetch(`/api/stripe/contract/${contractId}/create-payment`, {
-  method: 'POST'
-});
+const response = await fetch(
+  `/api/stripe/contract/${contractId}/create-payment`,
+  {
+    method: 'POST',
+  }
+);
 const result = await response.json();
 const { client_secret } = result.data;
 ```
 
 ### 4. Process Payment with Stripe Elements
+
 ```javascript
 const stripe = Stripe('pk_test_your_publishable_key');
 const elements = stripe.elements({ clientSecret: client_secret });
@@ -261,6 +280,7 @@ const elements = stripe.elements({ clientSecret: client_secret });
 ## 🚨 Error Handling
 
 ### Validation Errors
+
 ```json
 {
   "success": false,
@@ -269,6 +289,7 @@ const elements = stripe.elements({ clientSecret: client_secret });
 ```
 
 ### Server Errors
+
 ```json
 {
   "success": false,
@@ -277,6 +298,7 @@ const elements = stripe.elements({ clientSecret: client_secret });
 ```
 
 ### Payment Errors
+
 ```json
 {
   "success": false,
@@ -289,7 +311,8 @@ const elements = stripe.elements({ clientSecret: client_secret });
 - `STRIPE_SECRET_KEY`: Your Stripe secret key
 - `STRIPE_PUBLISHABLE_KEY`: Your Stripe publishable key (for frontend)
 - `STRIPE_WEBHOOK_SECRET`: Webhook endpoint secret
-- `DOCUSIGN_*`: DocuSign configuration variables
+- Native signing uses Cloud SQL `phi_contracts` and invitation email; there are
+  no DocuSign or SignNow environment variables.
 
 ## 📱 Frontend Integration Notes
 
@@ -300,4 +323,5 @@ const elements = stripe.elements({ clientSecret: client_secret });
 5. **Implement proper error boundaries** for payment processing
 6. **Test with Stripe test mode** before going live
 
-This API provides a complete contract-to-payment workflow with automatic calculations and seamless integration.
+This API provides a complete contract-to-payment workflow with automatic
+calculations and seamless integration.

@@ -48,9 +48,8 @@ Each feature package uses these layers:
 - Cross-feature consumers **must** import only that public API.
 - Cross-feature consumers **must not** import another feature’s
   `infrastructure/` (or other internal modules) directly.
-- Vendor names (QuickBooks, SignNow, DocuSign, Stripe, Supabase, …) belong under
-  the owning feature’s `infrastructure/`, not as top-level navigation
-  categories.
+- Vendor names (QuickBooks, Stripe, Supabase, …) belong under the owning
+  feature’s `infrastructure/`, not as top-level navigation categories.
 
 ## Dependency rules
 
@@ -214,6 +213,41 @@ Runtime notes:
   existing imports and Jest mocks keep working.
 - Behavior is pinned by
   `src/__tests__/matchingAssignmentCharacterization.test.ts`.
+
+## Contracts package (`src/features/contracts`)
+
+Fifth structural slice: native signing, invitations, signed-copy email, the
+portal signed-contract fact, plus the live template and generate-contract
+façades.
+
+```text
+src/features/contracts/
+  domain/                 # pricing, status, payload normalize, billing-schedule rule
+  application/            # draft/send, invitations, signing sessions, rate limits
+  http/                   # native + legacy generate-contract/template/postpartum routes
+  infrastructure/         # Cloud SQL, GCS PDF, outbox, completion email
+  composition.ts          # wires ports to adapters; not exported from the barrel
+  index.ts                # public feature entrypoints
+```
+
+Runtime notes:
+
+- Mounts are unchanged in `src/server.ts`: `/api/contracts`,
+  `/api/clients/me/contracts`, `/signing`,
+  `/api/contract-signing/generate-contract`, `/api/contract/postpartum/*`,
+  `/contracts/templates`.
+- Old technical-role folders (`controllers/`, `services/`, `repositories/`,
+  `routes/`, `pdf/`, `validation/`) and the previous global
+  controller/route/service paths are re-export shims, so existing imports and
+  Jest mocks keep working.
+- `composition.ts` is not exported from `index.ts`.
+- Signed-copy email and the portal `force_contract_signed` fact still run from
+  the completion outbox. Portal eligibility still reads that fact.
+- Generate-contract returns `contractId` and `invitationSent`. There is no
+  SignNow or DocuSign adapter.
+- Billing list/download helpers stay in `src/services/` for the billing slice.
+- Behavior is pinned by `src/__tests__/contractsFeatureCharacterization.test.ts`
+  and the existing `src/features/contracts/__tests__` suites.
 
 ## Target tree (incremental, not big-bang)
 

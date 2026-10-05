@@ -110,16 +110,13 @@ Prefix `/api/admin` — cookie-auth · **admin**
 
 ---
 
-## Contracts / signing / SignNow / PDF
+## Contracts / signing / PDF
 
-| Mount                                     | Auth                                         | Notes                                                                                                     |
-| ----------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `/contracts` + `/api/contracts` templates | cookie-auth · admin                          | `GET /templates` → template array (`Cache-Control: no-store`); CRUD + generate                            |
-| `/api/contract` postpartum                | mostly public today                          | calculate `{ success, amounts, fields }`; DocuSign send `410`; SignNow invite path                        |
-| `/api/contract-signing`                   | **no auth middleware**                       | generate/send/status tooling — inventory only; harden in later PRs                                        |
-| `/api/signnow`                            | callback public + HMAC (PR 5); tooling admin | `POST /callback` webhook `{ received, processed, documentId, … }` (+ `reason: duplicate`); tooling + send |
-
-| `/api/pdf-contract` | **no auth** | PDF helpers / test routes |
+| Mount                                     | Auth                   | Notes                                                                            |
+| ----------------------------------------- | ---------------------- | -------------------------------------------------------------------------------- |
+| `/contracts` + `/api/contracts` templates | cookie-auth · admin    | `GET /templates` → template array (`Cache-Control: no-store`); CRUD + generate   |
+| `/api/contract` postpartum                | mostly public today    | calculate `{ success, amounts, fields }`; retired vendor send path returns `410` |
+| `/api/contract-signing`                   | **no auth middleware** | generate/send/status tooling — inventory only; harden in later PRs               |
 
 ---
 
@@ -166,8 +163,8 @@ QB OAuth is off):
 | `/api/dashboard` | cookie-auth · admin; stats + calendar                         |
 | `/debug`         | **only** when `!IS_PRODUCTION && ENABLE_DEBUG_ENDPOINTS=true` |
 
-Not mounted in `server.ts` (present under `src/routes/`): `docusignRoutes`,
-`stripePaymentRoutes`, `contractPaymentRoutes`.
+Not mounted in `server.ts` (present under `src/routes/`): `stripePaymentRoutes`,
+`contractPaymentRoutes`.
 
 ---
 
@@ -186,7 +183,7 @@ breaking fix:
 7. Contract templates list/array + `Cache-Control: no-store`
 8. Billing `ApiResponse.*`
 9. Portal invite/status `{ ok, … }`
-10. SignNow / QB webhook acknowledgement fields above
+10. QuickBooks webhook acknowledgement fields above
 
 Aliases (`/client` vs `/clients`, `/api/client(s)`, `/contracts` vs
 `/api/contracts`, QB dual mounts) stay until deprecation telemetry lands in a

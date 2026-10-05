@@ -19,24 +19,33 @@ function calculatePostpartumContract(input) {
   if (input.hourly_rate <= 0) {
     throw new ValidationError('Hourly rate must be greater than 0');
   }
-  if (input.installments_count < DEFAULT_CONFIG.min_installments ||
-      input.installments_count > DEFAULT_CONFIG.max_installments) {
-    throw new ValidationError(`Installments must be between ${DEFAULT_CONFIG.min_installments} and ${DEFAULT_CONFIG.max_installments}`);
+  if (
+    input.installments_count < DEFAULT_CONFIG.min_installments ||
+    input.installments_count > DEFAULT_CONFIG.max_installments
+  ) {
+    throw new ValidationError(
+      `Installments must be between ${DEFAULT_CONFIG.min_installments} and ${DEFAULT_CONFIG.max_installments}`
+    );
   }
 
   // Calculate total in cents
   const total = toCents(input.total_hours * input.hourly_rate);
 
   // Calculate deposit
-  const deposit = input.deposit_type === 'percent'
-    ? Math.round(total * (input.deposit_value / 100))
-    : toCents(input.deposit_value);
+  const deposit =
+    input.deposit_type === 'percent'
+      ? Math.round(total * (input.deposit_value / 100))
+      : toCents(input.deposit_value);
 
   // Validate deposit
   if (input.deposit_type === 'percent') {
-    if (input.deposit_value < DEFAULT_CONFIG.min_deposit_percent ||
-        input.deposit_value > DEFAULT_CONFIG.max_deposit_percent) {
-      throw new ValidationError(`Deposit percentage must be between ${DEFAULT_CONFIG.min_deposit_percent}% and ${DEFAULT_CONFIG.max_deposit_percent}%`);
+    if (
+      input.deposit_value < DEFAULT_CONFIG.min_deposit_percent ||
+      input.deposit_value > DEFAULT_CONFIG.max_deposit_percent
+    ) {
+      throw new ValidationError(
+        `Deposit percentage must be between ${DEFAULT_CONFIG.min_deposit_percent}% and ${DEFAULT_CONFIG.max_deposit_percent}%`
+      );
     }
   }
   if (deposit <= 0 || deposit >= total) {
@@ -46,26 +55,25 @@ function calculatePostpartumContract(input) {
   // Calculate balance and installments
   const balance = total - deposit;
   const base = Math.floor(balance / input.installments_count);
-  const remainder = balance - (base * input.installments_count);
+  const remainder = balance - base * input.installments_count;
 
   // Create installments array with remainder added to last payment
   const installments = Array.from(
     { length: input.installments_count },
-    (_, i) => i === input.installments_count - 1 ? base + remainder : base
+    (_, i) => (i === input.installments_count - 1 ? base + remainder : base)
   );
 
   return {
     total_amount: fromCents(total),
     deposit_amount: fromCents(deposit),
     balance_amount: fromCents(balance),
-    installments_amounts: installments.map(fromCents)
+    installments_amounts: installments.map(fromCents),
   };
 }
 
-function formatForSignNow(input, amounts) {
-  const scheduleText = input.cadence === 'biweekly'
-    ? 'every two weeks'
-    : 'monthly';
+function formatPostpartumFields(input, amounts) {
+  const scheduleText =
+    input.cadence === 'biweekly' ? 'every two weeks' : 'monthly';
 
   const installmentText = amounts.installments_amounts
     .map((amount, i) => `Payment ${i + 1}: $${formatAmount(amount)}`)
@@ -78,12 +86,12 @@ function formatForSignNow(input, amounts) {
     deposit_amount: formatAmount(amounts.deposit_amount),
     balance_amount: formatAmount(amounts.balance_amount),
     installment_amounts: amounts.installments_amounts.map(formatAmount),
-    payment_schedule: `${installmentText}\n\nPayments will be processed ${scheduleText}`
+    payment_schedule: `${installmentText}\n\nPayments will be processed ${scheduleText}`,
   };
 }
 
 module.exports = {
   calculatePostpartumContract,
-  formatForSignNow,
-  ValidationError
+  formatPostpartumFields,
+  ValidationError,
 };

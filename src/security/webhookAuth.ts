@@ -11,7 +11,6 @@ import {
   getRawBodyBuffer,
   isWebhookTimestampFresh,
   verifyIntuitSignature,
-  verifySignNowSignature,
 } from './webhookCrypto';
 
 const WEBHOOK_MAX_AGE_MS = 15 * 60 * 1000; // 15 minutes
@@ -25,12 +24,6 @@ function trimEnv(name: string): string {
   return value && String(value).trim() ? String(value).trim() : '';
 }
 
-function resolveSignNowSecret(): string {
-  return (
-    trimEnv('SIGNNOW_WEBHOOK_SECRET') || trimEnv('SIGNNOW_BASIC_AUTH_TOKEN')
-  );
-}
-
 function resolveQuickBooksVerifier(): string {
   return (
     trimEnv('QB_WEBHOOK_VERIFIER_TOKEN') ||
@@ -41,43 +34,6 @@ function resolveQuickBooksVerifier(): string {
 function mustEnforce(secret: string): boolean {
   return IS_PRODUCTION || Boolean(secret);
 }
-
-export const requireSignNowWebhookAuth: RequestHandler = (req, res, next) => {
-  try {
-    const secret = resolveSignNowSecret();
-    if (!mustEnforce(secret)) {
-      next();
-      return;
-    }
-    if (!secret) {
-      logger.error(
-        { service: 'signnow', operation: 'webhook_auth' },
-        'SignNow webhook secret not configured'
-      );
-      unauthorized(res);
-      return;
-    }
-
-    const rawBody = getRawBodyBuffer(req);
-    if (!rawBody) {
-      unauthorized(res);
-      return;
-    }
-
-    const signature =
-      (req.get('x-signnow-signature') as string | undefined) ??
-      (req.headers['x-signnow-signature'] as string | undefined);
-
-    if (!verifySignNowSignature(rawBody, signature, secret)) {
-      unauthorized(res);
-      return;
-    }
-
-    next();
-  } catch {
-    unauthorized(res);
-  }
-};
 
 export const requireQuickBooksWebhookAuth: RequestHandler = (
   req,
@@ -131,7 +87,6 @@ export const requireQuickBooksWebhookAuth: RequestHandler = (
 
 /** Exported for unit tests. */
 export const webhookAuthInternals = {
-  resolveSignNowSecret,
   resolveQuickBooksVerifier,
   mustEnforce,
   WEBHOOK_MAX_AGE_MS,

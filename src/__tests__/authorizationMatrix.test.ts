@@ -126,7 +126,7 @@ jest.mock('../repositories/cloudSqlPaymentRepository', () => ({
 
 jest.mock('../services/postpartum/calculateContract', () => ({
   calculatePostpartumContract: jest.fn().mockReturnValue({ total_amount: 1 }),
-  formatForSignNow: jest.fn().mockReturnValue({}),
+  formatPostpartumFields: jest.fn().mockReturnValue({}),
   ValidationError: class ValidationError extends Error {},
 }));
 

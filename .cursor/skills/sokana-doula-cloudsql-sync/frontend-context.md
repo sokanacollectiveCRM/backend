@@ -4556,3 +4556,98 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 - **Action**:
   - [x] Context updated
   - [x] Implementation started
+
+## Preflight Update 2026-10-04 (contracts feature package)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Reshape `src/features/contracts` to
+  domain/application/infrastructure/http and fold the live outside contract
+  controllers and services behind the same public routes.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`. User asked for the contracts
+  slice next.
+- **Files Scanned**:
+  - `frontend-crm/src/common/utils/createContract.ts`
+  - `frontend-crm/src/common/hooks/contracts/useTemplates.ts`
+  - `frontend-crm/src/features/contracts/components/dialog/NewTemplateDialog.tsx`
+  - `frontend-crm/src/features/contracts/components/dialog/EditTemplateDialog.tsx`
+  - `frontend-crm/src/features/contracts/components/dialog/DeleteTemplateDialog.tsx`
+  - `frontend-crm/src/features/contracts/components/pdf/PdfPreview.tsx`
+  - `frontend-crm/src/features/public-signing/signingApi.ts`
+  - `frontend-crm/src/features/client-dashboard/components/ClientContractsTab.tsx`
+  - `frontend-crm/src/features/billing-portal/billingPortalApi.ts`
+  - `backend/src/server.ts`
+  - `backend/src/routes/contractSigningRoutes.ts`
+  - `backend/src/routes/contractRoutes.ts`
+  - `backend/src/routes/contractTemplateRoutes.ts`
+  - `backend/src/features/contracts/routes/*.ts`
+- **Contract Findings**: CRM create-contract uses
+  `POST /api/contract-signing/generate-contract` and still reads a
+  SignNow-shaped success body (`data.signNow.documentId`, `invitationSent`).
+  Amount preview is `POST /api/contract/postpartum/calculate` (`success`,
+  `amounts`, `fields`). Templates are `/contracts/templates` plus
+  `/:name/signed-url` and `/:name/download`. Public signing uses
+  `/signing/session/exchange|session| document|progress|complete` with
+  `X-Signing-Session`. Client portal lists `GET /api/clients/me/contracts` and
+  accepts either an array or `{ contracts }`. Billing downloads stay on
+  `/api/billing/contracts/:id/download|document`.
+- **Drift Risk**: Changing the generate-contract wrapper, template list shape
+  (array vs `{ data }`), signing 410 copy, or signed-contract portal fact would
+  break CRM create-contract, template admin, public signing, or portal
+  eligibility.
+- **Required Compatibility**: Same paths, status codes, error strings, and
+  response bodies. Keep SignNow-shaped generate-contract fields. Portal
+  eligibility still reads the signed-contract fact after completion. Do not
+  remove SignNow or DocuSign code in this slice.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation started
+
+## Preflight Update 2026-10-04 (remove SignNow and DocuSign)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Delete SignNow and DocuSign vendor code, docs, and unused
+  helpers. Native signing stays.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`. User overrode the earlier
+  keep-both-vendors note.
+- **Files Scanned**:
+  - `frontend-crm/src/common/utils/createContract.ts`
+  - `frontend-crm/src/services/signNowService.ts`
+  - `frontend-crm/src/features/clients/components/dialog/EnhancedContractDialog.tsx`
+  - `backend/src/features/contracts/http/legacyGenerateContractRoutes.ts`
+  - `backend/src/security/webhookAuth.ts`
+- **Contract Findings**: CRM generate-contract now types `data.contractId` and
+  `invitationSent`. Dialog preview labels renamed from `signNowFields` to
+  `previewFields`. Frontend `signNowService.ts` deleted.
+- **Drift Risk**: Calculate `fields` keys stay the same. Do not reintroduce a
+  `signNow` wrapper on generate-contract.
+- **Required Compatibility**: Same generate-contract path and status codes.
+  Response keeps `contractId` and `invitationSent`. Public signing unchanged.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation completed
+
+## Preflight Update 2026-10-04 (delete unused contract leftovers)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Delete unused `PostSigningService`, leftover PDF/DOCX
+  analyzers, stale SignNow/pdf-contract inventory rows, and October-12 evidence
+  TSV snapshots.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`.
+- **Files Scanned**:
+  - `frontend-crm/src/common/utils/createContract.ts`
+  - `frontend-crm/src/features/clients/components/dialog/EnhancedContractDialog.tsx`
+  - `backend/src/features/contracts/application/postSigningService.ts`
+  - `backend/docs/ENDPOINT_AUTHORIZATION_MATRIX.md`
+- **Contract Findings**: Frontend already uses native `contractId` /
+  `invitationSent`. No frontend import of the unused backend helpers.
+- **Drift Risk**: None. These files are unmounted and unimported.
+- **Required Compatibility**: Native generate-contract and `/signing` unchanged.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation completed

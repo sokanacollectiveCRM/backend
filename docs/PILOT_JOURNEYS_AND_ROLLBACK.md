@@ -40,8 +40,7 @@ Characterization/regression coverage should prefer these paths.
    assignment, portal invite/resend/disable.
 7. **Contracts templates** — `GET /contracts/templates` (and
    `/api/contracts/templates`) for admin; no-store caching behavior.
-8. **Signing / SignNow callback** — contract send paths used in pilot +
-   `POST /api/signnow/callback` acknowledgement.
+8. **Signing** — native contract send and completion paths used in pilot.
 9. **Billing / payments / invoices** — admin billing contract list/detail;
    payment and invoice list endpoints used by CRM.
 10. **QuickBooks (when feature enabled)** — status/connect, customer/invoice

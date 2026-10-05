@@ -1,42 +1,49 @@
 # Payment Page Development Prompt for Cursor
 
 ## Overview
-Create a payment page that handles users redirected from SignNow after signing contracts. The page should fetch payment details using the contract ID from the URL and integrate with Stripe for payment processing.
+
+Create a payment page that handles users after they sign a native contract. The
+page should fetch payment details using the contract ID from the URL and
+integrate with Stripe for payment processing.
 
 ## URL Structure
+
 - **Payment Page**: `/payment?contract_id={contractId}`
 - **Example**: `/payment?contract_id=f2eed073-72f8-469a-b74c-a97256908521`
 
 ## Backend API Endpoints Available
 
 ### 1. Get Payment Summary
+
 ```http
 GET /api/stripe/contract/{contractId}/payment-summary
 ```
+
 **Response:**
+
 ```json
 {
   "success": true,
   "data": {
     "contract_id": "f2eed073-72f8-469a-b74c-a97256908521",
-    "total_amount": 4200.00,
-    "deposit_amount": 1500.00,
-    "remaining_balance": 2700.00,
-    "next_payment_amount": 1500.00,
+    "total_amount": 4200.0,
+    "deposit_amount": 1500.0,
+    "remaining_balance": 2700.0,
+    "next_payment_amount": 1500.0,
     "next_payment_due_date": "2025-10-15",
     "installments": [
       {
-        "amount": 900.00,
+        "amount": 900.0,
         "due_date": "2025-10-15",
         "status": "pending"
       },
       {
-        "amount": 900.00,
+        "amount": 900.0,
         "due_date": "2025-11-15",
         "status": "pending"
       },
       {
-        "amount": 900.00,
+        "amount": 900.0,
         "due_date": "2025-12-15",
         "status": "pending"
       }
@@ -46,10 +53,13 @@ GET /api/stripe/contract/{contractId}/payment-summary
 ```
 
 ### 2. Create Payment Intent
+
 ```http
 POST /api/stripe/contract/{contractId}/create-payment
 ```
+
 **Response:**
+
 ```json
 {
   "success": true,
@@ -66,11 +76,13 @@ POST /api/stripe/contract/{contractId}/create-payment
 ## Required Features
 
 ### 1. Contract ID Extraction
+
 - Extract `contract_id` from URL query parameters
 - Validate that contract ID exists and is valid UUID format
 - Show error if contract ID is missing or invalid
 
 ### 2. Payment Details Display
+
 - Fetch and display contract payment summary
 - Show total contract value
 - Show deposit amount (first payment)
@@ -79,18 +91,21 @@ POST /api/stripe/contract/{contractId}/create-payment
 - Display payment schedule/installments
 
 ### 3. Stripe Integration
+
 - Integrate Stripe Elements for secure payment processing
 - Use the `client_secret` from the payment intent API
 - Handle payment success/failure states
 - Show loading states during payment processing
 
 ### 4. Error Handling
+
 - Handle API errors gracefully
 - Show user-friendly error messages
 - Handle network failures
 - Handle invalid contract IDs
 
 ### 5. User Experience
+
 - Clean, professional payment interface
 - Clear payment amount and purpose
 - Secure payment form
@@ -100,28 +115,33 @@ POST /api/stripe/contract/{contractId}/create-payment
 ## Technical Requirements
 
 ### Frontend Framework
+
 - Use React with TypeScript
 - Use React Router for navigation
 - Use Stripe Elements for payment processing
 
 ### State Management
+
 - Use React hooks (useState, useEffect)
 - Handle loading, error, and success states
 - Manage payment form state
 
 ### Styling
+
 - Use Tailwind CSS or similar
 - Responsive design for mobile/desktop
 - Professional, trustworthy appearance
 - Clear typography and spacing
 
 ### Security
+
 - Never store sensitive payment data
 - Use Stripe Elements for secure card input
 - Validate all inputs
 - Use HTTPS in production
 
 ## File Structure
+
 ```
 src/
 ├── pages/
@@ -141,12 +161,15 @@ src/
 ## Implementation Steps
 
 ### 1. Create Payment Page Component
+
 ```typescript
 // src/pages/PaymentPage.tsx
+import { useEffect, useState } from 'react';
+
 import { useSearchParams } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import PaymentSummary from '../components/PaymentSummary';
+
 import PaymentForm from '../components/PaymentForm';
+import PaymentSummary from '../components/PaymentSummary';
 
 const PaymentPage = () => {
   const [searchParams] = useSearchParams();
@@ -157,9 +180,10 @@ const PaymentPage = () => {
 ```
 
 ### 2. Create Payment Details Hook
+
 ```typescript
 // src/hooks/usePaymentDetails.ts
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 export const usePaymentDetails = (contractId: string) => {
   // Fetch payment summary from API
@@ -168,10 +192,11 @@ export const usePaymentDetails = (contractId: string) => {
 ```
 
 ### 3. Create Payment Form Component
+
 ```typescript
 // src/components/PaymentForm.tsx
+import { CardElement, Elements } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
-import { Elements, CardElement } from '@stripe/react-stripe-js';
 
 const PaymentForm = ({ contractId, amount, onSuccess }) => {
   // Stripe Elements integration
@@ -180,6 +205,7 @@ const PaymentForm = ({ contractId, amount, onSuccess }) => {
 ```
 
 ### 4. Create Payment Summary Component
+
 ```typescript
 // src/components/PaymentSummary.tsx
 interface PaymentSummaryProps {
@@ -199,9 +225,12 @@ interface PaymentSummaryProps {
 ## API Integration
 
 ### Fetch Payment Details
+
 ```typescript
 const fetchPaymentDetails = async (contractId: string) => {
-  const response = await fetch(`/api/stripe/contract/${contractId}/payment-summary`);
+  const response = await fetch(
+    `/api/stripe/contract/${contractId}/payment-summary`
+  );
   const data = await response.json();
 
   if (!data.success) {
@@ -213,14 +242,18 @@ const fetchPaymentDetails = async (contractId: string) => {
 ```
 
 ### Create Payment Intent
+
 ```typescript
 const createPaymentIntent = async (contractId: string) => {
-  const response = await fetch(`/api/stripe/contract/${contractId}/create-payment`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
+  const response = await fetch(
+    `/api/stripe/contract/${contractId}/create-payment`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    }
+  );
 
   const data = await response.json();
 
@@ -243,7 +276,7 @@ const createPaymentIntent = async (contractId: string) => {
 
 ## Success Flow
 
-1. User signs contract in SignNow
+1. User signs the native contract
 2. Redirected to `/payment?contract_id={contractId}`
 3. Page loads and fetches payment details
 4. User sees payment summary and amount
@@ -281,7 +314,8 @@ REACT_APP_API_BASE_URL=http://localhost:5050
 
 ## Additional Considerations
 
-1. **Accessibility**: Ensure form is accessible with proper labels and ARIA attributes
+1. **Accessibility**: Ensure form is accessible with proper labels and ARIA
+   attributes
 2. **Mobile Responsive**: Ensure payment form works well on mobile devices
 3. **Loading States**: Show loading indicators during API calls
 4. **Validation**: Validate all inputs before submission
@@ -292,6 +326,7 @@ REACT_APP_API_BASE_URL=http://localhost:5050
 ## Example Contract Data
 
 Based on the latest contract in the system:
+
 - **Contract ID**: `f2eed073-72f8-469a-b74c-a97256908521`
 - **Total Amount**: $4,200.00
 - **Deposit Amount**: $1,500.00
@@ -299,4 +334,5 @@ Based on the latest contract in the system:
 - **Installments**: 3 payments of $900.00 each
 - **Due Dates**: 2025-10-15, 2025-11-15, 2025-12-15
 
-This payment page should handle the complete flow from contract signing to payment processing, providing a seamless experience for users.
+This payment page should handle the complete flow from contract signing to
+payment processing, providing a seamless experience for users.

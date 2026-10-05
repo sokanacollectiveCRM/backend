@@ -21,24 +21,22 @@ jest.mock('../services/portalEligibilityService', () => ({
 describe('ContractSignatureCompletionService', () => {
   const contractId = 'contract-1';
   const clientId = 'client-1';
-  const documentId = 'doc-1';
 
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('marks a completed contract signed and creates the deposit invoice once', async () => {
+  it('creates the deposit invoice once for a signed contract', async () => {
     (queryCloudSql as jest.Mock)
       .mockResolvedValueOnce({
         rows: [
           {
             contract_id: contractId,
             client_id: clientId,
-            status: 'pending_signature',
+            status: 'signed',
           },
         ],
       })
-      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
       .mockResolvedValueOnce({
         rows: [
           {
@@ -65,15 +63,15 @@ describe('ContractSignatureCompletionService', () => {
     });
 
     const result =
-      await contractSignatureCompletionService.finalizeSignedDocument(
-        documentId
+      await contractSignatureCompletionService.finalizeSignedContract(
+        contractId
       );
 
     expect(portalEligibilityService.computeAndPersist).toHaveBeenCalledWith(
       clientId,
       {
         force_contract_signed: true,
-        event_source: 'signnow_status_sync',
+        event_source: 'native_contract_signature',
       }
     );
     expect(createInvoiceService).toHaveBeenCalledWith(
@@ -90,7 +88,7 @@ describe('ContractSignatureCompletionService', () => {
       expect.objectContaining({
         contract_id: contractId,
         client_id: clientId,
-        contract_marked_signed: true,
+        contract_marked_signed: false,
         deposit_invoice_created: true,
         deposit_invoice_id: 'qbo-inv-1',
         payment_link: 'https://pay.example/deposit',
@@ -125,8 +123,8 @@ describe('ContractSignatureCompletionService', () => {
     );
 
     const result =
-      await contractSignatureCompletionService.finalizeSignedDocument(
-        documentId
+      await contractSignatureCompletionService.finalizeSignedContract(
+        contractId
       );
 
     expect(createInvoiceService).not.toHaveBeenCalled();

@@ -11,34 +11,32 @@ import {
   objectPath,
   uploadObjectWithMetadata,
 } from '../../services/gcs/documentStorage';
-import { ContractController } from './controllers/contractController';
-import { SigningController } from './controllers/signingController';
-import { shouldCreateClientPaymentSchedule } from './domain/billing';
-import { NativeContractPdfService } from './pdf/pdfService';
-import { gcsPdfObjectStorage } from './pdf/templateLoader';
-import { contractRepository } from './repositories/contractRepository';
-import { invitationRepository } from './repositories/invitationRepository';
-import { signingAccessSessionRepository } from './repositories/signingAccessSessionRepository';
-import { signingSessionRepository } from './repositories/signingSessionRepository';
-import { templateRepository } from './repositories/templateRepository';
-import { createAdminContractRoutes } from './routes/adminContractRoutes';
-import { createClientContractRoutes } from './routes/clientContractRoutes';
-import { createSigningRoutes } from './routes/signingRoutes';
 import {
   ContractEntity,
   ContractService,
   NodemailerContractInvitationMailer,
-} from './services/contractService';
-import { InvitationService } from './services/invitationService';
-import {
-  PostgresRateLimitStore,
-  RateLimitService,
-} from './services/rateLimitService';
-import { SigningAccessSessionService } from './services/signingAccessSessionService';
+} from './application/contractService';
+import { InvitationService } from './application/invitationService';
+import { RateLimitService } from './application/rateLimitService';
+import { SigningAccessSessionService } from './application/signingAccessSessionService';
 import {
   SignedPdfFinalizer,
   SigningSessionService,
-} from './services/signingSessionService';
+} from './application/signingSessionService';
+import { shouldCreateClientPaymentSchedule } from './domain/billing';
+import { createAdminContractRoutes } from './http/adminContractRoutes';
+import { createClientContractRoutes } from './http/clientContractRoutes';
+import { ContractController } from './http/contractController';
+import { SigningController } from './http/signingController';
+import { createSigningRoutes } from './http/signingRoutes';
+import { contractRepository } from './infrastructure/contractRepository';
+import { invitationRepository } from './infrastructure/invitationRepository';
+import { NativeContractPdfService } from './infrastructure/pdf/pdfService';
+import { gcsPdfObjectStorage } from './infrastructure/pdf/templateLoader';
+import { PostgresRateLimitStore } from './infrastructure/postgresRateLimitStore';
+import { signingAccessSessionRepository } from './infrastructure/signingAccessSessionRepository';
+import { signingSessionRepository } from './infrastructure/signingSessionRepository';
+import { templateRepository } from './infrastructure/templateRepository';
 
 const pdf = new NativeContractPdfService({
   templates: templateRepository,

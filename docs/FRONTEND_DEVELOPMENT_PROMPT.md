@@ -2,17 +2,21 @@
 
 ## 🎯 **Task Overview**
 
-You need to update the frontend to integrate with the enhanced contract system. The backend has been upgraded to automatically calculate contract amounts and generate contracts ready for signature with payment integration.
+You need to update the frontend to integrate with the enhanced contract system.
+The backend has been upgraded to automatically calculate contract amounts and
+generate contracts ready for signature with payment integration.
 
 ## 🔄 **What Changed**
 
 **OLD SYSTEM:**
+
 - Admin manually entered all contract values
 - Contracts sent with blank fields for client to fill
 - No automatic calculations
 - No payment integration after signing
 
 **NEW SYSTEM:**
+
 - Admin enters basic service details (hours, rate, payment terms)
 - System automatically calculates all amounts (total, deposit, installments)
 - Contracts generated with prefilled values ready for signature
@@ -22,7 +26,9 @@ You need to update the frontend to integrate with the enhanced contract system. 
 ## 📋 **Required Implementation**
 
 ### 1. **Contract Calculation Form**
+
 Create a form with these fields:
+
 - `total_hours` (number input)
 - `hourly_rate` (number input)
 - `deposit_type` (dropdown: "percent" or "flat")
@@ -31,6 +37,7 @@ Create a form with these fields:
 - `cadence` (dropdown: "monthly" or "biweekly")
 
 ### 2. **Real-time Calculation Preview**
+
 - Add a "Calculate Contract" button
 - Call the calculation API and display results:
   - Total Amount
@@ -40,11 +47,13 @@ Create a form with these fields:
 - Show these in a highlighted preview box
 
 ### 3. **Client Information Form**
+
 - Client email (required)
 - Client name (required)
 - "Send Contract" button
 
 ### 4. **Payment Integration (After Signing)**
+
 - Create payment intent after contract signing
 - Integrate with Stripe Elements for payment processing
 - Show payment status and confirmation
@@ -52,6 +61,7 @@ Create a form with these fields:
 ## 🔧 **API Endpoints to Implement**
 
 ### Calculate Contract Amounts
+
 ```javascript
 POST /api/contract/postpartum/calculate
 Content-Type: application/json
@@ -85,6 +95,7 @@ Response:
 ```
 
 ### Send Contract for Signature
+
 ```javascript
 POST /api/contract/postpartum/send
 Content-Type: application/json
@@ -107,15 +118,16 @@ Content-Type: application/json
 Response:
 {
   "success": true,
-  "message": "Contract created with prefilled values and sent to client via DocuSign",
+  "message": "Contract generated and sent for signature",
   "amounts": { /* calculated amounts */ },
-  "envelopeId": "envelope-12345",
-  "docusign": { /* DocuSign response */ },
+  "contractId": "contract-12345",
+  "invitationSent": true,
   "prefilledValues": { /* contract fields */ }
 }
 ```
 
 ### Create Payment Intent (After Signing)
+
 ```javascript
 POST /api/stripe/contract/{contractId}/create-payment
 
@@ -458,7 +470,10 @@ export default ContractForm;
   padding: 20px;
 }
 
-.step-input, .step-calculation, .step-client, .step-sent {
+.step-input,
+.step-calculation,
+.step-client,
+.step-sent {
   background: #f9f9f9;
   padding: 20px;
   border-radius: 8px;
@@ -475,7 +490,8 @@ export default ContractForm;
   font-weight: bold;
 }
 
-.form-group input, .form-group select {
+.form-group input,
+.form-group select {
   width: 100%;
   padding: 8px;
   border: 1px solid #ddd;
@@ -556,6 +572,7 @@ export default ContractForm;
 ## 🔧 **Environment Variables Needed**
 
 Add these to your frontend environment:
+
 ```env
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
 NEXT_PUBLIC_API_URL=http://localhost:5050
@@ -597,4 +614,5 @@ NEXT_PUBLIC_API_URL=http://localhost:5050
 - **Better user experience**: Clear steps and validation
 - **Payment ready**: Integration with Stripe for post-signature payments
 
-This implementation will provide a much smoother experience for creating and managing contracts with automatic calculations and seamless payment integration.
+This implementation will provide a much smoother experience for creating and
+managing contracts with automatic calculations and seamless payment integration.

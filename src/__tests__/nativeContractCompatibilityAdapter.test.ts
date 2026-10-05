@@ -50,7 +50,7 @@ describe('legacy contract generation compatibility adapter', () => {
     });
   });
 
-  it('creates and sends natively without invoking SignNow', async () => {
+  it('creates and sends a native contract', async () => {
     const app = express();
     app.use(express.json());
     app.use('/api/contract-signing', contractSigningRoutes);
@@ -77,10 +77,7 @@ describe('legacy contract generation compatibility adapter', () => {
         contractId: '22222222-2222-4222-8222-222222222222',
         docxPath: '',
         pdfPath: '',
-        signNow: {
-          documentId: '22222222-2222-4222-8222-222222222222',
-          invitationSent: true,
-        },
+        invitationSent: true,
         emailDelivery: {
           provider: 'native',
           sent: true,

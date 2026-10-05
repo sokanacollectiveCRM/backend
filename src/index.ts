@@ -1,10 +1,12 @@
 import { AuthController } from './controllers/authController';
 import { ClientController } from './controllers/clientController';
-import { ContractController } from './controllers/contractController';
 import { DoulaController } from './controllers/doulaController';
 import { EmailController } from './controllers/emailController';
 import { RequestFormController } from './controllers/requestFormController';
 import { UserController } from './controllers/userController';
+import { ContractUseCase } from './features/contracts/application/legacyContractUseCase';
+import { ContractController } from './features/contracts/http/legacyTemplateController';
+import { SupabaseContractService } from './features/contracts/infrastructure/gcsContractTemplateService';
 import { ClientDocumentRepository } from './repositories/clientDocumentRepository';
 import { CloudSqlActivityRepository } from './repositories/cloudSqlActivityRepository';
 import { CloudSqlClientRepository } from './repositories/cloudSqlClientRepository';
@@ -18,11 +20,9 @@ import { DoulaDocumentCompletenessService } from './services/doulaDocumentComple
 import { DoulaDocumentUploadService } from './services/doulaDocumentUploadService';
 import { IdentityPlatformTokenService } from './services/identityPlatform/identityPlatformTokenService';
 import { SupabaseAuthService } from './services/supabaseAuthService';
-import { SupabaseContractService } from './services/supabaseContractService';
 import supabase from './supabase';
 import { AuthUseCase } from './usecase/authUseCase';
 import { ClientUseCase } from './usecase/clientUseCase';
-import { ContractUseCase } from './usecase/contractUseCase';
 import { UserUseCase } from './usecase/userUseCase';
 
 //-----------------------------------------------
