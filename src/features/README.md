@@ -245,9 +245,29 @@ Runtime notes:
   the completion outbox. Portal eligibility still reads that fact.
 - Generate-contract returns `contractId` and `invitationSent`. There is no
   SignNow or DocuSign adapter.
-- Billing list/download helpers stay in `src/services/` for the billing slice.
 - Behavior is pinned by `src/__tests__/contractsFeatureCharacterization.test.ts`
   and the existing `src/features/contracts/__tests__` suites.
+
+## Billing package (`src/features/billing`)
+
+Sixth structural slice, first step: the mounted billing portal.
+
+```text
+src/features/billing/
+  http/            # /api/billing contract list, detail, PDF, download, reminder
+  infrastructure/  # Cloud SQL limited views, GCS download, reminder email
+  index.ts         # public feature entrypoints
+```
+
+Runtime notes:
+
+- Mount is unchanged in `src/server.ts`: `/api/billing`.
+- Old `src/routes/billingRoutes.ts` and the three `src/services/` helpers are
+  re-export shims.
+- Response wrappers, roles (`admin`, `billing`), and PDF headers stay the same.
+- `/api/payments`, `/api/invoices`, `/api/financial`, and `/api/payment-methods`
+  stay on their current routers until a later step.
+- Behavior is pinned by `src/__tests__/billingRoutes.test.ts`.
 
 ## Target tree (incremental, not big-bang)
 

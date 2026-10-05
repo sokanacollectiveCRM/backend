@@ -485,8 +485,13 @@ architecture explicit from the first PR.
 - Deleted unused `PostSigningService`, leftover PDF/DOCX analyzers, stale
   `/api/signnow` and `/api/pdf-contract` inventory rows, and October-12 evidence
   TSV snapshots.
-- Next structural slice: billing. Then documents, then finish
-  clients/portal/intake/auth/doulas, then `src/bootstrap` and `src/shared`.
+- Billing portal moved into `src/features/billing` (`/api/billing` list, detail,
+  PDF, download, reminder). Old route and service paths are shims. Payments,
+  invoices, financial, and payment methods stay on their current mounts.
+- Next structural step: remaining billing mounts (`/api/payments`,
+  `/api/invoices`, `/api/financial`, `/api/payment-methods`). Then documents,
+  then finish clients/portal/intake/auth/doulas, then `src/bootstrap` and
+  `src/shared`.
 - Verified after vendor removal: typecheck and build clean, full suite 87 suites
   / 655 tests, security smoke 3/3. Three SignNow webhook cases were removed with
   the vendor adapter.

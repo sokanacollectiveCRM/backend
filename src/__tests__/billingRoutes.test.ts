@@ -1,16 +1,16 @@
 import express from 'express';
 import request from 'supertest';
 
-import billingRoutes from '../routes/billingRoutes';
 import {
   getBillingContractDocument,
   getBillingContractDownloadLink,
-} from '../services/billingContractDownloadService';
-import { sendBillingReminderEmail } from '../services/billingReminderService';
+} from '../features/billing/infrastructure/billingContractDownloadService';
+import { sendBillingReminderEmail } from '../features/billing/infrastructure/billingReminderService';
 import {
   getLimitedBillingContractById,
   listLimitedBillingContracts,
-} from '../services/limitedBillingContractsService';
+} from '../features/billing/infrastructure/limitedBillingContractsService';
+import billingRoutes from '../routes/billingRoutes';
 
 let currentUser: { id: string; role: string; email: string } | null = {
   id: 'billing-user-id',
@@ -30,12 +30,15 @@ jest.mock('../middleware/authMiddleware', () => ({
   },
 }));
 
-jest.mock('../services/limitedBillingContractsService', () => ({
-  listLimitedBillingContracts: jest.fn(),
-  getLimitedBillingContractById: jest.fn(),
-}));
+jest.mock(
+  '../features/billing/infrastructure/limitedBillingContractsService',
+  () => ({
+    listLimitedBillingContracts: jest.fn(),
+    getLimitedBillingContractById: jest.fn(),
+  })
+);
 
-jest.mock('../services/billingReminderService', () => ({
+jest.mock('../features/billing/infrastructure/billingReminderService', () => ({
   sendBillingReminderEmail: jest.fn(),
   BillingReminderValidationError: class BillingReminderValidationError extends Error {
     status: number;
@@ -48,19 +51,22 @@ jest.mock('../services/billingReminderService', () => ({
   },
 }));
 
-jest.mock('../services/billingContractDownloadService', () => ({
-  getBillingContractDownloadLink: jest.fn(),
-  getBillingContractDocument: jest.fn(),
-  BillingContractDownloadError: class BillingContractDownloadError extends Error {
-    status: number;
-    code: string;
-    constructor(message: string, status: number, code: string) {
-      super(message);
-      this.status = status;
-      this.code = code;
-    }
-  },
-}));
+jest.mock(
+  '../features/billing/infrastructure/billingContractDownloadService',
+  () => ({
+    getBillingContractDownloadLink: jest.fn(),
+    getBillingContractDocument: jest.fn(),
+    BillingContractDownloadError: class BillingContractDownloadError extends Error {
+      status: number;
+      code: string;
+      constructor(message: string, status: number, code: string) {
+        super(message);
+        this.status = status;
+        this.code = code;
+      }
+    },
+  })
+);
 
 describe('billing routes', () => {
   const app = express();

@@ -4651,3 +4651,32 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 - **Action**:
   - [x] Context updated
   - [x] Implementation completed
+
+## Preflight Update 2026-10-05 (billing portal package)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Move the mounted `/api/billing` portal (list, detail, PDF,
+  download link, reminder email) into `src/features/billing`. Keep response
+  shapes. Leave payments, invoices, financial, and payment-method mounts for a
+  later step.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`.
+- **Files Scanned**:
+  - `frontend-crm/src/features/billing-portal/billingPortalApi.ts`
+  - `frontend-crm/src/features/billing-portal/billingOutreach.ts`
+  - `frontend-crm/src/features/billing-portal/types.ts`
+  - `backend/src/routes/billingRoutes.ts`
+  - `backend/src/__tests__/billingRoutes.test.ts`
+- **Contract Findings**: CRM reads `GET /api/billing/contracts`,
+  `GET /api/billing/contracts/:id`, download `{ url, expiresInSeconds }`, and
+  document bytes as a PDF blob. List query: `status`, `since`, `signingProvider`
+  (`native` | `legacy`). Outreach email is built in the browser; the
+  reminder-email POST stays available.
+- **Drift Risk**: Changing `ApiResponse.list` / `success` wrappers or PDF
+  headers would break the billing portal.
+- **Required Compatibility**: Same mount `/api/billing`, roles `admin|billing`,
+  status codes, and bodies.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation completed
