@@ -1,7 +1,7 @@
 /**
  * PHI Field Ownership Constants
  *
- * sokana-private (Cloud SQL via PHI Broker) is the source of truth for PHI.
+ * sokana-private (Cloud SQL) is the source of truth for PHI.
  * Supabase is the source of truth for operational/workflow fields.
  *
  * Used for:
@@ -16,7 +16,7 @@
 
 /**
  * Fields owned by sokana-private (PHI database).
- * Updates to these MUST go through the PHI Broker — never write directly to Supabase.
+ * Updates to these are written to Cloud SQL phi_clients.
  *
  * Matches PHI Broker PhiData interface + user's ownership spec:
  *   Identity:  first_name, last_name, email, phone_number
@@ -69,7 +69,7 @@ export const PHI_FIELDS = new Set([
 
 /**
  * Columns that may be written to Supabase's client_info table.
- * PHI fields are intentionally excluded — they go through the PHI Broker.
+ * PHI fields are intentionally excluded from the legacy Supabase client table.
  */
 export const OPERATIONAL_UPDATE_COLUMNS = new Set([
   'status',

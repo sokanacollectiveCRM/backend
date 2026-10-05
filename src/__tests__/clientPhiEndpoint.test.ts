@@ -5,7 +5,7 @@
  * 1. Accepts only PHI fields
  * 2. Rejects non-PHI fields with clear error message
  * 3. Requires authorization (admin or assigned doula)
- * 4. Updates only Google Cloud SQL via PHI Broker
+ * 4. Updates those fields on Cloud SQL
  */
 import { Request, Response } from 'express';
 
@@ -13,13 +13,11 @@ import { ClientController } from '../controllers/clientController';
 import { ClientRepository } from '../repositories/interface/clientRepository';
 import { SupabaseAssignmentRepository } from '../repositories/supabaseAssignmentRepository';
 import { SupabaseClientRepository } from '../repositories/supabaseClientRepository';
-import * as phiBrokerService from '../services/phiBrokerService';
 import { AuthRequest, ROLE } from '../types';
 import { ClientUseCase } from '../usecase/clientUseCase';
 import * as sensitiveAccess from '../utils/sensitiveAccess';
 
 // Mock dependencies
-jest.mock('../services/phiBrokerService');
 jest.mock('../utils/sensitiveAccess');
 jest.mock('../repositories/supabaseClientRepository');
 jest.mock('../repositories/supabaseAssignmentRepository');
@@ -49,6 +47,7 @@ describe('PUT /clients/:id/phi', () => {
         serviceNeeded: 'Birth Support',
       }),
       updateIdentityCache: jest.fn().mockResolvedValue(undefined),
+      updateClientOperational: jest.fn().mockResolvedValue({ id: clientId }),
     } as unknown as jest.Mocked<ClientRepository>;
     clientController = new ClientController(
       mockClientUseCase,
@@ -83,13 +82,6 @@ describe('PUT /clients/:id/phi', () => {
       canAccess: true,
       assignedClientIds: [],
     });
-
-    // Mock updateClientPhi - default success
-    (phiBrokerService.updateClientPhi as jest.Mock).mockResolvedValue({
-      first_name: 'Jane',
-      last_name: 'Doe',
-      email: 'jane.doe@example.com',
-    });
   });
 
   afterEach(() => {
@@ -117,9 +109,8 @@ describe('PUT /clients/:id/phi', () => {
           }),
         })
       );
-      expect(phiBrokerService.updateClientPhi).toHaveBeenCalledWith(
+      expect(mockClientRepository.updateClientOperational).toHaveBeenCalledWith(
         clientId,
-        expect.any(Object),
         expect.objectContaining({
           first_name: 'Jane',
           last_name: 'Doe',
@@ -147,7 +138,9 @@ describe('PUT /clients/:id/phi', () => {
           error: expect.stringContaining('Non-PHI fields not allowed'),
         })
       );
-      expect(phiBrokerService.updateClientPhi).not.toHaveBeenCalled();
+      expect(
+        mockClientRepository.updateClientOperational
+      ).not.toHaveBeenCalled();
     });
 
     it('should reject empty request body', async () => {
@@ -265,7 +258,9 @@ describe('PUT /clients/:id/phi', () => {
           error: 'Not authorized to update PHI fields',
         })
       );
-      expect(phiBrokerService.updateClientPhi).not.toHaveBeenCalled();
+      expect(
+        mockClientRepository.updateClientOperational
+      ).not.toHaveBeenCalled();
     });
 
     it('should reject non-admin, non-doula roles', async () => {
@@ -283,7 +278,9 @@ describe('PUT /clients/:id/phi', () => {
       );
 
       expect(mockResponse.status).toHaveBeenCalledWith(403);
-      expect(phiBrokerService.updateClientPhi).not.toHaveBeenCalled();
+      expect(
+        mockClientRepository.updateClientOperational
+      ).not.toHaveBeenCalled();
     });
   });
 
@@ -300,9 +297,8 @@ describe('PUT /clients/:id/phi', () => {
         mockResponse as Response
       );
 
-      expect(phiBrokerService.updateClientPhi).toHaveBeenCalledWith(
+      expect(mockClientRepository.updateClientOperational).toHaveBeenCalledWith(
         clientId,
-        expect.any(Object),
         expect.objectContaining({
           first_name: 'Jane',
           last_name: 'Doe',
@@ -324,9 +320,8 @@ describe('PUT /clients/:id/phi', () => {
         mockResponse as Response
       );
 
-      expect(phiBrokerService.updateClientPhi).toHaveBeenCalledWith(
+      expect(mockClientRepository.updateClientOperational).toHaveBeenCalledWith(
         clientId,
-        expect.any(Object),
         expect.objectContaining({
           first_name: 'Jane',
           last_name: 'Doe',
@@ -335,8 +330,8 @@ describe('PUT /clients/:id/phi', () => {
     });
   });
 
-  describe('PHI Broker Integration', () => {
-    it('should call PHI Broker with correct parameters', async () => {
+  describe('Cloud SQL persistence', () => {
+    it('should write PHI fields to Cloud SQL', async () => {
       mockRequest.body = {
         first_name: 'Jane',
         last_name: 'Doe',
@@ -349,13 +344,8 @@ describe('PUT /clients/:id/phi', () => {
         mockResponse as Response
       );
 
-      expect(phiBrokerService.updateClientPhi).toHaveBeenCalledWith(
+      expect(mockClientRepository.updateClientOperational).toHaveBeenCalledWith(
         clientId,
-        {
-          role: 'admin',
-          userId: 'admin-user-id',
-          assignedClientIds: [],
-        },
         {
           first_name: 'Jane',
           last_name: 'Doe',
@@ -413,16 +403,11 @@ describe('PUT /clients/:id/phi', () => {
     });
   });
 
-  describe('Broker fallback', () => {
-    it('falls back to Cloud SQL when PHI broker is unavailable in primary mode', async () => {
-      (mockClientRepository as any).updateClientOperational = jest
+  describe('Cloud SQL write failure', () => {
+    it('returns an error when the PHI write fails', async () => {
+      mockClientRepository.updateClientOperational = jest
         .fn()
-        .mockResolvedValue({ id: clientId });
-      (phiBrokerService.updateClientPhi as jest.Mock).mockRejectedValue(
-        new phiBrokerService.PhiBrokerError(
-          'Failed to connect to PHI Broker for update'
-        )
-      );
+        .mockRejectedValue(new Error('db down'));
       mockRequest.body = {
         first_name: 'Jane',
         phone_number: '555-1234',
@@ -433,19 +418,10 @@ describe('PUT /clients/:id/phi', () => {
         mockResponse as Response
       );
 
-      expect(mockClientRepository.updateClientOperational).toHaveBeenCalledWith(
-        clientId,
-        expect.objectContaining({
-          first_name: 'Jane',
-          phone_number: '555-1234',
-        })
-      );
+      expect(mockResponse.status).toHaveBeenCalledWith(500);
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
-          success: true,
-          data: expect.objectContaining({
-            message: 'PHI fields updated successfully',
-          }),
+          success: false,
         })
       );
     });

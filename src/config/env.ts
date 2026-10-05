@@ -78,19 +78,6 @@ export const supabase = {
   },
 };
 
-export const phiBroker = {
-  get url(): string {
-    return optionalEnv('PHI_BROKER_URL') ?? '';
-  },
-  get secret(): string {
-    return (
-      optionalEnv('PHI_BROKER_SECRET') ??
-      optionalEnv('PHI_BROKER_SHARED_SECRET') ??
-      ''
-    );
-  },
-};
-
 export const stripe = {
   get secretKey(): string {
     if (!FEATURE_STRIPE) return '';

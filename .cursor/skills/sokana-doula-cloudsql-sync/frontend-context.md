@@ -4798,3 +4798,104 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 - **Action**:
   - [x] Context updated
   - [x] Implementation completed
+
+## Preflight Update 2026-10-05 (remove unused supabase and tools folders)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Remove folders the API does not load. Keep Cloud SQL
+  `migrations/`, `scripts/`, `templates/`, and `phi-broker`.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`. User asked to remove the
+  supabase folder and other unused folders.
+- **Files Scanned**:
+  - `backend/supabase/migrations/`
+  - `backend/src/server.ts`
+  - `backend/src/supabase.ts` (auth client; not the `supabase/` folder)
+  - `frontend-crm` has no dependency on these folders.
+- **Contract Findings**: No request or response change. Auth still uses the
+  Supabase client in `src/supabase.ts`.
+- **Drift Risk**: None for CRM mounts. Root `migrations/` stays because the
+  client API and Cloud SQL docs still name those SQL files.
+- **Required Compatibility**: Do not remove `phi-broker`, `scripts`,
+  `templates`, or root `migrations/`.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation completed
+
+## Preflight Update 2026-10-05 (PHI writes stay on Cloud SQL)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Stop the API from calling `sokana-phi-broker`. Keep
+  `PUT /clients/:id/phi` and write those fields with the Cloud SQL client
+  repository.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`. User asked to finish the
+  consolidation that left the broker in the live path.
+- **Files Scanned**:
+  - `frontend-crm/src/api/services/clients.service.ts` (`updateClientPhi`)
+  - `frontend-crm/src/features/clients/components/dialog/LeadProfileModal.tsx`
+  - `frontend-crm/src/config/clientFieldRouting.ts`
+  - `backend/src/features/clients/http/clientController.ts`
+  - `backend/src/repositories/cloudSqlClientRepository.ts`
+- **Contract Findings**: The CRM sends PHI fields to `PUT /clients/:id/phi` and
+  reads `{ success, data: { message } }`. A general client update still returns
+  the detail DTO with the saved fields merged in.
+- **Drift Risk**: Dropping the route or the success message breaks lead-profile
+  saves. Writing a different field set than `PHI_FIELDS` breaks the dialog.
+- **Required Compatibility**: Same route, roles (`admin`, `doula`), status
+  codes, and `{ message: 'PHI fields updated successfully' }`. Persist through
+  `updateClientOperational` on Cloud SQL.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation completed
+
+## Preflight Update 2026-10-05 (remove phi-broker folder)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Delete the unused `phi-broker/` source tree. The API already
+  writes PHI on Cloud SQL and does not import this package.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`. User asked to remove the
+  folder after the broker client was deleted.
+- **Files Scanned**:
+  - `frontend-crm/src/api/services/clients.service.ts` (`updateClientPhi`)
+  - `backend/src/features/clients/http/clientController.ts`
+  - `backend/package.json`, `backend/cloudbuild.yaml`, `backend/tsconfig.json`
+  - `backend/phi-broker/` (standalone Express service, own `package.json`)
+- **Contract Findings**: The CRM still calls `PUT /clients/:id/phi` on the main
+  API and reads `{ success, data: { message } }`. It does not call the broker.
+- **Drift Risk**: None for the CRM. Root build, tests, and Cloud Build do not
+  include `phi-broker/`.
+- **Required Compatibility**: Keep `PUT /clients/:id/phi`, roles, and the
+  success message. Do not delete the Cloud Run service from this change.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation completed
+
+## Preflight Update 2026-10-05 (delete sokana-phi-broker)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Delete the unused Cloud Run service `sokana-phi-broker` and
+  the Cloud Build trigger that redeploys it from `phi-broker/Dockerfile`.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`. User asked to remove the
+  service after the folder was deleted.
+- **Files Scanned**:
+  - `frontend-crm/src/api/services/clients.service.ts` (`updateClientPhi`)
+  - Live `sokana-private-api` env names (no `PHI_BROKER_URL`)
+  - Cloud Build trigger
+    `rmgpgab-sokana-phi-broker-us-central1-sokanacollectiveCRM-basif`
+- **Contract Findings**: The CRM still calls `PUT /clients/:id/phi` on
+  `sokana-private-api`. It does not call `sokana-phi-broker`.
+- **Drift Risk**: The trigger rebuilds the broker on every backend `main` push.
+  Leaving it would recreate the service, and it would fail once `phi-broker/` is
+  gone from `main`.
+- **Required Compatibility**: Keep the client PHI route on the main API. Do not
+  change `sokana-private-api` or `sokana-front-end`.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation completed

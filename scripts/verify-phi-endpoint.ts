@@ -3,10 +3,9 @@
  *
  * This script verifies that the PHI endpoint method exists and has the correct signature.
  */
-
 import { ClientController } from '../src/controllers/clientController';
-import { ClientUseCase } from '../src/usecase/clientUseCase';
 import { SupabaseAssignmentRepository } from '../src/repositories/supabaseAssignmentRepository';
+import { ClientUseCase } from '../src/usecase/clientUseCase';
 
 async function verifyPhiEndpoint() {
   console.log('🔍 Verifying PHI endpoint implementation...\n');
@@ -19,7 +18,9 @@ async function verifyPhiEndpoint() {
   // Check if method exists
   if (typeof controller.updateClientPhi === 'function') {
     console.log('✅ updateClientPhi method exists on ClientController');
-    console.log(`✅ Method signature: async updateClientPhi(req, res): Promise<void>`);
+    console.log(
+      `✅ Method signature: async updateClientPhi(req, res): Promise<void>`
+    );
   } else {
     console.log('❌ updateClientPhi method NOT found on ClientController');
     process.exit(1);
@@ -32,10 +33,22 @@ async function verifyPhiEndpoint() {
     { name: 'Accepts req parameter', test: methodString.includes('req') },
     { name: 'Accepts res parameter', test: methodString.includes('res') },
     { name: 'Validates client ID', test: methodString.includes('id') },
-    { name: 'Splits PHI/operational fields', test: methodString.includes('splitClientPatch') },
-    { name: 'Checks authorization', test: methodString.includes('canAccessSensitive') },
-    { name: 'Calls PHI Broker', test: methodString.includes('updateClientPhi') },
-    { name: 'Updates identity cache', test: methodString.includes('updateIdentityCache') },
+    {
+      name: 'Splits PHI/operational fields',
+      test: methodString.includes('splitClientPatch'),
+    },
+    {
+      name: 'Checks authorization',
+      test: methodString.includes('canAccessSensitive'),
+    },
+    {
+      name: 'Writes PHI on Cloud SQL',
+      test: methodString.includes('writePhiFields'),
+    },
+    {
+      name: 'Updates identity cache',
+      test: methodString.includes('updateIdentityCache'),
+    },
   ];
 
   console.log('\n📋 Implementation checks:');

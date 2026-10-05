@@ -54,12 +54,6 @@ import { syncMatchedClientToQuickBooks } from '../../../services/customer/syncMa
 import { DoulaAvailabilityService } from '../../../services/doulaAvailabilityService';
 import { CloudSqlIdentityUserService } from '../../../services/identityPlatform/cloudSqlIdentityUserService';
 import {
-  PhiBrokerError,
-  fetchClientPhi,
-  updateClientPhi,
-} from '../../../services/phiBrokerService';
-import type { PhiRequester } from '../../../services/phiBrokerService';
-import {
   PortalEligibilityService,
   portalEligibilityService,
 } from '../../../services/portalEligibilityService';
@@ -462,42 +456,45 @@ export class ClientController {
   }
 
   /**
-   * Write PHI fields via broker when available; in primary mode fall back to
-   * Cloud SQL direct write (local dev + production private-IP path).
+   * Persist PHI fields on Cloud SQL phi_clients. The separate PHI broker is
+   * not part of this path.
    */
-  private async writePhiFieldsWithFallback(
+  private async writePhiFields(
     clientId: string,
-    requester: PhiRequester,
     phi: Record<string, any>
   ): Promise<Record<string, any>> {
-    try {
-      return await updateClientPhi(clientId, requester, phi);
-    } catch (error) {
-      const canDirectWrite =
-        process.env.SPLIT_DB_READ_MODE === 'primary' &&
-        typeof this.clientRepository.updateClientOperational === 'function';
-
-      if (!canDirectWrite || !(error instanceof PhiBrokerError)) {
-        throw error;
-      }
-
-      logger.warn(
-        {
-          clientId,
-          errorMessage: error.message,
-        },
-        '[Client] PHI broker write failed — falling back to Cloud SQL direct write'
-      );
-
-      const result = await this.clientRepository.updateClientOperational!(
-        clientId,
-        phi
-      );
-      if (!result) {
-        throw new NotFoundError('Client not found');
-      }
-      return phi;
+    if (!this.clientRepository.updateClientOperational) {
+      throw new Error('Client store cannot persist PHI fields');
     }
+    const result = await this.clientRepository.updateClientOperational(
+      clientId,
+      phi
+    );
+    if (!result) {
+      throw new NotFoundError('Client not found');
+    }
+    return phi;
+  }
+
+  /** Snake_case PHI fields already stored on the Cloud SQL client row. */
+  private storedPhiFields(client: Client): Record<string, unknown> {
+    const user = client.user;
+    const due = client.due_date ?? user?.due_date;
+    const fields: Record<string, unknown> = {
+      first_name: user?.firstname,
+      last_name: user?.lastname,
+      email: user?.email,
+      phone_number: user?.phone_number ?? client.phoneNumber,
+      address_line1: user?.address,
+      health_history: client.health_history ?? user?.health_history,
+      allergies: client.allergies ?? user?.allergies,
+      due_date: due instanceof Date ? due.toISOString().slice(0, 10) : due,
+    };
+    return Object.fromEntries(
+      Object.entries(fields).filter(
+        ([, value]) => value !== undefined && value !== null && value !== ''
+      )
+    );
   }
 
   private validateBillingPayload(input: Record<string, any>): {
@@ -1824,11 +1821,11 @@ export class ClientController {
       }
       const normalized = sanitized.value;
 
-      // ── Step 1: Split payload into operational (Supabase) vs PHI (broker) ──
+      // ── Step 1: Split payload into operational vs PHI fields ──
       let { operational, phi } = splitClientPatch(normalized);
 
-      // Cloud SQL is now canonical for client profile data; for self-service client
-      // updates, route all fields to Cloud SQL and skip PHI broker split/gating.
+      // Cloud SQL is canonical for client profile data. Self-service client
+      // updates write every field through the operational Cloud SQL update.
       if (req.user?.role === 'client') {
         operational = { ...operational, ...phi };
         phi = {};
@@ -1877,15 +1874,7 @@ export class ClientController {
       }
 
       // ── Step 2: Authorization check (one call, reuse result) ──
-      const { canAccess, assignedClientIds } = await canAccessSensitive(
-        req.user,
-        targetClientId
-      );
-      const requester = {
-        role: req.user?.role || '',
-        userId: req.user?.id || '',
-        assignedClientIds,
-      };
+      const { canAccess } = await canAccessSensitive(req.user, targetClientId);
 
       // If PHI fields are present but user is not authorized → reject
       if (Object.keys(phi).length > 0 && !canAccess) {
@@ -1983,11 +1972,7 @@ export class ClientController {
       // ── Step 3b: Write PHI fields to sokana-private (via broker) ──
       let phiWriteResult = null;
       if (Object.keys(phi).length > 0) {
-        phiWriteResult = await this.writePhiFieldsWithFallback(
-          targetClientId,
-          requester,
-          phi
-        );
+        phiWriteResult = await this.writePhiFields(targetClientId, phi);
 
         // DEBT: Write-through cache — keep Supabase identity fields in sync so list
         // endpoint shows current names. Broker stays authoritative.
@@ -2150,12 +2135,13 @@ export class ClientController {
         }
       } else if (canAccess) {
         try {
-          // Use broker write result if we just wrote, otherwise fresh read
-          const freshPhi =
-            phiWriteResult ?? (await fetchClientPhi(targetClientId, requester));
-          response = { ...dto, ...freshPhi };
           const fullClient =
             await this.clientRepository.findClientDetailedById(targetClientId);
+          response = {
+            ...dto,
+            ...this.storedPhiFields(fullClient),
+            ...(phiWriteResult ?? {}),
+          };
           const u = fullClient.user as unknown as Record<string, unknown>;
           this.mergeExtendedProfileFields(response, u, {
             children_expected: fullClient.childrenExpected ?? null,
@@ -2179,7 +2165,7 @@ export class ClientController {
           sources: {
             operational:
               Object.keys(operational).length > 0 ? 'cloud_sql' : 'none',
-            sensitive: Object.keys(phi).length > 0 ? 'phiBroker' : 'none',
+            sensitive: Object.keys(phi).length > 0 ? 'cloud_sql' : 'none',
           },
           keys: {
             operational: Object.keys(freshOperational),
@@ -2407,7 +2393,7 @@ export class ClientController {
   //
   // updateClientPhi()
   //
-  // PHI-only update: routes ONLY PHI fields to sokana-private (via PHI Broker).
+  // PHI-only update: writes ONLY PHI fields to Cloud SQL phi_clients.
   // Rejects any non-PHI fields in the request body.
   //
   // Authorization: admin or assigned doula only
@@ -2520,15 +2506,7 @@ export class ClientController {
       );
 
       // ── Step 2: Authorization check ──
-      const { canAccess, assignedClientIds } = await canAccessSensitive(
-        req.user,
-        id
-      );
-      const requester = {
-        role: req.user?.role || '',
-        userId: req.user?.id || '',
-        assignedClientIds,
-      };
+      const { canAccess } = await canAccessSensitive(req.user, id);
 
       if (!canAccess) {
         logger.warn(
@@ -2556,12 +2534,8 @@ export class ClientController {
         return;
       }
 
-      // ── Step 4: Write PHI fields to sokana-private (via broker) ──
-      const phiWriteResult = await this.writePhiFieldsWithFallback(
-        id,
-        requester,
-        phi
-      );
+      // ── Step 4: Write PHI fields to Cloud SQL ──
+      const phiWriteResult = await this.writePhiFields(id, phi);
 
       // ── Step 5: Write-through cache — keep identity fields in sync ──
       if (phi.first_name || phi.last_name || phi.email || phi.phone_number) {
@@ -2584,7 +2558,7 @@ export class ClientController {
       logger.info(
         {
           clientId: id,
-          sources: { sensitive: 'phiBroker' },
+          sources: { sensitive: 'cloud_sql' },
           keys: { sensitive: Object.keys(phiWriteResult ?? {}) },
         },
         '[Client] PHI-only update response composition'
