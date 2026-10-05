@@ -1,3 +1,4 @@
+.DS_Store
 .DS_STORE
 .env
 .env.backup
@@ -13,3 +14,17 @@ generated/
 *.log
 *.tmp
 *.temp
+
+# Local operational data and diagnostic output
+/tmp/
+/outputs/
+/annotated-*.pdf
+/layout-diff*.pdf
+.env.*
+!.env.example
+
+# TypeScript emit belongs in dist/, not beside sources.
+src/**/*.js
+src/*.js
+src/**/*.js.map
+src/*.js.map

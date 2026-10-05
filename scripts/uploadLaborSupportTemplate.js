@@ -16,7 +16,7 @@ async function uploadLaborSupportTemplate() {
     // Check if Labor Support template exists locally
     const templatePath = path.join(
       process.cwd(),
-      'Labor Support Agreement for Service.docx'
+      'templates/Labor Support Agreement for Service.docx'
     );
 
     if (!fs.existsSync(templatePath)) {

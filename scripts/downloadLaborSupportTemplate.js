@@ -40,7 +40,7 @@ async function downloadLaborSupportTemplate() {
     const buffer = Buffer.from(arrayBuffer);
 
     // Save to current directory
-    const outputPath = path.join(process.cwd(), templateFileName);
+    const outputPath = path.join(process.cwd(), 'templates', templateFileName);
     fs.writeFileSync(outputPath, buffer);
 
     console.log('✅ Template downloaded successfully!');
@@ -59,9 +59,3 @@ async function downloadLaborSupportTemplate() {
 
 // Run the script
 downloadLaborSupportTemplate();
-
-
-
-
-
-

@@ -78,7 +78,7 @@ describe('INV-12 birth-outcomes route authorization', () => {
 
   it('route source requires authMiddleware and admin|doula roles', () => {
     const routeSrc = fs.readFileSync(
-      path.join(__dirname, '../routes/clientRoutes.ts'),
+      path.join(__dirname, '../features/clients/http/clientRoutes.ts'),
       'utf8'
     );
     const start = routeSrc.indexOf("'/:id/birth-outcomes'");

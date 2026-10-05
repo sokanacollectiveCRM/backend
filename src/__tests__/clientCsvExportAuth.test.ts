@@ -75,7 +75,7 @@ describe('HIPAA-13A client CSV export authorization', () => {
 
   it('route source allows only admin for /fetchCSV', () => {
     const routeSrc = fs.readFileSync(
-      path.join(__dirname, '../routes/clientRoutes.ts'),
+      path.join(__dirname, '../features/clients/http/clientRoutes.ts'),
       'utf8'
     );
     const start = routeSrc.indexOf("'/fetchCSV'");

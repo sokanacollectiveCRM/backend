@@ -5,7 +5,7 @@ function checkDocxContent() {
   try {
     console.log('🔍 Checking DOCX content for Text Tags...');
 
-    const docxPath = './Labor Support Agreement for Service (1).docx';
+    const docxPath = './templates/Labor Support Agreement for Service.docx';
 
     if (!fs.existsSync(docxPath)) {
       throw new Error(`DOCX file not found: ${docxPath}`);
@@ -70,9 +70,3 @@ function checkDocxContent() {
 }
 
 checkDocxContent();
-
-
-
-
-
-

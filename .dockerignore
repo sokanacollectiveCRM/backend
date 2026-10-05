@@ -1,0 +1,15 @@
+# Keep local data and generated artifacts out of image build contexts.
+.git
+node_modules
+dist
+coverage
+generated
+tmp
+outputs
+.env
+.env.*
+!.env.example
+**/.DS_Store
+*.log
+annotated-*.pdf
+layout-diff*.pdf

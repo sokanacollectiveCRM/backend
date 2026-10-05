@@ -488,10 +488,21 @@ architecture explicit from the first PR.
 - Billing portal moved into `src/features/billing` (`/api/billing` list, detail,
   PDF, download, reminder). Old route and service paths are shims. Payments,
   invoices, financial, and payment methods stay on their current mounts.
+- Moved the remaining live client, portal, intake, doula, auth, and QuickBooks
+  controllers and their routes into the matching feature packages. Old
+  `src/controllers`, `src/routes`, and `src/usecase` paths are shims. Mounts and
+  response bodies are unchanged.
+- Moved user, admin, email, and dashboard controllers and routes into
+  `src/features/users`, `src/features/admin`, `src/features/email`, and
+  `src/features/dashboard`. Old paths are shims. Mounts and response bodies are
+  unchanged. Dashboard handlers live in the route module. Shared mail transport
+  stays in `src/services/emailService`.
+- Removed committed TypeScript emit under `src` (the `.js` copies beside `.ts`
+  sources), unused `src/config/quickbooks.js`, `src/utils/logAxiosError.js`, and
+  the unused sample signature assets. Runtime stays `src/**/*.ts` and `dist/`.
 - Next structural step: remaining billing mounts (`/api/payments`,
   `/api/invoices`, `/api/financial`, `/api/payment-methods`). Then documents,
-  then finish clients/portal/intake/auth/doulas, then `src/bootstrap` and
-  `src/shared`.
+  then `src/bootstrap` and `src/shared`.
 - Verified after vendor removal: typecheck and build clean, full suite 87 suites
   / 655 tests, security smoke 3/3. Three SignNow webhook cases were removed with
   the vendor adapter.

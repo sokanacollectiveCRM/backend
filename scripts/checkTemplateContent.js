@@ -6,7 +6,7 @@ function checkTemplateContent() {
   try {
     console.log('🔍 Checking template content for Text Tags...');
 
-    const templatePath = './Labor Support Agreement for Service.docx.pdf';
+    const templatePath = './templates/Labor Support Agreement for Service.pdf';
 
     if (!fs.existsSync(templatePath)) {
       throw new Error(`Template file not found: ${templatePath}`);

@@ -1,0 +1,4 @@
+# Keep local operational data and secrets out of Cloud Build uploads.
+.gcloudignore
+.git
+#!include:.gitignore

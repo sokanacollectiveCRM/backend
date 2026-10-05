@@ -4680,3 +4680,121 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 - **Action**:
   - [x] Context updated
   - [x] Implementation completed
+
+## Preflight Update 2026-10-05 (move remaining global controllers)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Move the still-global client, portal, intake, doula, auth,
+  and QuickBooks controllers/routes into their feature packages. Old paths
+  become shims. Mounts and response bodies stay the same.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`.
+- **Files Scanned**:
+  - `frontend-crm/src/api/services/clients.service.ts`
+  - `frontend-crm/src/features/client-dashboard/ClientDashboard.tsx`
+  - `frontend-crm/src/Routes.tsx`
+  - `backend/src/server.ts`
+  - `backend/src/index.ts`
+- **Contract Findings**: Frontend still calls the existing `/clients`,
+  `/api/clients`, `/api/doulas`, `/auth`, `/requestService`, and `/quickbooks`
+  mounts. This move does not change those paths or bodies.
+- **Drift Risk**: None if shims keep the same exports and server mounts.
+- **Required Compatibility**: Same mounts, status codes, and bodies.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation completed
+
+## Preflight Update 2026-10-05 (user, admin, email, dashboard modules)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Move the still-global user, admin, email, and dashboard
+  controllers and routes into their own feature packages. Old paths become
+  shims. Mounts and response bodies stay the same.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`. User asked for this slice
+  directly.
+- **Files Scanned**:
+  - `frontend-crm/src/common/hooks/user/useGetUserById.ts`
+  - `frontend-crm/src/common/utils/saveUser.tsx`
+  - `frontend-crm/src/common/hooks/dashboard/useDashboardStats.ts`
+  - `frontend-crm/src/common/hooks/dashboard/useDueDateCalendar.ts`
+  - `frontend-crm/src/api/admin/adminService.ts`
+  - `frontend-crm/src/api/doulas/doulaService.ts`
+  - `frontend-crm/src/features/clients/Clients.tsx`
+  - `frontend-crm/src/features/teams/teams.tsx`
+  - `backend/src/server.ts`
+  - `backend/src/index.ts`
+  - `backend/src/routes/specificUserRoutes.ts`
+  - `backend/src/routes/adminRoutes.ts`
+  - `backend/src/routes/EmailRoutes.ts`
+  - `backend/src/routes/dashboardRoutes.ts`
+- **Contract Findings**:
+  - Users: `GET /users/:id`, `PUT /users/update` (profile picture multipart).
+  - Dashboard stats: flat JSON
+    `{ totalDoulas, totalClients, pendingContracts, overdueNotes, upcomingTasks, monthlyRevenue }`.
+    Frontend also accepts a `{ data }` wrapper.
+  - Calendar: `GET /api/dashboard/calendar` returns
+    `{ events: [{ id, type: 'pregnancyDueDate', title, date, color }] }`.
+  - Admin: `GET /api/admin/clients/matching`,
+    `POST /api/admin/assignments/match`, portal invite/resend/disable, doula
+    document list/review/url.
+  - Email: `POST /email/team-invite` with
+    `{ email, firstname, lastname, role }`, admin role.
+    `POST /email/client-approval` stays mounted.
+- **Drift Risk**: None if shims keep the same exports and `src/server.ts` mounts
+  stay `/users`, `/api/admin`, `/email`, and `/api/dashboard`.
+- **Required Compatibility**: Same mounts, roles, status codes, and bodies.
+  Dashboard has no separate controller; its handlers move with the route module.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation completed
+
+## Preflight Update 2026-10-05 (remove stale src emit)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Remove committed TypeScript emit and unused sample assets
+  from `src` so the tree shows source files only. No route or body change.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`. User asked to clean the
+  folder.
+- **Files Scanned**:
+  - `frontend-crm/src/common/hooks/dashboard/useDashboardStats.ts`
+  - `backend/src/server.ts`
+  - `backend/package.json`
+  - `backend/tsconfig.json`
+  - `backend/src/__tests__/simulatePaymentRouteDisabled.test.ts`
+- **Contract Findings**: App entry is `src/server.ts` via `tsx` in dev and
+  `dist/` in production. Frontend mounts are unchanged.
+- **Drift Risk**: None. The `.js` copies are stale compiler output beside the
+  `.ts` sources. Nothing imports `src/config/quickbooks.js`,
+  `src/utils/logAxiosError.js`, or `src/assets/signatures`.
+- **Required Compatibility**: Keep the `.ts` shims and live sources. Do not
+  delete `dist/` or historical SQL.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation completed
+
+## Preflight Update 2026-10-05 (root duplicate contract files)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Remove duplicate labor-support files that were copied out of
+  the repo root. Keep the templates the seed script reads. No API change.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`.
+- **Files Scanned**:
+  - `backend/scripts/seed-native-contract-templates.ts`
+  - `backend/templates/`
+  - `frontend-crm` not affected; contract generation still uses GCS templates.
+- **Contract Findings**: Seed reads
+  `templates/Labor Support Agreement for Service.docx` and
+  `templates/Labor Support Agreement for Service.pdf`.
+- **Drift Risk**: None for the CRM if those two files stay.
+- **Required Compatibility**: Do not delete the tracked docx files or the seed
+  PDF.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation completed

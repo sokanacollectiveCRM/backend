@@ -267,6 +267,27 @@ Runtime notes:
 - Response wrappers, roles (`admin`, `billing`), and PDF headers stay the same.
 - `/api/payments`, `/api/invoices`, `/api/financial`, and `/api/payment-methods`
   stay on their current routers until a later step.
+- QuickBooks HTTP (`/quickbooks`, `/api/quickbooks`, `/quickbooks/customers`)
+  now lives in this package. The old route and controller paths are shims.
+
+## Moved behind existing mounts
+
+These live controllers and routes now sit in their feature packages. The old
+`src/controllers`, `src/routes`, and `src/usecase` files re-export them, and
+`src/server.ts` mounts are unchanged.
+
+- clients: client API and client billing schedule
+- portal: portal invite controller
+- intake: public request-form controller and route
+- doulas: doula dashboard controller and admin doula list
+- auth: login, session, and password recovery
+- billing: QuickBooks OAuth, customers, and invoice webhook
+- users: user profile and hours (`/users`)
+- admin: doula invite, matching, and the admin router (`/api/admin`)
+- email: approval and team-invite HTTP (`/email`). Mail transport stays in
+  `src/services/emailService`.
+- dashboard: stats and due-date calendar (`/api/dashboard`). Handlers live in
+  the route module.
 - Behavior is pinned by `src/__tests__/billingRoutes.test.ts`.
 
 ## Target tree (incremental, not big-bang)
@@ -283,6 +304,10 @@ src/
     portal/{domain,application,http,infrastructure}
     contracts/{domain,application,http,infrastructure}
     billing/{domain,application,http,infrastructure}
+    users/{domain,application,http,infrastructure}
+    admin/{domain,application,http,infrastructure}
+    email/{domain,application,http,infrastructure}
+    dashboard/{domain,application,http,infrastructure}
     documents/{domain,application,http,infrastructure}
   shared/{config,database,http,logging,security,testing}
 ```

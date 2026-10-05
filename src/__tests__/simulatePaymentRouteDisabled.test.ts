@@ -74,7 +74,7 @@ describe('INV-10 simulate-payment route disabled', () => {
 
   it('does not register simulate-payment in quickbooksRoutes source', () => {
     const routeSrc = fs.readFileSync(
-      path.join(__dirname, '../routes/quickbooksRoutes.ts'),
+      path.join(__dirname, '../features/billing/http/quickbooksRoutes.ts'),
       'utf8'
     );
     expect(routeSrc).not.toMatch(/simulate-payment/);

@@ -1,24 +1,6 @@
-// src/features/quickbooks/routes/customersRoutes.js
-import { Router } from 'express';
-
-import {
-  createCustomer,
-  getInvoiceableCustomersController,
-} from '../controllers/quickbooksController';
-import authMiddleware from '../middleware/authMiddleware';
-import authorizeRoles from '../middleware/authorizeRoles';
-
-const router = Router();
-
-const requireStaff = (req: any, res: any, next: any) =>
-  authorizeRoles(req, res, next, ['admin', 'billing']);
-router.use(authMiddleware);
-router.use(requireStaff);
-
-// POST /quickbooks/customers — security bug fix (PR 4): was anonymous
-router.post('/', createCustomer);
-
-// GET /quickbooks/customers/invoiceable — security bug fix (PR 4): was anonymous
-router.get('/invoiceable', getInvoiceableCustomersController);
-
-export default router;
+/**
+ * Compatibility shim. Implementation lives in
+ * `src/features/billing/http/customersRoutes.ts`.
+ */
+export * from '../features/billing/http/customersRoutes';
+export { default } from '../features/billing/http/customersRoutes';
