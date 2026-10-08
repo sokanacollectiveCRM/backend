@@ -182,7 +182,8 @@ describe('Request Endpoint Tests', () => {
           lastname: 'Doe',
           email: 'jane.doe@example.com',
           service_needed: ServiceTypes.LABOR_SUPPORT,
-        })
+        }),
+        expect.objectContaining({ tenantId: undefined })
       );
     });
 
