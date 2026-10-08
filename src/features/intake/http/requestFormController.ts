@@ -10,14 +10,17 @@ import { logger } from '../../../common/utils/logger';
 import { RequestFormService } from '../../../services/RequestFormService';
 import { NodemailerService } from '../../../services/emailService';
 import { AuthRequest, RequestFormData, RequestStatus } from '../../../types';
+import { SOKANA_TENANT_SLUG } from '../../tenancy';
 import {
   evaluateIntakeSubmissionGuards,
   finalizeIntakeIdempotency,
   sendIntakeRateLimited,
   sendIntakeSoftDedupe,
 } from '../infrastructure/intakeAbuseProtection';
+import { getPublicIntakeBrandingBySlug } from '../infrastructure/publicIntakeBrandingRepository';
+import type { IntakeRequest } from './intakeRequestTypes';
 
-const notificationEmail = 'hello@sokanacollective.com';
+const DEFAULT_INTAKE_NOTIFICATION_EMAIL = 'hello@sokanacollective.com';
 const emailService = new NodemailerService();
 
 export class RequestFormController {
@@ -204,6 +207,25 @@ export class RequestFormController {
     }
   }
 
+  async getPublicBranding(req: Request, res: Response): Promise<void> {
+    try {
+      const tenantSlug = req.params.tenantSlug?.trim();
+      if (!tenantSlug) {
+        res.status(404).json({ error: 'Organization not found' });
+        return;
+      }
+      const branding = await getPublicIntakeBrandingBySlug(tenantSlug);
+      if (!branding) {
+        res.status(404).json({ error: 'Organization not found' });
+        return;
+      }
+      res.status(200).json(branding);
+    } catch (error) {
+      console.error('Error loading public intake branding:', error);
+      res.status(500).json({ error: 'Unable to load organization branding' });
+    }
+  }
+
   // Updated method to handle all 10-step form fields
   async createForm(req: Request, res: Response): Promise<void> {
     try {
@@ -227,9 +249,16 @@ export class RequestFormController {
         return;
       }
 
-      const savedForm = await this.service.newForm(formData);
+      const intakeTenant = (req as Request & IntakeRequest).intakeTenant;
+      const savedForm = await this.service.newForm(formData, {
+        tenantId: intakeTenant?.tenantId,
+      });
       logger.info(
-        { service: 'intake', operation: 'lead_saved' },
+        {
+          service: 'intake',
+          operation: 'lead_saved',
+          tenantSlug: intakeTenant?.tenantSlug ?? SOKANA_TENANT_SLUG,
+        },
         'Public intake lead persisted'
       );
       // HIPAA-13F / INV-01: staff mail = client_number + CRM link only (no PHI body)
@@ -244,7 +273,7 @@ export class RequestFormController {
           crmProfileUrl: profileLink,
         });
         await emailService.sendEmail(
-          notificationEmail,
+          intakeTenant?.notificationEmail ?? DEFAULT_INTAKE_NOTIFICATION_EMAIL,
           staffMail.subject,
           staffMail.text,
           staffMail.html

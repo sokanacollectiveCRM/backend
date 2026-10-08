@@ -10,6 +10,7 @@ import {
   pickIntakeShadowCompareSlice,
   submitPublicRequestForm,
 } from '../features/intake';
+import { runWithTenant } from '../features/tenancy';
 import { RequestFormRepository } from '../repositories/requestFormRepository';
 import { RequestFormData, RequestFormResponse, RequestStatus } from '../types';
 
@@ -146,8 +147,11 @@ export class RequestFormService {
    * - `INTAKE_USE_FEATURE_PACKAGE=true`: application use case write path.
    * - `INTAKE_SHADOW_COMPARE=true`: compare normalize slices (no PHI dump) while serving active write path.
    */
-  async newForm(formData: any): Promise<RequestForm> {
-    try {
+  async newForm(
+    formData: any,
+    options?: { tenantId?: string }
+  ): Promise<RequestForm> {
+    const writeLead = async (): Promise<RequestForm> => {
       const normalized = normalizePublicIntakeSubmission(formData);
 
       if (intakeShadowCompare()) {
@@ -244,6 +248,13 @@ export class RequestFormService {
 
       const response = await this.repository.saveData(normalized);
       return mapIntakeResponseToRequestForm(response);
+    };
+
+    try {
+      if (options?.tenantId) {
+        return await runWithTenant(options.tenantId, writeLead);
+      }
+      return await writeLead();
     } catch (error) {
       console.error('Error in newForm:', error);
       throw error;

@@ -2,12 +2,27 @@ import express, { Router } from 'express';
 
 import { requestFormController } from '../../../index';
 import { protectPublicIntakeEarly } from '../infrastructure/intakeAbuseProtection';
+import { attachLegacySokanaIntakeTenant } from './attachLegacySokanaIntakeTenant';
+import { resolveIntakeTenantSlug } from './resolveIntakeTenantSlug';
 
 const requestRouter: Router = express.Router();
 
-// Public intake — honeypot + IP rate limit before controller (P0 abuse protection).
-requestRouter.post('/requestSubmission', protectPublicIntakeEarly, (req, res) =>
-  requestFormController.createForm(req, res)
+requestRouter.get('/public/:tenantSlug', (req, res) =>
+  requestFormController.getPublicBranding(req, res)
+);
+
+requestRouter.post(
+  '/:tenantSlug/requestSubmission',
+  resolveIntakeTenantSlug,
+  protectPublicIntakeEarly,
+  (req, res) => requestFormController.createForm(req, res)
+);
+
+requestRouter.post(
+  '/requestSubmission',
+  attachLegacySokanaIntakeTenant,
+  protectPublicIntakeEarly,
+  (req, res) => requestFormController.createForm(req, res)
 );
 
 export default requestRouter;

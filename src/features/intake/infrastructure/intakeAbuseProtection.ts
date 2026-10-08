@@ -403,8 +403,13 @@ export const protectPublicIntakeEarly: RequestHandler = async (
     if (isIntakeAbuseEnforced()) {
       const config = getIntakeAbuseConfig();
       const ip = extractClientIp(req);
+      const routeSlug = req.params?.tenantSlug;
+      const tenantScope =
+        typeof routeSlug === 'string' && routeSlug.trim().length > 0
+          ? `${routeSlug.trim()}:`
+          : '';
       const ipResult = await getIntakeAbuseStore().hitRateLimit(
-        `ip:${ip}`,
+        `ip:${tenantScope}${ip}`,
         config.ipMax,
         config.windowMs
       );
@@ -446,6 +451,12 @@ export type IntakeGuardDecision =
  * Email rate limit + Idempotency-Key + soft email dedupe.
  * Call before persisting a lead; on success call `finalizeIntakeIdempotency`.
  */
+function intakeTenantRateScope(req: Request): string {
+  const routeSlug = req.params?.tenantSlug;
+  const slug = typeof routeSlug === 'string' ? routeSlug.trim() : '';
+  return slug ? `${slug}:` : '';
+}
+
 export async function evaluateIntakeSubmissionGuards(
   req: Request,
   body: unknown
@@ -474,8 +485,9 @@ export async function evaluateIntakeSubmissionGuards(
 
     const email = normalizeIntakeEmail(body);
     if (email) {
+      const tenantScope = intakeTenantRateScope(req);
       const emailResult = await abuseStore.hitRateLimit(
-        `email:${email}`,
+        `email:${tenantScope}${email}`,
         config.emailMax,
         config.windowMs
       );
