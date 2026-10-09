@@ -189,6 +189,12 @@ export class QuickBooksInvoiceWebhookService {
         event_type: 'quickbooks_card_missing',
         event_source: 'quickbooks_webhook',
       });
+      try {
+        const { emitReminderEvent } = require('../features/messaging/application/reminderHooks');
+        emitReminderEvent({ type: 'deposit_paid_no_card', clientId });
+      } catch {
+        // optional
+      }
       return;
     }
 

@@ -6178,3 +6178,62 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 - **Action**:
   - [x] Context updated
   - [x] Implementation completed
+
+## Preflight Update 2026-10-09 (admin messaging reminder policies)
+
+### Task
+- Backend-only admin-configurable messaging / reminder policy engine (v4 spec).
+  Frontend Messaging UI is a later PR; this records the contract the CRM will
+  consume.
+
+### Gate
+- `run_preflight`
+- `open_handoff_tasks_found`: `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md` (neither is `frontend->backend`;
+  this work is an explicit owner-approved messaging build, so those tickets stay
+  queued). Messaging-specific: `no_open_handoff_tasks`.
+
+### Files Scanned
+- Frontend repo is not mounted in this workspace. Used living notes plus the
+  backend routes those notes already mapped:
+  - `frontend-crm/src/api/http.ts` (`{ success, data }` wrapper, cookies)
+  - `frontend-crm/src/api/doulas/doulaService.ts`
+  - `frontend-crm/src/common/hooks/dashboard/useDueDateCalendar.ts`
+  - `frontend-crm/src/common/data/sidebar-data.ts` / `src/Routes.tsx`
+  - `frontend-crm/src/common/auth/roles.ts`
+  - `backend/src/utils/responseBuilder.ts`
+  - `backend/src/middleware/authorizeRoles.ts`
+  - `backend/src/features/contracts/**` (native send/void/outbox)
+  - `backend/src/features/dashboard/http/dashboardRoutes.ts` (`phi_clients.due_date`)
+  - `backend/src/features/clients/http/clientController.ts` (birth outcomes, notes)
+  - `backend/src/db/migrations/add_phi_clients_birth_outcomes*.sql`
+
+### Contract Findings
+- Admin CRM APIs should return `{ success: true, data }` / `{ success: true, data, meta }`.
+- Calendar / EDD already reads `phi_clients.due_date` (not a separate EDD column).
+- Birth outcomes stop condition: structured fields
+  `birth_outcomes_induction`, `birth_outcomes_delivery_type`,
+  `birth_outcomes_medications_used` via `PUT /clients/:id/birth-outcomes`.
+- Deposit paid: `payment_installments.payment_type = 'deposit'` with status in
+  `paid|succeeded|completed` (portal eligibility), else no deposit due.
+- Notes/activities: `public.client_activities.timestamp`.
+- No Messaging API client exists yet (`src/api/messaging/messagingApi.ts` will
+  be frontend work). Roles already include `billing`.
+
+### Drift Risk
+- Frontend Messaging screens must not assume a `deposit_payment` policy or a
+  `postponed` contract status.
+- `POST /api/internal/cron/reminders/tick` is OIDC, not session-cookie auth.
+- Dev-only `tick-now` / `runs/:id/advance` return 404 unless
+  `REMINDER_TEST_TOOLS_ENABLED=true`.
+
+### Required Compatibility
+- Wrapper `{ success, data }` for admin messaging routes.
+- Settings payload includes `overdue_days`, `billing_notification_email`,
+  `evaluation_link`, and `test_tools_enabled`.
+- Merge fields are the v4 allow-list (incl. `cancel_date`, `contact_email`,
+  `restart_date`, `evaluation_link`, `hours_remaining`).
+
+### Action
+- [x] Context updated
+- [x] Implementation started

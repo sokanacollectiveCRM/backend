@@ -2362,6 +2362,13 @@ export class ClientController {
         return;
       }
 
+      try {
+        const { emitReminderEvent } = require('../../messaging/application/reminderHooks');
+        emitReminderEvent({ type: 'birth_outcomes_recorded', clientId: id });
+      } catch {
+        // optional
+      }
+
       res.json(
         ApiResponse.success({
           birth_outcomes_induction: induction,

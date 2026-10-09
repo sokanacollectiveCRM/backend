@@ -583,7 +583,18 @@ export class CloudSqlClientRepository implements ClientRepository {
         [status, clientId]
       );
     }
-    return this.getClientById(clientId);
+    const updated = await this.getClientById(clientId);
+    try {
+      const { emitReminderEvent } = require('../features/messaging/application/reminderHooks');
+      emitReminderEvent({
+        type: 'client_status_changed',
+        clientId,
+        status,
+      });
+    } catch {
+      // optional
+    }
+    return updated;
   }
 
   async saveQboCustomerId(

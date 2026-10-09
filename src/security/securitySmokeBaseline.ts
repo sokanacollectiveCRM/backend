@@ -53,6 +53,8 @@ export const PILOT_CRITICAL_PROTECTED_PREFIXES = [
   '/api/quickbooks',
   '/api/payment-methods',
   '/email',
+  '/api/admin/messaging',
+  '/api/internal',
 ] as const;
 
 /** Mirrors the lightweight Cloud Run health JSON (shape freeze only). */
