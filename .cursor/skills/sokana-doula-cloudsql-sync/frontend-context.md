@@ -2,6 +2,1258 @@
 
 This file is intentionally updateable as frontend work finishes.
 
+## Preflight Update 2026-10-08 (inbox verification — doula + client)
+
+### Task
+
+- Doulas and clients may use any email domain but must **verify inbox** before
+  PHI/API access.
+
+### Files Scanned
+
+- `frontend-crm/src/features/auth/VerifyEmail.tsx` (new)
+- `frontend-crm/src/features/auth/SetPassword.tsx`, `AcceptInvite.tsx`
+- `frontend-crm/src/common/components/routes/EmailVerifiedRoute.tsx`
+- `frontend-crm/src/Routes.tsx`, `src/common/types/user.ts`
+- `backend/src/middleware/authMiddleware.ts`
+- `backend/src/features/auth/http/authRoutes.ts`
+- `backend/src/features/team/application/staffInvitationService.ts`
+
+### Contract
+
+- `/auth/me` includes `emailVerified` (live from Identity Platform).
+- Unverified doula/client: API returns `403` + `EMAIL_NOT_VERIFIED` except
+  exempt auth paths.
+- `POST /auth/send-email-verification` (session),
+  `POST /auth/email-verification/post-password-setup` `{ email }` (public,
+  rate-limited).
+- Doula invite accept: `emailVerified: false` + verification email; admin accept
+  unchanged.
+- CRM routes wrapped in `EmailVerifiedRoute`; link landing
+  `/auth/verify-email?mode=verifyEmail&oobCode=…`.
+
+### Action
+
+- [x] Context updated
+
+## Preflight Update 2026-10-08 (staff email domain — admin only)
+
+### Task
+
+- Org `staff_email_domain` applies to **admin** team invites only; **doula** and
+  **client** emails are unrestricted.
+
+### Backend
+
+- `assertStaffInviteEmail({ role: 'doula' })` no-ops; `role: 'admin'` enforces
+  domain.
+- Client portal invites never used this check.
+
+### Action
+
+- [x] Context updated
+
+## Preflight Update 2026-10-08 (intake org logo at top)
+
+### Task
+
+- Branded org intake page shows org logo at top (not platform Cove NavBar).
+
+### Files Scanned
+
+- `frontend-crm/src/Routes.tsx`
+- `frontend-crm/src/common/layouts/NavLayout.tsx` / `NavBar.tsx` (Cove header)
+- `frontend-crm/src/features/intake/components/IntakeOrgTopBar.tsx`
+- `frontend-crm/src/features/intake/components/IntakeFormHeader.tsx`
+- `frontend-crm/src/features/intake/RequestForm.tsx`
+
+### Compatibility
+
+- `/request` and `/request/:tenantSlug` render **outside** `NavLayout`.
+- Org logo from branding API in `IntakeOrgTopBar`; form title remains in
+  `IntakeFormHeader`.
+
+### Action
+
+- [x] Context updated
+- [x] Frontend layout fix applied (cross-repo)
+
+## Preflight Update 2026-10-07 (per-org public intake branding)
+
+### Task
+
+- Per-organization intake URL and branding for Sokana360 (`/request/sokana360`).
+
+### Files Scanned
+
+- `frontend-crm/src/features/intake/RequestRoutes.tsx`
+- `frontend-crm/src/features/intake/RequestForm.tsx`
+- `frontend-crm/src/features/intake/RequestFormDesktop.tsx`
+- `frontend-crm/src/features/intake/application/usePublicIntakeBranding.ts`
+- `backend/src/features/intake/http/requestRoute.ts`
+- `backend/src/features/intake/infrastructure/publicIntakeBrandingRepository.ts`
+
+### Contract Findings
+
+- Public intake branding: `GET /requestService/public/:tenantSlug` →
+  `{ slug, name, branding: { displayName, logoPath, markPath, pageTitle } }`.
+- Submit: `POST /requestService/:tenantSlug/requestSubmission` (same JSON body;
+  same `200 { message }`).
+- Legacy `POST /requestService/requestSubmission` delegates to Sokana360 tenant
+  until callers migrate.
+- Primary tenant slug is **`sokana360`** (was `sokana-collective`).
+
+### Drift Risk
+
+- Frontend must not call branding endpoint before slug is known; unknown slug
+  shows 404 UI.
+- Hardcoded logos on intake bypass org config.
+
+### Required Compatibility
+
+- `/request` redirects to `/request/sokana360`.
+- Intake header uses branding endpoint assets (Sokana360:
+  `/sokana360-logo.png`).
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-06 (profile picture survives refresh)
+
+### Task
+
+- A saved profile photo must still show after the page reloads.
+
+### Files Scanned
+
+- `frontend-crm/src/features/my-account/components/UpdateProfile.tsx`
+- `frontend-crm/src/common/components/user/UserAvatar.tsx`
+- `backend/src/features/auth/http/authController.ts`
+- `backend/src/services/gcs/profilePictureStorage.ts`
+- `backend/src/services/cloudSqlTeamService.ts`
+
+### Contract Findings
+
+- `GET /auth/me` is a flat user object and includes `profile_picture`.
+- The profile form shows whatever `profile_picture` string comes back.
+- Save currently returns a signed image URL. Reload returns the stored file
+  path.
+
+### Drift Risk
+
+- An `<img>` cannot load a storage path, so the avatar falls back to initials.
+
+### Required Compatibility
+
+- `GET /auth/me` stays a flat user object.
+- `profile_picture` on that object is an https URL when a photo is stored.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-06 (team role filter width)
+
+### Task
+
+- Make the Team page Admin/Doula filter wide enough to read, and allow the dev
+  API to save profile images.
+
+### Files Scanned
+
+- `frontend-crm/src/features/teams/teams.tsx`
+- `backend/src/services/gcs/profilePictureStorage.ts`
+
+### Contract Findings
+
+- The team filter is a native select with values `doula` and `admin`.
+- Profile images upload to `gs://sokana-private-documents`.
+
+### Drift Risk
+
+- A narrow select hides the role label.
+
+### Required Compatibility
+
+- Filter values stay `doula` and `admin`.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-06 (expired session routes to login)
+
+### Task
+
+- An expired CRM session should leave the current page and open the login
+  screen.
+
+### Files Scanned
+
+- `frontend-crm/src/features/clients/Clients.tsx`
+- `frontend-crm/src/features/clients/application/useClients.ts`
+- `frontend-crm/src/common/utils/sessionUtils.ts`
+- `frontend-crm/src/api/http.ts`
+- `frontend-crm/src/common/components/routes/ProtectedRoutes.tsx`
+
+### Contract Findings
+
+- `GET /clients` 401 is turned into the banner "Your session has expired."
+- `handleSessionExpiration()` already points at `/login` but nothing calls it.
+- The signed-in user stays in memory, so the sidebar remains.
+
+### Drift Risk
+
+- Redirecting every 401, including login and invite calls, would bounce those
+  pages.
+
+### Required Compatibility
+
+- Authenticated CRM calls that return 401 go to `/login`.
+- Login, invite accept, signup, and public request calls stay put.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-06 (invite testing on shared dev)
+
+### Task
+
+- Staff invites must be sent from the public dev CRM so invitees can open the
+  accept link. Localhost links are unreachable.
+
+### Files Scanned
+
+- `frontend-crm/src/Routes.tsx`
+- `frontend-crm/src/features/auth/AcceptInvite.tsx`
+- `frontend-crm/src/features/teams/teams.tsx`
+- `backend/src/features/team/application/staffInvitationService.ts`
+- `backend/scripts/dev-env/deploy-cloudrun.sh`
+- `backend/scripts/dev-env/deploy-frontend.sh`
+
+### Contract Findings
+
+- Accept link is `${FRONTEND_URL}/accept-invite?token=...`.
+- The public dev CRM is `sokana-front-end-dev` and the public dev API is
+  `sokana-private-api-dev`.
+- `deploy-cloudrun.sh` copies the production API image, which does not include
+  the pending-invite routes.
+
+### Drift Risk
+
+- A localhost `FRONTEND_URL` puts unreachable links in invitation email.
+- Deploying this image to `sokana-private-api` would change production.
+
+### Required Compatibility
+
+- Dev API `FRONTEND_URL` stays the public dev CRM URL.
+- Production service `sokana-private-api` is not updated.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-06 (pending staff invitations)
+
+### Task
+
+- An admin or doula invite stays pending until the person accepts it. Acceptance
+  adds them to the team view and writes a log.
+
+### Files Scanned
+
+- `frontend-crm/src/features/teams/teams.tsx`
+- `frontend-crm/src/features/auth/SignUp.tsx`
+- `frontend-crm/src/features/auth/AuthRoutes.tsx`
+- `frontend-crm/src/Routes.tsx`
+- `backend/src/features/users/http/userController.ts`
+- `backend/src/services/emailService.ts`
+
+### Contract Findings
+
+- The team page posts `POST /clients/team/add` then `POST /email/team-invite`.
+- The invite email links to `/signup`, and that page tells the person to fill
+  out a sign-up form.
+- `GET /clients/team/all` returns an array of team members.
+
+### Drift Risk
+
+- Creating the login before acceptance makes the person look active and sends
+  them to the wrong page.
+- Dropping pending rows from `/clients/team/all` hides invitations from the
+  admin.
+
+### Required Compatibility
+
+- Keep `POST /clients/team/add` `{ firstname, lastname, email, role }` and
+  return `201` with `invitation_status: "pending"`.
+- Team list stays an array. Pending rows include `invitation_status: "pending"`.
+- Accept link is `/accept-invite?token=...`, not `/signup`.
+- Client invites are unchanged.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-06 (staff invite email domain)
+
+### Task
+
+- Reject admin and doula invites whose email is outside that organization's
+  domain. Client invites stay unchanged.
+
+### Files Scanned
+
+- `frontend-crm/src/features/teams/teams.tsx`
+- `backend/src/features/users/http/userController.ts`
+- `backend/src/features/admin/http/adminController.ts`
+- `backend/src/features/email/http/emailController.ts`
+- `backend/src/features/clients/http/clientRoutes.ts`
+
+### Contract Findings
+
+- The team page invites with `POST /clients/team/add`
+  `{ firstname, lastname, email, role }`, then `POST /email/team-invite`.
+- Role is `admin` or `doula`. The UI shows `error` from a failed add response.
+- Doula invites also exist at `POST /api/admin/doulas/invite` with
+  `{ success: false, error }`.
+- Client portal invites are a separate path.
+
+### Drift Risk
+
+- Checking the domain only on the email send would still create the staff
+  account.
+- Applying the same check to client invites would block families who use
+  personal email.
+
+### Required Compatibility
+
+- Keep both request bodies. Return `400 { error }` on `/clients/team/add` and
+  `{ success: false, error }` on the doula invite route.
+- Sokana staff domain is `sokanacollective.com`. Synthetic Tenant B staff domain
+  is `tenantb.example`.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-06 (tenant B in-app logo)
+
+### Task
+
+- Show a different organization logo in the signed-in sidebar for Synthetic
+  Tenant B.
+
+### Files Scanned
+
+- `frontend-crm/src/common/components/navigation/sidebar/BusinessCard.tsx`
+- `frontend-crm/src/common/components/navigation/sidebar/AppSidebar.tsx`
+- `frontend-crm/src/common/types/user.ts`
+- `frontend-crm/src/common/contexts/UserContext.tsx`
+- `backend/src/features/auth/http/authController.ts` (`GET /auth/me` tenant
+  fields)
+
+### Contract Findings
+
+- `/auth/me` is a flat user object and may include
+  `tenant: { id, slug, name, role }`.
+- `UserProvider` stores that object as-is.
+- The sidebar brand is hardcoded to Sokana360 in `BusinessCard`.
+
+### Drift Risk
+
+- Dropping `tenant` from `/auth/me` would make every organization show the
+  Sokana360 mark.
+
+### Required Compatibility
+
+- Keep `/auth/me` flat, with optional `tenant.slug` and `tenant.name`.
+- Sokana (`sokana-collective`) keeps the Sokana360 mark. `synthetic-tenant-b`
+  uses its own mark.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-06 (Cove header, no sign-up link)
+
+### Task
+
+- Show Cove in the public header and remove the sign-up link from login.
+
+### Files Scanned
+
+- `frontend-crm/src/common/components/navigation/navbar/NavBar.tsx`
+- `frontend-crm/src/features/auth/Login.tsx`
+- `frontend-crm/src/common/components/brand/Sokana360Logo.tsx`
+
+### Contract Findings
+
+- The public header is `NavBar`, used by login, sign-up, and password reset.
+- Login also has a "Sign up" link under the form.
+
+### Drift Risk
+
+- Removing those links hides self-serve sign-up. The `/signup` route can still
+  be opened directly.
+
+### Required Compatibility
+
+- Keep the Cove mark on the sign-in card and the Sokana360 logo inside the app.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-06 (platform name)
+
+### Task
+
+- Give the shared sign-in screen a product name. Sokana360 stays the
+  organization name inside the app.
+
+### Files Scanned
+
+- `frontend-crm/index.html`
+- `frontend-crm/src/common/components/brand/Sokana360Logo.tsx`
+- `frontend-crm/src/features/auth/Login.tsx`
+
+### Contract Findings
+
+- The document title is `Sokana360`.
+- Auth screens render `AuthFormLogo`.
+- The signed-in sidebar still renders the Sokana360 logo and name.
+
+### Drift Risk
+
+- Changing `Sokana360Logo` would rename the organization inside the app.
+
+### Required Compatibility
+
+- Set the public product name on `AuthFormLogo` and the document title only.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-06 (remove public header mark)
+
+### Task
+
+- Remove the upper-left mark from the public login header.
+
+### Files Scanned
+
+- `frontend-crm/src/common/components/navigation/navbar/NavBar.tsx`
+- `frontend-crm/src/common/layouts/NavLayout.tsx`
+
+### Contract Findings
+
+- `NavBar` is the public header on login, sign-up, and password reset.
+- The signed-in sidebar logo is separate and stays.
+
+### Drift Risk
+
+- Removing the header button also removes its link back to `/login`. Sign Up and
+  Login remain.
+
+### Required Compatibility
+
+- Leave the sign-in card mark and the in-app Sokana360 logo unchanged.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-06 (generic login mark)
+
+### Task
+
+- Keep the shared login screen free of an organization logo. Show the Sokana360
+  logo only inside the signed-in app.
+
+### Files Scanned
+
+- `frontend-crm/src/common/components/brand/Sokana360Logo.tsx`
+- `frontend-crm/src/features/auth/Login.tsx`
+- `frontend-crm/src/features/auth/ClientLogin.tsx`
+- `frontend-crm/src/features/auth/SignUp.tsx`
+- `frontend-crm/src/features/auth/RequestPasswordReset.tsx`
+- `frontend-crm/src/common/components/navigation/sidebar/BusinessCard.tsx`
+- `frontend-crm/src/common/components/navigation/navbar/NavBar.tsx`
+
+### Contract Findings
+
+- Auth screens share `AuthFormLogo`, which currently renders
+  `/sokana360-logo.png`.
+- The signed-in shell uses `Sokana360Logo` in the sidebar and
+  `/sokana360-logo.png` in the navbar.
+
+### Drift Risk
+
+- Replacing `Sokana360Logo` itself would also remove the in-app logo.
+
+### Required Compatibility
+
+- Change only `AuthFormLogo`.
+- Leave sidebar and navbar logos in place.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-06 (local email 2FA)
+
+### Task
+
+- Turn the local CRM login onto the existing email-code step so 2FA can be
+  tested.
+
+### Files Scanned
+
+- `frontend-crm/src/features/auth/Login.tsx`
+- `frontend-crm/src/common/contexts/UserContext.tsx`
+- `frontend-crm/src/common/types/auth.ts`
+- `backend/src/features/auth/http/authController.ts`
+- `backend/src/features/auth/http/authRoutes.ts`
+
+### Contract Findings
+
+- The login screen already shows a 6-digit code form when `login()` returns
+  `{ mfaRequired, challengeId, emailHint, idToken }`.
+- `POST /auth/session` returns
+  `{ mfaRequired: true, challengeId, emailHint, expiresInSec, resendAvailableInSec }`
+  and does not set a session cookie.
+- `POST /auth/mfa/verify` with `{ challengeId, code, idToken }` sets the session
+  cookie and returns `{ message, user }`.
+- `GET /auth/me` stays a flat user object.
+
+### Drift Risk
+
+- If `login()` keeps calling `POST /auth/login`, the code form never appears.
+- A session cookie must not be set until the code is accepted.
+
+### Required Compatibility
+
+- Keep the Firebase password sign-in, then `POST /auth/session { idToken }`.
+- Attach the Firebase `idToken` on the pending result so verify and resend can
+  send it.
+- Keep `POST /auth/mfa/verify` and the flat `/auth/me` user.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-06 (tenant isolation local test)
+
+### Task
+
+- Turn on tenant isolation for the local API and add a Synthetic Tenant B login.
+
+### Files Scanned
+
+- `frontend-crm/src/features/auth/Login.tsx`
+- `frontend-crm/src/common/contexts/UserContext.tsx`
+- `backend/src/features/auth/http/authController.ts`
+- `backend/src/middleware/authMiddleware.ts`
+
+### Contract Findings
+
+- Login is Firebase email/password, then `POST /auth/login { idToken }`, then
+  `GET /auth/me`.
+- The CRM does not send `X-Tenant-Id`. A person in one organization can sign in
+  with no tenant header.
+- `/auth/me` stays a flat user object. Optional `tenant` is additive.
+
+### Drift Risk
+
+- A person in two organizations gets `409 TENANT_SELECTION_REQUIRED` from
+  `/auth/me`, and the current login screen treats that as a failed session.
+
+### Required Compatibility
+
+- Tenant B gets its own user with one membership, so the existing login screen
+  works.
+- Keep `POST /auth/login` `{ idToken }` and the flat `/auth/me` user.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-05 (multitenant foundation)
+
+### Task
+
+- Prepare the API for multitenant operation: organization records, memberships,
+  and request tenant context.
+
+### Files Scanned
+
+- `frontend-crm/src/common/contexts/UserContext.tsx`
+- `frontend-crm/src/common/types/user.ts`
+- `frontend-crm/src/features/auth/Login.tsx` (via prior preflight; login still
+  posts an Identity token)
+- `backend/src/features/auth/http/authController.ts`
+- `backend/src/middleware/authMiddleware.ts`
+
+### Contract Findings
+
+- `GET /auth/me` is an unwrapped user object. `UserProvider` stores that JSON as
+  `user`.
+- Frontend `User` reads `id`, `email`, `firstname`, `lastname`, `role`, and
+  profile fields. It does not send an organization id.
+- Login stays Identity email/password, then the CRM session. Role still comes
+  from `/auth/me`.
+
+### Drift Risk
+
+- Requiring an `X-Tenant-Id` header, or wrapping `/auth/me` in
+  `{ success, data }`, logs the current app out.
+- Turning on `TENANCY_ENFORCE` before public signing, webhooks, and jobs set a
+  tenant will hide their rows.
+
+### Required Compatibility
+
+- Keep `/auth/me` a flat user object, including `role`.
+- Add optional `tenant: { id, slug, name, role }` only after a membership is
+  resolved.
+- One organization needs no tenant header. `X-Tenant-Id` (uuid or slug) is only
+  for a person who belongs to more than one organization.
+- Do not change login or session cookie behavior.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-05 (reset Test Admin password)
+
+### Task
+
+- User requested a new Identity Platform password for isolated Test Admin
+  `hello@sokanacollective.com`.
+
+### Files Scanned
+
+- `frontend-crm/src/features/auth/Login.tsx`
+- `backend/scripts/dev-env/provision-admin-login.ts`
+- `backend/docs/PILOT_TEST_GUIDE.md`
+
+### Contract Findings
+
+- Staff login is Identity email/password, then `POST /auth/login {idToken}`.
+- Isolated and production share the same Identity Platform project.
+
+### Drift Risk
+
+- `--reset-password` changes production login for the same inbox.
+
+### Required Compatibility
+
+- Keep email `hello@sokanacollective.com` and display name Test Admin.
+- Do not commit the password. Store only in gitignored `dev.env`.
+
+### Action
+
+- [x] Context updated
+- [x] `--reset-password` applied for `hello@sokanacollective.com`
+- [x] New password stored in gitignored `scripts/dev-env/.local/dev.env`
+
+## Preflight Update 2026-10-05 (dev admin email)
+
+### Task
+
+- Isolated tester admin must be `hello@sokanacollective.com`.
+
+### Files Scanned
+
+- `frontend-crm/src/common/components/navigation/sidebar/NavUser.tsx`
+- `backend/scripts/dev-env/adminLogin.ts`
+- `backend/scripts/dev-env/provision-admin-login.ts`
+- `backend/docs/PILOT_TEST_GUIDE.md`
+
+### Contract Findings
+
+- Sidebar shows `user.email` from `/auth/me`. Login is Identity Platform
+  email/password. Isolated `public.admins` must match that email.
+
+### Drift Risk
+
+- Resetting this Identity password would also change production login for the
+  same inbox. Do not pass `--reset-password`.
+
+### Required Compatibility
+
+- Keep Test Admin display name. Email is `hello@sokanacollective.com`.
+
+### Action
+
+- [x] Context updated
+- [x] Isolated `public.admins` now has only `hello@sokanacollective.com`
+- [x] Leftover `hello+isolated@` row removed from isolated DB only
+- [x] Identity password left unchanged (shared with production)
+
+## Preflight Update 2026-10-05 (auth form logo)
+
+### Task
+
+- Place the Sokana360 logo directly above the login and sign-up forms.
+
+### Files Scanned
+
+- `frontend-crm/src/features/auth/Login.tsx`
+- `frontend-crm/src/features/auth/SignUp.tsx`
+- `frontend-crm/src/features/auth/ClientLogin.tsx`
+
+### Contract Findings
+
+- Logo already rendered above the cards; move it into each card header so it
+  sits on the form.
+
+### Drift Risk
+
+- Isolated and production frontends both need a rebuild.
+
+### Required Compatibility
+
+- No API change.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-05 (Sokana360 branding)
+
+### Task
+
+- Rename visible CRM chrome from Sokana Collective / SokanaCRM to Sokana360 and
+  add the provided logo with the white background removed.
+
+### Files Scanned
+
+- `frontend-crm/src/common/components/navigation/sidebar/BusinessCard.tsx`
+- `frontend-crm/src/common/components/navigation/navbar/NavBar.tsx`
+- `frontend-crm/src/features/auth/Login.tsx`
+- `frontend-crm/src/features/auth/ClientLogin.tsx`
+- `frontend-crm/src/features/intake/RequestForm.tsx`
+- `frontend-crm/src/features/intake/RequestFormDesktop.tsx`
+- `frontend-crm/index.html`
+- `frontend-crm/public/logo.jpeg`
+
+### Contract Findings
+
+- Branding is frontend-only (sidebar name, login, favicon, public logo).
+- No API contract change.
+
+### Drift Risk
+
+- Isolated Cloud Run frontend must be rebuilt to show the new assets.
+- Production `sokana-front-end` uses the same frontend source and logo assets as
+  `sokana-front-end-dev`.
+
+### Required Compatibility
+
+- Keep `/logo.jpeg` working if anything still points at it, and add transparent
+  PNG assets for the new lockup.
+- Branding-only production deploy must keep production `VITE_APP_BACKEND_URL` on
+  `sokana-private-api`, not the isolated API.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+- Transparent `sokana360-logo.png` / `sokana360-mark.png` added; sidebar name is
+  Sokana360.
+- Shared branding for production `sokana-front-end` and isolated
+  `sokana-front-end-dev`.
+
+## Preflight Update 2026-10-05 (admin billing 403)
+
+### Task
+
+- Test Admin can open the CRM sidebar but `/billing/contracts` shows "You do not
+  have permission to view billing contracts."
+
+### Files Scanned
+
+- `frontend-crm/src/features/billing/ui/portal/BillingContractsListPage.tsx`
+- `frontend-crm/src/features/billing/infrastructure/billingPortalApi.ts`
+- `frontend-crm/src/common/data/sidebar-data.ts`
+- `backend/src/features/billing/http/billingRoutes.ts`
+- `backend/src/security/resolveAuthoritativeRole.ts`
+- `backend/src/services/identityPlatform/cloudSqlIdentityUserService.ts`
+
+### Contract Findings
+
+- Signed Contracts calls `GET /api/billing/contracts` (`admin` or `billing`).
+- A 403 is rendered as Access denied. Sidebar `adminOnly` items still show from
+  the frontend user object.
+- Cloud SQL admin lookup by Identity UID was missing in `findCloudSqlRole` (UUID
+  id / email only).
+
+### Drift Risk
+
+- Identity Platform UIDs are not UUIDs. Staff sessions that only match
+  `identity_platform_uid` can be treated as client on some auth paths.
+
+### Required Compatibility
+
+- Keep `/api/billing/contracts` wrapper and admin|billing allowlist.
+- Resolve Cloud SQL admin/doula/client by identity_platform_uid as well.
+- Native `/me/contracts` client middleware must not wrap other `/api/clients/*`
+  staff routes (documents, activities).
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+- Native `createClientContractRoutes` no longer applies a client-only check to
+  every `/api/clients/*` request.
+
+## Preflight Update 2026-10-05 (dev Clients 403)
+
+### Task
+
+- Isolated CRM Clients page shows `Forbidden: Insufficient permissions` for Test
+  Admin (403 on `/clients`, `/dashboard/stats`, `/contracts/templates`,
+  `/quickbooks/status`).
+
+### Files Scanned
+
+- `frontend-crm/src/features/clients/Clients.tsx`
+- `frontend-crm/src/common/contexts/UserContext.tsx`
+- `frontend-crm/src/common/components/routes/ProtectedRoutes.tsx`
+- `backend/src/middleware/authorizeRoles.ts`
+- `backend/src/services/identityPlatform/cloudSqlIdentityUserService.ts`
+
+### Contract Findings
+
+- Staff list is `GET /clients` with `authorizeRoles(['admin','doula'])`.
+- Cloud Run logs: session uid `F2Bjj6GdBsXTIKKzEmuBe7lQcBC3` (legacy
+  `hello+isolated@`) resolved as `role=client` after that admins row was
+  removed. UI can stay on a stale Test Admin object.
+
+### Drift Risk
+
+- Removing a still-logged-in Identity user from `public.admins` turns every
+  staff call into 403 without forcing a re-login.
+
+### Required Compatibility
+
+- Keep `/clients` role allowlist. Restore the live session's admin row.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-05 (pilot guide tone rewrite)
+
+### Task
+
+- Rewrite `docs/PILOT_TEST_GUIDE.md` in plain adult language. No workflow or
+  login-contract changes.
+
+### Files Scanned
+
+- `docs/PILOT_TEST_GUIDE.md`
+- `frontend-crm/src/common/data/sidebar-data.ts` (roles already documented)
+
+### Contract Findings
+
+- No API or payload changes. Guide still uses admin, doula, client, and billing
+  surfaces already in the CRM.
+
+### Drift Risk
+
+- None for code. Testers should still use fictional names while email,
+  QuickBooks, and card charges are live.
+
+### Required Compatibility
+
+- Keep the same URLs, Test Admin email, Maya Tester client login, and live-email
+  / live-QBO warnings.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-05 (playground live email + QBO + money)
+
+### Task
+
+- Turn on real SMTP from `hello@sokanacollective.com`, real QuickBooks company
+  connection, and live charges on the isolated playground API.
+
+### Files Scanned
+
+- `frontend-crm` Integrations / QuickBooks connect (CRM uses `/quickbooks/auth`
+  then returns to `/integrations/quickbooks`)
+- `backend/src/features/billing/http/quickbooksRoutes.ts`
+- `backend/src/features/billing/http/quickbooksController.ts`
+- `backend/src/services/emailService.ts`
+- `backend/src/config/env.ts`
+- `backend/src/server.ts`
+- `backend/scripts/dev-env/deploy-cloudrun.sh`
+
+### Contract Findings
+
+- Email send does not check `FEATURE_EMAIL`; SMTP env + `EMAIL_PASSWORD` is what
+  actually sends from `hello@sokanacollective.com`.
+- QuickBooks CRM routes mount only when `FEATURE_QUICKBOOKS=true`.
+- OAuth callback is `GET /quickbooks/callback`; tokens live in that database's
+  `quickbooks_tokens` row, not production PHI tables.
+- Frontend success path is `/integrations/quickbooks?quickbooks=connected`.
+
+### Drift Risk
+
+- Isolated Cloud Run currently forces `FEATURE_*=false` and omits SMTP/QBO
+  secrets, so testers see UI that cannot send mail or talk to Intuit.
+- Reusing the production Intuit app can revoke production refresh tokens when
+  playground connects the same company.
+
+### Required Compatibility
+
+- Do not change OAuth or payment payload shapes.
+- Keep isolated Cloud SQL (`sokana_private_dev`); do not copy production QBO
+  tokens or PHI.
+- Copy SMTP/QBO/Stripe credentials onto `sokana-private-api-dev` only.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-05 (real admin email + guaranteed client)
+
+### Task
+
+- Put a real-email Test Admin on the isolated CRM and create one fake client so
+  the pilot always has a family to open.
+
+### Files Scanned
+
+- `frontend-crm/src/features/auth/Login.tsx`
+- `frontend-crm/src/features/auth/ClientLogin.tsx`
+- `frontend-crm/src/features/dashboard-home/Home.jsx`
+- `backend/scripts/dev-env/adminLogin.ts`
+- `backend/scripts/dev-env/provision-admin-login.ts`
+- `backend/src/services/identityPlatform/cloudSqlIdentityUserService.ts`
+
+### Contract Findings
+
+- Staff login still matches `public.admins` by uid/email after Firebase
+  `POST /auth/login`.
+- Client portal matches `phi_clients.user_id` / `identity_platform_uid` / email.
+- Identity Platform is shared with production; do not reset an existing password
+  unless asked.
+
+### Drift Risk
+
+- Using `hello@sokanacollective.com` on isolated Cloud SQL does not copy PHI; it
+  only links the same login mailbox to `sokana_private_dev`.
+
+### Required Compatibility
+
+- Do not change login payload shapes.
+- Do not reset an existing Identity Platform password unless there is no
+  email/password login yet.
+- Isolated greeting still comes from Cloud SQL `first_name`, not Identity
+  display name.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-05 (pilot role test guide)
+
+### Task
+
+- Write a non-technical pilot test guide for admin, doula, client, and billing
+  workflows on the isolated tester CRM.
+
+### Files Scanned
+
+- `frontend-crm/src/common/data/sidebar-data.ts`
+- `frontend-crm/src/common/components/routes/ProtectedRoutes.tsx`
+- `frontend-crm/src/common/auth/roles.ts`
+- `frontend-crm/src/features/teams/teams.tsx`
+- `frontend-crm/src/features/dashboard-home/Home.jsx`
+- `backend/src/security/authorizationPolicies.ts`
+- `backend/src/features/users/http/userController.ts`
+
+### Contract Findings
+
+- Hats in the CRM: admin, doula, client, billing.
+- Team invite UI/API only create `admin` or `doula`.
+- Billing-only users are sent to `/billing/contracts` and see Billing nav only.
+- Isolated tester CRM: https://sokana-front-end-dev-46lcr3n2qa-uc.a.run.app
+- Isolated API now sends real email, mounts QuickBooks, and can take live
+  charges once Connect succeeds.
+
+### Drift Risk
+
+- Testers may think invite emails or card charges work on this playground.
+
+### Required Compatibility
+
+- Do not change login or role payload shapes for this documentation task.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-05 (rename isolated admin)
+
+### Task
+
+- Change the isolated tester greeting name from Isolated to Test Admin.
+
+### Files Scanned
+
+- `frontend-crm/src/features/dashboard-home/Home.jsx`
+- `frontend-crm/src/common/contexts/UserContext.tsx`
+- `backend/src/services/identityPlatform/cloudSqlIdentityUserService.ts`
+- `backend/scripts/dev-env/adminLogin.ts`
+
+### Contract Findings
+
+- Home greets `user.firstname` / `first_name`
+  (`Welcome back, {displayFirstName}!`).
+- Isolated admin name comes from Cloud SQL `public.admins`, not Firebase
+  displayName.
+
+### Drift Risk
+
+- Provisioning again would restore Isolated Admin unless the helper default
+  changes.
+
+### Required Compatibility
+
+- Do not change login payload shapes or the tester email.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-05 (wipe isolated data, keep admin)
+
+### Task
+
+- Clear `sokana_private_dev` application rows and keep only the isolated tester
+  admin login.
+
+### Files Scanned
+
+- `frontend-crm/src/features/auth/Login.tsx`
+- `frontend-crm/src/common/contexts/UserContext.tsx`
+- `backend/scripts/dev-env/seed-synthetic.ts`
+- `backend/scripts/dev-env/adminLogin.ts`
+
+### Contract Findings
+
+- Staff CRM login still needs one `public.admins` row matched by
+  `identity_platform_uid` / email after Firebase `POST /auth/login`.
+- Empty client/doula/hours lists are valid dashboard states.
+
+### Drift Risk
+
+- Wiping production `sokana_private` would destroy PHI. Tooling must refuse
+  production names.
+
+### Required Compatibility
+
+- Do not change login shapes.
+- Keep `hello@sokanacollective.com` (or `DEV_ENV_ADMIN_EMAIL`) so testers can
+  still sign in as Test Admin.
+- Keep Maya Tester (`DEV_ENV_CLIENT_EMAIL`) on wipe so the pilot always has a
+  family.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-05 (isolated login 500)
+
+### Task
+
+- Isolated tester CRM login shows Internal Server Error after Firebase password
+  sign-in.
+
+### Files Scanned
+
+- `frontend-crm/src/features/auth/Login.tsx`
+- `frontend-crm/src/common/contexts/UserContext.tsx`
+- `backend/src/features/auth/http/authController.ts`
+- `backend/src/services/identityPlatform/cloudSqlIdentityUserService.ts`
+- `backend/src/db/migrations/firebase_portal_user_id_and_request_status.sql`
+
+### Contract Findings
+
+- Isolated frontend still posts `{ idToken }` to `POST /auth/login`, then
+  `GET /auth/me`. Toast surfaces `error` from the JSON body.
+- `phi_clients.user_id` is text (Firebase UID). Isolated Postgres 18 rejects
+  `c.user_id = $2::uuid` (`text = uuid`) and the API returns 500.
+
+### Drift Risk
+
+- Copying the production image onto Postgres 18 without text casts breaks staff
+  login even when Identity Platform succeeds.
+
+### Required Compatibility
+
+- Do not change login request/response shapes.
+- Compare identity/profile ids as text so uuid and Firebase uid columns both
+  work.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-05 (public tester access)
+
+### Task
+
+- Make the isolated Cloud Run stack reachable by testers in a browser without
+  Google IAM. Production remains private.
+
+### Files Scanned
+
+- `frontend-crm/src/api/http.ts`
+- `frontend-crm/src/features/auth/Login.tsx`
+- `frontend-crm/src/lib/firebase.ts`
+- `frontend-crm/cloudbuild.yaml`
+- `backend/src/server.ts`
+- `backend/src/config/env.ts`
+
+### Contract Findings
+
+- Frontend bakes `VITE_APP_BACKEND_URL` at Docker build time.
+- Login still uses Firebase + `POST /auth/login` with cookies/`credentials`.
+- Backend CORS allowlist is `FRONTEND_ORIGIN` (production does not auto-add
+  localhost). Unknown origins throw and the API returns 500.
+- Identity Platform authorized domains currently include production
+  `sokana-front-end-*.run.app` and localhost, not `sokana-front-end-dev`.
+
+### Drift Risk
+
+- Reusing the production frontend image would keep calling production API.
+- `gcloud --env-vars-file` replaces every Cloud Run env var and will crash the
+  isolated API revision. CORS updates must `--update-env-vars`.
+- Identity Platform authorized domains must include the tester frontend host.
+
+### Required Compatibility
+
+- Do not change login payload shapes.
+- Do not make `sokana-private-api` (production) publicly invokable.
+- When patching Identity Platform domains, keep existing production hosts.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-05 (isolated admin login)
+
+### Task
+
+- Give the isolated Cloud SQL/Cloud Run stack one admin who can sign in through
+  the existing CRM login (Firebase password → `POST /auth/login` idToken →
+  `GET /auth/me`).
+
+### Files Scanned
+
+- `frontend-crm/src/features/auth/Login.tsx`
+- `frontend-crm/src/common/contexts/UserContext.tsx`
+- `frontend-crm/src/lib/firebase.ts`
+- `backend/src/features/auth/http/authController.ts`
+- `backend/src/services/identityPlatform/cloudSqlIdentityUserService.ts`
+- `backend/src/security/resolveAuthoritativeRole.ts`
+
+### Contract Findings
+
+- Frontend signs in with `signInWithEmailAndPassword`, then `POST /auth/login`
+  `{ idToken }` and `GET /auth/me`.
+- Backend role is Cloud SQL `public.admins` matched by `identity_platform_uid`,
+  UUID `id`, or email. Missing row becomes client and is blocked from staff CRM.
+
+### Drift Risk
+
+- Isolated synthetic admin used `@sokana-dev.example` with no Identity Platform
+  user, so CRM login could not succeed until a real IdP user is linked.
+
+### Required Compatibility
+
+- Do not change login request/response shapes.
+- Do not reset passwords of existing Identity Platform users unless explicitly
+  requested.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-05
+
+### Task
+
+- Add a terminal-driven Cloud Run + Cloud SQL **dev** stack with schema clone
+  and synthetic data. No API or frontend contract change.
+
+### Files Scanned
+
+- `backend/cloudbuild.yaml`
+- `backend/scripts/deploy.sh`
+- `backend/src/db/cloudSqlPool.ts`
+- `backend/docs/CLOUD_SQL_SOKANA_PRIVATE_SCHEMA.md`
+- `frontend-crm/src/api/doulas/doulaService.ts`
+- `frontend-crm/src/features/doula-dashboard/DoulaDashboard.tsx`
+
+### Contract Findings
+
+- Frontend still expects Cloud SQL-backed doula dashboard shapes (`phi_clients`,
+  `doula_assignments`, `hours`, `client_activities`).
+- No request/response wrapper change for this infra task.
+
+### Drift Risk
+
+- A schema-only clone plus synthetic rows can miss a NOT NULL column that
+  production added after the last dump. Seeder skips missing tables and inserts
+  only columns that exist.
+
+### Required Compatibility
+
+- Preserve existing doula/client/hours/activities payload fields.
+- Never copy production PHI into the dev instance.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
 ## Preflight Update 2026-10-03
 
 ### Task
@@ -4896,6 +6148,33 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
   gone from `main`.
 - **Required Compatibility**: Keep the client PHI route on the main API. Do not
   change `sokana-private-api` or `sokana-front-end`.
+- **Action**:
+  - [x] Context updated
+  - [x] Implementation completed
+
+## Preflight Update 2026-10-05 (frontend modular-monolith prompt)
+
+- **Gate Result**: `run_preflight`
+- **Task Intent**: Write a prompt for packaging `frontend-crm` by feature, using
+  the same rules as `backend/src/features`. No code change.
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md`. User asked for the prompt
+  instead of those tickets.
+- **Files Scanned**:
+  - `backend/src/features/README.md`
+  - `frontend-crm/src/Routes.tsx`
+  - `frontend-crm/src/features/`
+  - `frontend-crm/src/api/`
+  - `frontend-crm/src/domain/`
+- **Contract Findings**: Screens already live under `src/features`. About 95
+  files still import `@/api/`. Client PHI still goes through
+  `src/api/services/clients.service.ts` `updateClientPhi` to
+  `PUT /clients/:id/phi`.
+- **Drift Risk**: A frontend move that changes routes, request bodies, or
+  response parsing will break the CRM even if folders look cleaner.
+- **Required Compatibility**: Keep router paths, role gates, and API payloads.
+  Leave old import paths as re-export shims.
 - **Action**:
   - [x] Context updated
   - [x] Implementation completed

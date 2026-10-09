@@ -16,5 +16,5 @@ export function emailMatchesStaffDomain(
 }
 
 export function staffInviteDomainMessage(orgDomain: string): string {
-  return `Admins and doulas must use an @${normalizeStaffEmailDomain(orgDomain)} email address.`;
+  return `Admin staff must use an @${normalizeStaffEmailDomain(orgDomain)} email address.`;
 }

@@ -481,6 +481,54 @@ The Sokana Team`;
     await this.sendEmail(to, subject, text, html);
   }
 
+  async sendStaffInvitationEmail(input: {
+    to: string;
+    firstname: string;
+    lastname: string;
+    role: string;
+    organizationName: string;
+    acceptUrl: string;
+  }): Promise<void> {
+    const roleLabel = input.role === 'admin' ? 'an admin' : 'a doula';
+    const subject = `You're invited to ${input.organizationName}`;
+    const text = `Dear ${input.firstname} ${input.lastname},\n\nYou have been invited to join ${input.organizationName} as ${roleLabel}. Accept the invitation to create your login:\n${input.acceptUrl}\n\nThis invitation stays pending until you accept it.`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>You're invited</h2>
+        <p>Dear ${input.firstname} ${input.lastname},</p>
+        <p>You have been invited to join ${input.organizationName} as ${roleLabel}.</p>
+        <p>The invitation stays pending until you accept it.</p>
+        <div style="text-align: center; margin: 25px 0;">
+          <a href="${input.acceptUrl}" style="background-color: #0f766e; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">Accept invitation</a>
+        </div>
+        <p>If the button doesn't work, copy this link into your browser:</p>
+        <p>${input.acceptUrl}</p>
+      </div>
+    `;
+    await this.sendEmail(input.to, subject, text, html);
+  }
+
+  async sendEmailVerificationEmail(
+    to: string,
+    verifyUrl: string
+  ): Promise<void> {
+    const subject = 'Verify your email — Sokana';
+    const text = `Please verify your email address to access your Sokana account:\n\n${verifyUrl}\n\nAfter you click the link, sign in at Sokana with the same email and password if you are not already logged in on that device.\n\nIf you did not create this account, you can ignore this email.\n\nBest regards,\nThe Sokana Team`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #333;">Verify your email</h2>
+        <p>For your security, confirm that you own this email address before accessing health-related information in Sokana.</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${verifyUrl}" style="background-color: #0A3147; color: white; padding: 14px 28px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Verify email</a>
+        </div>
+        <p style="color: #666; font-size: 14px;">After you verify, sign in with the same email and password if this browser is not already logged in.</p>
+        <p style="color: #666; font-size: 14px;">If the button does not work, copy this link into your browser:</p>
+        <p style="word-break: break-all; color: #666; font-size: 14px;">${verifyUrl}</p>
+      </div>
+    `;
+    await this.sendEmail(to, subject, text, html);
+  }
+
   async sendTeamInviteEmail(
     to: string,
     firstname: string,

@@ -93,6 +93,8 @@ export class User {
   referral_email?: string;
   referral_source_other?: string;
   intake_age_years?: number;
+  /** Identity Platform inbox verification (doulas + clients). */
+  emailVerified?: boolean;
 
   constructor(data: {
     id?: string;
@@ -183,6 +185,7 @@ export class User {
     referral_email?: string;
     referral_source_other?: string;
     intake_age_years?: number;
+    emailVerified?: boolean;
   }) {
     this.id = data.id;
     this.email = data.email || '';
@@ -273,6 +276,7 @@ export class User {
     this.referral_email = data.referral_email;
     this.referral_source_other = data.referral_source_other;
     this.intake_age_years = data.intake_age_years;
+    this.emailVerified = data.emailVerified;
   }
 
   getFullName(): string {
@@ -297,6 +301,7 @@ export class User {
       created_at: this.created_at,
       updatedAt: this.updated_at,
       role: this.role,
+      emailVerified: this.emailVerified,
       address: this.address,
       city: this.city,
       state: this.state,

@@ -5,10 +5,18 @@ import {
 } from '../domain/staffEmailDomain';
 import { findStaffEmailDomain } from '../infrastructure/staffEmailDomainRepository';
 
+export type StaffInviteRole = 'admin' | 'doula';
+
 export async function assertStaffInviteEmail(input: {
   tenantId: string | null | undefined;
   email: string;
+  /** Domain rule applies to admin staff only (not doulas or clients). */
+  role?: StaffInviteRole;
 }): Promise<void> {
+  if (input.role === 'doula') {
+    return;
+  }
+
   if (!input.tenantId) {
     throw new ValidationError(
       'Sign in to an organization before inviting an admin or doula.'

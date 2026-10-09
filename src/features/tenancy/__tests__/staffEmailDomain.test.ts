@@ -33,7 +33,7 @@ describe('staff email domain', () => {
 
   it('names the required domain in the invite error', () => {
     expect(staffInviteDomainMessage('sokanacollective.com')).toBe(
-      'Admins and doulas must use an @sokanacollective.com email address.'
+      'Admin staff must use an @sokanacollective.com email address.'
     );
   });
 });

@@ -9,14 +9,25 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../../domains/errors';
+import {
+  TENANT_HEADER,
+  isTenancyEnforced,
+  resolveTenantGate,
+} from '../../../features/tenancy';
 import { getSessionToken } from '../../../middleware/authMiddleware';
+import { ApiErrorCode } from '../../../security/errorCodes';
 import { isStaffRole } from '../../../security/resolveAuthoritativeRole';
 import {
   clearSessionCookies,
   setSessionCookie,
 } from '../../../security/sessionCookies';
 import { CloudSqlTeamService } from '../../../services/cloudSqlTeamService';
+import { attachDisplayProfilePicture } from '../../../services/gcs/profilePictureStorage';
 import { EmailMfaChallengeService } from '../../../services/identityPlatform/emailMfaChallengeService';
+import {
+  emailVerificationService,
+  readLiveEmailVerified,
+} from '../../../services/identityPlatform/emailVerificationService';
 import { getFirebaseAuth } from '../../../services/identityPlatform/firebaseAdmin';
 import { IdentityPlatformTokenService } from '../../../services/identityPlatform/identityPlatformTokenService';
 import { AuthRequest, LoginBody, SignupBody } from '../../../types';
@@ -84,7 +95,10 @@ export class AuthController {
         return;
       }
 
+      const claims = await this.identityTokenService.verifyIdToken(idToken);
       const user = await this.identityTokenService.getUserFromIdToken(idToken);
+      user.emailVerified = await readLiveEmailVerified(claims.uid);
+      await attachDisplayProfilePicture(user);
       const sessionCookie =
         await this.identityTokenService.createSessionCookie(idToken);
       setSessionCookie(res, sessionCookie);
@@ -139,13 +153,43 @@ export class AuthController {
         return;
       }
 
-      const appUser =
-        await this.identityTokenService.getUserFromSessionToken(token);
+      const { user: appUser } =
+        await this.identityTokenService.resolveSessionUser(token);
       if (!appUser) {
         res.status(404).json({ error: 'User not found' });
         return;
       }
-      res.json(appUser.toJSON());
+
+      const requestedTenant = req.header(TENANT_HEADER);
+      const gate = await resolveTenantGate({
+        userId: String(appUser.id || ''),
+        email: appUser.email,
+        requestedTenant: requestedTenant?.trim() || null,
+        currentRole: appUser.role ? String(appUser.role) : null,
+      });
+      if (gate.action === 'deny') {
+        res.status(gate.status).json({
+          error: gate.error,
+          code: gate.code,
+          ...(gate.tenants ? { tenants: gate.tenants } : {}),
+        });
+        return;
+      }
+
+      await attachDisplayProfilePicture(appUser);
+      const body = appUser.toJSON() as Record<string, unknown>;
+      if (gate.action === 'attach') {
+        body.tenant = {
+          id: gate.tenant.id,
+          slug: gate.tenant.slug,
+          name: gate.tenant.name,
+          role: gate.tenant.role,
+        };
+        if (isTenancyEnforced()) {
+          body.role = gate.tenant.role;
+        }
+      }
+      res.json(body);
     } catch (err: any) {
       const errorInfo = this.handleError(err, res);
       res.status(errorInfo.status).json({ error: errorInfo.message });
@@ -239,6 +283,7 @@ export class AuthController {
         res.status(403).json({ error: 'Staff access only' });
         return;
       }
+      await attachDisplayProfilePicture(user);
 
       const sessionCookie =
         await this.identityTokenService.createSessionCookie(idToken);
@@ -324,8 +369,53 @@ export class AuthController {
   //
   async verifyEmail(_req: Request, res: Response): Promise<void> {
     res.status(410).json({
-      error: 'Email verification links are no longer accepted.',
+      error:
+        'Open the verification link from your email in the browser (do not call this API directly).',
     });
+  }
+
+  async sendEmailVerification(req: Request, res: Response): Promise<void> {
+    try {
+      const token = getSessionToken(req as AuthRequest);
+      if (!token) {
+        res.status(401).json({
+          error: 'No session token provided',
+          code: ApiErrorCode.UNAUTHENTICATED,
+        });
+        return;
+      }
+      const { firebaseUid } =
+        await this.identityTokenService.resolveSessionUser(token);
+      await emailVerificationService.sendVerificationEmailForUid(firebaseUid);
+      res.status(200).json({
+        message:
+          'Verification email sent if your inbox is not already verified.',
+      });
+    } catch (error) {
+      const handled = this.handleError(error as Error, res);
+      res.status(handled.status).json({ error: handled.message });
+    }
+  }
+
+  async sendEmailVerificationAfterPasswordSetup(
+    req: Request<object, object, { email?: string }>,
+    res: Response
+  ): Promise<void> {
+    try {
+      const email = String(req.body?.email || '').trim();
+      if (!email) {
+        res.status(400).json({ error: 'email is required' });
+        return;
+      }
+      await emailVerificationService.sendVerificationEmailForEmail(email);
+      res.status(200).json({
+        message:
+          'Verification email sent if your inbox is not already verified.',
+      });
+    } catch (error) {
+      const handled = this.handleError(error as Error, res);
+      res.status(handled.status).json({ error: handled.message });
+    }
   }
 
   //

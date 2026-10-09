@@ -11,6 +11,8 @@ export const ApiErrorCode = {
   CONFLICT: 'CONFLICT',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   UNAUTHORIZED: 'UNAUTHORIZED',
+  TENANT_SELECTION_REQUIRED: 'TENANT_SELECTION_REQUIRED',
+  EMAIL_NOT_VERIFIED: 'EMAIL_NOT_VERIFIED',
 } as const;
 
 export type ApiErrorCodeName = (typeof ApiErrorCode)[keyof typeof ApiErrorCode];

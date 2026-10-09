@@ -2,12 +2,22 @@ import { NextFunction, Response } from 'express';
 
 import { logger } from '../common/utils/logger';
 import { SAFE_INTERNAL_ERROR_MESSAGE } from '../common/utils/safeLogging';
+import {
+  TENANT_HEADER,
+  isTenancyEnforced,
+  resolveTenantGate,
+  runWithTenant,
+} from '../features/tenancy';
 import { identityTokenService } from '../index';
 import { isCurrentAccountActive } from '../security/accountAccess';
 import { recordAuthTransport } from '../security/authTransportTelemetry';
+import {
+  isEmailVerificationExemptRequest,
+  roleRequiresVerifiedEmail,
+} from '../security/emailVerificationPolicy';
 import { ApiErrorCode } from '../security/errorCodes';
 import { SESSION_COOKIE } from '../security/sessionCookies';
-import type { AuthRequest } from '../types';
+import { type AuthRequest, ROLE } from '../types';
 
 /** Cookie and header names for session token (canonical). */
 export { SESSION_COOKIE } from '../security/sessionCookies';
@@ -119,8 +129,11 @@ const authMiddleware = async (
     recordTokenSource(source, req);
 
     let user_entity;
+    let emailVerified = true;
     try {
-      user_entity = await identityTokenService.getUserFromSessionToken(token);
+      const resolved = await identityTokenService.resolveSessionUser(token);
+      user_entity = resolved.user;
+      emailVerified = resolved.emailVerified;
     } catch (verifyError) {
       logger.warn(
         {
@@ -134,6 +147,18 @@ const authMiddleware = async (
       res.status(401).json({
         error: 'Invalid or expired session token',
         code: ApiErrorCode.UNAUTHENTICATED,
+      });
+      return;
+    }
+
+    if (
+      !emailVerified &&
+      roleRequiresVerifiedEmail(user_entity.role) &&
+      !isEmailVerificationExemptRequest(req)
+    ) {
+      res.status(403).json({
+        error: 'Verify your email before accessing this resource.',
+        code: ApiErrorCode.EMAIL_NOT_VERIFIED,
       });
       return;
     }
@@ -159,6 +184,46 @@ const authMiddleware = async (
     }
 
     req.user = user_entity;
+    const headerValue = req.header(TENANT_HEADER);
+    const gate = await resolveTenantGate({
+      userId: String(user_entity.id || ''),
+      email: user_entity.email,
+      requestedTenant: headerValue?.trim() || null,
+      currentRole: user_entity.role ? String(user_entity.role) : null,
+    });
+
+    if (gate.action === 'deny') {
+      logger.warn(
+        {
+          service: 'backend-authz',
+          event: 'tenant_access_denied',
+          userId: String(user_entity.id || ''),
+          method: req.method,
+          path: req.path,
+          status: gate.status,
+          errorCode: gate.code,
+        },
+        'Tenant access denied'
+      );
+      res.status(gate.status).json({
+        error: gate.error,
+        code: gate.code,
+        ...(gate.tenants ? { tenants: gate.tenants } : {}),
+      });
+      return;
+    }
+
+    if (gate.action === 'attach') {
+      req.tenant = gate.tenant;
+      if (isTenancyEnforced()) {
+        user_entity.role = gate.tenant.role as ROLE;
+      }
+      runWithTenant(gate.tenant.id, () => {
+        next();
+      });
+      return;
+    }
+
     next();
   } catch (err: any) {
     logger.error(
