@@ -198,6 +198,29 @@ export const nativeContracts = {
   },
 };
 
+/** Admin-configurable reminder engine / Cloud Scheduler tick. */
+export const reminderMessaging = {
+  get oidcAudience(): string {
+    return optionalEnv('REMINDER_CRON_OIDC_AUDIENCE') ?? '';
+  },
+  get oidcServiceAccount(): string {
+    return optionalEnv('REMINDER_CRON_OIDC_SERVICE_ACCOUNT') ?? '';
+  },
+  get enabledDefault(): boolean {
+    const value = (optionalEnv('REMINDERS_ENABLED') ?? 'true').toLowerCase();
+    return value !== 'false' && value !== '0';
+  },
+  get testToolsEnabled(): boolean {
+    const value = (
+      optionalEnv('REMINDER_TEST_TOOLS_ENABLED') ?? ''
+    ).toLowerCase();
+    return value === 'true' || value === '1';
+  },
+  get adminNotificationEmail(): string {
+    return optionalEnv('ADMIN_NOTIFICATION_EMAIL') ?? 'hello@sokanacollective.com';
+  },
+};
+
 /** PR 8 intake feature-package cutover / shadow window. */
 export const intakeFeature = {
   get useFeaturePackage(): boolean {

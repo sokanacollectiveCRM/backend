@@ -1131,6 +1131,13 @@ export class DoulaController {
         timestamp: new Date(),
         createdBy: doulaId,
       });
+      const { fireMessagingEvent } = require('../../messaging/eventBus');
+      fireMessagingEvent({
+        type: 'note_created',
+        clientId,
+        activityType: type,
+        createdByRole: 'doula',
+      });
 
       res.status(201).json({
         success: true,
@@ -1342,6 +1349,8 @@ export class DoulaController {
         doulaId,
         imageUrl
       );
+      const { fireMessagingEvent } = require('../../messaging/eventBus');
+      fireMessagingEvent({ type: 'headshot_updated', doulaId });
       if (!updated) {
         res.status(404).json({ error: 'Doula profile not found' });
         return;

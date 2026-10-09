@@ -2362,6 +2362,9 @@ export class ClientController {
         return;
       }
 
+      const { fireMessagingEvent } = require('../../messaging/eventBus');
+      fireMessagingEvent({ type: 'birth_outcomes_recorded', clientId: id });
+
       res.json(
         ApiResponse.success({
           birth_outcomes_induction: induction,

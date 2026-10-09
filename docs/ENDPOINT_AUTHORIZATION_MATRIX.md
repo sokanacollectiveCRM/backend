@@ -145,6 +145,20 @@ Implemented in `src/security/authorizationPolicies.ts`:
 
 ---
 
+## Messaging reminder engine (2026-10-09)
+
+| Method | Canonical path | Classification | Allowed roles | Middleware |
+| ------ | -------------- | -------------- | ------------- | ---------- |
+| GET/PATCH | `/api/admin/messaging/*` | Admin | admin | `auth` + `roles[admin]` |
+| POST | `/api/admin/contracts/:id/reminders/stop\|resume` | Admin | admin | `auth` + `roles[admin]` |
+| GET/POST | `/api/admin/clients/:id/postponements` | Admin | admin | `auth` + `roles[admin]` |
+| POST | `/api/admin/postponements/:id/{approve,lift,extend,cancel}` | Admin | admin | `auth` + `roles[admin]` |
+| POST | `/api/doulas/clients/:id/postponement-requests` | Doula-owned | doula | `auth` + `roles[doula]` |
+| POST | `/api/internal/cron/reminders/tick` | Internal maintenance | Cloud Scheduler OIDC | Bearer OIDC (`aud` + verified SA email) |
+| POST | `/api/admin/messaging/tick-now`, `/api/admin/messaging/runs/:id/advance` | Admin + dev flag | admin | 404 unless `REMINDER_TEST_TOOLS_ENABLED=true` |
+
+---
+
 ## Verification notes
 
 - Aliases inherit the same router middleware as canonical mounts.

@@ -142,7 +142,24 @@ const contractService = new ContractService(
     },
   },
   new NodemailerContractInvitationMailer(),
-  nativeContracts.signingBaseUrl
+  nativeContracts.signingBaseUrl,
+  {
+    async renderInitialEmail(input) {
+      const { renderContractSentInitial } = require('../messaging/composition');
+      return renderContractSentInitial(input);
+    },
+    async onSent(input) {
+      const { reminderEngine } = require('../messaging/composition');
+      await reminderEngine.handleEvent({
+        type: 'contract_sent',
+        contractId: input.contractId,
+        clientId: input.clientId,
+        signingUrl: input.signingUrl,
+        sentAt: input.sentAt,
+        isResend: input.isResend,
+      });
+    },
+  }
 );
 
 const rateLimitService = new RateLimitService(

@@ -51,4 +51,21 @@ describe('contract initiated billing email', () => {
     expect(mailOptions.text).not.toMatch(/health|pregnancy|demographic|doula assignment|care-note/i);
     expect(mailOptions.html).toContain('https://crm.example.com/billing/contracts/contract-123');
   });
+
+  it('includes the sign-by cancel date on the native contract invitation', async () => {
+    const service = new NodemailerService();
+    await service.sendNativeContractInvitation({
+      clientEmail: 'ada@example.test',
+      clientName: 'Ada Lovelace',
+      contractTitle: 'Labor Support',
+      signingUrl: 'https://crm.example.com/signing#invitation=token',
+      expiresAt: new Date('2026-10-04T12:00:00.000Z'),
+      cancelDate: '2026-10-08',
+    });
+    const transporter = (nodemailer.createTransport as jest.Mock).mock.results.at(-1)
+      .value;
+    const mailOptions = transporter.sendMail.mock.calls.at(-1)[0];
+    expect(mailOptions.text).toContain('2026-10-08');
+    expect(mailOptions.text).toMatch(/reserve your doula/i);
+  });
 });

@@ -188,6 +188,16 @@ app.use('/api/payments', asMiddleware(paymentRoutes));
 app.use('/api/invoices', asMiddleware(invoiceRoutes));
 app.use('/api/financial', asMiddleware(financialRoutes));
 app.use('/api/billing', asMiddleware(billingRoutes));
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const messaging = require('./features/messaging/composition');
+messaging.initMessagingFeature();
+app.use('/api/admin', asMiddleware(messaging.adminMessagingRoutes));
+app.use('/api/doulas', asMiddleware(messaging.doulaPostponementRoutes));
+app.use(
+  '/api/internal/cron/reminders',
+  asMiddleware(messaging.reminderTickRoutes)
+);
 // DEV-only debug routes — NEVER in production (no token/cookie endpoints)
 if (!IS_PRODUCTION && process.env.ENABLE_DEBUG_ENDPOINTS === 'true') {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
