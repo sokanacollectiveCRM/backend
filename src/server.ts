@@ -188,6 +188,36 @@ app.use('/api/payments', asMiddleware(paymentRoutes));
 app.use('/api/invoices', asMiddleware(invoiceRoutes));
 app.use('/api/financial', asMiddleware(financialRoutes));
 app.use('/api/billing', asMiddleware(billingRoutes));
+
+// Admin-configurable messaging / reminder policies (OIDC tick is unauthenticated by session).
+{
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const messaging = require('./features/messaging/composition');
+  const native = nativeContracts.enabled
+    ? // eslint-disable-next-line @typescript-eslint/no-var-requires
+      require('./features/contracts/composition')
+    : null;
+  const messagingFeature = messaging.createMessagingFeature({
+    voidContract: native
+      ? (contractId: string) =>
+          native.nativeContractService.void(contractId, '')
+      : undefined,
+    mintSigningLink: native
+      ? async (contractId: string, clientId: string) => {
+          const issued = await native.nativeInvitationService.issue(
+            contractId,
+            clientId,
+            true
+          );
+          return `${nativeContracts.signingBaseUrl}#invitation=${encodeURIComponent(issued.token)}`;
+        }
+      : undefined,
+  });
+  app.use('/api/admin', asMiddleware(messagingFeature.adminRoutes));
+  app.use('/api/doulas', asMiddleware(messagingFeature.doulaRoutes));
+  app.use('/api/internal', asMiddleware(messagingFeature.tickRoutes));
+}
+
 // DEV-only debug routes — NEVER in production (no token/cookie endpoints)
 if (!IS_PRODUCTION && process.env.ENABLE_DEBUG_ENDPOINTS === 'true') {
   // eslint-disable-next-line @typescript-eslint/no-var-requires

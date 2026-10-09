@@ -136,7 +136,10 @@ export class QuickBooksInvoiceWebhookService {
       event.client_id
     );
     if (event.client_id && !installmentClientId) {
-      const belongsToClaimedClient = await isDepositInvoice(qboInvoiceId, event.client_id);
+      const belongsToClaimedClient = await isDepositInvoice(
+        qboInvoiceId,
+        event.client_id
+      );
       if (!belongsToClaimedClient) return;
     }
     if (installmentClientId) clientId = installmentClientId;
@@ -189,6 +192,14 @@ export class QuickBooksInvoiceWebhookService {
         event_type: 'quickbooks_card_missing',
         event_source: 'quickbooks_webhook',
       });
+      try {
+        const {
+          emitReminderEvent,
+        } = require('../features/messaging/application/reminderHooks');
+        emitReminderEvent({ type: 'deposit_paid_no_card', clientId });
+      } catch {
+        // optional
+      }
       return;
     }
 

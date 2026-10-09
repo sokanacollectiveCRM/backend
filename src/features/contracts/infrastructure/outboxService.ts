@@ -76,7 +76,23 @@ export class ContractOutboxService {
       generate_signed_document: async () => undefined,
       archive_signed_document: async () => undefined,
       send_signing_invitation: async () => undefined,
-      send_signing_reminder: async () => undefined,
+      send_signing_reminder: async (message) => {
+        try {
+          const {
+            emitReminderEvent,
+          } = require('../../messaging/application/reminderHooks');
+          emitReminderEvent({
+            type: 'contract_sent',
+            contractId: message.contractId,
+            clientId: message.clientId,
+            sentAt: new Date(),
+            signingUrl: '',
+            resend: true,
+          });
+        } catch {
+          // Engine is wired at boot; a missing module must not fail the outbox.
+        }
+      },
     };
   }
 

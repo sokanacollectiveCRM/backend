@@ -108,6 +108,7 @@ export interface ContractInvitationMailer {
     contractTitle: string;
     signingUrl: string;
     expiresAt: Date;
+    cancelDate?: Date;
   }): Promise<void>;
 }
 
@@ -127,6 +128,7 @@ export class NodemailerContractInvitationMailer
     contractTitle: string;
     signingUrl: string;
     expiresAt: Date;
+    cancelDate?: Date;
   }): Promise<void> {
     await this.email.sendNativeContractInvitation({
       clientEmail: input.recipientEmail,
@@ -134,6 +136,7 @@ export class NodemailerContractInvitationMailer
       contractTitle: input.contractTitle,
       signingUrl: input.signingUrl,
       expiresAt: input.expiresAt,
+      cancelDate: input.cancelDate,
     });
   }
 }
@@ -327,13 +330,33 @@ export class ContractService {
       replaceInvitation,
     });
 
+    const sentAt = sent.updatedAt || new Date();
+    const cancelDate = new Date(sentAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const signingUrl = `${this.signingBaseUrl}#invitation=${encodeURIComponent(prepared.token)}`;
     await this.invitationMailer.send({
       recipientEmail: contract.snapshot.client.email,
       recipientName: contract.snapshot.client.name,
       contractTitle: contract.snapshot.serviceType,
-      signingUrl: `${this.signingBaseUrl}#invitation=${encodeURIComponent(prepared.token)}`,
+      signingUrl,
       expiresAt: prepared.input.expiresAt,
+      cancelDate,
     });
+
+    try {
+      const {
+        emitReminderEvent,
+      } = require('../../messaging/application/reminderHooks');
+      emitReminderEvent({
+        type: 'contract_sent',
+        contractId: contract.id,
+        clientId: contract.clientId,
+        sentAt,
+        signingUrl,
+        resend: replaceInvitation,
+      });
+    } catch {
+      // Messaging feature is optional at boot; sending the contract must not fail.
+    }
 
     return this.toSafeDto(sent);
   }
