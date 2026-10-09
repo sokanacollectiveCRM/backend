@@ -10,6 +10,7 @@ import {
   createSafeRequestLogger,
   installProductionConsoleGuard,
 } from './common/utils/safeLogging';
+import { createCorsOptions } from './config/corsConfig';
 import {
   FEATURE_QUICKBOOKS,
   IS_PRODUCTION,
@@ -53,25 +54,7 @@ const asMiddleware = (m: any) =>
   typeof m === 'function' ? m : (m?.default ?? m);
 
 const allowedOriginsSet = new Set(getAllowedOrigins());
-const corsOptions = {
-  origin: (
-    origin: string | undefined,
-    callback: (err: Error | null, allow?: boolean) => void
-  ) => {
-    if (!origin) return callback(null, true);
-    if (allowedOriginsSet.has(origin)) return callback(null, true);
-    return callback(new Error('Not allowed by CORS'));
-  },
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'X-Session-Token',
-    'X-Signing-Session',
-  ],
-  credentials: true, // Required for HttpOnly sokana_session_token cookie cross-origin
-  maxAge: 86400,
-};
+const corsOptions = createCorsOptions(allowedOriginsSet);
 
 app.use(cors(corsOptions));
 

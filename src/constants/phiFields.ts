@@ -55,6 +55,8 @@ export const PHI_FIELDS = new Set([
   'service_support_details',
   'services_interested',
   'intake_age_years',
+  'primary_language',
+  'primary_language_other',
 
   // Clinical / health
   'health_history',
@@ -102,6 +104,7 @@ export const OPERATIONAL_UPDATE_COLUMNS = new Set([
   'past_pregnancy_experience',
   'race_ethnicity',
   'primary_language',
+  'primary_language_other',
   'client_age_range',
   'insurance',
   'demographics_multi',

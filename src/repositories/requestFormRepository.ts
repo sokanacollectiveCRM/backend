@@ -176,6 +176,7 @@ export class RequestFormRepository {
                     services_interested,
                     intake_age_years,
                     primary_language,
+                    primary_language_other,
                     children_expected,
                     due_date,
                     health_history,
@@ -221,7 +222,7 @@ export class RequestFormRepository {
                     $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
                     $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27,
                     $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46,
-                    $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63, $64, $65
+                    $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63, $64, $65, $66
                 )
                 RETURNING client_number
             `;
@@ -247,7 +248,7 @@ export class RequestFormRepository {
           formData.lastname,
           formData.email,
           formData.phone_number,
-          formData.address,
+          formData.address?.trim() || null,
           formData.city ?? null,
           formData.state ?? null,
           formData.zip_code ?? null,
@@ -268,6 +269,7 @@ export class RequestFormRepository {
           servicesInterested,
           intakeAgeYearsFromForm(formData),
           formData.primary_language?.trim() || null,
+          formData.primary_language_other?.trim() || null,
           formData.children_expected?.trim() || null,
           dueDate,
           formData.health_history || null,
@@ -374,6 +376,7 @@ export class RequestFormRepository {
         service_support_details: formData.service_support_details,
         race_ethnicity: formData.race_ethnicity,
         primary_language: formData.primary_language,
+        primary_language_other: formData.primary_language_other,
         client_age_range: formData.client_age_range,
         insurance: billingFields.insurance,
         payment_method: billingFields.payment_method,

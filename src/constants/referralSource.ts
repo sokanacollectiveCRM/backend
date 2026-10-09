@@ -28,9 +28,9 @@ function trimToNull(v: unknown): string | null {
 }
 
 /**
- * Validates public intake referral fields. `referral_source` is required.
- * When source is `Other`, `referral_source_other` must be non-empty after trim.
- * Otherwise `referral_source_other` is cleared (null).
+ * Validates public intake referral fields. `referral_source` is optional
+ * (Nancy 2026-10-09). When source is `Other`, `referral_source_other` must
+ * be non-empty after trim. Otherwise `referral_source_other` is cleared (null).
  */
 export function parseIntakeReferral(form: {
   referral_source?: unknown;
@@ -38,22 +38,11 @@ export function parseIntakeReferral(form: {
   referral_email?: unknown;
   referral_source_other?: unknown;
 }): {
-  referral_source: string;
+  referral_source: string | null;
   referral_name: string | null;
   referral_email: string | null;
   referral_source_other: string | null;
 } {
-  const srcRaw = form.referral_source;
-  if (typeof srcRaw !== 'string' || !srcRaw.trim()) {
-    throw new ValidationError('referral_source is required');
-  }
-  const referral_source = srcRaw.trim();
-  if (!ALLOWED_SET.has(referral_source)) {
-    throw new ValidationError(
-      `referral_source must be one of: ${ALLOWED_REFERRAL_SOURCES.join(', ')}`
-    );
-  }
-
   const referral_name = trimToNull(form.referral_name);
 
   const emailRaw = trimToNull(form.referral_email);
@@ -61,6 +50,22 @@ export function parseIntakeReferral(form: {
     throw new ValidationError('referral_email must be a valid email address');
   }
   const referral_email = emailRaw;
+
+  const srcRaw = form.referral_source;
+  if (typeof srcRaw !== 'string' || !srcRaw.trim()) {
+    return {
+      referral_source: null,
+      referral_name,
+      referral_email,
+      referral_source_other: null,
+    };
+  }
+  const referral_source = srcRaw.trim();
+  if (!ALLOWED_SET.has(referral_source)) {
+    throw new ValidationError(
+      `referral_source must be one of: ${ALLOWED_REFERRAL_SOURCES.join(', ')}`
+    );
+  }
 
   let referral_source_other = trimToNull(form.referral_source_other);
   if (referral_source === 'Other') {
@@ -71,7 +76,12 @@ export function parseIntakeReferral(form: {
     referral_source_other = null;
   }
 
-  return { referral_source, referral_name, referral_email, referral_source_other };
+  return {
+    referral_source,
+    referral_name,
+    referral_email,
+    referral_source_other,
+  };
 }
 
 export type ReferralCurrent = {
@@ -89,18 +99,27 @@ export type ReferralCurrent = {
 export function normalizeStaffReferralOperationalPatch(
   operational: Record<string, unknown>,
   current: ReferralCurrent
-): { ok: true; operational: Record<string, unknown> } | { ok: false; message: string } {
-  const keys = ['referral_source', 'referral_source_other', 'referral_name', 'referral_email'];
+):
+  | { ok: true; operational: Record<string, unknown> }
+  | { ok: false; message: string } {
+  const keys = [
+    'referral_source',
+    'referral_source_other',
+    'referral_name',
+    'referral_email',
+  ];
   if (!keys.some((k) => Object.prototype.hasOwnProperty.call(operational, k))) {
     return { ok: true, operational };
   }
 
   const out = { ...operational };
 
-  const mergedSource =
-    Object.prototype.hasOwnProperty.call(out, 'referral_source')
-      ? trimToNull(out.referral_source)
-      : trimToNull(current.referral_source ?? undefined);
+  const mergedSource = Object.prototype.hasOwnProperty.call(
+    out,
+    'referral_source'
+  )
+    ? trimToNull(out.referral_source)
+    : trimToNull(current.referral_source ?? undefined);
 
   if (Object.prototype.hasOwnProperty.call(out, 'referral_source')) {
     if (!mergedSource) {
@@ -124,12 +143,18 @@ export function normalizeStaffReferralOperationalPatch(
   if (Object.prototype.hasOwnProperty.call(out, 'referral_email')) {
     const e = trimToNull(out.referral_email);
     if (e && !EMAIL_RE.test(e)) {
-      return { ok: false, message: 'referral_email must be a valid email address' };
+      return {
+        ok: false,
+        message: 'referral_email must be a valid email address',
+      };
     }
     out.referral_email = e;
   }
 
-  const mergedOtherExplicit = Object.prototype.hasOwnProperty.call(out, 'referral_source_other');
+  const mergedOtherExplicit = Object.prototype.hasOwnProperty.call(
+    out,
+    'referral_source_other'
+  );
   const mergedOtherValue = mergedOtherExplicit
     ? trimToNull(out.referral_source_other)
     : trimToNull(current.referral_source_other ?? undefined);

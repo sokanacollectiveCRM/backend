@@ -75,6 +75,7 @@ export class User {
   service_support_details?: string;
   race_ethnicity?: string;
   primary_language?: string;
+  primary_language_other?: string;
   client_age_range?: string;
   insurance?: string;
   demographics_multi?: string[];
@@ -167,6 +168,7 @@ export class User {
     service_support_details?: string;
     race_ethnicity?: string;
     primary_language?: string;
+    primary_language_other?: string;
     client_age_range?: string;
     insurance?: string;
     demographics_multi?: string[];
@@ -258,6 +260,7 @@ export class User {
     this.service_support_details = data.service_support_details;
     this.race_ethnicity = data.race_ethnicity;
     this.primary_language = data.primary_language;
+    this.primary_language_other = data.primary_language_other;
     this.client_age_range = data.client_age_range;
     this.insurance = data.insurance;
     this.demographics_multi = data.demographics_multi;
@@ -351,6 +354,7 @@ export class User {
       service_support_details: this.service_support_details,
       race_ethnicity: this.race_ethnicity,
       primary_language: this.primary_language,
+      primary_language_other: this.primary_language_other,
       client_age_range: this.client_age_range,
       insurance: this.insurance,
       demographics_multi: this.demographics_multi,
