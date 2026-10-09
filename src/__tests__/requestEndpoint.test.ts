@@ -463,7 +463,7 @@ describe('Request Endpoint Tests', () => {
       };
 
       await expect(requestFormService.newForm(invalidData)).rejects.toThrow(
-        'Missing required fields: first name and last name'
+        /Missing required fields:.*firstname.*lastname/
       );
     });
 
@@ -475,7 +475,7 @@ describe('Request Endpoint Tests', () => {
 
       await expect(
         requestFormService.newForm(invalidEmailData)
-      ).rejects.toThrow('Valid email is required');
+      ).rejects.toThrow('Invalid email format');
     });
 
     it('should validate phone number format correctly', async () => {
@@ -500,40 +500,54 @@ describe('Request Endpoint Tests', () => {
       );
     });
 
-    it('should validate complete address is provided', async () => {
-      const incompleteAddressData = {
+    it('should accept omitted street address and state (Nancy optional)', async () => {
+      jest.spyOn(requestFormRepository, 'saveData').mockResolvedValue({
         ...mockFormData,
-        address: '', // Missing address
-        city: 'Anytown',
-        state: STATE.CA,
-        zip_code: '90210',
-      };
+        address: undefined,
+        state: undefined,
+      } as any);
 
       await expect(
-        requestFormService.newForm(incompleteAddressData)
-      ).rejects.toThrow('Complete address is required');
+        requestFormService.newForm({
+          ...mockFormData,
+          address: '',
+          state: '',
+        })
+      ).resolves.toBeDefined();
+    });
+
+    it('should still require city and zip_code', async () => {
+      await expect(
+        requestFormService.newForm({
+          ...mockFormData,
+          city: '',
+          zip_code: '',
+        })
+      ).rejects.toThrow(/Missing required fields:.*city.*zip_code/);
     });
 
     it('should validate service_needed is provided', async () => {
       const missingServiceData = {
         ...mockFormData,
         service_needed: undefined,
+        services_interested: [],
       };
 
       await expect(
         requestFormService.newForm(missingServiceData)
-      ).rejects.toThrow('Missing required field: service_needed');
+      ).rejects.toThrow(/Missing required fields:.*service_needed/);
     });
 
-    it('should require referral_source on intake', async () => {
+    it('should allow omitted referral_source on intake', async () => {
       const {
         referral_source: _rs,
         referral_source_other: _ro,
         ...rest
       } = mockFormData as any;
-      await expect(requestFormService.newForm(rest)).rejects.toThrow(
-        'referral_source is required'
-      );
+      jest
+        .spyOn(requestFormRepository, 'saveData')
+        .mockResolvedValue(rest as any);
+      await expect(requestFormService.newForm(rest)).resolves.toBeDefined();
     });
 
     it('should require referral_source_other when referral_source is Other', async () => {
@@ -700,10 +714,13 @@ describe('Request Endpoint Tests', () => {
       );
     });
 
-    it('should reject missing birth_hospital when birth_location is Hospital', async () => {
+    it('should allow missing birth_hospital when birth_location is Hospital', async () => {
+      jest
+        .spyOn(requestFormRepository, 'saveData')
+        .mockResolvedValue(mockFormData as any);
       await expect(
         requestFormService.newForm({ ...mockFormData, birth_hospital: '  ' })
-      ).rejects.toThrow('Please enter the hospital name.');
+      ).resolves.toBeDefined();
     });
 
     it.each([
@@ -847,31 +864,33 @@ describe('Request Endpoint Tests', () => {
       expect(params[18]).toEqual(['House']);
       expect(params[20]).toBe('2');
       expect(params[21]).toBe('1');
-      expect(params[42]).toBe('Google');
-      expect(params[43]).toBe('Sarah Smith');
-      expect(params[44]).toBe('sarah@example.com');
-      expect(params[45]).toBeNull();
-      expect(params[46]).toBe('Blue Cross Blue Shield');
+      expect(params[43]).toBe('Google');
+      expect(params[44]).toBe('Sarah Smith');
+      expect(params[45]).toBe('sarah@example.com');
+      expect(params[46]).toBeNull();
+      expect(params[47]).toBe('Blue Cross Blue Shield');
       expect(params[9]).toBe('Hospital');
       expect(params[10]).toBe('City General Hospital');
-      expect(params[47]).toBe('Private/Commercial Insurance');
-      expect(params[48]).toBe('Blue Cross Blue Shield');
-      expect(params[49]).toBe('MEM-12345');
-      expect(params[50]).toBe('Jane Q Client');
-      expect(params[51]).toBe('1990-04-12');
-      expect(params[52]).toBe('Self');
-      expect(params[53]).toBe('PPO');
-      expect(params[54]).toBe('POL-67890');
-      expect(params[55]).toBe('800-555-1212');
-      expect(params[56]).toBe(false);
-      expect(params[57]).toBeNull();
+      expect(params[26]).toBeNull();
+      expect(sql).toContain('primary_language_other');
+      expect(params[48]).toBe('Private/Commercial Insurance');
+      expect(params[49]).toBe('Blue Cross Blue Shield');
+      expect(params[50]).toBe('MEM-12345');
+      expect(params[51]).toBe('Jane Q Client');
+      expect(params[52]).toBe('1990-04-12');
+      expect(params[53]).toBe('Self');
+      expect(params[54]).toBe('PPO');
+      expect(params[55]).toBe('POL-67890');
+      expect(params[56]).toBe('800-555-1212');
+      expect(params[57]).toBe(false);
       expect(params[58]).toBeNull();
       expect(params[59]).toBeNull();
       expect(params[60]).toBeNull();
-      expect(params[61]).toBe('lead');
-      expect(params[62]).toBe(mockFormData.service_needed);
-      expect(params[63]).toBe('not_invited');
-      expect(params[64]).toEqual(expect.any(String));
+      expect(params[61]).toBeNull();
+      expect(params[62]).toBe('lead');
+      expect(params[63]).toBe(mockFormData.service_needed);
+      expect(params[64]).toBe('not_invited');
+      expect(params[65]).toEqual(expect.any(String));
     });
 
     it('should null out insurance fields for Self-Pay submissions before persisting and returning the record', async () => {
@@ -914,13 +933,12 @@ describe('Request Endpoint Tests', () => {
       );
 
       const [, params] = mockQuery.mock.calls[0];
-      expect(params[42]).toBe('Google');
-      expect(params[43]).toBe('Sarah Smith');
-      expect(params[44]).toBe('sarah@example.com');
-      expect(params[45]).toBeNull();
+      expect(params[43]).toBe('Google');
+      expect(params[44]).toBe('Sarah Smith');
+      expect(params[45]).toBe('sarah@example.com');
       expect(params[46]).toBeNull();
-      expect(params[47]).toBe('Self-Pay');
-      expect(params[48]).toBeNull();
+      expect(params[47]).toBeNull();
+      expect(params[48]).toBe('Self-Pay');
       expect(params[49]).toBeNull();
       expect(params[50]).toBeNull();
       expect(params[51]).toBeNull();
@@ -928,15 +946,16 @@ describe('Request Endpoint Tests', () => {
       expect(params[53]).toBeNull();
       expect(params[54]).toBeNull();
       expect(params[55]).toBeNull();
-      expect(params[56]).toBe(false);
-      expect(params[57]).toBeNull();
+      expect(params[56]).toBeNull();
+      expect(params[57]).toBe(false);
       expect(params[58]).toBeNull();
       expect(params[59]).toBeNull();
       expect(params[60]).toBeNull();
-      expect(params[61]).toBe('lead');
-      expect(params[62]).toBe(mockFormData.service_needed);
-      expect(params[63]).toBe('not_invited');
-      expect(params[64]).toEqual(expect.any(String));
+      expect(params[61]).toBeNull();
+      expect(params[62]).toBe('lead');
+      expect(params[63]).toBe(mockFormData.service_needed);
+      expect(params[64]).toBe('not_invited');
+      expect(params[65]).toEqual(expect.any(String));
     });
   });
 

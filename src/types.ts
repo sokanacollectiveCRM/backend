@@ -142,9 +142,9 @@ export interface RequestFormData {
   intake_age_years?: number;
 
   // Step 2: Home Details
-  address: string;
+  address?: string;
   city: string;
-  state: STATE;
+  state?: STATE;
   zip_code: string;
   home_phone?: string;
   /** Legacy single value; CRM sends `home_types` array on intake. */
@@ -219,7 +219,9 @@ export interface RequestFormData {
   // Step 10: Client Demographics (Optional)
   race_ethnicity?: string;
   primary_language?: string;
-  client_age_range?: ClientAgeRange;
+  /** Specify-text when primary language is Other; frontend also folds this into primary_language. */
+  primary_language_other?: string;
+  client_age_range?: ClientAgeRange | string;
   insurance?: string;
   demographics_multi?: string[];
 }
@@ -243,9 +245,9 @@ export interface RequestFormResponse {
   preferred_name?: string;
   children_expected?: string;
   intake_age_years?: number;
-  address: string;
+  address?: string;
   city: string;
-  state: STATE;
+  state?: STATE;
   zip_code: string;
   home_phone?: string;
   home_type?: HomeType | string | string[];
@@ -288,7 +290,8 @@ export interface RequestFormResponse {
   service_support_details?: string;
   race_ethnicity?: string;
   primary_language?: string;
-  client_age_range?: ClientAgeRange;
+  primary_language_other?: string;
+  client_age_range?: ClientAgeRange | string;
   insurance?: string;
   payment_method?: string | null;
   insurance_provider?: string | null;

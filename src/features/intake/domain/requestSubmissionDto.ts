@@ -59,17 +59,30 @@ export function getBirthLocationPlaceError(birthLocation: string): string {
 
 /**
  * Validates intake birth type + place name (`birth_hospital` is not hospital-only).
+ * Both are optional on public intake (Nancy 2026-10-09). If a location is sent,
+ * it must be one of the allowed labels; place name is not hard-required.
  */
 export function validateIntakeBirthPlace(
   birthLocationRaw: unknown,
   birthHospitalRaw: unknown
 ):
-  | { ok: true; birth_location: string; birth_hospital: string }
+  | {
+      ok: true;
+      birth_location: string | null;
+      birth_hospital: string | null;
+    }
   | { ok: false; message: string } {
   const birth_location =
     typeof birthLocationRaw === 'string' ? birthLocationRaw.trim() : '';
+  const birth_hospital =
+    typeof birthHospitalRaw === 'string' ? birthHospitalRaw.trim() : '';
+
   if (!birth_location) {
-    return { ok: false, message: 'birth_location is required' };
+    return {
+      ok: true,
+      birth_location: null,
+      birth_hospital: birth_hospital || null,
+    };
   }
   if (!ALLOWED_INTAKE_BIRTH_LOCATIONS.has(birth_location)) {
     return {
@@ -79,29 +92,31 @@ export function validateIntakeBirthPlace(
     };
   }
 
-  const birth_hospital =
-    typeof birthHospitalRaw === 'string' ? birthHospitalRaw.trim() : '';
-  if (!birth_hospital) {
-    return { ok: false, message: getBirthLocationPlaceError(birth_location) };
-  }
-
-  return { ok: true, birth_location, birth_hospital };
+  return {
+    ok: true,
+    birth_location,
+    birth_hospital: birth_hospital || null,
+  };
 }
 
 /**
  * Public intake payment method: accept four CRM labels, reject Medicaid, map for persistence.
+ * Omitted/blank is allowed (Nancy 2026-10-09).
  */
 export function parseIntakePaymentMethod(
   raw: unknown
 ):
-  | { ok: true; value: string; requiresInsurance: boolean }
+  | { ok: true; value: string | null; requiresInsurance: boolean }
   | { ok: false; message: string } {
+  if (raw === undefined || raw === null) {
+    return { ok: true, value: null, requiresInsurance: false };
+  }
   if (typeof raw !== 'string') {
-    return { ok: false, message: 'payment_method is required' };
+    return { ok: false, message: 'payment_method must be a string' };
   }
   const trimmed = raw.trim();
   if (!trimmed) {
-    return { ok: false, message: 'payment_method is required' };
+    return { ok: true, value: null, requiresInsurance: false };
   }
   if (trimmed.toLowerCase() === 'medicaid') {
     return {
@@ -130,19 +145,20 @@ export function normalizeIntakePaymentMethod(
 ): string {
   const parsed = parseIntakePaymentMethod(trimmedPaymentMethod);
   if (parsed.ok) {
-    return parsed.value;
+    return parsed.value ?? trimmedPaymentMethod;
   }
   return trimmedPaymentMethod;
 }
 
 /**
  * Client age in whole years (CRM `useRequestForm`: 1–120 inclusive).
+ * Omitted/blank is allowed (Nancy 2026-10-09).
  */
 export function parseIntakeClientAgeYears(
   raw: unknown
-): { ok: true; value: number } | { ok: false; message: string } {
+): { ok: true; value: number | null } | { ok: false; message: string } {
   if (raw === undefined || raw === null) {
-    return { ok: false, message: 'age is required' };
+    return { ok: true, value: null };
   }
   let n: number;
   if (typeof raw === 'number') {
@@ -156,7 +172,7 @@ export function parseIntakeClientAgeYears(
   } else if (typeof raw === 'string') {
     const t = raw.trim();
     if (!t) {
-      return { ok: false, message: 'age is required' };
+      return { ok: true, value: null };
     }
     if (!/^\d+$/.test(t)) {
       return {
@@ -174,18 +190,43 @@ export function parseIntakeClientAgeYears(
   return { ok: true, value: n };
 }
 
+/** Frontend demographics buckets derived from exact age when provided. */
+export const CLIENT_AGE_RANGE_FROM_YEARS = [
+  'Under 20',
+  '20-25',
+  '26-35',
+  '36 and older',
+] as const;
+
+export type ClientAgeRangeFromYears =
+  (typeof CLIENT_AGE_RANGE_FROM_YEARS)[number];
+
+export function clientAgeRangeFromYears(
+  age: number
+): ClientAgeRangeFromYears | null {
+  if (!Number.isFinite(age) || age < 1) return null;
+  if (age < 20) return 'Under 20';
+  if (age <= 25) return '20-25';
+  if (age <= 35) return '26-35';
+  return '36 and older';
+}
+
 /**
  * Pregnancy care provider; accepts CRM copy such as "Family Doctor" → `Family Physician`.
+ * Omitted/blank is allowed (Nancy 2026-10-09).
  */
 export function parseIntakeProviderType(
   raw: unknown
-): { ok: true; value: ProviderType } | { ok: false; message: string } {
+): { ok: true; value: ProviderType | null } | { ok: false; message: string } {
+  if (raw === undefined || raw === null) {
+    return { ok: true, value: null };
+  }
   if (typeof raw !== 'string') {
-    return { ok: false, message: 'provider_type is required' };
+    return { ok: false, message: 'provider_type must be a string' };
   }
   const t = raw.trim();
   if (!t) {
-    return { ok: false, message: 'provider_type is required' };
+    return { ok: true, value: null };
   }
   const normalized = PROVIDER_TYPE_ALIASES[t] ?? t;
   if (!ALLOWED_PROVIDER_LABELS.has(normalized)) {
@@ -248,9 +289,9 @@ export const INTAKE_HOME_PEOPLE_COUNT_OPTIONS = [
 export function parseIntakeHomePeopleCount(
   raw: unknown,
   fieldLabel: 'home_adults_count' | 'home_youth_count'
-): { ok: true; value: string } | { ok: false; message: string } {
+): { ok: true; value: string | null } | { ok: false; message: string } {
   if (raw === undefined || raw === null) {
-    return { ok: false, message: `${fieldLabel} is required` };
+    return { ok: true, value: null };
   }
   const s =
     typeof raw === 'number'
@@ -259,7 +300,7 @@ export function parseIntakeHomePeopleCount(
         ? raw.trim()
         : '';
   if (!s) {
-    return { ok: false, message: `${fieldLabel} is required` };
+    return { ok: true, value: null };
   }
   if (!(INTAKE_HOME_PEOPLE_COUNT_OPTIONS as readonly string[]).includes(s)) {
     return {
