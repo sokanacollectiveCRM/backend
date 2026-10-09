@@ -6240,3 +6240,38 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 
 - [x] Context updated
 - [x] Implementation started
+
+## Preflight Update 2026-10-09 (CI green-up for PR #97)
+
+### Task
+
+- Fix PR lint/format failures and small pre-existing `main` TypeScript build
+  errors so GitHub checks can go green.
+
+### Files Scanned
+
+- Frontend repo is **not mounted** in this workspace.
+- `src/types.ts` (`AuthRequest` missing `tenant`)
+- `src/middleware/authMiddleware.ts` (`req.tenant = gate.tenant`)
+- `src/features/auth/http/authController.ts` (`attachDisplayProfilePicture`)
+- `src/services/gcs/profilePictureStorage.ts` (no such export on `main`)
+
+### Contract Findings
+
+- Auth JSON still `{ user: user.toJSON() }` / `/auth/me` body; the missing
+  export only blocked `tsc`. Display URL attach is in-place on `profile_picture`
+  before serialize.
+- No CRM response-shape change.
+
+### Drift Risk
+
+- None for Messaging UI. Tenant field is middleware-only.
+
+### Required Compatibility
+
+- Keep `{ success, data }` admin wrappers. Do not change `/auth/me` keys.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
