@@ -76,7 +76,24 @@ export class ContractOutboxService {
       generate_signed_document: async () => undefined,
       archive_signed_document: async () => undefined,
       send_signing_invitation: async () => undefined,
-      send_signing_reminder: async () => undefined,
+      send_signing_reminder: async (message) => {
+        try {
+          const { reminderEngine } = require('../../messaging/composition');
+          if (message.payload?.contractId && message.payload?.clientId) {
+            await reminderEngine.handleEvent({
+              type: 'contract_sent',
+              contractId: message.payload.contractId,
+              clientId: message.payload.clientId,
+              signingUrl: '',
+              sentAt: new Date(),
+              isResend: true,
+            });
+          }
+          await reminderEngine.tick();
+        } catch {
+          // Messaging tables may not be migrated yet; keep the outbox worker healthy.
+        }
+      },
     };
   }
 

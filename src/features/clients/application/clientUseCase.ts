@@ -78,6 +78,10 @@ export class ClientUseCase {
     try {
       // Update the client status directly
       const client = await this.clientRepository.updateStatus(clientId, status);
+      if (String(status).toLowerCase() === 'complete') {
+        const { fireMessagingEvent } = require('../../messaging/eventBus');
+        fireMessagingEvent({ type: 'client_completed', clientId });
+      }
 
       return client;
     } catch (error) {
@@ -121,7 +125,7 @@ export class ClientUseCase {
     userId: string
   ): Promise<Activity> {
     try {
-      return await this.activityRepository.createActivity({
+      const created = await this.activityRepository.createActivity({
         clientId,
         type,
         description,
@@ -129,6 +133,14 @@ export class ClientUseCase {
         timestamp: new Date(),
         createdBy: userId,
       });
+      const { fireMessagingEvent } = require('../../messaging/eventBus');
+      fireMessagingEvent({
+        type: 'note_created',
+        clientId,
+        activityType: type,
+        createdByRole: String(metadata?.createdByRole || ''),
+      });
+      return created;
     } catch (error) {
       throw new Error(`Could not create activity: ${error.message}`);
     }
