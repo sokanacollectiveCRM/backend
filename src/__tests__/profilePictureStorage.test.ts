@@ -3,6 +3,7 @@ import {
   uploadObject,
 } from '../services/gcs/documentStorage';
 import {
+  attachDisplayProfilePicture,
   isHttpUrl,
   resolveProfilePictureUrl,
   uploadProfilePictureObject,
@@ -60,5 +61,11 @@ describe('profilePictureStorage', () => {
   it('detects http urls', () => {
     expect(isHttpUrl('https://x')).toBe(true);
     expect(isHttpUrl('user-1/file.png')).toBe(false);
+  });
+
+  it('attaches a signed URL onto a user-like object', async () => {
+    const user = { profile_picture: 'user-1/123_headshot.png' };
+    await attachDisplayProfilePicture(user);
+    expect(user.profile_picture).toBe('https://signed.example/profile.jpg');
   });
 });

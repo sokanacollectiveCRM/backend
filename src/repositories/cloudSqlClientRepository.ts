@@ -585,7 +585,9 @@ export class CloudSqlClientRepository implements ClientRepository {
     }
     const updated = await this.getClientById(clientId);
     try {
-      const { emitReminderEvent } = require('../features/messaging/application/reminderHooks');
+      const {
+        emitReminderEvent,
+      } = require('../features/messaging/application/reminderHooks');
       emitReminderEvent({
         type: 'client_status_changed',
         clientId,

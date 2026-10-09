@@ -28,8 +28,9 @@ OIDC tick. Pilot first on the dev Cloud Run service.
 ## Completion summary
 
 Backend messaging engine shipped on branch
-`cursor/messaging-reminder-policies-f041` (one PR vs `main`, not merged).
+`cursor/messaging-reminder-policies-f041` (PR
+https://github.com/sokanacollectiveCRM/backend/pull/96 vs `main`, not merged).
 Deploy the PR build to the **dev** Cloud Run API, run
-`src/db/migrations/20261009_messaging_reminder_policies.sql`, set the
-reminder env vars, then create Cloud Scheduler. Catalog:
-`docs/MESSAGING_API.md`. Tick: `POST /api/internal/cron/reminders/tick`.
+`src/db/migrations/20261009_messaging_reminder_policies.sql`, set the reminder
+env vars, then create Cloud Scheduler. Catalog: `docs/MESSAGING_API.md`. Tick:
+`POST /api/internal/cron/reminders/tick`.

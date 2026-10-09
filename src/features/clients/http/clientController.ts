@@ -2363,7 +2363,9 @@ export class ClientController {
       }
 
       try {
-        const { emitReminderEvent } = require('../../messaging/application/reminderHooks');
+        const {
+          emitReminderEvent,
+        } = require('../../messaging/application/reminderHooks');
         emitReminderEvent({ type: 'birth_outcomes_recorded', clientId: id });
       } catch {
         // optional

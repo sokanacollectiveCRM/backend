@@ -1,6 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { Activity } from '../entities/Activity';
+
 import { queryCloudSql } from '../db/cloudSqlPool';
+import { Activity } from '../entities/Activity';
 import { ActivityRepository } from './interface/activityRepository';
 
 type ActivityRow = {
@@ -79,7 +80,9 @@ export class CloudSqlActivityRepository implements ActivityRepository {
 
     const activity = this.mapToActivity(rows[0]);
     try {
-      const { emitReminderEvent } = require('../features/messaging/application/reminderHooks');
+      const {
+        emitReminderEvent,
+      } = require('../features/messaging/application/reminderHooks');
       emitReminderEvent({
         type: 'activity_created',
         clientId: activityData.clientId,
