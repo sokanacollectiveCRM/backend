@@ -6192,36 +6192,45 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
   (`/Users/jerrybony/Documents/GitHub/sokana-crm-frontend/frontend-crm` and
   `/workspace/frontend-crm` are absent). Scanned living context plus backend
   consumers the CRM already uses:
-  - `.cursor/skills/sokana-doula-cloudsql-sync/frontend-context.md` (http wrapper,
-    sidebar-data, native signing, dashboard calendar, activities, hours)
+  - `.cursor/skills/sokana-doula-cloudsql-sync/frontend-context.md` (http
+    wrapper, sidebar-data, native signing, dashboard calendar, activities,
+    hours)
   - `backend/src/utils/responseBuilder.ts` (`{ success, data }`)
-  - `backend/src/server.ts` mounts (`/api/admin`, `/api/doulas`, `/api/contracts`)
+  - `backend/src/server.ts` mounts (`/api/admin`, `/api/doulas`,
+    `/api/contracts`)
   - `backend/src/features/contracts/` native send/void/outbox
-  - `backend/src/features/dashboard/http/dashboardRoutes.ts` (`due_date`, overdue notes)
-  - `backend/src/middleware/authorizeRoles.ts` (`admin | doula | client | billing`)
+  - `backend/src/features/dashboard/http/dashboardRoutes.ts` (`due_date`,
+    overdue notes)
+  - `backend/src/middleware/authorizeRoles.ts`
+    (`admin | doula | client | billing`)
 
 ### Contract Findings
 
-- CRM `src/api/http.ts` expects `{ success, data }` (and list `{ success, data, meta }`).
-- Admin routes live under `/api/admin/*` with cookie session + `authorizeRoles(['admin'])`.
+- CRM `src/api/http.ts` expects `{ success, data }` (and list
+  `{ success, data, meta }`).
+- Admin routes live under `/api/admin/*` with cookie session +
+  `authorizeRoles(['admin'])`.
 - Doula routes live under `/api/doulas/*` with `authorizeRoles(['doula'])`.
-- Native contract send is `POST /api/contracts/:id/send` (admin); invitation email is
-  synchronous via `sendNativeContractInvitation`, not outbox.
+- Native contract send is `POST /api/contracts/:id/send` (admin); invitation
+  email is synchronous via `sendNativeContractInvitation`, not outbox.
 - Dashboard calendar reads `phi_clients.due_date`. Overdue-notes card currently
-  hardcodes 7 days; settings API will return `overdue_days` for the Messaging UI.
+  hardcodes 7 days; settings API will return `overdue_days` for the Messaging
+  UI.
 - No existing frontend Messaging screens, `messagingApi.ts`, or sidebar item.
 
 ### Drift Risk
 
-- Frontend Messaging PR must follow this backend's API catalog (method/path/body).
-- If FE assumes a `deposit_payment` policy or SignNow, it will not match this repo
-  (native signing; deposit reminders removed Oct 9).
+- Frontend Messaging PR must follow this backend's API catalog
+  (method/path/body).
+- If FE assumes a `deposit_payment` policy or SignNow, it will not match this
+  repo (native signing; deposit reminders removed Oct 9).
 - Test tools (`/tick-now`, `/runs/:id/advance`) 404 unless
   `REMINDER_TEST_TOOLS_ENABLED=true` (dev only).
 
 ### Required Compatibility
 
-- Wrap admin JSON as `{ success: true, data }` / `{ success: true, data, meta }`.
+- Wrap admin JSON as `{ success: true, data }` /
+  `{ success: true, data, meta }`.
 - Recipient roles include `billing`.
 - Settings payload includes `overdue_days`, `billing_notification_email`,
   `evaluation_link`, `reminders_enabled`, `test_tools_enabled`.

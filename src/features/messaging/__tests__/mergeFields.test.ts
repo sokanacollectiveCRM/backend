@@ -1,5 +1,5 @@
-import { unknownMergeFields, renderTemplate } from '../domain/mergeFields';
 import { addDelay, windowStartIso } from '../domain/delay';
+import { renderTemplate, unknownMergeFields } from '../domain/mergeFields';
 
 describe('merge fields and delay', () => {
   it('rejects unknown merge fields', () => {
@@ -18,9 +18,9 @@ describe('merge fields and delay', () => {
     expect(addDelay(friday, 3, 'days').toISOString().slice(0, 10)).toBe(
       '2026-10-12'
     );
-    expect(addDelay(friday, 1, 'business_days').toISOString().slice(0, 10)).toBe(
-      '2026-10-12'
-    );
+    expect(
+      addDelay(friday, 1, 'business_days').toISOString().slice(0, 10)
+    ).toBe('2026-10-12');
   });
 
   it('windows repeating steps', () => {

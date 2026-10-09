@@ -5,7 +5,10 @@ import authMiddleware from '../../../middleware/authMiddleware';
 import authorizeRoles from '../../../middleware/authorizeRoles';
 import { ApiErrorCode } from '../../../security/errorCodes';
 import { MessagingController } from './messagingController';
-import { requireReminderCronOidc, requireReminderTestTools } from './oidcCronAuth';
+import {
+  requireReminderCronOidc,
+  requireReminderTestTools,
+} from './oidcCronAuth';
 
 const wrap =
   (fn: (req: Request, res: Response, next: NextFunction) => unknown) =>
@@ -53,8 +56,14 @@ export function createAdminMessagingRoutes(
   router.get('/messaging/templates', wrap(controller.listTemplates));
   router.get('/messaging/templates/:id', wrap(controller.getTemplate));
   router.patch('/messaging/templates/:id', wrap(controller.patchTemplate));
-  router.post('/messaging/templates/:id/preview', wrap(controller.previewTemplate));
-  router.post('/messaging/templates/:id/test-send', wrap(controller.testSendTemplate));
+  router.post(
+    '/messaging/templates/:id/preview',
+    wrap(controller.previewTemplate)
+  );
+  router.post(
+    '/messaging/templates/:id/test-send',
+    wrap(controller.testSendTemplate)
+  );
 
   router.get('/messaging/runs', wrap(controller.listRuns));
   router.get('/messaging/send-log', wrap(controller.listSendLog));
@@ -84,8 +93,14 @@ export function createAdminMessagingRoutes(
   );
 
   router.get('/clients/:id/postponements', wrap(controller.listPostponements));
-  router.post('/clients/:id/postponements', wrap(controller.createPostponement));
-  router.post('/postponements/:id/approve', wrap(controller.approvePostponement));
+  router.post(
+    '/clients/:id/postponements',
+    wrap(controller.createPostponement)
+  );
+  router.post(
+    '/postponements/:id/approve',
+    wrap(controller.approvePostponement)
+  );
   router.post('/postponements/:id/lift', wrap(controller.liftPostponement));
   router.post('/postponements/:id/extend', wrap(controller.extendPostponement));
   router.post('/postponements/:id/cancel', wrap(controller.cancelPostponement));

@@ -1,9 +1,9 @@
 import express from 'express';
 import request from 'supertest';
 
-import { loadDefaultSeed } from '../application/seedDefaults';
 import { PostponementService } from '../application/postponementService';
 import { ReminderEngine } from '../application/reminderEngine';
+import { loadDefaultSeed } from '../application/seedDefaults';
 import { MessagingController } from '../http/messagingController';
 import {
   createAdminMessagingRoutes,
@@ -76,13 +76,14 @@ describe('messaging HTTP', () => {
     app = express();
     app.use(express.json());
     app.use('/api/admin', createAdminMessagingRoutes(controller));
-    app.use('/api/internal/cron/reminders', createReminderTickRoutes(controller));
+    app.use(
+      '/api/internal/cron/reminders',
+      createReminderTickRoutes(controller)
+    );
   });
 
   it('rejects the tick without a valid OIDC token', async () => {
-    await request(app)
-      .post('/api/internal/cron/reminders/tick')
-      .expect(401);
+    await request(app).post('/api/internal/cron/reminders/tick').expect(401);
     verifyIdToken.mockRejectedValue(new Error('bad token'));
     await request(app)
       .post('/api/internal/cron/reminders/tick')
@@ -114,9 +115,7 @@ describe('messaging HTTP', () => {
       .post('/api/internal/cron/reminders/tick')
       .set('Authorization', 'Bearer good')
       .expect(200);
-    expect(res.body).toEqual(
-      expect.objectContaining({ claimed: 0, sent: 0 })
-    );
+    expect(res.body).toEqual(expect.objectContaining({ claimed: 0, sent: 0 }));
   });
 
   it('returns 404 for test tools when the flag is off', async () => {
@@ -126,7 +125,9 @@ describe('messaging HTTP', () => {
       .set('x-test-role', 'admin')
       .expect(404);
     await request(app)
-      .post('/api/admin/messaging/runs/11111111-1111-4111-8111-111111111111/advance')
+      .post(
+        '/api/admin/messaging/runs/11111111-1111-4111-8111-111111111111/advance'
+      )
       .set('x-test-role', 'admin')
       .expect(404);
   });
@@ -155,9 +156,9 @@ describe('messaging HTTP', () => {
       .set('x-test-role', 'admin')
       .expect(200);
     expect(res.body.success).toBe(true);
-    expect(res.body.data.some((p: { key: string }) => p.key === 'deposit_payment')).toBe(
-      false
-    );
+    expect(
+      res.body.data.some((p: { key: string }) => p.key === 'deposit_payment')
+    ).toBe(false);
   });
 
   it('returns overdue_days on settings', async () => {

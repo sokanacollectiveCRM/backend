@@ -13,4 +13,5 @@ npm run migrate:payment-schedules
 npm run migrate:cloudsql -- src/db/migrations/20261009_messaging_reminder_policies.sql
 ```
 
-Never pass credentials manually—always use the migration runner, which loads `.env` automatically.
+Never pass credentials manually—always use the migration runner, which loads
+`.env` automatically.

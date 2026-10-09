@@ -217,7 +217,9 @@ export const reminderMessaging = {
     return value === 'true' || value === '1';
   },
   get adminNotificationEmail(): string {
-    return optionalEnv('ADMIN_NOTIFICATION_EMAIL') ?? 'hello@sokanacollective.com';
+    return (
+      optionalEnv('ADMIN_NOTIFICATION_EMAIL') ?? 'hello@sokanacollective.com'
+    );
   },
 };
 

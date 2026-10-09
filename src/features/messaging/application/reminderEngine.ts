@@ -14,7 +14,11 @@ import {
   ReminderRun,
   TickCounts,
 } from '../domain/types';
-import { isSigned, isUnsignedPending, evaluateStopReason } from './stopConditions';
+import {
+  evaluateStopReason,
+  isSigned,
+  isUnsignedPending,
+} from './stopConditions';
 import { MessagingStore, UniqueViolationError } from './store';
 
 export interface ReminderEmailSender {
@@ -50,7 +54,8 @@ export class ReminderEngine {
     private readonly voids: ContractVoider,
     private readonly signingLinks: SigningLinkIssuer,
     private readonly clock: ReminderClock = { now: () => new Date() },
-    private readonly frontendUrl: string = process.env.FRONTEND_URL || DEFAULT_CRM_LINK
+    private readonly frontendUrl: string = process.env.FRONTEND_URL ||
+      DEFAULT_CRM_LINK
   ) {}
 
   async tick(): Promise<TickCounts> {
@@ -83,7 +88,10 @@ export class ReminderEngine {
       scansStarted: 0,
     };
 
-    counts.postponedRestarted = await this.autoRestartPostponements(now, settings);
+    counts.postponedRestarted = await this.autoRestartPostponements(
+      now,
+      settings
+    );
 
     const claimed = await this.store.claimDueRuns(now, 50);
     counts.claimed = claimed.length;
@@ -118,9 +126,14 @@ export class ReminderEngine {
       case 'contract_sent':
         return this.onContractSent(event, settings);
       case 'baby_delivered':
-        return this.startClientPolicy('birth_outcomes', event.clientId, settings, {
-          anchorAt: this.clock.now(),
-        });
+        return this.startClientPolicy(
+          'birth_outcomes',
+          event.clientId,
+          settings,
+          {
+            anchorAt: this.clock.now(),
+          }
+        );
       case 'birth_outcomes_recorded':
         await this.completeClientPolicy(
           'birth_outcomes',
@@ -129,9 +142,18 @@ export class ReminderEngine {
         );
         return null;
       case 'note_created':
-        await this.completeClientPolicy('overdue_notes', event.clientId, 'note_created');
+        await this.completeClientPolicy(
+          'overdue_notes',
+          event.clientId,
+          'note_created'
+        );
         if (event.createdByRole === 'admin') {
-          return this.startImmediate('admin_note_added', event.clientId, 'client', settings);
+          return this.startImmediate(
+            'admin_note_added',
+            event.clientId,
+            'client',
+            settings
+          );
         }
         if (/interview/i.test(event.activityType || '')) {
           return this.startImmediate(
@@ -374,7 +396,13 @@ export class ReminderEngine {
     if (policyKey === 'birth_outcomes' && client.birthOutcomesRecorded) {
       return null;
     }
-    return this.startAndMaybeSend(policy, clientId, 'client', settings, options);
+    return this.startAndMaybeSend(
+      policy,
+      clientId,
+      'client',
+      settings,
+      options
+    );
   }
 
   private async startAndMaybeSend(
@@ -390,7 +418,8 @@ export class ReminderEngine {
       clientId,
       contractId: options?.contractId,
     });
-    const first = this.firstTickStep(policy) ?? policy.steps.find((s) => s.enabled);
+    const first =
+      this.firstTickStep(policy) ?? policy.steps.find((s) => s.enabled);
     const run = await this.store.createRun({
       policyId: policy.id,
       policyKey: policy.key,
@@ -435,7 +464,12 @@ export class ReminderEngine {
     run: ReminderRun,
     settings: MessagingSettings,
     now: Date
-  ): Promise<{ sent: number; skipped: number; failed: number; endActions: number }> {
+  ): Promise<{
+    sent: number;
+    skipped: number;
+    failed: number;
+    endActions: number;
+  }> {
     const result = { sent: 0, skipped: 0, failed: 0, endActions: 0 };
     const policy = await this.store.getPolicyById(run.policyId);
     if (!policy || !policy.enabled) {
@@ -465,7 +499,13 @@ export class ReminderEngine {
     }
 
     if (run.endActionDueAt && run.endActionDueAt.getTime() <= now.getTime()) {
-      const applied = await this.applyEndAction(run, policy, settings, contract, now);
+      const applied = await this.applyEndAction(
+        run,
+        policy,
+        settings,
+        contract,
+        now
+      );
       result.endActions += applied ? 1 : 0;
       return result;
     }
@@ -491,7 +531,8 @@ export class ReminderEngine {
       const already = await this.store.listAlerts();
       const exists = already.some(
         (alert) =>
-          alert.runId === run.id && alert.type === `${policy.key}_admin_threshold`
+          alert.runId === run.id &&
+          alert.type === `${policy.key}_admin_threshold`
       );
       if (!exists) {
         await this.store.createAlert({
@@ -506,7 +547,11 @@ export class ReminderEngine {
 
     const next = this.nextDue(run, policy, now);
     await this.store.updateRun(run.id, {
-      currentStep: Math.max(run.currentStep, ...dueSteps.map((s) => s.stepOrder), 0),
+      currentStep: Math.max(
+        run.currentStep,
+        ...dueSteps.map((s) => s.stepOrder),
+        0
+      ),
       nextDueAt: next,
       sendsCount: run.sendsCount + result.sent,
       claimedUntil: null,
@@ -595,7 +640,10 @@ export class ReminderEngine {
                 : null,
         });
       } catch (error) {
-        if (error instanceof UniqueViolationError || (error as { code?: string }).code === '23505') {
+        if (
+          error instanceof UniqueViolationError ||
+          (error as { code?: string }).code === '23505'
+        ) {
           skipped += 1;
           continue;
         }
@@ -646,7 +694,13 @@ export class ReminderEngine {
             runId: run.id,
             message: 'signed, deposit not received',
           });
-          await this.tryLog(key, run, policy, 'skipped', 'signed_deposit_unpaid');
+          await this.tryLog(
+            key,
+            run,
+            policy,
+            'skipped',
+            'signed_deposit_unpaid'
+          );
           await this.store.updateRun(run.id, {
             status: 'completed',
             completedReason: 'signed_deposit_unpaid',
@@ -665,7 +719,13 @@ export class ReminderEngine {
       }
 
       if (!isUnsignedPending(contract.status)) {
-        await this.tryLog(key, run, policy, 'skipped', `status_${contract.status}`);
+        await this.tryLog(
+          key,
+          run,
+          policy,
+          'skipped',
+          `status_${contract.status}`
+        );
         await this.store.updateRun(run.id, {
           status: 'completed',
           completedReason: contract.status,
@@ -711,7 +771,13 @@ export class ReminderEngine {
           templateId: template.id,
           enabled: true,
         };
-        await this.sendStep(run, { ...policy, steps: [cancelStep] }, cancelStep, settings, now);
+        await this.sendStep(
+          run,
+          { ...policy, steps: [cancelStep] },
+          cancelStep,
+          settings,
+          now
+        );
       }
 
       await this.store.createAlert({
@@ -725,7 +791,11 @@ export class ReminderEngine {
       if (policy.notifyAdminEmail) {
         const subject = `Contract auto-canceled: ${contract.clientFirstName}`;
         const text = `A contract was auto-canceled because it was not signed. Contact: ${settings.contactEmail}`;
-        await this.email.sendEmail(settings.adminNotificationEmail, subject, text);
+        await this.email.sendEmail(
+          settings.adminNotificationEmail,
+          subject,
+          text
+        );
       }
 
       await this.tryLog(key, run, policy, 'sent', null);
@@ -763,7 +833,9 @@ export class ReminderEngine {
     const due = await this.store.listActivePostponementsDue(now);
     let count = 0;
     for (const postponement of due) {
-      await this.store.updatePostponement(postponement.id, { status: 'restarted' });
+      await this.store.updatePostponement(postponement.id, {
+        status: 'restarted',
+      });
       await this.store.appendPostponementEvent({
         postponementId: postponement.id,
         eventType: 'auto_restarted',
@@ -774,7 +846,10 @@ export class ReminderEngine {
         status: 'paused',
       });
       for (const run of runs) {
-        if (postponement.contractId && run.contractId !== postponement.contractId) {
+        if (
+          postponement.contractId &&
+          run.contractId !== postponement.contractId
+        ) {
           continue;
         }
         const policy = await this.store.getPolicyById(run.policyId);
@@ -786,7 +861,11 @@ export class ReminderEngine {
           anchorAt: anchor,
           currentStep: firstReminder?.stepOrder ?? 1,
           nextDueAt: firstReminder
-            ? addDelay(anchor, firstReminder.delayValue, firstReminder.delayUnit)
+            ? addDelay(
+                anchor,
+                firstReminder.delayValue,
+                firstReminder.delayUnit
+              )
             : anchor,
           endActionDueAt: this.endActionAt(policy, anchor),
           pauseReason: null,
@@ -815,7 +894,8 @@ export class ReminderEngine {
       status: ['paused', 'active'],
     });
     for (const run of runs) {
-      if (contractId && run.contractId && run.contractId !== contractId) continue;
+      if (contractId && run.contractId && run.contractId !== contractId)
+        continue;
       const policy = await this.store.getPolicyById(run.policyId);
       if (!policy) continue;
       const firstReminder = this.firstTickStep(policy);
@@ -842,9 +922,14 @@ export class ReminderEngine {
       const days = Number(birth.config.days_after_due_date ?? 5);
       const clients = await this.store.listDueDateScanCandidates(now, days);
       for (const client of clients) {
-        const run = await this.startClientPolicy('birth_outcomes', client.id, settings, {
-          anchorAt: addDelay(client.dueDate as Date, days, 'days'),
-        });
+        const run = await this.startClientPolicy(
+          'birth_outcomes',
+          client.id,
+          settings,
+          {
+            anchorAt: addDelay(client.dueDate as Date, days, 'days'),
+          }
+        );
         if (run) started += 1;
       }
     }
@@ -853,7 +938,11 @@ export class ReminderEngine {
       const days = Number(notes.config.overdue_days ?? 7);
       const clients = await this.store.listOverdueNoteCandidates(now, days);
       for (const client of clients) {
-        const run = await this.startClientPolicy('overdue_notes', client.id, settings);
+        const run = await this.startClientPolicy(
+          'overdue_notes',
+          client.id,
+          settings
+        );
         if (run) started += 1;
       }
     }
@@ -888,7 +977,9 @@ export class ReminderEngine {
     return started;
   }
 
-  private firstTickStep(policy: ReminderPolicy): ReminderPolicyStep | undefined {
+  private firstTickStep(
+    policy: ReminderPolicy
+  ): ReminderPolicyStep | undefined {
     const steps = policy.steps
       .filter((s) => s.enabled)
       .sort((a, b) => a.stepOrder - b.stepOrder);
@@ -902,10 +993,18 @@ export class ReminderEngine {
     if (policy.endActionDelayValue == null || !policy.endActionDelayUnit) {
       return null;
     }
-    return addDelay(anchor, policy.endActionDelayValue, policy.endActionDelayUnit);
+    return addDelay(
+      anchor,
+      policy.endActionDelayValue,
+      policy.endActionDelayUnit
+    );
   }
 
-  private nextDue(run: ReminderRun, policy: ReminderPolicy, now: Date): Date | null {
+  private nextDue(
+    run: ReminderRun,
+    policy: ReminderPolicy,
+    now: Date
+  ): Date | null {
     const candidates: Date[] = [];
     for (const step of policy.steps) {
       if (!step.enabled) continue;
@@ -925,7 +1024,9 @@ export class ReminderEngine {
       candidates.push(run.endActionDueAt);
     }
     if (!candidates.length) return run.endActionDueAt;
-    return candidates.reduce((min, d) => (d.getTime() < min.getTime() ? d : min));
+    return candidates.reduce((min, d) =>
+      d.getTime() < min.getTime() ? d : min
+    );
   }
 
   private resolveRecipient(
@@ -969,7 +1070,10 @@ export class ReminderEngine {
     const remaining =
       client?.hoursContracted != null
         ? String(
-            Math.max(0, client.hoursContracted - (client.postpartumHoursLogged || 0))
+            Math.max(
+              0,
+              client.hoursContracted - (client.postpartumHoursLogged || 0)
+            )
           )
         : '';
     return {
@@ -995,11 +1099,15 @@ export class ReminderEngine {
   }
 
   private isHoursLow(client: ClientFacts, policy: ReminderPolicy): boolean {
-    if (client.hoursContracted == null || client.hoursContracted <= 0) return false;
+    if (client.hoursContracted == null || client.hoursContracted <= 0)
+      return false;
     const remaining = client.hoursContracted - client.postpartumHoursLogged;
     const threshold = Number(policy.config.remaining_hours_threshold ?? 4);
     const pct = Number(policy.config.remaining_pct ?? 20);
-    return remaining <= threshold || (remaining / client.hoursContracted) * 100 <= pct;
+    return (
+      remaining <= threshold ||
+      (remaining / client.hoursContracted) * 100 <= pct
+    );
   }
 
   private async tryLog(
@@ -1024,7 +1132,10 @@ export class ReminderEngine {
         suppressReason: reason,
       });
     } catch (error) {
-      if (error instanceof UniqueViolationError || (error as { code?: string }).code === '23505') {
+      if (
+        error instanceof UniqueViolationError ||
+        (error as { code?: string }).code === '23505'
+      ) {
         return;
       }
       throw error;

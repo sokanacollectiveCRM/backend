@@ -1,9 +1,9 @@
-import { addDelay } from '../domain/delay';
+import { PostponementService } from '../application/postponementService';
 import { ReminderEngine } from '../application/reminderEngine';
 import { loadDefaultSeed } from '../application/seedDefaults';
-import { PostponementService } from '../application/postponementService';
-import { InMemoryMessagingStore } from '../testSupport/inMemoryStore';
+import { addDelay } from '../domain/delay';
 import { ContractFacts } from '../domain/types';
+import { InMemoryMessagingStore } from '../testSupport/inMemoryStore';
 
 jest.mock('nodemailer', () => ({
   createTransport: jest.fn().mockReturnValue({
@@ -66,7 +66,10 @@ describe('reminder engine', () => {
       depositPaid: false,
       cardOnFile: false,
     });
-    store.doulas.set(doulaId, { email: 'donna@example.test', name: 'Donna Doula' });
+    store.doulas.set(doulaId, {
+      email: 'donna@example.test',
+      name: 'Donna Doula',
+    });
     const overdue = (await store.getPolicyByKey('overdue_notes'))!;
     overdue.enabled = false;
     const birth = (await store.getPolicyByKey('birth_outcomes'))!;
@@ -125,22 +128,20 @@ describe('reminder engine', () => {
     await engine.tick();
     const day3 = sent.map((s) => s.to).sort();
     expect(day3).toEqual(['ada@example.test', 'donna@example.test']);
-    expect(sent.some((s) => s.text.includes('haven\'t signed yet'))).toBe(true);
+    expect(sent.some((s) => s.text.includes("haven't signed yet"))).toBe(true);
 
     sent.length = 0;
     store.releaseClaims();
     now = addDelay(now, 4, 'days');
     await engine.tick();
     expect(voids).toEqual([contractId]);
-    expect(sent.some((s) => s.text.includes('hello@sokanacollective.com'))).toBe(
+    expect(
+      sent.some((s) => s.text.includes('hello@sokanacollective.com'))
+    ).toBe(true);
+    expect(store.alerts.some((a) => a.type === 'contract_auto_canceled')).toBe(
       true
     );
-    expect(
-      store.alerts.some((a) => a.type === 'contract_auto_canceled')
-    ).toBe(true);
-    expect(
-      sent.some((s) => s.to === 'hello@sokanacollective.com')
-    ).toBe(false);
+    expect(sent.some((s) => s.to === 'hello@sokanacollective.com')).toBe(false);
 
     sent.length = 0;
     voids.length = 0;
@@ -214,13 +215,15 @@ describe('reminder engine', () => {
     store.releaseClaims();
     now = created.postponement.restartAt;
     await engine.tick();
-    expect(
-      store.alerts.some((a) => a.type === 'postponement_restarted')
-    ).toBe(true);
+    expect(store.alerts.some((a) => a.type === 'postponement_restarted')).toBe(
+      true
+    );
     const run = store.runs.find((r) => r.policyKey === 'contract_signing');
     expect(run?.status).toBe('active');
     expect(run?.endActionDueAt?.toISOString().slice(0, 10)).toBe(
-      addDelay(created.postponement.restartAt, 7, 'days').toISOString().slice(0, 10)
+      addDelay(created.postponement.restartAt, 7, 'days')
+        .toISOString()
+        .slice(0, 10)
     );
 
     store.releaseClaims();
@@ -252,9 +255,9 @@ describe('reminder engine', () => {
       '2026-10-22'
     );
     await postponements.lift(created.postponement.id, 'admin-1');
-    expect(store.runs.find((r) => r.policyKey === 'contract_signing')?.status).toBe(
-      'active'
-    );
+    expect(
+      store.runs.find((r) => r.policyKey === 'contract_signing')?.status
+    ).toBe('active');
 
     const second = await postponements.create({
       clientId,
@@ -288,7 +291,9 @@ describe('reminder engine', () => {
     birth.enabled = true;
     store.clients.get(clientId)!.birthOutcomesRecorded = true;
     await engine.handleEvent({ type: 'baby_delivered', clientId });
-    expect(store.runs.filter((r) => r.policyKey === 'birth_outcomes')).toEqual([]);
+    expect(store.runs.filter((r) => r.policyKey === 'birth_outcomes')).toEqual(
+      []
+    );
   });
 
   it('first birth-outcomes send is at due date + 5 and alerts once after 3 sends', async () => {
@@ -375,7 +380,9 @@ describe('reminder engine', () => {
 
     expect(sent.some((s) => s.to === 'ada@example.test')).toBe(true);
     expect(sent.some((s) => s.to === 'hello@sokanacollective.com')).toBe(true);
-    expect(sent.some((s) => s.to === 'billing@sokanacollective.com')).toBe(true);
+    expect(sent.some((s) => s.to === 'billing@sokanacollective.com')).toBe(
+      true
+    );
   });
 
   it('concurrent ticks produce a single send via idempotency', async () => {

@@ -4,6 +4,9 @@ import { z } from 'zod';
 import { ApiErrorCode } from '../../../security/errorCodes';
 import type { AuthRequest } from '../../../types';
 import { ApiResponse } from '../../../utils/responseBuilder';
+import { PostponementService } from '../application/postponementService';
+import { ReminderEngine } from '../application/reminderEngine';
+import { MessagingStore } from '../application/store';
 import { unknownMergeFields } from '../domain/mergeFields';
 import {
   CHANNELS,
@@ -12,9 +15,6 @@ import {
   POSTPONEMENT_REASON_CODES,
   RECIPIENT_ROLES,
 } from '../domain/types';
-import { PostponementService } from '../application/postponementService';
-import { ReminderEngine } from '../application/reminderEngine';
-import { MessagingStore } from '../application/store';
 
 const uuidSchema = z.string().uuid();
 
@@ -41,7 +41,9 @@ export class MessagingController {
   getPolicy = async (req: AuthRequest, res: Response): Promise<void> => {
     const policy = await this.store.getPolicyById(String(req.params.id));
     if (!policy) {
-      res.status(404).json(ApiResponse.error('Policy not found', ApiErrorCode.NOT_FOUND));
+      res
+        .status(404)
+        .json(ApiResponse.error('Policy not found', ApiErrorCode.NOT_FOUND));
       return;
     }
     res.json(ApiResponse.success(policy));
@@ -55,7 +57,12 @@ export class MessagingController {
         enabled: z.boolean().optional(),
         stopConditions: z.array(z.string()).optional(),
         endAction: z.enum(END_ACTIONS).optional(),
-        endActionDelayValue: z.number().int().nonnegative().nullable().optional(),
+        endActionDelayValue: z
+          .number()
+          .int()
+          .nonnegative()
+          .nullable()
+          .optional(),
         endActionDelayUnit: z.enum(DELAY_UNITS).nullable().optional(),
         endActionTemplateKeys: z.array(z.string()).optional(),
         notifyAdminEmail: z.boolean().optional(),
@@ -137,12 +144,14 @@ export class MessagingController {
       body.bodyHtml ?? ''
     );
     if (unknown.length) {
-      res.status(400).json(
-        ApiResponse.error(
-          `Unknown merge fields: ${unknown.join(', ')}`,
-          ApiErrorCode.VALIDATION_ERROR
-        )
-      );
+      res
+        .status(400)
+        .json(
+          ApiResponse.error(
+            `Unknown merge fields: ${unknown.join(', ')}`,
+            ApiErrorCode.VALIDATION_ERROR
+          )
+        );
       return;
     }
     const template = await this.store.updateTemplate(String(req.params.id), {
@@ -184,14 +193,21 @@ export class MessagingController {
     if (!to) {
       res
         .status(400)
-        .json(ApiResponse.error('Admin email missing', ApiErrorCode.VALIDATION_ERROR));
+        .json(
+          ApiResponse.error(
+            'Admin email missing',
+            ApiErrorCode.VALIDATION_ERROR
+          )
+        );
       return;
     }
     const sample = (req.body?.sample ?? {
       client_first_name: 'Test',
       contact_email: 'hello@sokanacollective.com',
     }) as Record<string, string>;
-    const { renderTemplate, htmlFromText } = await import('../domain/mergeFields');
+    const { renderTemplate, htmlFromText } = await import(
+      '../domain/mergeFields'
+    );
     const subject = renderTemplate(template.subject, sample);
     const text = renderTemplate(template.bodyText, sample);
     const html = template.bodyHtml
@@ -219,7 +235,9 @@ export class MessagingController {
       status: status as never,
       policyKey: req.query.policyKey ? String(req.query.policyKey) : undefined,
       clientId: req.query.clientId ? String(req.query.clientId) : undefined,
-      contractId: req.query.contractId ? String(req.query.contractId) : undefined,
+      contractId: req.query.contractId
+        ? String(req.query.contractId)
+        : undefined,
     });
     res.json(ApiResponse.list(runs, runs.length));
   };
@@ -231,7 +249,9 @@ export class MessagingController {
       limit,
       offset,
       policyKey: req.query.policyKey ? String(req.query.policyKey) : undefined,
-      status: req.query.status ? (String(req.query.status) as never) : undefined,
+      status: req.query.status
+        ? (String(req.query.status) as never)
+        : undefined,
     });
     res.json(ApiResponse.list(result.rows, result.total, { limit, offset }));
   };
@@ -245,8 +265,7 @@ export class MessagingController {
         overdue_days: Number(notes?.config.overdue_days ?? 7),
         test_tools_enabled:
           (process.env.REMINDER_TEST_TOOLS_ENABLED || '').toLowerCase() ===
-            'true' ||
-          process.env.REMINDER_TEST_TOOLS_ENABLED === '1',
+            'true' || process.env.REMINDER_TEST_TOOLS_ENABLED === '1',
       })
     );
   };
@@ -284,13 +303,18 @@ export class MessagingController {
       String(req.user?.id || '')
     );
     if (!alert) {
-      res.status(404).json(ApiResponse.error('Alert not found', ApiErrorCode.NOT_FOUND));
+      res
+        .status(404)
+        .json(ApiResponse.error('Alert not found', ApiErrorCode.NOT_FOUND));
       return;
     }
     res.json(ApiResponse.success(alert));
   };
 
-  stopContractReminders = async (req: AuthRequest, res: Response): Promise<void> => {
+  stopContractReminders = async (
+    req: AuthRequest,
+    res: Response
+  ): Promise<void> => {
     uuidSchema.parse(req.params.id);
     await this.engine.stopContractReminders(
       String(req.params.id),
@@ -300,7 +324,10 @@ export class MessagingController {
     res.json(ApiResponse.success({ stopped: true }));
   };
 
-  resumeContractReminders = async (req: AuthRequest, res: Response): Promise<void> => {
+  resumeContractReminders = async (
+    req: AuthRequest,
+    res: Response
+  ): Promise<void> => {
     uuidSchema.parse(req.params.id);
     await this.engine.resumeContractReminders(
       String(req.params.id),
@@ -309,12 +336,18 @@ export class MessagingController {
     res.json(ApiResponse.success({ resumed: true }));
   };
 
-  listPostponements = async (req: AuthRequest, res: Response): Promise<void> => {
+  listPostponements = async (
+    req: AuthRequest,
+    res: Response
+  ): Promise<void> => {
     const rows = await this.postponements.list(String(req.params.id));
     res.json(ApiResponse.list(rows, rows.length));
   };
 
-  createPostponement = async (req: AuthRequest, res: Response): Promise<void> => {
+  createPostponement = async (
+    req: AuthRequest,
+    res: Response
+  ): Promise<void> => {
     const body = z
       .object({
         contractId: z.string().uuid().nullable().optional(),
@@ -335,7 +368,10 @@ export class MessagingController {
     res.status(201).json(ApiResponse.success(result));
   };
 
-  requestPostponement = async (req: AuthRequest, res: Response): Promise<void> => {
+  requestPostponement = async (
+    req: AuthRequest,
+    res: Response
+  ): Promise<void> => {
     const body = z
       .object({
         contractId: z.string().uuid().nullable().optional(),
@@ -356,7 +392,10 @@ export class MessagingController {
     res.status(201).json(ApiResponse.success(result));
   };
 
-  approvePostponement = async (req: AuthRequest, res: Response): Promise<void> => {
+  approvePostponement = async (
+    req: AuthRequest,
+    res: Response
+  ): Promise<void> => {
     const row = await this.postponements.approve(
       String(req.params.id),
       String(req.user?.id || '')
@@ -372,7 +411,10 @@ export class MessagingController {
     res.json(ApiResponse.success(row));
   };
 
-  extendPostponement = async (req: AuthRequest, res: Response): Promise<void> => {
+  extendPostponement = async (
+    req: AuthRequest,
+    res: Response
+  ): Promise<void> => {
     const body = z.object({ restartAt: z.string().datetime() }).parse(req.body);
     const result = await this.postponements.extend(
       String(req.params.id),
@@ -382,7 +424,10 @@ export class MessagingController {
     res.json(ApiResponse.success(result));
   };
 
-  cancelPostponement = async (req: AuthRequest, res: Response): Promise<void> => {
+  cancelPostponement = async (
+    req: AuthRequest,
+    res: Response
+  ): Promise<void> => {
     const row = await this.postponements.cancel(
       String(req.params.id),
       String(req.user?.id || '')

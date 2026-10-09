@@ -11,4 +11,7 @@
 
 ## Completion summary
 
-Backend reminder engine, Cloud SQL migrations/seeds, admin/doula/OIDC HTTP APIs, native contract send hook (sign-by date), postponement auto-restart, per-contract stop, Jest tests. PR against `main`, not merged. Frontend UI, SMS, and Cloud Scheduler job creation are out of scope.
+Backend reminder engine, Cloud SQL migrations/seeds, admin/doula/OIDC HTTP APIs,
+native contract send hook (sign-by date), postponement auto-restart,
+per-contract stop, Jest tests. PR against `main`, not merged. Frontend UI, SMS,
+and Cloud Scheduler job creation are out of scope.

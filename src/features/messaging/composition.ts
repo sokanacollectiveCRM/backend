@@ -1,17 +1,17 @@
-import { contractNotifications } from '../../config/env';
 import { logger } from '../../common/utils/logger';
+import { contractNotifications } from '../../config/env';
+import { nativeContracts } from '../../config/env';
 import { NodemailerService } from '../../services/emailService';
 import { InvitationService } from '../contracts/application/invitationService';
 import { contractRepository } from '../contracts/infrastructure/contractRepository';
 import { invitationRepository } from '../contracts/infrastructure/invitationRepository';
-import { nativeContracts } from '../../config/env';
-import { isSigned, isUnsignedPending } from './application/stopConditions';
 import { PostponementService } from './application/postponementService';
 import {
   ContractVoider,
   ReminderEngine,
   SigningLinkIssuer,
 } from './application/reminderEngine';
+import { isSigned, isUnsignedPending } from './application/stopConditions';
 import { setMessagingEventHandler } from './eventBus';
 import { MessagingController } from './http/messagingController';
 import {
@@ -85,12 +85,10 @@ export const messagingController = new MessagingController(
   email
 );
 
-export const adminMessagingRoutes = createAdminMessagingRoutes(
-  messagingController
-);
-export const doulaPostponementRoutes = createDoulaPostponementRoutes(
-  messagingController
-);
+export const adminMessagingRoutes =
+  createAdminMessagingRoutes(messagingController);
+export const doulaPostponementRoutes =
+  createDoulaPostponementRoutes(messagingController);
 export const reminderTickRoutes = createReminderTickRoutes(messagingController);
 
 export function initMessagingFeature(): void {

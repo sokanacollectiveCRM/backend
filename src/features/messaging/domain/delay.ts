@@ -34,7 +34,9 @@ export function addDelay(from: Date, value: number, unit: DelayUnit): Date {
   return new Date(from.getTime() + durationMs(value, unit));
 }
 
-export function formatMergeDate(value: Date | string | null | undefined): string {
+export function formatMergeDate(
+  value: Date | string | null | undefined
+): string {
   if (!value) return '';
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return '';

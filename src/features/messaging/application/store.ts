@@ -45,9 +45,7 @@ export class UniqueViolationError extends Error {
 
 export interface MessagingStore {
   getSettings(): Promise<MessagingSettings>;
-  updateSettings(
-    patch: Partial<MessagingSettings>
-  ): Promise<MessagingSettings>;
+  updateSettings(patch: Partial<MessagingSettings>): Promise<MessagingSettings>;
 
   listPolicies(): Promise<ReminderPolicy[]>;
   getPolicyById(id: string): Promise<ReminderPolicy | null>;
@@ -141,11 +139,22 @@ export interface MessagingStore {
 
   getContractFacts(contractId: string): Promise<ContractFacts | null>;
   getClientFacts(clientId: string): Promise<ClientFacts | null>;
-  listDueDateScanCandidates(now: Date, daysAfter: number): Promise<ClientFacts[]>;
-  listOverdueNoteCandidates(now: Date, overdueDays: number): Promise<ClientFacts[]>;
-  listHoursLowCandidates(thresholdHours: number, remainingPct: number): Promise<ClientFacts[]>;
+  listDueDateScanCandidates(
+    now: Date,
+    daysAfter: number
+  ): Promise<ClientFacts[]>;
+  listOverdueNoteCandidates(
+    now: Date,
+    overdueDays: number
+  ): Promise<ClientFacts[]>;
+  listHoursLowCandidates(
+    thresholdHours: number,
+    remainingPct: number
+  ): Promise<ClientFacts[]>;
   listDepositPaidNoCardCandidates(): Promise<ClientFacts[]>;
-  listDoulaEmail(doulaId: string): Promise<{ email: string | null; name: string } | null>;
+  listDoulaEmail(
+    doulaId: string
+  ): Promise<{ email: string | null; name: string } | null>;
 
   createPostponement(input: {
     clientId: string;

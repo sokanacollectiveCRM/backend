@@ -174,7 +174,8 @@ export class InMemoryMessagingStore implements MessagingStore {
       : null;
     return this.runs.filter((run) => {
       if (statuses && !statuses.includes(run.status)) return false;
-      if (filters.policyKey && run.policyKey !== filters.policyKey) return false;
+      if (filters.policyKey && run.policyKey !== filters.policyKey)
+        return false;
       if (filters.clientId && run.clientId !== filters.clientId) return false;
       if (filters.contractId && run.contractId !== filters.contractId)
         return false;
@@ -182,7 +183,10 @@ export class InMemoryMessagingStore implements MessagingStore {
     });
   }
 
-  async updateRun(id: string, patch: Partial<ReminderRun>): Promise<ReminderRun> {
+  async updateRun(
+    id: string,
+    patch: Partial<ReminderRun>
+  ): Promise<ReminderRun> {
     const run = this.runs.find((r) => r.id === id);
     if (!run) throw new Error('Run not found');
     Object.assign(run, patch);
@@ -228,7 +232,9 @@ export class InMemoryMessagingStore implements MessagingStore {
   }
 
   async insertSendLog(input: InsertSendLogInput): Promise<ReminderSendLog> {
-    if (this.sendLog.some((row) => row.idempotencyKey === input.idempotencyKey)) {
+    if (
+      this.sendLog.some((row) => row.idempotencyKey === input.idempotencyKey)
+    ) {
       throw new UniqueViolationError();
     }
     const row: ReminderSendLog = {
@@ -251,8 +257,12 @@ export class InMemoryMessagingStore implements MessagingStore {
     return row;
   }
 
-  async findSendLogByKey(idempotencyKey: string): Promise<ReminderSendLog | null> {
-    return this.sendLog.find((row) => row.idempotencyKey === idempotencyKey) ?? null;
+  async findSendLogByKey(
+    idempotencyKey: string
+  ): Promise<ReminderSendLog | null> {
+    return (
+      this.sendLog.find((row) => row.idempotencyKey === idempotencyKey) ?? null
+    );
   }
 
   async listSendLog(input: {
@@ -264,7 +274,8 @@ export class InMemoryMessagingStore implements MessagingStore {
     let rows = [...this.sendLog].sort(
       (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
     );
-    if (input.policyKey) rows = rows.filter((r) => r.policyKey === input.policyKey);
+    if (input.policyKey)
+      rows = rows.filter((r) => r.policyKey === input.policyKey);
     if (input.status) rows = rows.filter((r) => r.status === input.status);
     return {
       total: rows.length,
@@ -272,7 +283,10 @@ export class InMemoryMessagingStore implements MessagingStore {
     };
   }
 
-  async countSendsForRunStep(runId: string, stepOrder: number): Promise<number> {
+  async countSendsForRunStep(
+    runId: string,
+    stepOrder: number
+  ): Promise<number> {
     return this.sendLog.filter(
       (row) =>
         row.runId === runId &&
@@ -309,7 +323,10 @@ export class InMemoryMessagingStore implements MessagingStore {
     );
   }
 
-  async acknowledgeAlert(id: string, actorId: string): Promise<AdminAlert | null> {
+  async acknowledgeAlert(
+    id: string,
+    actorId: string
+  ): Promise<AdminAlert | null> {
     const alert = this.alerts.find((a) => a.id === id);
     if (!alert) return null;
     alert.acknowledgedBy = actorId;

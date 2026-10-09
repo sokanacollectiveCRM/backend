@@ -62,19 +62,19 @@ export function buildDefaultSeed(): {
       'contract_sent_initial',
       'Contract sent (sign-by date)',
       'Please review and sign by {{cancel_date}}: your Sokana agreement',
-      'Please sign by {{cancel_date}} to reserve your doula; if it isn\'t signed by then we can\'t guarantee your doula\'s availability. {{signing_link}} Contact: {{contact_email}}'
+      "Please sign by {{cancel_date}} to reserve your doula; if it isn't signed by then we can't guarantee your doula's availability. {{signing_link}} Contact: {{contact_email}}"
     ),
     template(
       'contract_signing_reminder_day3',
       'Contract signing reminder (day 3)',
       'Checking in about your Sokana agreement',
-      'We see you haven\'t signed yet; do you have any questions? We can hold your doula until {{cancel_date}}; if it isn\'t signed and your deposit paid by then, we\'ll need to release your doula. {{signing_link}}'
+      "We see you haven't signed yet; do you have any questions? We can hold your doula until {{cancel_date}}; if it isn't signed and your deposit paid by then, we'll need to release your doula. {{signing_link}}"
     ),
     template(
       'contract_signing_doula_nudge',
       'Unsigned contract — doula nudge',
-      '{{client_first_name}} hasn\'t signed yet',
-      '{{client_first_name}} hasn\'t signed yet; feel free to check in.'
+      "{{client_first_name}} hasn't signed yet",
+      "{{client_first_name}} hasn't signed yet; feel free to check in."
     ),
     template(
       'contract_canceled_unsigned',
@@ -86,7 +86,7 @@ export function buildDefaultSeed(): {
       'birth_outcomes_reminder',
       'Birth outcomes reminder',
       'Birth outcomes needed before payout',
-      'Please complete birth outcomes and notes for {{client_first_name}}. Payout can\'t be submitted until outcomes and notes are complete.',
+      "Please complete birth outcomes and notes for {{client_first_name}}. Payout can't be submitted until outcomes and notes are complete.",
       'both'
     ),
     template(
@@ -202,9 +202,30 @@ export function buildDefaultSeed(): {
       updatedBy: null,
       updatedAt: now,
       steps: [
-        step(signingId, 0, 0, 'days', ['client'], idOf('contract_sent_initial')),
-        step(signingId, 1, 3, 'days', ['client'], idOf('contract_signing_reminder_day3')),
-        step(signingId, 2, 3, 'days', ['doula'], idOf('contract_signing_doula_nudge')),
+        step(
+          signingId,
+          0,
+          0,
+          'days',
+          ['client'],
+          idOf('contract_sent_initial')
+        ),
+        step(
+          signingId,
+          1,
+          3,
+          'days',
+          ['client'],
+          idOf('contract_signing_reminder_day3')
+        ),
+        step(
+          signingId,
+          2,
+          3,
+          'days',
+          ['doula'],
+          idOf('contract_signing_doula_nudge')
+        ),
       ],
     },
     {
@@ -226,11 +247,19 @@ export function buildDefaultSeed(): {
       updatedBy: null,
       updatedAt: now,
       steps: [
-        step(birthId, 0, 0, 'days', ['doula'], idOf('birth_outcomes_reminder'), {
-          channel: 'both',
-          repeatEveryValue: 48,
-          repeatEveryUnit: 'hours',
-        }),
+        step(
+          birthId,
+          0,
+          0,
+          'days',
+          ['doula'],
+          idOf('birth_outcomes_reminder'),
+          {
+            channel: 'both',
+            repeatEveryValue: 48,
+            repeatEveryUnit: 'hours',
+          }
+        ),
       ],
     },
     {
@@ -281,7 +310,14 @@ export function buildDefaultSeed(): {
       updatedBy: null,
       updatedAt: now,
       steps: [
-        step(evalId, 0, 0, 'days', ['client'], idOf('service_completed_evaluation')),
+        step(
+          evalId,
+          0,
+          0,
+          'days',
+          ['client'],
+          idOf('service_completed_evaluation')
+        ),
       ],
     },
     {
@@ -303,9 +339,17 @@ export function buildDefaultSeed(): {
       updatedBy: null,
       updatedAt: now,
       steps: [
-        step(evalRecvId, 0, 0, 'days', ['admin'], idOf('evaluation_received_admin'), {
-          channel: 'both',
-        }),
+        step(
+          evalRecvId,
+          0,
+          0,
+          'days',
+          ['admin'],
+          idOf('evaluation_received_admin'),
+          {
+            channel: 'both',
+          }
+        ),
       ],
     },
     {
@@ -349,7 +393,14 @@ export function buildDefaultSeed(): {
       updatedBy: null,
       updatedAt: now,
       steps: [
-        step(cardId, 0, 0, 'days', ['billing'], idOf('card_not_on_file_billing')),
+        step(
+          cardId,
+          0,
+          0,
+          'days',
+          ['billing'],
+          idOf('card_not_on_file_billing')
+        ),
       ],
     },
     {
@@ -400,7 +451,14 @@ export function buildDefaultSeed(): {
       updatedBy: null,
       updatedAt: now,
       steps: [
-        step(adminNoteId, 0, 0, 'days', ['doula'], idOf('admin_note_added_doula')),
+        step(
+          adminNoteId,
+          0,
+          0,
+          'days',
+          ['doula'],
+          idOf('admin_note_added_doula')
+        ),
       ],
     },
     {
@@ -422,7 +480,14 @@ export function buildDefaultSeed(): {
       updatedBy: null,
       updatedAt: now,
       steps: [
-        step(headshotId, 0, 0, 'days', ['admin'], idOf('headshot_updated_admin')),
+        step(
+          headshotId,
+          0,
+          0,
+          'days',
+          ['admin'],
+          idOf('headshot_updated_admin')
+        ),
       ],
     },
     {
@@ -444,9 +509,17 @@ export function buildDefaultSeed(): {
       updatedBy: null,
       updatedAt: now,
       steps: [
-        step(routineId, 0, 0, 'days', ['admin'], idOf('routine_update_dashboard'), {
-          channel: 'dashboard',
-        }),
+        step(
+          routineId,
+          0,
+          0,
+          'days',
+          ['admin'],
+          idOf('routine_update_dashboard'),
+          {
+            channel: 'dashboard',
+          }
+        ),
       ],
     },
     {

@@ -1,4 +1,9 @@
-import { ClientFacts, ContractFacts, ReminderPolicy, ReminderRun } from '../domain/types';
+import {
+  ClientFacts,
+  ContractFacts,
+  ReminderPolicy,
+  ReminderRun,
+} from '../domain/types';
 
 export function evaluateStopReason(input: {
   policy: ReminderPolicy;
@@ -31,11 +36,17 @@ export function evaluateStopReason(input: {
     if (signed && depositOk) return 'signed_and_deposit_paid';
   }
 
-  if (conditions.includes('birth_outcomes_recorded') && client?.birthOutcomesRecorded) {
+  if (
+    conditions.includes('birth_outcomes_recorded') &&
+    client?.birthOutcomesRecorded
+  ) {
     return 'birth_outcomes_recorded';
   }
 
-  if (conditions.includes('note_created') && input.policy.key === 'overdue_notes') {
+  if (
+    conditions.includes('note_created') &&
+    input.policy.key === 'overdue_notes'
+  ) {
     return null;
   }
 
@@ -43,7 +54,9 @@ export function evaluateStopReason(input: {
 }
 
 export function isUnsignedPending(status: string): boolean {
-  return status === 'sent' || status === 'viewed' || status === 'partially_signed';
+  return (
+    status === 'sent' || status === 'viewed' || status === 'partially_signed'
+  );
 }
 
 export function isSigned(status: string): boolean {

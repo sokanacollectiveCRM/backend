@@ -269,9 +269,7 @@ export class PostgresMessagingStore implements MessagingStore {
         patch.name ?? null,
         patch.description ?? null,
         patch.enabled === undefined ? null : patch.enabled,
-        patch.stopConditions
-          ? JSON.stringify(patch.stopConditions)
-          : null,
+        patch.stopConditions ? JSON.stringify(patch.stopConditions) : null,
         patch.endAction ?? null,
         patch.endActionDelayValue ?? null,
         patch.endActionDelayUnit ?? null,
@@ -470,12 +468,20 @@ export class PostgresMessagingStore implements MessagingStore {
          AND ($3::uuid IS NULL OR r.client_id = $3::uuid)
          AND ($4::uuid IS NULL OR r.contract_id = $4::uuid)
        ORDER BY r.next_due_at NULLS LAST, r.created_at`,
-      [statuses, filters.policyKey ?? null, filters.clientId ?? null, filters.contractId ?? null]
+      [
+        statuses,
+        filters.policyKey ?? null,
+        filters.clientId ?? null,
+        filters.contractId ?? null,
+      ]
     );
     return rows.map(mapRun);
   }
 
-  async updateRun(id: string, patch: Partial<ReminderRun>): Promise<ReminderRun> {
+  async updateRun(
+    id: string,
+    patch: Partial<ReminderRun>
+  ): Promise<ReminderRun> {
     await queryCloudSql(
       `UPDATE public.reminder_runs
        SET status = COALESCE($2, status),
@@ -599,7 +605,9 @@ export class PostgresMessagingStore implements MessagingStore {
     }
   }
 
-  async findSendLogByKey(idempotencyKey: string): Promise<ReminderSendLog | null> {
+  async findSendLogByKey(
+    idempotencyKey: string
+  ): Promise<ReminderSendLog | null> {
     const { rows } = await queryCloudSql<Record<string, unknown>>(
       `SELECT * FROM public.reminder_send_log WHERE idempotency_key = $1`,
       [idempotencyKey]
@@ -628,7 +636,10 @@ export class PostgresMessagingStore implements MessagingStore {
     };
   }
 
-  async countSendsForRunStep(runId: string, stepOrder: number): Promise<number> {
+  async countSendsForRunStep(
+    runId: string,
+    stepOrder: number
+  ): Promise<number> {
     const { rows } = await queryCloudSql<{ count: string }>(
       `SELECT COUNT(*)::text AS count
        FROM public.reminder_send_log
@@ -671,7 +682,10 @@ export class PostgresMessagingStore implements MessagingStore {
     return rows.map((row) => this.mapAlert(row));
   }
 
-  async acknowledgeAlert(id: string, actorId: string): Promise<AdminAlert | null> {
+  async acknowledgeAlert(
+    id: string,
+    actorId: string
+  ): Promise<AdminAlert | null> {
     const { rows } = await queryCloudSql<Record<string, unknown>>(
       `UPDATE public.admin_alerts
        SET acknowledged_by = $2::uuid, acknowledged_at = CURRENT_TIMESTAMP
@@ -831,10 +845,12 @@ export class PostgresMessagingStore implements MessagingStore {
   async listDoulaEmail(
     doulaId: string
   ): Promise<{ email: string | null; name: string } | null> {
-    const { rows } = await queryCloudSql<{ email: string | null; full_name: string | null }>(
-      `SELECT email, full_name FROM public.doulas WHERE id = $1::uuid`,
-      [doulaId]
-    );
+    const { rows } = await queryCloudSql<{
+      email: string | null;
+      full_name: string | null;
+    }>(`SELECT email, full_name FROM public.doulas WHERE id = $1::uuid`, [
+      doulaId,
+    ]);
     if (!rows[0]) return null;
     return { email: rows[0].email, name: rows[0].full_name || '' };
   }
