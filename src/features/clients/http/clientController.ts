@@ -65,6 +65,7 @@ import { canAccessSensitive } from '../../../utils/sensitiveAccess';
 import { assignDoulaOnClient } from '../../matching';
 import { ActivityRepository } from '../application/activityRepository';
 import { createActivity as runCreateActivity } from '../application/createActivity';
+import { listClientActivities } from '../application/listClientActivities';
 import {
   CreateActivityErrorCode,
   parseCreateActivityCommand,
@@ -225,6 +226,8 @@ export class ClientController {
             data.metadata,
             data.createdBy ?? ''
           ),
+        getActivitiesByClientId: (clientId) =>
+          clientUseCase.getClientActivities(clientId),
       }
     );
     this.eligibilityService = portalEligibilityService;
@@ -2958,49 +2961,40 @@ export class ClientController {
     }
 
     try {
-      const clientExists =
-        (await this.clientRepository.getClientById?.(targetClientId)) ?? null;
-      if (!clientExists) {
+      const result = await listClientActivities(
+        {
+          tenantId: req.tenant?.id ?? '',
+          clientId: targetClientId,
+          viewerRole: req.user?.role,
+        },
+        this.clientActivities
+      );
+      if ('error' in result) {
+        if (result.error === 'ACTIVITIES_UNAVAILABLE') {
+          console.error(
+            'Error: Failed to fetch activities (table may be missing). Returning empty list.'
+          );
+          res.json(ApiResponse.list([], 0));
+          return;
+        }
+        if (result.error === 'MISSING_CLIENT_ID') {
+          res
+            .status(400)
+            .json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
+          return;
+        }
         res
           .status(404)
           .json(ApiResponse.error('Client not found', 'NOT_FOUND'));
         return;
       }
 
-      const activities =
-        await this.clientUseCase.getClientActivities(targetClientId);
-      const forViewer =
-        req.user?.role === 'client'
-          ? activities.filter((a) =>
-              ActivityMapper.isVisibleToClientMetadata(
-                a.metadata as Record<string, unknown> | undefined
-              )
-            )
-          : activities;
-
-      const dtos = forViewer.map((a) => ActivityMapper.fromCloudActivity(a));
+      const dtos = result.activities.map((activity) =>
+        ActivityMapper.fromCloudActivity(activity)
+      );
       const enriched = await this.enrichCreatorNames(dtos);
-
       res.json(ApiResponse.list(enriched, enriched.length));
     } catch (error) {
-      // Graceful fallback: if client_activities table is missing in schema, return empty list (no 500)
-      const message = (
-        error instanceof Error ? error.message : String(error)
-      ).toLowerCase();
-      const isTableMissing =
-        (message.includes('client_activities') ||
-          message.includes('failed to fetch activities')) &&
-        (message.includes('could not find the table') ||
-          message.includes('schema cache') ||
-          message.includes('relation') ||
-          message.includes('does not exist'));
-      if (isTableMissing) {
-        console.error(
-          'Error: Failed to fetch activities (table may be missing). Returning empty list.'
-        );
-        res.json(ApiResponse.list([], 0));
-        return;
-      }
       const err = this.handleError(error, res);
       res.status(err.status).json(ApiResponse.error(err.message));
     }

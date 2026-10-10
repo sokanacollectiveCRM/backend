@@ -127,6 +127,34 @@ export function parseCreateActivityCommand(
   };
 }
 
+/** Client viewers only see notes explicitly marked visible. Staff see every note. */
+export function isActivityVisibleToClient(
+  metadata: Record<string, unknown> | undefined | null
+): boolean {
+  if (!metadata || typeof metadata !== 'object') return false;
+  return (
+    metadata.visibleToClient === true || metadata.visible_to_client === true
+  );
+}
+
+/**
+ * List fallback: a missing activities table becomes an empty 200, not a 503.
+ * The phrases differ from the create-activity check.
+ */
+export function isClientActivitiesListUnavailable(error: unknown): boolean {
+  const message = (
+    error instanceof Error ? error.message : String(error)
+  ).toLowerCase();
+  return (
+    (message.includes('client_activities') ||
+      message.includes('failed to fetch activities')) &&
+    (message.includes('could not find the table') ||
+      message.includes('schema cache') ||
+      message.includes('relation') ||
+      message.includes('does not exist'))
+  );
+}
+
 /** Same table-missing detection the controller used for the 503 fallback. */
 export function isClientActivitiesTableMissing(error: unknown): boolean {
   const message = (

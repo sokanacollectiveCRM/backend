@@ -16,4 +16,5 @@ export interface ActivityInsert {
 export interface ActivityRepository {
   clientExists(clientId: string, tenantId: string): Promise<boolean>;
   insert(activity: ActivityInsert): Promise<Activity>;
+  listByClient(clientId: string, tenantId: string): Promise<Activity[]>;
 }

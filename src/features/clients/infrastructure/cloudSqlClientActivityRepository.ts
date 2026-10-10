@@ -19,6 +19,7 @@ export interface ClientActivityWrite {
     timestamp: Date;
     createdBy?: string;
   }): Promise<Activity>;
+  getActivitiesByClientId(clientId: string): Promise<Activity[]>;
 }
 
 /**
@@ -53,6 +54,10 @@ export class CloudSqlClientActivityRepository implements ActivityRepository {
       timestamp: activity.timestamp,
       createdBy: activity.createdBy,
     });
+  }
+
+  async listByClient(clientId: string, _tenantId: string): Promise<Activity[]> {
+    return this.activities.getActivitiesByClientId(clientId);
   }
 }
 

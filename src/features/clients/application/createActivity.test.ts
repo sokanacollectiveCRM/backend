@@ -19,6 +19,10 @@ class MemoryActivityRepository implements ActivityRepository {
     );
   }
 
+  async listByClient(): Promise<Activity[]> {
+    return [];
+  }
+
   async insert(activity: ActivityInsert): Promise<Activity> {
     if (this.failInsert) throw this.failInsert;
     this.inserts.push(activity);
