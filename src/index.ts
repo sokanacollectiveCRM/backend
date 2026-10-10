@@ -94,6 +94,7 @@ export {
   doulaController,
   emailController,
   requestFormController,
+  requestService as requestFormService,
   userController,
   userRepository,
   clientRepository,
