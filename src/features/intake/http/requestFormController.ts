@@ -11,6 +11,8 @@ import { RequestFormService } from '../../../services/RequestFormService';
 import { NodemailerService } from '../../../services/emailService';
 import { AuthRequest, RequestFormData, RequestStatus } from '../../../types';
 import { SOKANA_TENANT_SLUG } from '../../tenancy';
+import { confirmIntakeAnswerImages } from '../application/intakeFormEditor';
+import { normalizePublishedIntakeSubmission } from '../domain/normalizePublishedSubmission';
 import {
   evaluateIntakeSubmissionGuards,
   finalizeIntakeIdempotency,
@@ -18,6 +20,7 @@ import {
   sendIntakeSoftDedupe,
 } from '../infrastructure/intakeAbuseProtection';
 import { getPublicIntakeBrandingBySlug } from '../infrastructure/publicIntakeBrandingRepository';
+import { loadPublishedIntakeForm } from '../infrastructure/publishedIntakeLookup';
 import type { IntakeRequest } from './intakeRequestTypes';
 
 const DEFAULT_INTAKE_NOTIFICATION_EMAIL = 'hello@sokanacollective.com';
@@ -219,7 +222,8 @@ export class RequestFormController {
         res.status(404).json({ error: 'Organization not found' });
         return;
       }
-      res.status(200).json(branding);
+      const form = await loadPublishedIntakeForm(tenantSlug);
+      res.status(200).json(form ? { ...branding, form } : branding);
     } catch (error) {
       console.error('Error loading public intake branding:', error);
       res.status(500).json({ error: 'Unable to load organization branding' });
@@ -234,6 +238,9 @@ export class RequestFormController {
         return;
       }
       const formData = req.body;
+      if (formData && typeof formData === 'object') {
+        delete (formData as Record<string, unknown>).is_test;
+      }
 
       const guard = await evaluateIntakeSubmissionGuards(req, formData);
       if (guard.action === 'rate_limited') {
@@ -250,9 +257,29 @@ export class RequestFormController {
       }
 
       const intakeTenant = (req as Request & IntakeRequest).intakeTenant;
-      const savedForm = await this.service.newForm(formData, {
-        tenantId: intakeTenant?.tenantId,
-      });
+      const published = intakeTenant
+        ? await loadPublishedIntakeForm(intakeTenant.tenantSlug)
+        : null;
+      const prepared = published
+        ? normalizePublishedIntakeSubmission(formData, published.definition)
+        : null;
+      if (prepared && intakeTenant) {
+        await confirmIntakeAnswerImages(
+          intakeTenant.tenantId,
+          prepared.customAnswers,
+          published!.definition
+        );
+      }
+      const savedForm = prepared
+        ? await this.service.savePreparedLead(prepared.data, {
+            tenantId: intakeTenant?.tenantId,
+            intakeFormVersion: published?.version ?? null,
+            customAnswers: prepared.customAnswers,
+            isTest: false,
+          })
+        : await this.service.newForm(formData, {
+            tenantId: intakeTenant?.tenantId,
+          });
       logger.info(
         {
           service: 'intake',

@@ -260,4 +260,31 @@ export class RequestFormService {
       throw error;
     }
   }
+
+  /**
+   * Persist a lead that was already validated against a published definition
+   * or an admin test of a draft. Does not run the legacy Sokana normalizer.
+   */
+  async savePreparedLead(
+    formData: RequestFormData,
+    options: {
+      tenantId?: string;
+      intakeFormVersion: number | null;
+      customAnswers: Record<string, unknown>;
+      isTest: boolean;
+    }
+  ): Promise<RequestForm> {
+    const write = async () => {
+      const response = await this.repository.saveData(formData, {
+        intakeFormVersion: options.intakeFormVersion,
+        customAnswers: options.customAnswers,
+        isTest: options.isTest,
+      });
+      return mapIntakeResponseToRequestForm(response);
+    };
+    if (options.tenantId) {
+      return runWithTenant(options.tenantId, write);
+    }
+    return write();
+  }
 }

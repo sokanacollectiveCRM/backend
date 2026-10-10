@@ -42,3 +42,4 @@ export {
 } from './application/tenantRequestStore';
 export { assertStaffInviteEmail } from './application/assertStaffInviteEmail';
 export { isTenancyEnforced } from './infrastructure/tenancyMode';
+export { isPlatformSupportPrincipal } from './infrastructure/platformAdminRepository';

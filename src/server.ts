@@ -68,6 +68,7 @@ const corsOptions = {
     'Authorization',
     'X-Session-Token',
     'X-Signing-Session',
+    'Idempotency-Key',
   ],
   credentials: true, // Required for HttpOnly sokana_session_token cookie cross-origin
   maxAge: 86400,
@@ -124,11 +125,6 @@ app.post(
   (req, res) => authController.login(req, res)
 );
 app.use('/auth', asMiddleware(authRoutes));
-app.use('/api', asMiddleware(doulasRoutes));
-app.use('/api/admin', asMiddleware(adminRoutes));
-app.use('/api/doulas', asMiddleware(doulaRoutes));
-app.use('/email', asMiddleware(emailRoutes));
-app.use('/requestService', asMiddleware(requestRouter));
 if (nativeContracts.enabled) {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const native = require('./features/contracts/composition');
@@ -150,6 +146,15 @@ app.use(
     successorPath: '/api/clients',
   }),
   asMiddleware(clientRoutes)
+);
+app.use('/api', asMiddleware(doulasRoutes));
+app.use('/api/admin', asMiddleware(adminRoutes));
+app.use('/api/doulas', asMiddleware(doulaRoutes));
+app.use('/email', asMiddleware(emailRoutes));
+app.use('/requestService', asMiddleware(requestRouter));
+app.use(
+  '/api/intake-forms',
+  asMiddleware(require('./features/intake/http/intakeFormRoutes').default)
 );
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
