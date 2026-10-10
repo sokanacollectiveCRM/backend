@@ -63,6 +63,55 @@ import { mergePortalEligibilityFields } from '../../../utils/portalEligibilityRe
 import { ApiResponse } from '../../../utils/responseBuilder';
 import { canAccessSensitive } from '../../../utils/sensitiveAccess';
 import { assignDoulaOnClient } from '../../matching';
+import { ActivityRepository } from '../application/activityRepository';
+import { createActivity as runCreateActivity } from '../application/createActivity';
+import {
+  CreateActivityErrorCode,
+  parseCreateActivityCommand,
+} from '../domain/activity';
+import { CloudSqlClientActivityRepository } from '../infrastructure/cloudSqlClientActivityRepository';
+
+function mapCreateActivityError(error: CreateActivityErrorCode): {
+  status: number;
+  body: ReturnType<typeof ApiResponse.error>;
+} {
+  switch (error) {
+    case 'MISSING_CLIENT_ID':
+      return {
+        status: 400,
+        body: ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'),
+      };
+    case 'INVALID_ACTIVITY_TYPE':
+      return {
+        status: 400,
+        body: ApiResponse.error(
+          'Invalid request: activity_type is required and must be a non-empty string',
+          'VALIDATION_ERROR'
+        ),
+      };
+    case 'INVALID_CONTENT':
+      return {
+        status: 400,
+        body: ApiResponse.error(
+          'Invalid request: content is required and must be a non-empty string',
+          'VALIDATION_ERROR'
+        ),
+      };
+    case 'CLIENT_NOT_FOUND':
+      return {
+        status: 404,
+        body: ApiResponse.error('Client not found', 'NOT_FOUND'),
+      };
+    case 'ACTIVITIES_UNAVAILABLE':
+      return {
+        status: 503,
+        body: ApiResponse.error(
+          'Activities feature not available — table pending migration',
+          'SERVICE_UNAVAILABLE'
+        ),
+      };
+  }
+}
 
 export class ClientController {
   private static readonly BIRTH_OUTCOMES_DELIVERY_TYPES = new Set([
@@ -149,6 +198,7 @@ export class ClientController {
 
   private clientUseCase: ClientUseCase;
   private clientRepository: ClientRepository;
+  private clientActivities: ActivityRepository;
   private eligibilityService: PortalEligibilityService;
   private cloudSqlAssignmentService: CloudSqlDoulaAssignmentService;
   private doulaAvailabilityService: DoulaAvailabilityService;
@@ -164,6 +214,19 @@ export class ClientController {
   ) {
     this.clientUseCase = clientUseCase;
     this.clientRepository = clientRepository;
+    this.clientActivities = new CloudSqlClientActivityRepository(
+      clientRepository,
+      {
+        createActivity: (data) =>
+          clientUseCase.createActivity(
+            data.clientId,
+            data.type,
+            data.description ?? '',
+            data.metadata,
+            data.createdBy ?? ''
+          ),
+      }
+    );
     this.eligibilityService = portalEligibilityService;
     this.cloudSqlAssignmentService = new CloudSqlDoulaAssignmentService();
     this.doulaAvailabilityService = new DoulaAvailabilityService();
@@ -2755,9 +2818,8 @@ export class ClientController {
     }
 
     if (!id) {
-      res
-        .status(400)
-        .json(ApiResponse.error('Missing client ID', 'VALIDATION_ERROR'));
+      const missing = mapCreateActivityError('MISSING_CLIENT_ID');
+      res.status(missing.status).json(missing.body);
       return;
     }
 
@@ -2770,32 +2832,25 @@ export class ClientController {
       visibleToClient,
     } = req.body;
 
-    // Validate request body
-    if (
-      !activity_type ||
-      typeof activity_type !== 'string' ||
-      activity_type.trim() === ''
-    ) {
-      res
-        .status(400)
-        .json(
-          ApiResponse.error(
-            'Invalid request: activity_type is required and must be a non-empty string',
-            'VALIDATION_ERROR'
-          )
-        );
-      return;
-    }
+    const input = {
+      tenantId: req.tenant?.id ?? '',
+      clientId: id,
+      authorId: req.user?.id ?? '',
+      authorFirstName: req.user?.firstname,
+      authorLastName: req.user?.lastname,
+      authorEmail: req.user?.email,
+      authorRole: req.user?.role,
+      activityType: activity_type,
+      content,
+      metadata,
+      visibleToClient,
+      visibleToClientSnake: visibleSnake,
+    };
 
-    if (!content || typeof content !== 'string' || content.trim() === '') {
-      res
-        .status(400)
-        .json(
-          ApiResponse.error(
-            'Invalid request: content is required and must be a non-empty string',
-            'VALIDATION_ERROR'
-          )
-        );
+    const parsed = parseCreateActivityCommand(input);
+    if ('error' in parsed) {
+      const httpError = mapCreateActivityError(parsed.error);
+      res.status(httpError.status).json(httpError.body);
       return;
     }
 
@@ -2811,71 +2866,22 @@ export class ClientController {
     }
 
     try {
-      // Verify client exists (optional but preferred)
-      const clientExists =
-        (await this.clientRepository.getClientById?.(id)) ?? null;
-      if (!clientExists) {
-        res
-          .status(404)
-          .json(ApiResponse.error('Client not found', 'NOT_FOUND'));
-        return;
-      }
-
-      const userId = req.user?.id ?? '';
-      const visible =
-        visibleToClient === true ||
-        visibleSnake === true ||
-        visibleToClient === 'true' ||
-        visibleSnake === 'true';
-      const creatorName =
-        `${req.user?.firstname || ''} ${req.user?.lastname || ''}`.trim() ||
-        (req.user?.email || '').trim() ||
-        'Staff member';
-      const creatorRole = req.user?.role ? String(req.user.role) : 'staff';
-      const incomingMetadata =
-        metadata && typeof metadata === 'object' && !Array.isArray(metadata)
-          ? { ...metadata }
-          : {};
-
-      const activity = await this.clientUseCase.createActivity(
-        id,
-        activity_type.trim(),
-        content.trim(),
-        {
-          ...incomingMetadata,
-          visibleToClient: visible,
-          createdByName: creatorName,
-          createdByRole: creatorRole,
-        },
-        userId
-      );
-
-      const dto = ActivityMapper.fromCloudActivity(activity);
-      res.json(ApiResponse.success(dto));
-    } catch (error) {
-      // Graceful fallback: if client_activities table is missing, return 503 (not 500)
-      const message = (
-        error instanceof Error ? error.message : String(error)
-      ).toLowerCase();
-      const isTableMissing =
-        message.includes('client_activities') &&
-        (message.includes('could not find') ||
-          message.includes('schema cache') ||
-          message.includes('does not exist'));
-      if (isTableMissing) {
-        logger.warn(
-          '[Client] client_activities table missing — cannot create activity'
-        );
-        res
-          .status(503)
-          .json(
-            ApiResponse.error(
-              'Activities feature not available — table pending migration',
-              'SERVICE_UNAVAILABLE'
-            )
+      const result = await runCreateActivity(input, this.clientActivities);
+      if ('error' in result) {
+        if (result.error === 'ACTIVITIES_UNAVAILABLE') {
+          logger.warn(
+            '[Client] client_activities table missing — cannot create activity'
           );
+        }
+        const httpError = mapCreateActivityError(result.error);
+        res.status(httpError.status).json(httpError.body);
         return;
       }
+
+      res.json(
+        ApiResponse.success(ActivityMapper.fromCloudActivity(result.activity))
+      );
+    } catch (error) {
       const err = this.handleError(error as Error, res);
       res.status(err.status).json(ApiResponse.error(err.message));
     }
