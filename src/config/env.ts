@@ -198,6 +198,36 @@ export const nativeContracts = {
   },
 };
 
+export const messagingReminders = {
+  get cronAudience(): string {
+    return optionalEnv('REMINDER_CRON_OIDC_AUDIENCE') ?? '';
+  },
+  get cronServiceAccount(): string {
+    return optionalEnv('REMINDER_CRON_OIDC_SERVICE_ACCOUNT') ?? '';
+  },
+  get enabledDefault(): boolean {
+    const value = (optionalEnv('REMINDERS_ENABLED') ?? 'true').toLowerCase();
+    return value === 'true' || value === '1';
+  },
+  get testToolsEnabled(): boolean {
+    const value = (
+      optionalEnv('REMINDER_TEST_TOOLS_ENABLED') ?? 'false'
+    ).toLowerCase();
+    return value === 'true' || value === '1';
+  },
+  get adminNotificationEmail(): string {
+    return (
+      optionalEnv('ADMIN_NOTIFICATION_EMAIL') ?? 'hello@sokanacollective.com'
+    );
+  },
+  get billingNotificationEmail(): string {
+    return (
+      optionalEnv('BILLING_NOTIFICATION_EMAIL') ??
+      'billing@sokanacollective.com'
+    );
+  },
+};
+
 /** PR 8 intake feature-package cutover / shadow window. */
 export const intakeFeature = {
   get useFeaturePackage(): boolean {

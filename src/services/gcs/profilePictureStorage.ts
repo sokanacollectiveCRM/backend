@@ -95,3 +95,20 @@ export async function deleteProfilePictureObject(
   if (!relativePath || isHttpUrl(relativePath)) return;
   await deleteObject(profilePictureObjectPath(relativePath));
 }
+
+/**
+ * Mutate a user (or user-like object) so `profile_picture` is a displayable
+ * URL. Auth login/`/me` call this before serializing the session user.
+ */
+export async function attachDisplayProfilePicture<
+  T extends { profile_picture?: unknown },
+>(user: T): Promise<T> {
+  const stored = user.profile_picture;
+  if (typeof stored !== 'string' && stored != null) {
+    return user;
+  }
+  user.profile_picture = (await resolveProfilePictureUrl(
+    stored as string | null | undefined
+  )) as T['profile_picture'];
+  return user;
+}

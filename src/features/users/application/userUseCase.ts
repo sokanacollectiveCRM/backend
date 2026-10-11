@@ -59,6 +59,19 @@ export class UserUseCase {
       note,
       type
     );
+    try {
+      const {
+        emitReminderEvent,
+      } = require('../../messaging/application/reminderHooks');
+      emitReminderEvent({
+        type: 'hours_logged',
+        clientId: client_id,
+        doulaId: doula_id,
+        hourType: type,
+      });
+    } catch {
+      // optional
+    }
 
     return newWorkEntry;
   }
@@ -79,7 +92,24 @@ export class UserUseCase {
 
   async uploadProfilePicture(user: User, profilePicture: MulterFile) {
     // Relative GCS path under profile-pictures/; APIs resolve to signed URLs on read.
-    return this.userRepository.uploadProfilePicture(user, profilePicture);
+    const result = await this.userRepository.uploadProfilePicture(
+      user,
+      profilePicture
+    );
+    try {
+      const {
+        emitReminderEvent,
+      } = require('../../messaging/application/reminderHooks');
+      if (user.id) {
+        emitReminderEvent({
+          type: 'headshot_updated',
+          doulaId: String(user.id),
+        });
+      }
+    } catch {
+      // optional
+    }
+    return result;
   }
 
   async updateUser(user: User, updateData: Partial<User>) {

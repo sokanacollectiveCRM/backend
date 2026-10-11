@@ -1,6 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { Activity } from '../entities/Activity';
+
 import { queryCloudSql } from '../db/cloudSqlPool';
+import { Activity } from '../entities/Activity';
 import { ActivityRepository } from './interface/activityRepository';
 
 type ActivityRow = {
@@ -77,7 +78,24 @@ export class CloudSqlActivityRepository implements ActivityRepository {
       activityData.createdBy ?? null,
     ]);
 
-    return this.mapToActivity(rows[0]);
+    const activity = this.mapToActivity(rows[0]);
+    try {
+      const {
+        emitReminderEvent,
+      } = require('../features/messaging/application/reminderHooks');
+      emitReminderEvent({
+        type: 'activity_created',
+        clientId: activityData.clientId,
+        activityType: activityData.type,
+        createdByRole:
+          activityData.metadata?.createdByRole ??
+          activityData.metadata?.created_by_role ??
+          null,
+      });
+    } catch {
+      // optional
+    }
+    return activity;
   }
 
   async getActivitiesByClientId(clientId: string): Promise<Activity[]> {

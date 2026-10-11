@@ -24,6 +24,7 @@ export interface NativeContractInvitationEmailInput {
   contractTitle: string;
   signingUrl: string;
   expiresAt: Date;
+  cancelDate?: Date;
 }
 
 export interface SignedContractCopyEmailInput {
@@ -226,11 +227,15 @@ Payment Schedule Link: ${paymentScheduleLink}`;
     const safeTitle = escapeHtml(input.contractTitle);
     const safeUrl = escapeHtml(input.signingUrl);
     const expiration = input.expiresAt.toISOString();
+    const cancelDate = (input.cancelDate || input.expiresAt)
+      .toISOString()
+      .slice(0, 10);
+    const signBy = `please sign by ${cancelDate} to reserve your doula; if it isn't signed by then we can't guarantee your doula's availability`;
     await this.sendEmail(
       input.clientEmail,
-      `Please review and sign: ${input.contractTitle}`,
-      `Hello ${input.clientName},\n\nPlease review and sign ${input.contractTitle} using this secure link:\n${input.signingUrl}\n\nThis link expires at ${expiration}.\n\nSokana Collective`,
-      `<p>Hello ${safeName},</p><p>Please review and sign <strong>${safeTitle}</strong>.</p><p><a href="${safeUrl}">Review and sign contract</a></p><p>This secure link expires at ${escapeHtml(expiration)}.</p><p>Sokana Collective</p>`
+      `Please sign your Sokana agreement by ${cancelDate}`,
+      `Hello ${input.clientName},\n\nPlease review and sign ${input.contractTitle} using this secure link:\n${input.signingUrl}\n\nPlease ${signBy}.\n\nThis link expires at ${expiration}.\n\nSokana Collective`,
+      `<p>Hello ${safeName},</p><p>Please review and sign <strong>${safeTitle}</strong>.</p><p>Please ${escapeHtml(signBy)}.</p><p><a href="${safeUrl}">Review and sign contract</a></p><p>This secure link expires at ${escapeHtml(expiration)}.</p><p>Sokana Collective</p>`
     );
   }
 
