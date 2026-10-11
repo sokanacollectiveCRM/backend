@@ -184,6 +184,21 @@ Runtime notes:
   `src/__tests__/clientStatusQuickBooksSyncCharacterization.test.ts` and
   `src/__tests__/syncMatchedClientToQuickBooks.test.ts`.
 
+## Scheduling package (`src/features/scheduling`)
+
+Pilot visit booking. Mount: `/api/scheduling`. Contract: `docs/SCHEDULING_MVP.md`.
+
+```text
+src/features/scheduling/
+  domain/           # slot math, booking transitions
+  application/      # SchedulingService + ports
+  infrastructure/   # Cloud SQL store + advisory lock
+  notifications/    # PHI-minimized booking mail
+  http/             # routes/controller
+  composition.ts
+  index.ts
+```
+
 ## Matching package (`src/features/matching`)
 
 Fourth structural slice: the decisions for assigning a doula to a client.
