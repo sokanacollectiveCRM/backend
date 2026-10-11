@@ -95,3 +95,15 @@ export async function deleteProfilePictureObject(
   if (!relativePath || isHttpUrl(relativePath)) return;
   await deleteObject(profilePictureObjectPath(relativePath));
 }
+
+/** Resolve a stored profile picture onto the user object used in session JSON. */
+export async function attachDisplayProfilePicture(user: {
+  profile_picture?: unknown;
+}): Promise<void> {
+  const stored =
+    typeof user.profile_picture === 'string' ? user.profile_picture : null;
+  const resolved = await resolveProfilePictureUrl(stored);
+  if (resolved) {
+    user.profile_picture = resolved;
+  }
+}

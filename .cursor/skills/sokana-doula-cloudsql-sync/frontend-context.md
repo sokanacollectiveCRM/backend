@@ -6178,3 +6178,71 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 - **Action**:
   - [x] Context updated
   - [x] Implementation completed
+
+## Preflight Update 2026-10-11 (pilot scheduling MVP — backend)
+
+### Task
+
+- Build the backend half of the Sokana360 pilot scheduling MVP
+  (`/api/scheduling/*`) so a separate frontend agent can implement
+  Schedule / Book visit / Admin Visits against a locked contract.
+
+### Gate
+
+- `run_preflight`
+- Handoff inbox: `no_open_handoff_tasks` for `frontend->backend`.
+  Open files are older architecture / Supabase-exit tickets, not scheduling.
+  User explicitly requested this backend MVP.
+
+### Files Scanned
+
+Frontend repo is **not** in this workspace (expected path
+`/Users/jerrybony/Documents/GitHub/sokana-crm-frontend/frontend-crm`).
+Scanned backend consumers and the living frontend notes instead:
+
+- Prior notes: `doulaService.ts` availability CRUD
+  (`{ success, records|record }`, camelCase `startAt`/`endAt`)
+- Prior notes: `DoulaDashboard.tsx` routes are profile / documents / clients /
+  hours / activities — **no schedule page yet**
+- Prior notes: `ProfileTab.tsx` upserts one `unavailable` row; saving
+  "Available" deletes every unavailable record (frontend must fix)
+- Prior notes: `ClientProfileTab.tsx` uses `GET /clients/:id/assigned-doulas`
+  + `canClientViewDoulaScheduling`; does **not** call booking-requests
+- Prior notes: Playwright stubs in `e2e/helpers/doulaE2eStubs.ts`
+- Backend: `src/features/matching/infrastructure/doulaAvailabilityService.ts`
+- Backend: `src/features/clients/http/clientController.ts`
+  `createDoulaBookingRequest`
+- Backend: `src/features/doulas/http/doulaRoutes.ts` availability CRUD
+- Backend: `src/features/assignments/notifications/doulaAssignmentNotificationEmail.ts`
+
+### Contract Findings
+
+- Existing availability CRUD stays at `/api/doulas/availability*`.
+- Existing `POST /clients/:id/assigned-doulas/:doulaId/booking-requests`
+  returns `201 { success: true, bookingRequest }` and is **unchanged**.
+- Frontend currently has no `/api/scheduling` client. `docs/SCHEDULING_MVP.md`
+  is the source of truth for the frontend agent.
+- Auth: doula `req.user.id` is `public.doulas.id`; client `req.user.id` is
+  `COALESCE(phi_clients.user_id, phi_clients.id)`.
+- Times are ISO UTC strings. Email zone label is `America/Chicago`.
+- Booking notes may contain PHI: API returns them to assigned doula / client /
+  admin only. Emails and logs must never include notes.
+
+### Drift Risk
+
+- If the frontend agent invents different paths or wrappers, the pilot UI
+  will 404 / fail to parse.
+- `BOOKING_REQUIRE_CONTRACT_STAGE` defaults to `true`. Pilot clients without
+  a `phi_contracts` row get `403` `CONTRACT_STAGE_REQUIRED` unless Jerry sets
+  the flag to `false` on **dev**.
+- ProfileTab blackout wipe is a **frontend** bug.
+
+### Required Compatibility
+
+See `docs/SCHEDULING_MVP.md`. Visits are **60 minutes**. Success wrappers are
+`{ success, slots|booking|bookings|records }`. Errors are `{ error, code? }`.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
