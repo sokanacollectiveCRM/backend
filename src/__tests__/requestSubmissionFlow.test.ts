@@ -1,9 +1,19 @@
 import express from 'express';
 import request from 'supertest';
+
 import { RequestFormController } from '../controllers/requestFormController';
 import { RequestFormRepository } from '../repositories/requestFormRepository';
 import { RequestFormService } from '../services/RequestFormService';
-import { ClientAgeRange, HomeType, IncomeLevel, Pronouns, ProviderType, RelationshipStatus, ServiceTypes, STATE } from '../types';
+import {
+  ClientAgeRange,
+  HomeType,
+  IncomeLevel,
+  Pronouns,
+  ProviderType,
+  RelationshipStatus,
+  STATE,
+  ServiceTypes,
+} from '../types';
 
 jest.mock('nodemailer', () => ({
   createTransport: jest.fn().mockReturnValue({
@@ -33,7 +43,9 @@ jest.mock('../db/cloudSqlPool', () => ({
 
 /** Mirrors CRM `DUMMY_TEST_LEAD` + submit transforms (`number_of_babies` number, `service_needed` from services). */
 function buildCrmLikeSubmitBody(): Record<string, unknown> {
-  const due = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const due = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
   return {
     services_interested: ['Labor Support', 'Postpartum Support'],
     service_support_details:
@@ -148,12 +160,16 @@ describe('POST /requestService/requestSubmission flow', () => {
         .send({ ...buildCrmLikeSubmitBody(), firstname: 'Test' })
         .expect(200);
 
-      expect(res.body).toEqual({ message: 'Form data received, onto processing' });
+      expect(res.body).toEqual({
+        message: 'Form data received, onto processing',
+      });
       expect(requestFormService.newForm).toHaveBeenCalled();
     });
 
     it('returns 400 when newForm throws', async () => {
-      jest.spyOn(requestFormService, 'newForm').mockRejectedValue(new Error('boom'));
+      jest
+        .spyOn(requestFormService, 'newForm')
+        .mockRejectedValue(new Error('boom'));
 
       const res = await request(app)
         .post('/requestService/requestSubmission')
@@ -165,29 +181,37 @@ describe('POST /requestService/requestSubmission flow', () => {
   });
 
   describe('validation → 400 (real service)', () => {
-    it('returns 400 when birth_location is set but birth_hospital is empty', async () => {
+    it('allows empty birth_hospital when birth_location is set', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ client_number: 'CL-00103' }],
+      });
       const body = {
         ...buildCrmLikeSubmitBody(),
         birth_hospital: '',
       };
 
-      const res = await request(app).post('/requestService/requestSubmission').send(body).expect(400);
-
-      expect(res.body.error).toContain('hospital name');
-      expect(mockQuery).not.toHaveBeenCalled();
+      const res = await request(app)
+        .post('/requestService/requestSubmission')
+        .send(body)
+        .expect(200);
+      expect(res.body.message).toBe('Form data received, onto processing');
     });
 
-    it('returns Home-specific error when birth_hospital is empty for Home birth', async () => {
+    it('allows empty birth_hospital for Home birth (Nancy optional)', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ client_number: 'CL-00100' }],
+      });
       const body = {
         ...buildCrmLikeSubmitBody(),
         birth_location: 'Home',
         birth_hospital: '   ',
       };
 
-      const res = await request(app).post('/requestService/requestSubmission').send(body).expect(400);
-
-      expect(res.body.error).toContain('home birth location');
-      expect(mockQuery).not.toHaveBeenCalled();
+      const res = await request(app)
+        .post('/requestService/requestSubmission')
+        .send(body)
+        .expect(200);
+      expect(res.body.message).toBe('Form data received, onto processing');
     });
 
     it('returns 400 when payment_method is Medicaid', async () => {
@@ -199,36 +223,53 @@ describe('POST /requestService/requestSubmission flow', () => {
         insurance_plan_type: 'Medicaid',
       };
 
-      const res = await request(app).post('/requestService/requestSubmission').send(body).expect(400);
+      const res = await request(app)
+        .post('/requestService/requestSubmission')
+        .send(body)
+        .expect(400);
 
       expect(res.body.error).toMatch(/Medicaid/i);
       expect(mockQuery).not.toHaveBeenCalled();
     });
 
-    it('returns 400 when home_adults_count is missing', async () => {
+    it('allows missing home_adults_count (Nancy optional)', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ client_number: 'CL-00101' }],
+      });
       const { home_adults_count: _a, ...body } = buildCrmLikeSubmitBody();
-      const res = await request(app).post('/requestService/requestSubmission').send(body).expect(400);
-      expect(res.body.error).toContain('home_adults_count');
-      expect(mockQuery).not.toHaveBeenCalled();
+      const res = await request(app)
+        .post('/requestService/requestSubmission')
+        .send(body)
+        .expect(200);
+      expect(res.body.message).toBe('Form data received, onto processing');
     });
 
-    it('returns 400 when has_secondary_insurance is true but secondary_policy_number is missing', async () => {
+    it('allows missing secondary_policy_number when has_secondary_insurance is true', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ client_number: 'CL-00102' }],
+      });
       const body = {
         ...buildCrmLikeSubmitBody(),
         secondary_policy_number: '',
       };
 
-      const res = await request(app).post('/requestService/requestSubmission').send(body).expect(400);
-
-      expect(res.body.error).toContain('secondary_policy_number');
+      const res = await request(app)
+        .post('/requestService/requestSubmission')
+        .send(body)
+        .expect(200);
+      expect(res.body.message).toBe('Form data received, onto processing');
     });
   });
 
   describe('integration: CRM-shaped body persists expected Cloud SQL columns', () => {
     it('writes number_of_babies, service_needed, normalized payment, and secondary billing fields', async () => {
-      mockQuery.mockResolvedValueOnce({ rows: [{ client_number: 'CL-00042' }] });
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ client_number: 'CL-00042' }],
+      });
 
-      const res = await request(app).post('/requestService/requestSubmission').send(buildCrmLikeSubmitBody());
+      const res = await request(app)
+        .post('/requestService/requestSubmission')
+        .send(buildCrmLikeSubmitBody());
 
       expect(res.status).toBe(200);
       expect(mockQuery).toHaveBeenCalled();
@@ -250,14 +291,14 @@ describe('POST /requestService/requestSubmission flow', () => {
       expect(params[22]).toContain('labor and postpartum support');
       expect(params[23]).toEqual(['Labor Support', 'Postpartum Support']);
       expect(params[24]).toBe(30);
-      expect(params[39]).toBe(1);
-      expect(params[47]).toBe('Commercial Insurance');
-      expect(params[48]).toBe('Blue Cross Blue Shield');
-      expect(params[56]).toBe(true);
-      expect(params[57]).toBe('Secondary Health Plan');
-      expect(params[58]).toBe('SEC-MEMBER-789');
-      expect(params[59]).toBe('SEC-POL-456');
-      expect(params[62]).toBe('Labor Support, Postpartum Support');
+      expect(params[40]).toBe(1);
+      expect(params[48]).toBe('Commercial Insurance');
+      expect(params[49]).toBe('Blue Cross Blue Shield');
+      expect(params[57]).toBe(true);
+      expect(params[58]).toBe('Secondary Health Plan');
+      expect(params[59]).toBe('SEC-MEMBER-789');
+      expect(params[60]).toBe('SEC-POL-456');
+      expect(params[63]).toBe('Labor Support, Postpartum Support');
     });
 
     it.each([
@@ -266,11 +307,17 @@ describe('POST /requestService/requestSubmission flow', () => {
     ] as const)(
       'persists birth_location %s and place name in INSERT params',
       async (birth_location, birth_hospital) => {
-        mockQuery.mockResolvedValueOnce({ rows: [{ client_number: 'CL-00099' }] });
+        mockQuery.mockResolvedValueOnce({
+          rows: [{ client_number: 'CL-00099' }],
+        });
 
         const res = await request(app)
           .post('/requestService/requestSubmission')
-          .send({ ...buildCrmLikeSubmitBody(), birth_location, birth_hospital });
+          .send({
+            ...buildCrmLikeSubmitBody(),
+            birth_location,
+            birth_hospital,
+          });
 
         expect(res.status).toBe(200);
         const [, params] = mockQuery.mock.calls[0];

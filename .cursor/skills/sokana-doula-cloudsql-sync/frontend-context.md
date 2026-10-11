@@ -2,6 +2,56 @@
 
 This file is intentionally updateable as frontend work finishes.
 
+## Preflight Update 2026-10-09 (public intake CORS + Nancy required fields)
+
+### Task
+
+- Unblock public `/request` submit on the dev pilot site: allow
+  `Idempotency-Key` CORS preflight and relax server-side required fields to
+  Nancy Cowans' 2026-10-09 set.
+
+### Files Scanned
+
+- `frontend-crm` PR https://github.com/sokanacollectiveCRM/frontend/pull/103
+- `frontend-crm/.cursor/handoffs/open/2026-10-09-backend-intake-cors-language.md`
+- `frontend-crm/src/features/intake/domain/intakePayload.ts`
+- `frontend-crm/src/features/intake/domain/clientAgeRange.ts`
+- `frontend-crm/src/features/intake/__tests__/nancyRequiredFields.test.ts`
+- `backend/src/server.ts`
+- `backend/src/features/intake/domain/normalizePublicSubmission.ts`
+- `backend/src/features/intake/domain/requestSubmissionDto.ts`
+- `backend/src/repositories/requestFormRepository.ts`
+
+### Contract Findings
+
+- Frontend required: first/last name, email, phone, city, zip, due date, service
+  requested (`services_interested` → `service_needed`), why-doula
+  (`service_support_details`). Other language specify required only when
+  `primary_language` is Other.
+- Frontend sends optional `Idempotency-Key` (omitted until CORS allowlists it)
+  and `primary_language_other` (also folded into `primary_language`).
+- Frontend derives `client_age_range` as `Under 20` / `20-25` / `26-35` /
+  `36 and older` from exact age when provided.
+
+### Drift Risk
+
+- A frontend-valid Nancy-only POST 400s if backend still requires address,
+  state, age, provider, home counts, birth place, payment, insurance details, or
+  referral.
+- Browser submit is `Failed to fetch` if preflight rejects `Idempotency-Key`.
+
+### Required Compatibility
+
+- CORS `allowedHeaders` must include `Idempotency-Key`; origin allowlist
+  unchanged (`FRONTEND_ORIGIN` already includes the dev Cloud Run frontend).
+- Persist optional `primary_language_other`; accept/derive optional
+  `client_age_range`.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
 ## Preflight Update 2026-10-08 (inbox verification — doula + client)
 
 ### Task

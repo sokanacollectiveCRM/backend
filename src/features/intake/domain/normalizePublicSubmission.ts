@@ -3,13 +3,15 @@
  * No Express, DB, email, or env access.
  */
 import {
+  INSURANCE_PLAN_TYPES,
+  INSURANCE_POLICY_HOLDER_RELATIONSHIPS,
   parseInsurancePolicyHolderDob,
-  validatePrimaryInsuranceWhenRequired,
 } from '../../../billing/expandedInsuranceBilling';
 import { parseIntakeReferral } from '../../../constants/referralSource';
 import { ValidationError } from '../../../domains/errors';
 import { RequestFormData } from '../../../types';
 import {
+  clientAgeRangeFromYears,
   normalizeIntakeHomeTypes,
   parseIntakeClientAgeYears,
   parseIntakeHomePeopleCount,
@@ -26,6 +28,17 @@ function trimNullableString(value: unknown): string | null | undefined {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function presentString(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+  return null;
+}
+
 function normalizeOptionalBoolean(value: unknown): boolean | null | undefined {
   if (value === undefined) return undefined;
   if (value === null) return null;
@@ -38,9 +51,53 @@ function normalizeOptionalBoolean(value: unknown): boolean | null | undefined {
   return undefined;
 }
 
+function resolveServiceNeeded(raw: Record<string, any>): string | null {
+  const explicit = presentString(raw.service_needed);
+  if (explicit) return explicit;
+  if (Array.isArray(raw.services_interested)) {
+    const items = raw.services_interested
+      .map((item: unknown) =>
+        typeof item === 'string' ? item.trim() : String(item ?? '').trim()
+      )
+      .filter((item: string) => item.length > 0);
+    if (items.length > 0) return items.join(', ');
+  }
+  return null;
+}
+
+function hasDueDate(value: unknown): boolean {
+  if (value instanceof Date) return !Number.isNaN(value.getTime());
+  if (typeof value === 'string') return value.trim().length > 0;
+  return false;
+}
+
+function assertDueDateParseable(value: unknown): void {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) {
+      throw new ValidationError('due_date must be a valid date');
+    }
+    return;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    const parsed = new Date(trimmed);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new ValidationError('due_date must be a valid date');
+    }
+  }
+}
+
+function isPrimaryLanguageOther(value: unknown): boolean {
+  return presentString(value)?.toLowerCase() === 'other';
+}
+
 /**
  * Validate and normalize a raw CRM public request-form body into `RequestFormData`.
  * Throws `ValidationError` with the same messages the legacy service used.
+ *
+ * Nancy Cowans (2026-10-09): required are first/last name, email, phone, city,
+ * zip, due date, service requested, why-doula (`service_support_details`), and
+ * `primary_language_other` only when primary language is Other.
  */
 export function normalizePublicIntakeSubmission(
   formData: unknown
@@ -55,40 +112,48 @@ export function normalizePublicIntakeSubmission(
     );
   }
 
-  if (!raw.firstname || !raw.lastname) {
-    throw new ValidationError(
-      'Missing required fields: first name and last name'
-    );
+  const firstname = presentString(raw.firstname);
+  const lastname = presentString(raw.lastname);
+  const email = presentString(raw.email);
+  const phone = presentString(raw.phone_number);
+  const city = presentString(raw.city);
+  const zipCode = presentString(raw.zip_code);
+  const serviceNeeded = resolveServiceNeeded(raw);
+  const serviceSupportDetails = presentString(raw.service_support_details);
+  const primaryLanguage = presentString(raw.primary_language);
+  const primaryLanguageOther = presentString(raw.primary_language_other);
+
+  const missing: string[] = [];
+  if (!firstname) missing.push('firstname');
+  if (!lastname) missing.push('lastname');
+  if (!email) missing.push('email');
+  if (!phone) missing.push('phone_number');
+  if (!city) missing.push('city');
+  if (!zipCode) missing.push('zip_code');
+  if (!hasDueDate(raw.due_date)) missing.push('due_date');
+  if (!serviceNeeded) missing.push('service_needed');
+  if (!serviceSupportDetails) missing.push('service_support_details');
+  if (isPrimaryLanguageOther(raw.primary_language) && !primaryLanguageOther) {
+    missing.push('primary_language_other');
+  }
+  if (missing.length > 0) {
+    throw new ValidationError(`Missing required fields: ${missing.join(', ')}`);
   }
 
-  if (!raw.service_needed) {
-    throw new ValidationError('Missing required field: service_needed');
-  }
-
-  if (!raw.email || !String(raw.email).includes('@')) {
-    throw new ValidationError('Valid email is required');
-  }
-
-  if (!raw.phone_number) {
-    throw new ValidationError('Phone number is required');
-  }
-
-  if (!raw.address || !raw.city || !raw.state || !raw.zip_code) {
-    throw new ValidationError('Complete address is required');
-  }
+  assertDueDateParseable(raw.due_date);
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(String(raw.email))) {
+  if (!emailRegex.test(String(email))) {
     throw new ValidationError('Invalid email format');
   }
 
   const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
-  if (!phoneRegex.test(String(raw.phone_number).replace(/[\s\-\(\)]/g, ''))) {
+  if (!phoneRegex.test(String(phone).replace(/[\s\-\(\)]/g, ''))) {
     throw new ValidationError('Invalid phone number format');
   }
 
   const zipRegex = /^\d{5}(-\d{4})?$/;
-  if (!zipRegex.test(String(raw.zip_code))) {
+  if (!zipRegex.test(String(zipCode))) {
     throw new ValidationError('Invalid zip code format');
   }
 
@@ -165,45 +230,56 @@ export function normalizePublicIntakeSubmission(
   );
   const insurancePlanType = trimNullableString(raw.insurance_plan_type);
 
+  // Insurance details are optional even when Commercial is chosen. If the
+  // client did fill them, reject invalid enum values.
   if (requiresInsurance) {
-    const primaryCheck = validatePrimaryInsuranceWhenRequired({
-      insuranceProvider,
-      insuranceMemberId,
-      insurancePolicyHolderName,
-      insurancePolicyHolderDob,
-      insurancePolicyHolderRelationship,
-      insurancePlanType,
-      hasSecondaryInsurance,
-      secondaryInsuranceProvider,
-      secondaryInsuranceMemberId,
-      secondaryPolicyNumber,
-    });
-    if (primaryCheck.ok === false) {
-      throw new ValidationError(primaryCheck.message);
+    if (
+      insurancePolicyHolderRelationship &&
+      !INSURANCE_POLICY_HOLDER_RELATIONSHIPS.has(
+        insurancePolicyHolderRelationship
+      )
+    ) {
+      throw new ValidationError(
+        'insurance_policy_holder_relationship must be one of: Self, Spouse, Partner, Parent, Child, Sibling, Other'
+      );
+    }
+    if (insurancePlanType && !INSURANCE_PLAN_TYPES.has(insurancePlanType)) {
+      throw new ValidationError(
+        'insurance_plan_type must be one of: HMO, PPO, EPO, POS, HDHP, Medicaid, Medicare, Other'
+      );
     }
   }
 
+  const persistedLanguage =
+    isPrimaryLanguageOther(raw.primary_language) && primaryLanguageOther
+      ? primaryLanguageOther
+      : primaryLanguage;
+
+  const providedAgeRange = presentString(raw.client_age_range);
+  const derivedAgeRange =
+    ageResult.value != null ? clientAgeRangeFromYears(ageResult.value) : null;
+
   return {
-    firstname: raw.firstname,
-    lastname: raw.lastname,
-    email: raw.email,
-    phone_number: raw.phone_number,
+    firstname: firstname as string,
+    lastname: lastname as string,
+    email: email as string,
+    phone_number: phone as string,
     preferred_contact_method: raw.preferred_contact_method,
     preferred_name: raw.preferred_name,
     pronouns: raw.pronouns,
     pronouns_other: raw.pronouns_other,
-    intake_age_years: ageResult.value,
+    intake_age_years: ageResult.value ?? undefined,
 
-    address: raw.address,
-    city: raw.city,
-    state: raw.state,
-    zip_code: raw.zip_code,
+    address: presentString(raw.address) ?? undefined,
+    city: city as string,
+    state: (presentString(raw.state) ?? undefined) as RequestFormData['state'],
+    zip_code: zipCode as string,
     home_phone: raw.home_phone,
     home_types: homeTypes ?? undefined,
     home_type_other: homeTypeOther ?? undefined,
     home_access: trimNullableString(raw.home_access) ?? undefined,
-    home_adults_count: homeAdults.value,
-    home_youth_count: homeYouth.value,
+    home_adults_count: homeAdults.value ?? undefined,
+    home_youth_count: homeYouth.value ?? undefined,
     pets: raw.pets,
 
     relationship_status: raw.relationship_status,
@@ -213,7 +289,7 @@ export function normalizePublicIntakeSubmission(
     mobile_phone: raw.mobile_phone,
     work_phone: raw.work_phone,
 
-    referral_source: referral.referral_source,
+    referral_source: referral.referral_source ?? undefined,
     referral_name: referral.referral_name ?? undefined,
     referral_email: referral.referral_email ?? undefined,
     referral_source_other: referral.referral_source_other ?? undefined,
@@ -222,7 +298,7 @@ export function normalizePublicIntakeSubmission(
     allergies: raw.allergies,
     health_notes: raw.health_notes,
 
-    payment_method: paymentMethod,
+    payment_method: paymentMethod ?? undefined,
     insurance_provider: requiresInsurance ? (insuranceProvider ?? null) : null,
     insurance_member_id: requiresInsurance ? (insuranceMemberId ?? null) : null,
     insurance_policy_holder_name: requiresInsurance
@@ -255,15 +331,15 @@ export function normalizePublicIntakeSubmission(
         ? (secondaryPolicyNumber ?? null)
         : null,
     annual_income: raw.annual_income,
-    service_needed: raw.service_needed,
+    service_needed: serviceNeeded as RequestFormData['service_needed'],
     service_specifics: raw.service_specifics,
 
     due_date: raw.due_date,
-    birth_location: birthPlace.birth_location,
-    birth_hospital: birthPlace.birth_hospital,
+    birth_location: birthPlace.birth_location ?? undefined,
+    birth_hospital: birthPlace.birth_hospital ?? undefined,
     number_of_babies: raw.number_of_babies,
     baby_name: raw.baby_name,
-    provider_type: providerResult.value,
+    provider_type: providerResult.value ?? undefined,
     pregnancy_number: raw.pregnancy_number,
 
     had_previous_pregnancies: raw.had_previous_pregnancies,
@@ -272,11 +348,14 @@ export function normalizePublicIntakeSubmission(
     past_pregnancy_experience: raw.past_pregnancy_experience,
 
     services_interested: raw.services_interested,
-    service_support_details: raw.service_support_details,
+    service_support_details: serviceSupportDetails ?? undefined,
 
     race_ethnicity: raw.race_ethnicity,
-    primary_language: raw.primary_language,
-    client_age_range: raw.client_age_range,
+    primary_language: persistedLanguage ?? undefined,
+    primary_language_other: primaryLanguageOther ?? undefined,
+    client_age_range: (providedAgeRange ??
+      derivedAgeRange ??
+      undefined) as RequestFormData['client_age_range'],
     insurance: requiresInsurance ? (raw.insurance ?? null) : null,
     demographics_multi: raw.demographics_multi,
   };

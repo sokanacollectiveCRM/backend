@@ -13,23 +13,26 @@ import { ProviderType } from '../types';
 
 describe('requestSubmissionDto', () => {
   describe('validateIntakeBirthPlace', () => {
-    it('rejects empty birth_hospital when birth_location is set', () => {
+    it('allows empty birth_hospital when birth_location is set', () => {
       const r = validateIntakeBirthPlace('Hospital', '');
-      expect(r.ok).toBe(false);
-      if (r.ok === false) {
-        expect(r.message).toBe('Please enter the hospital name.');
-      }
+      expect(r).toEqual({
+        ok: true,
+        birth_location: 'Hospital',
+        birth_hospital: null,
+      });
     });
 
-    it.each([
-      ['Home', '', 'Please enter your home birth location (e.g. home address).'],
-      ['Hospital', '   ', 'Please enter the hospital name.'],
-      ['Birth Center', '', 'Please enter the birth center name or location.'],
-      ['Other', '  ', 'Please enter your birth location name.'],
-    ])('location %p with missing place', (location, place, message) => {
-      const r = validateIntakeBirthPlace(location, place);
-      expect(r).toEqual({ ok: false, message });
-    });
+    it.each(['Home', 'Hospital', 'Birth Center', 'Other'] as const)(
+      'location %p with missing place is optional',
+      (location) => {
+        const r = validateIntakeBirthPlace(location, '');
+        expect(r).toEqual({
+          ok: true,
+          birth_location: location,
+          birth_hospital: null,
+        });
+      }
+    );
 
     it.each(['Home', 'Hospital', 'Birth Center', 'Other'] as const)(
       'accepts %p with non-empty birth_hospital',
@@ -46,14 +49,16 @@ describe('requestSubmissionDto', () => {
     it('rejects unknown birth_location', () => {
       expect(validateIntakeBirthPlace('Clinic', 'Somewhere')).toEqual({
         ok: false,
-        message: 'birth_location must be one of: Hospital, Home, Birth Center, Other',
+        message:
+          'birth_location must be one of: Hospital, Home, Birth Center, Other',
       });
     });
 
-    it('rejects missing birth_location', () => {
+    it('allows missing birth_location and keeps a provided place name', () => {
       expect(validateIntakeBirthPlace('', 'Mercy')).toEqual({
-        ok: false,
-        message: 'birth_location is required',
+        ok: true,
+        birth_location: null,
+        birth_hospital: 'Mercy',
       });
     });
   });
@@ -67,10 +72,13 @@ describe('requestSubmissionDto', () => {
       }
     });
 
-    it.each(INTAKE_PAYMENT_METHOD_OPTIONS)('accepts intake label %p', (label) => {
-      const r = parseIntakePaymentMethod(label);
-      expect(r.ok).toBe(true);
-    });
+    it.each(INTAKE_PAYMENT_METHOD_OPTIONS)(
+      'accepts intake label %p',
+      (label) => {
+        const r = parseIntakePaymentMethod(label);
+        expect(r.ok).toBe(true);
+      }
+    );
 
     it('maps Private/Commercial Insurance to Commercial Insurance with insurance required', () => {
       expect(parseIntakePaymentMethod('Private/Commercial Insurance')).toEqual({
@@ -115,9 +123,6 @@ describe('requestSubmissionDto', () => {
       [121, 'age must be between 1 and 120'],
       ['0', 'age must be between 1 and 120'],
       ['121', 'age must be between 1 and 120'],
-      ['', 'age is required'],
-      [null, 'age is required'],
-      [undefined, 'age is required'],
       [12.5, 'age must be a whole number between 1 and 120'],
       ['12.5', 'age must be a whole number between 1 and 120'],
       ['abc', 'age must be a whole number between 1 and 120'],
@@ -156,10 +161,20 @@ describe('requestSubmissionDto', () => {
       }
     });
 
-    it.each([[''], ['   ']])('rejects empty provider_type %p', (raw) => {
-      expect(parseIntakeProviderType(raw)).toEqual({
-        ok: false,
-        message: 'provider_type is required',
+    it.each([[''], ['   '], [null], [undefined]])(
+      'allows empty provider_type %p',
+      (raw) => {
+        expect(parseIntakeProviderType(raw)).toEqual({
+          ok: true,
+          value: null,
+        });
+      }
+    );
+
+    it.each([[''], [null], [undefined]])('allows omitted age %p', (raw) => {
+      expect(parseIntakeClientAgeYears(raw)).toEqual({
+        ok: true,
+        value: null,
       });
     });
   });
@@ -184,7 +199,10 @@ describe('requestSubmissionDto', () => {
   describe('legacyHomeTypeVarchar', () => {
     it('joins selections for legacy column', () => {
       expect(
-        legacyHomeTypeVarchar(['Rent, apartment or house', 'Own, apartment, condo, or house'])
+        legacyHomeTypeVarchar([
+          'Rent, apartment or house',
+          'Own, apartment, condo, or house',
+        ])
       ).toBe('Rent, apartment or house; Own, apartment, condo, or house');
     });
   });
@@ -225,7 +243,8 @@ describe('requestSubmissionDto', () => {
       });
       expect(r).toEqual({
         ok: false,
-        message: 'secondary_policy_number is required when has_secondary_insurance is true',
+        message:
+          'secondary_policy_number is required when has_secondary_insurance is true',
       });
     });
 

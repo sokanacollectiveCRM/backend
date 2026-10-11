@@ -19,6 +19,7 @@ export class RequestForm {
   public created_at?: Date;
   public updated_at?: Date;
   public requested?: string;
+  public primary_language_other?: string;
 
   constructor(
     // Step 1: Client Details (Required)
@@ -28,10 +29,10 @@ export class RequestForm {
     public phone_number: string,
     public service_needed: ServiceTypes,
 
-    // Step 2: Home Details (Required)
-    public address: string,
+    // Step 2: Home Details (city + zip required on public intake; street/state optional)
+    public address: string | undefined,
     public city: string,
-    public state: STATE,
+    public state: STATE | undefined,
     public zip_code: string,
 
     // Step 1: Client Details (Optional)
@@ -92,7 +93,7 @@ export class RequestForm {
     // Step 10: Client Demographics (Optional)
     public race_ethnicity?: string,
     public primary_language?: string,
-    public client_age_range?: ClientAgeRange,
+    public client_age_range?: ClientAgeRange | string,
     public insurance?: string,
     public payment_method?: string,
     public insurance_provider?: string,

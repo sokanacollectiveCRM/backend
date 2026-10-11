@@ -428,6 +428,7 @@ export class ClientController {
       'pronouns',
       'pronouns_other',
       'primary_language',
+      'primary_language_other',
       'provider_type',
       'birth_hospital',
       'birth_location',

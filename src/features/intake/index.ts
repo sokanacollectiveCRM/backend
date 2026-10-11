@@ -19,6 +19,7 @@ export {
   normalizeIntakeHomeTypes,
   parseIntakeHomePeopleCount,
   legacyHomeTypeVarchar,
+  clientAgeRangeFromYears,
 } from './domain/requestSubmissionDto';
 
 export type { IntakeLeadRepository } from './application/ports';
