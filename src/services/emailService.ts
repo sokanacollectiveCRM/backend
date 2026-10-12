@@ -24,6 +24,7 @@ export interface NativeContractInvitationEmailInput {
   contractTitle: string;
   signingUrl: string;
   expiresAt: Date;
+  cancelBy?: Date;
 }
 
 export interface SignedContractCopyEmailInput {
@@ -226,11 +227,23 @@ Payment Schedule Link: ${paymentScheduleLink}`;
     const safeTitle = escapeHtml(input.contractTitle);
     const safeUrl = escapeHtml(input.signingUrl);
     const expiration = input.expiresAt.toISOString();
+    const cancelBy = input.cancelBy
+      ? new Intl.DateTimeFormat('en-US', {
+          timeZone: 'America/New_York',
+          dateStyle: 'long',
+        }).format(input.cancelBy)
+      : '';
+    const cancelText = cancelBy
+      ? `\n\nPlease sign by ${cancelBy}. If the contract is not signed by that date, it will be canceled.`
+      : '';
+    const cancelHtml = cancelBy
+      ? `<p>Please sign by ${escapeHtml(cancelBy)}. If the contract is not signed by that date, it will be canceled.</p>`
+      : '';
     await this.sendEmail(
       input.clientEmail,
       `Please review and sign: ${input.contractTitle}`,
-      `Hello ${input.clientName},\n\nPlease review and sign ${input.contractTitle} using this secure link:\n${input.signingUrl}\n\nThis link expires at ${expiration}.\n\nSokana Collective`,
-      `<p>Hello ${safeName},</p><p>Please review and sign <strong>${safeTitle}</strong>.</p><p><a href="${safeUrl}">Review and sign contract</a></p><p>This secure link expires at ${escapeHtml(expiration)}.</p><p>Sokana Collective</p>`
+      `Hello ${input.clientName},\n\nPlease review and sign ${input.contractTitle} using this secure link:\n${input.signingUrl}${cancelText}\n\nThis link expires at ${expiration}.\n\nQuestions: hello@sokanacollective.com\n\nSokana Collective`,
+      `<p>Hello ${safeName},</p><p>Please review and sign <strong>${safeTitle}</strong>.</p><p><a href="${safeUrl}">Review and sign contract</a></p>${cancelHtml}<p>This secure link expires at ${escapeHtml(expiration)}.</p><p>Questions: hello@sokanacollective.com</p><p>Sokana Collective</p>`
     );
   }
 
