@@ -78,6 +78,14 @@ export enum IncomeLevel {
 export interface AuthRequest extends Request {
   user?: User;
   file?: MulterFile;
+  tenant?: {
+    id: string;
+    slug: string;
+    name: string;
+    role: string;
+    membershipId: string;
+    platformAdmin: false;
+  };
 }
 
 export interface UpdateRequest extends Request {
