@@ -660,6 +660,16 @@ export class CloudSqlTeamService {
       `,
       [profilePictureUrl, doulaId]
     );
+    if ((result.rowCount ?? 0) > 0) {
+      try {
+        const { recordHeadshotNotice } = await import(
+          '../features/notifications/application/eventNotices'
+        );
+        await recordHeadshotNotice(doulaId);
+      } catch {
+        // A missing notice table must not block the headshot save.
+      }
+    }
     return (result.rowCount ?? 0) > 0;
   }
 

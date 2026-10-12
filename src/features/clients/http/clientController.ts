@@ -2850,6 +2850,26 @@ export class ClientController {
         userId
       );
 
+      try {
+        const { recordActivityNotice } = await import(
+          '../../notifications/application/eventNotices'
+        );
+        await recordActivityNotice({
+          clientId: id,
+          activityType: activity_type.trim(),
+          authorRole: creatorRole,
+          activityId: String(activity.id),
+        });
+      } catch (noticeError) {
+        logger.error(
+          {
+            service: 'notification-rules',
+            err: noticeError instanceof Error ? noticeError.name : 'Error',
+          },
+          'Activity notice failed'
+        );
+      }
+
       const dto = ActivityMapper.fromCloudActivity(activity);
       res.json(ApiResponse.success(dto));
     } catch (error) {
