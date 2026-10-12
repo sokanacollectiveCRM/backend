@@ -271,7 +271,7 @@ async function performSigning(
         service: 'notification-rules',
         ruleId: action.ruleId,
         contractId: row.contractId,
-        err: error instanceof Error ? error.name : 'Error',
+        errName: error instanceof Error ? error.name : 'Error',
       },
       'Notification rule failed'
     );
@@ -345,7 +345,7 @@ async function runBirthRow(
           service: 'notification-rules',
           ruleId: action.ruleId,
           clientId: row.clientId,
-          err: error instanceof Error ? error.name : 'Error',
+          errName: error instanceof Error ? error.name : 'Error',
         },
         'Birth outcome reminder failed'
       );
@@ -408,7 +408,7 @@ async function runNoteRow(
         service: 'notification-rules',
         ruleId: action.ruleId,
         clientId: row.clientId,
-        err: error instanceof Error ? error.name : 'Error',
+        errName: error instanceof Error ? error.name : 'Error',
       },
       'Overdue note reminder failed'
     );

@@ -223,13 +223,13 @@ export class NotificationStore {
     }>(
       `
       SELECT
-        da.id AS assignment_id,
+        da.client_id::text || ':' || da.doula_id::text AS assignment_id,
         da.client_id,
         cl.first_name,
         da.doula_id,
         doulas.email AS doula_email,
         note.id AS last_note_id,
-        COALESCE(note.timestamp, da.created_at) AS last_activity_at,
+        COALESCE(note.timestamp, da.created_at, da.assigned_at) AS last_activity_at,
         EXISTS (
           SELECT 1 FROM public.client_postponements p
           WHERE p.client_id = da.client_id AND p.status = 'active'
@@ -245,7 +245,7 @@ export class NotificationStore {
         LIMIT 1
       ) note ON TRUE
       WHERE da.status = 'active'
-      ORDER BY COALESCE(note.timestamp, da.created_at) ASC
+      ORDER BY COALESCE(note.timestamp, da.created_at, da.assigned_at) ASC
       LIMIT 100
       `
     );

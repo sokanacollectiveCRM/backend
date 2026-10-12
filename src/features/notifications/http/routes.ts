@@ -46,7 +46,11 @@ export function createNotificationTickRouter(): Router {
       logger.error(
         {
           service: 'notification-rules',
-          err: error instanceof Error ? error.name : 'Error',
+          errName: error instanceof Error ? error.name : 'Error',
+          pgCode:
+            typeof (error as { code?: unknown }).code === 'string'
+              ? (error as { code: string }).code
+              : undefined,
         },
         'Notification tick failed'
       );
