@@ -6178,3 +6178,100 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 - **Action**:
   - [x] Context updated
   - [x] Implementation completed
+
+## Preflight Update 2026-10-09 (admin messaging reminder policies)
+
+### Task
+
+- Backend-only admin-configurable messaging / reminder policy engine (v4 spec).
+  Frontend Messaging UI is a separate PR.
+
+### Files Scanned
+
+- Frontend repo is **not mounted** in this Cloud Agent workspace
+  (`/Users/jerrybony/Documents/GitHub/sokana-crm-frontend/frontend-crm` and
+  `/workspace/frontend-crm` are absent). Scanned living context plus backend
+  consumers the CRM already uses:
+  - `.cursor/skills/sokana-doula-cloudsql-sync/frontend-context.md` (http
+    wrapper, sidebar-data, native signing, dashboard calendar, activities,
+    hours)
+  - `backend/src/utils/responseBuilder.ts` (`{ success, data }`)
+  - `backend/src/server.ts` mounts (`/api/admin`, `/api/doulas`,
+    `/api/contracts`)
+  - `backend/src/features/contracts/` native send/void/outbox
+  - `backend/src/features/dashboard/http/dashboardRoutes.ts` (`due_date`,
+    overdue notes)
+  - `backend/src/middleware/authorizeRoles.ts`
+    (`admin | doula | client | billing`)
+
+### Contract Findings
+
+- CRM `src/api/http.ts` expects `{ success, data }` (and list
+  `{ success, data, meta }`).
+- Admin routes live under `/api/admin/*` with cookie session +
+  `authorizeRoles(['admin'])`.
+- Doula routes live under `/api/doulas/*` with `authorizeRoles(['doula'])`.
+- Native contract send is `POST /api/contracts/:id/send` (admin); invitation
+  email is synchronous via `sendNativeContractInvitation`, not outbox.
+- Dashboard calendar reads `phi_clients.due_date`. Overdue-notes card currently
+  hardcodes 7 days; settings API will return `overdue_days` for the Messaging
+  UI.
+- No existing frontend Messaging screens, `messagingApi.ts`, or sidebar item.
+
+### Drift Risk
+
+- Frontend Messaging PR must follow this backend's API catalog
+  (method/path/body).
+- If FE assumes a `deposit_payment` policy or SignNow, it will not match this
+  repo (native signing; deposit reminders removed Oct 9).
+- Test tools (`/tick-now`, `/runs/:id/advance`) 404 unless
+  `REMINDER_TEST_TOOLS_ENABLED=true` (dev only).
+
+### Required Compatibility
+
+- Wrap admin JSON as `{ success: true, data }` /
+  `{ success: true, data, meta }`.
+- Recipient roles include `billing`.
+- Settings payload includes `overdue_days`, `billing_notification_email`,
+  `evaluation_link`, `reminders_enabled`, `test_tools_enabled`.
+- Kill switch off → tick `{ suppressed: true }` with no sends/voids.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-09 (CI green-up for PR #97)
+
+### Task
+
+- Fix PR lint/format failures and small pre-existing `main` TypeScript build
+  errors so GitHub checks can go green.
+
+### Files Scanned
+
+- Frontend repo is **not mounted** in this workspace.
+- `src/types.ts` (`AuthRequest` missing `tenant`)
+- `src/middleware/authMiddleware.ts` (`req.tenant = gate.tenant`)
+- `src/features/auth/http/authController.ts` (`attachDisplayProfilePicture`)
+- `src/services/gcs/profilePictureStorage.ts` (no such export on `main`)
+
+### Contract Findings
+
+- Auth JSON still `{ user: user.toJSON() }` / `/auth/me` body; the missing
+  export only blocked `tsc`. Display URL attach is in-place on `profile_picture`
+  before serialize.
+- No CRM response-shape change.
+
+### Drift Risk
+
+- None for Messaging UI. Tenant field is middleware-only.
+
+### Required Compatibility
+
+- Keep `{ success, data }` admin wrappers. Do not change `/auth/me` keys.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started

@@ -59,6 +59,8 @@ export class UserUseCase {
       note,
       type
     );
+    const { fireMessagingEvent } = require('../../messaging/eventBus');
+    fireMessagingEvent({ type: 'hours_logged', clientId: client_id });
 
     return newWorkEntry;
   }

@@ -108,6 +108,31 @@ export interface ContractInvitationMailer {
     contractTitle: string;
     signingUrl: string;
     expiresAt: Date;
+    cancelDate?: string;
+    subject?: string;
+    text?: string;
+    html?: string;
+  }): Promise<void>;
+}
+
+export interface ContractSentReminderHook {
+  renderInitialEmail?(input: {
+    contractId: string;
+    clientId: string;
+    signingUrl: string;
+    sentAt: Date;
+  }): Promise<{
+    subject?: string;
+    text?: string;
+    html?: string;
+    cancelDate?: string;
+  } | null>;
+  onSent?(input: {
+    contractId: string;
+    clientId: string;
+    signingUrl: string;
+    sentAt: Date;
+    isResend: boolean;
   }): Promise<void>;
 }
 
@@ -127,6 +152,10 @@ export class NodemailerContractInvitationMailer
     contractTitle: string;
     signingUrl: string;
     expiresAt: Date;
+    cancelDate?: string;
+    subject?: string;
+    text?: string;
+    html?: string;
   }): Promise<void> {
     await this.email.sendNativeContractInvitation({
       clientEmail: input.recipientEmail,
@@ -134,6 +163,10 @@ export class NodemailerContractInvitationMailer
       contractTitle: input.contractTitle,
       signingUrl: input.signingUrl,
       expiresAt: input.expiresAt,
+      cancelDate: input.cancelDate,
+      subject: input.subject,
+      text: input.text,
+      html: input.html,
     });
   }
 }
@@ -159,7 +192,8 @@ export class ContractService {
     private readonly templates: ContractTemplateResolver,
     private readonly paymentSchedules: PaymentScheduleCreator,
     private readonly invitationMailer: ContractInvitationMailer,
-    private readonly signingBaseUrl: string
+    private readonly signingBaseUrl: string,
+    private readonly reminderHook: ContractSentReminderHook = {}
   ) {}
 
   async createDraft(input: unknown, actorId: string): Promise<SafeContractDto> {
@@ -327,13 +361,52 @@ export class ContractService {
       replaceInvitation,
     });
 
+    const signingUrl = `${this.signingBaseUrl}#invitation=${encodeURIComponent(prepared.token)}`;
+    const sentAt = new Date();
+    const fallbackCancel = new Date(sentAt.getTime() + 7 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    let rendered: {
+      subject?: string;
+      text?: string;
+      html?: string;
+      cancelDate?: string;
+    } | null = null;
+    try {
+      rendered =
+        (await this.reminderHook.renderInitialEmail?.({
+          contractId,
+          clientId: contract.clientId,
+          signingUrl,
+          sentAt,
+        })) ?? null;
+    } catch {
+      rendered = null;
+    }
+
     await this.invitationMailer.send({
       recipientEmail: contract.snapshot.client.email,
       recipientName: contract.snapshot.client.name,
       contractTitle: contract.snapshot.serviceType,
-      signingUrl: `${this.signingBaseUrl}#invitation=${encodeURIComponent(prepared.token)}`,
+      signingUrl,
       expiresAt: prepared.input.expiresAt,
+      cancelDate: rendered?.cancelDate ?? fallbackCancel,
+      subject: rendered?.subject,
+      text: rendered?.text,
+      html: rendered?.html,
     });
+
+    try {
+      await this.reminderHook.onSent?.({
+        contractId,
+        clientId: contract.clientId,
+        signingUrl,
+        sentAt,
+        isResend: replaceInvitation,
+      });
+    } catch {
+      // Reminder engine must not block sending the contract.
+    }
 
     return this.toSafeDto(sent);
   }
