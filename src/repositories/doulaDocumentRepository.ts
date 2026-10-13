@@ -148,10 +148,10 @@ export class DoulaDocumentRepository {
     const { rows } = await queryCloudSql<DoulaDocumentRow>(
       `
       UPDATE public.doula_documents
-      SET status = $2,
+      SET status = $2::text,
           reviewed_at = NOW(),
           reviewed_by = $3,
-          rejection_reason = CASE WHEN $2 = 'approved' THEN NULL ELSE $4 END,
+          rejection_reason = CASE WHEN $2::text = 'approved' THEN NULL ELSE $4 END,
           updated_at = NOW()
       WHERE id = $1::uuid
       RETURNING *
