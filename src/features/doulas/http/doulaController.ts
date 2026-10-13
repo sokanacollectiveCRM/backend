@@ -5,8 +5,10 @@ import { logger } from '../../../common/utils/logger';
 import { sanitizeDoulaRaceEthnicity } from '../../../constants/doulaDemographics';
 import {
   ALLOWED_MIME_TYPES,
-  ALL_DOULA_DOCUMENT_TYPES,
   MAX_DOCUMENT_SIZE_BYTES,
+  allowsMultipleDoulaDocuments,
+  doulaDocumentUploadRejection,
+  isRetiredDoulaDocumentType,
 } from '../../../constants/doulaDocuments';
 import { NotFoundError } from '../../../domains/errors';
 import {
@@ -163,11 +165,9 @@ export class DoulaController {
         return;
       }
 
-      const validTypes = ALL_DOULA_DOCUMENT_TYPES;
-      if (!validTypes.includes(document_type)) {
-        res.status(400).json({
-          error: `Invalid document_type. Must be one of: ${validTypes.join(', ')}`,
-        });
+      const typeRejection = doulaDocumentUploadRejection(String(document_type));
+      if (typeRejection) {
+        res.status(400).json({ error: typeRejection });
         return;
       }
 
@@ -185,15 +185,17 @@ export class DoulaController {
         return;
       }
 
-      // Replace: if doula already has a document of this type, delete old one first
-      const existingDoc =
-        await this.documentRepository.getCurrentDocumentByType(
-          doulaId,
-          document_type
-        );
-      if (existingDoc) {
-        await this.uploadService.deleteDocument(existingDoc.filePath);
-        await this.documentRepository.deleteDocument(existingDoc.id);
+      // Single-file types replace the current file. Miscellaneous keeps every upload.
+      if (!allowsMultipleDoulaDocuments(String(document_type))) {
+        const existingDoc =
+          await this.documentRepository.getCurrentDocumentByType(
+            doulaId,
+            document_type
+          );
+        if (existingDoc) {
+          await this.uploadService.deleteDocument(existingDoc.filePath);
+          await this.documentRepository.deleteDocument(existingDoc.id);
+        }
       }
 
       const uploadedDoc = await this.uploadService.uploadDocument(
@@ -253,8 +255,9 @@ export class DoulaController {
         return;
       }
 
-      const documents =
-        await this.documentRepository.getDocumentsByDoulaId(doulaId);
+      const documents = (
+        await this.documentRepository.getDocumentsByDoulaId(doulaId)
+      ).filter((doc) => !isRetiredDoulaDocumentType(doc.documentType));
       const completeness =
         await this.completenessService.getCompleteness(doulaId);
 
@@ -585,6 +588,16 @@ export class DoulaController {
       if (!documentId) {
         res.status(400).json({ error: 'Missing document ID' });
         return;
+      }
+
+      if (typeof req.body?.document_type === 'string') {
+        const typeRejection = doulaDocumentUploadRejection(
+          req.body.document_type
+        );
+        if (typeRejection) {
+          res.status(400).json({ error: typeRejection });
+          return;
+        }
       }
 
       const parsed = renameDoulaDocumentSchema.safeParse(req.body);
