@@ -9,6 +9,7 @@ import {
 import { getLimitedBillingViewUrl } from '../utils/billingViewUrl';
 import { buildStaffPasswordSetupUrl } from './identityPlatform/staffPasswordSetup';
 import { EmailService } from './interface/emailServiceInterface';
+import { buildStaffInvitationEmail } from './staffInvitationEmail';
 
 export interface ContractInitiatedBillingEmailInput {
   clientName: string;
@@ -490,23 +491,25 @@ The Sokana Team`;
     organizationName: string;
     acceptUrl: string;
   }): Promise<void> {
-    const roleLabel = input.role === 'admin' ? 'an admin' : 'a doula';
-    const subject = `You're invited to ${input.organizationName}`;
-    const text = `Dear ${input.firstname} ${input.lastname},\n\nYou have been invited to join ${input.organizationName} as ${roleLabel}. Accept the invitation to create your login:\n${input.acceptUrl}\n\nThis invitation stays pending until you accept it.`;
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>You're invited</h2>
-        <p>Dear ${input.firstname} ${input.lastname},</p>
-        <p>You have been invited to join ${input.organizationName} as ${roleLabel}.</p>
-        <p>The invitation stays pending until you accept it.</p>
-        <div style="text-align: center; margin: 25px 0;">
-          <a href="${input.acceptUrl}" style="background-color: #0f766e; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">Accept invitation</a>
-        </div>
-        <p>If the button doesn't work, copy this link into your browser:</p>
-        <p>${input.acceptUrl}</p>
-      </div>
-    `;
-    await this.sendEmail(input.to, subject, text, html);
+    await this.sendAccountSetupInvitation(
+      input.to,
+      input.firstname,
+      input.acceptUrl
+    );
+  }
+
+  private async sendAccountSetupInvitation(
+    to: string,
+    firstname: string,
+    setupUrl: string
+  ): Promise<void> {
+    const { subject, text, html } = buildStaffInvitationEmail({
+      firstname,
+      email: to,
+      setupUrl,
+      frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3001',
+    });
+    await this.sendEmail(to, subject, text, html);
   }
 
   async sendEmailVerificationEmail(
@@ -536,25 +539,10 @@ The Sokana Team`;
     lastname: string,
     role: string
   ): Promise<void> {
+    void lastname;
+    void role;
     const signupUrl = await buildStaffPasswordSetupUrl(to);
-    const subject = 'Welcome to the Sokana CRM Team!';
-    const text = `Dear ${firstname} ${lastname},\n\nYou have been invited to join the Sokana CRM team as a ${role}. Create and confirm your password using the secure link below, then log in with this email address.\n\n${signupUrl}\n\nBest regards,\nThe Sokana Team`;
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>Welcome to the Sokana Team!</h2>
-        <p>Dear ${firstname} ${lastname},</p>
-        <p>We're excited to have you join our team as a ${role}!</p>
-        <div>
-        <p>Your account details are already saved. Use the secure link below to create and confirm your password, then log in.</p>
-        <a href="${signupUrl}" style="font-weight: bold;">Create Password</a>
-        
-        </div>
-        <p>If you have any questions, please don't hesitate to reach out.</p>
-        <p>Best regards,<br>The Sokana Team</p>
-      </div>
-    `;
-
-    await this.sendEmail(to, subject, text, html);
+    await this.sendAccountSetupInvitation(to, firstname, signupUrl);
   }
 
   async sendPortalInviteEmail(
@@ -587,48 +575,10 @@ The Sokana Team`;
     lastname: string,
     inviteToken?: string
   ): Promise<void> {
-    void inviteToken; // Legacy callers may still pass a tracking token.
+    void lastname;
+    void inviteToken;
     const signupUrl = await buildStaffPasswordSetupUrl(to);
-
-    const subject = 'Welcome to the Sokana Doula Team!';
-    const text = `Dear ${firstname} ${lastname},\n\nYou have been invited to join the Sokana Collective as a doula! We're excited to have you on our team.\n\nCreate and confirm your password using the secure link below, then log in:\n${signupUrl}\n\nAfter logging in, you'll be able to:\n- Complete your profile\n- Upload required documents (background checks and licenses)\n- View and manage your assigned clients\n- Log hours and add notes for your clients\n\nLog in with your invited email address (${to}).\n\nIf you have any questions, please don't hesitate to reach out.\n\nBest regards,\nThe Sokana Team`;
-
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #333;">Welcome to the Sokana Doula Team!</h2>
-        <p>Dear ${firstname} ${lastname},</p>
-        <p>We're excited to have you join the Sokana Collective as a doula! We're thrilled to have you on our team.</p>
-
-        <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
-          <p style="margin-top: 0;"><strong>Next Steps:</strong></p>
-          <ol style="margin: 0; padding-left: 20px;">
-            <li>Create and confirm your password, then log in</li>
-            <li>Upload required documents (background checks and licenses)</li>
-            <li>Start viewing and managing your assigned clients</li>
-            <li>Log hours and add notes for your clients</li>
-          </ol>
-        </div>
-
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${signupUrl}"
-             style="background-color: #4CAF50; color: white; padding: 15px 30px; text-decoration: none;
-                    border-radius: 5px; font-weight: bold; font-size: 16px; display: inline-block;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            Create Password
-          </a>
-        </div>
-
-        <p><strong>Important:</strong> Log in with your invited email address (<strong>${to}</strong>).</p>
-
-        <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
-        <p style="word-break: break-all; color: #666;">${signupUrl}</p>
-
-        <p>If you have any questions, please don't hesitate to reach out.</p>
-        <p>Best regards,<br>The Sokana Team</p>
-      </div>
-    `;
-
-    await this.sendEmail(to, subject, text, html);
+    await this.sendAccountSetupInvitation(to, firstname, signupUrl);
   }
 
   async sendDoulaMatchNotification(
