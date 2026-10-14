@@ -186,7 +186,8 @@ Runtime notes:
 
 ## Scheduling package (`src/features/scheduling`)
 
-Pilot visit booking. Mount: `/api/scheduling`. Contract: `docs/SCHEDULING_MVP.md`.
+Pilot visit booking. Mount: `/api/scheduling`. Contract:
+`docs/SCHEDULING_MVP.md`.
 
 ```text
 src/features/scheduling/

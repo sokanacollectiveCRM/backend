@@ -1,8 +1,8 @@
 import { Response } from 'express';
 
 import type { AuthRequest } from '../../../types';
-import type { SchedulingActorRole } from '../domain/bookingRules';
 import type { SchedulingService } from '../application/schedulingService';
+import type { SchedulingActorRole } from '../domain/bookingRules';
 import { sendSchedulingError } from './mapError';
 
 function actorFrom(req: AuthRequest) {

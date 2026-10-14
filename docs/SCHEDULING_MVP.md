@@ -1,7 +1,7 @@
 # Pilot scheduling MVP
 
-Backend half of the Sokana360 doula/client visit scheduling pilot.
-Frontend implements against this contract. Do not invent different paths.
+Backend half of the Sokana360 doula/client visit scheduling pilot. Frontend
+implements against this contract. Do not invent different paths.
 
 **Visits are a fixed 60 minutes.** Stored in UTC (`timestamptz`). Emails show
 `America/Chicago` with a zone label. The CRM UI should show the browser zone
@@ -9,24 +9,26 @@ plus a label.
 
 Existing routes stay unchanged:
 
-- `GET/POST /api/doulas/availability`, `PATCH/DELETE /api/doulas/availability/:availabilityId`
+- `GET/POST /api/doulas/availability`,
+  `PATCH/DELETE /api/doulas/availability/:availabilityId`
 - `GET /clients/:id/assigned-doulas`
 - `POST /clients/:id/assigned-doulas/:doulaId/booking-requests`
 
 ## Environment
 
-| Variable | Default | Meaning |
-| -------- | ------- | ------- |
-| `BOOKING_REQUIRE_CONTRACT_STAGE` | `true` | Booking and open-slot listing require a `phi_contracts` row for the client. **Set to `false` on dev for the Oct 12 pilot** if pilot clients have no contract. Leave `true` in code/prod. |
-| `FRONTEND_URL` | `http://localhost:3001` | Login links in booking emails |
-| `USE_TEST_EMAIL` | unset | When `true`, `emailService.sendEmail` does not SMTP. Automated tests must set this or mock the transport. **Dev sends real mail** to Jerry plus-addresses. |
+| Variable                         | Default                 | Meaning                                                                                                                                                                                  |
+| -------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BOOKING_REQUIRE_CONTRACT_STAGE` | `true`                  | Booking and open-slot listing require a `phi_contracts` row for the client. **Set to `false` on dev for the Oct 12 pilot** if pilot clients have no contract. Leave `true` in code/prod. |
+| `FRONTEND_URL`                   | `http://localhost:3001` | Login links in booking emails                                                                                                                                                            |
+| `USE_TEST_EMAIL`                 | unset                   | When `true`, `emailService.sendEmail` does not SMTP. Automated tests must set this or mock the transport. **Dev sends real mail** to Jerry plus-addresses.                               |
 
 ## Endpoints
 
 All routes are mounted at `/api/scheduling`. Session cookie / `X-Session-Token`
-+ `authMiddleware`. Doulas and clients must be inbox-verified (existing main
-policy). Success bodies use `{ success: true, ... }`. Errors use
-`{ error, code? }`.
+
+- `authMiddleware`. Doulas and clients must be inbox-verified (existing main
+  policy). Success bodies use `{ success: true, ... }`. Errors use
+  `{ error, code? }`.
 
 ### `GET /api/scheduling/client/doulas/:doulaId/slots`
 
@@ -50,7 +52,12 @@ max **14-day** range.
   "durationMinutes": 60,
   "from": "2026-10-13T00:00:00.000Z",
   "to": "2026-10-27T00:00:00.000Z",
-  "slots": [{ "startAt": "2026-10-13T15:00:00.000Z", "endAt": "2026-10-13T16:00:00.000Z" }]
+  "slots": [
+    {
+      "startAt": "2026-10-13T15:00:00.000Z",
+      "endAt": "2026-10-13T16:00:00.000Z"
+    }
+  ]
 }
 ```
 
@@ -71,11 +78,11 @@ Roles: `client`, `admin`.
 }
 ```
 
-Checks (same intent as `createDoulaBookingRequest`): own client (clients
-cannot book for someone else), active assignment, contract-stage gate.
-Must lie fully inside an `available` window. `409` on blackout or overlap
-with another pending/approved booking for that doula. Overlap + insert run
-in one transaction with `pg_advisory_xact_lock(hashtext(doula_id::text))`.
+Checks (same intent as `createDoulaBookingRequest`): own client (clients cannot
+book for someone else), active assignment, contract-stage gate. Must lie fully
+inside an `available` window. `409` on blackout or overlap with another
+pending/approved booking for that doula. Overlap + insert run in one transaction
+with `pg_advisory_xact_lock(hashtext(doula_id::text))`.
 
 `201 { "success": true, "booking": { ... } }`
 
@@ -109,8 +116,8 @@ Roles: `admin`. Each booking includes `doulaName`, `clientNumber`,
 
 ### `GET /api/scheduling/admin/doulas/:doulaId/availability`
 
-Roles: `admin`, read-only.
-`200 { "success": true, "records": [ ... ] }` (same shape as doula availability CRUD).
+Roles: `admin`, read-only. `200 { "success": true, "records": [ ... ] }` (same
+shape as doula availability CRUD).
 
 ### Booking object
 
@@ -133,22 +140,22 @@ Roles: `admin`, read-only.
 
 Best-effort; failures are logged without PHI and never fail the request.
 
-| Event | Recipients |
-| ----- | ---------- |
-| New request | Doula |
-| Approved / declined / cancelled | Client |
-| Client cancels | Client **and** doula |
+| Event                           | Recipients           |
+| ------------------------------- | -------------------- |
+| New request                     | Doula                |
+| Approved / declined / cancelled | Client               |
+| Client cancels                  | Client **and** doula |
 
-Content: visit date/time with Chicago zone label + “log in to view” link.
-No notes, names (except client **number** on doula mail), or health details.
+Content: visit date/time with Chicago zone label + “log in to view” link. No
+notes, names (except client **number** on doula mail), or health details.
 
 ## Fixture accounts (dev only)
 
-| Role | Name | Email |
-| ---- | ---- | ----- |
-| Doula | Maya Rivers | `jerry+sokanadoula@techluminateacademy.com` |
+| Role   | Name        | Email                                        |
+| ------ | ----------- | -------------------------------------------- |
+| Doula  | Maya Rivers | `jerry+sokanadoula@techluminateacademy.com`  |
 | Client | Jordan Lake | `jerry+sokanaclient@techluminateacademy.com` |
-| Admin | Pilot Admin | `jerry+sokanaadmin@techluminateacademy.com` |
+| Admin  | Pilot Admin | `jerry+sokanaadmin@techluminateacademy.com`  |
 
 ```bash
 npx tsx scripts/dev-env/seed-scheduling-fixture.ts
@@ -156,8 +163,8 @@ npx tsx scripts/dev-env/seed-scheduling-fixture.ts --cleanup
 ```
 
 The script refuses unless `NODE_ENV !== production` and the Cloud SQL host /
-database / instance name contains `dev`. Set `SCHEDULING_FIXTURE_PASSWORD`
-plus Firebase Admin credentials to create verified Identity Platform users.
+database / instance name contains `dev`. Set `SCHEDULING_FIXTURE_PASSWORD` plus
+Firebase Admin credentials to create verified Identity Platform users.
 
 ## Jerry — exact dev rollout order
 
@@ -171,8 +178,9 @@ plus Firebase Admin credentials to create verified Identity Platform users.
 
    Skip the `#98` language migration if it is already applied.
 
-2. **Deploy** branch `pilot/backend-dev-20261012` to **`sokana-private-api-dev`**.
-   Do not deploy this to production. Do not include PR #96 or #97.
+2. **Deploy** branch `pilot/backend-dev-20261012` to
+   **`sokana-private-api-dev`**. Do not deploy this to production. Do not
+   include PR #96 or #97.
 
 3. **Deploy** frontend integration branch `pilot/frontend-dev-20261012` to
    **`sokana-front-end-dev`**.
@@ -205,7 +213,8 @@ plus Firebase Admin credentials to create verified Identity Platform users.
 
 ## Known limitations
 
-- No recurring-availability rules table (frontend expands weekly repeats into rows).
+- No recurring-availability rules table (frontend expands weekly repeats into
+  rows).
 - No appointment reminders (needs PR #97 event types; not in this deploy).
 - No Google/Outlook sync, ICS, SMS, or visit-type durations.
 - Double-booking is enforced in a transaction + advisory lock, not a

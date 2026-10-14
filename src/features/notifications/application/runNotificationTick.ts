@@ -20,6 +20,7 @@ import {
   NotificationStore,
   SigningCandidate,
 } from '../infrastructure/notificationStore';
+import { runVisitReminders } from './runVisitReminders';
 
 const UNSIGNED = new Set(['sent', 'viewed', 'partially_signed']);
 
@@ -142,6 +143,10 @@ export async function runNotificationTick(
   for (const row of await store.listNoteCandidates()) {
     await runNoteRow(row, now, store, email, result);
   }
+  const visits = await runVisitReminders(now, store, email);
+  result.sent += visits.sent;
+  result.failed += visits.failed;
+  result.skipped += visits.skipped;
   return result;
 }
 

@@ -25,18 +25,6 @@ export function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value.trim());
 }
 
-/** Replace a stored profile path with a URL the browser can load. */
-export async function attachDisplayProfilePicture<
-  T extends { profile_picture?: unknown },
->(record: T): Promise<T> {
-  const stored = record.profile_picture;
-  if (typeof stored !== 'string' || !stored.trim()) return record;
-  const displayUrl = await resolveProfilePictureUrl(stored);
-  if (!displayUrl) return record;
-  record.profile_picture = displayUrl;
-  return record;
-}
-
 /**
  * Resolve a stored profile_picture value to something usable in <img src>.
  * - Legacy Supabase/public http(s) URLs pass through
@@ -119,16 +107,4 @@ export async function deleteProfilePictureObject(
 ): Promise<void> {
   if (!relativePath || isHttpUrl(relativePath)) return;
   await deleteObject(profilePictureObjectPath(relativePath));
-}
-
-/** Resolve a stored profile picture onto the user object used in session JSON. */
-export async function attachDisplayProfilePicture(user: {
-  profile_picture?: unknown;
-}): Promise<void> {
-  const stored =
-    typeof user.profile_picture === 'string' ? user.profile_picture : null;
-  const resolved = await resolveProfilePictureUrl(stored);
-  if (resolved) {
-    user.profile_picture = resolved;
-  }
 }

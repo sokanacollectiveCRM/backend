@@ -5,6 +5,10 @@ import { logger } from '../../../common/utils/logger';
 import authMiddleware from '../../../middleware/authMiddleware';
 import authorizeRoles from '../../../middleware/authorizeRoles';
 import type { AuthRequest } from '../../../types';
+import {
+  devVisitPreviewAllowed,
+  previewVisitReminders,
+} from '../application/devVisitPreview';
 import { runNotificationTick } from '../application/runNotificationTick';
 import { NOTIFICATION_RULES, NotificationRuleId } from '../domain/catalog';
 import { displayFirstName } from '../domain/names';
@@ -66,6 +70,35 @@ export function createNotificationRoutes(): Router {
   const email = new NotificationEmail();
 
   router.use(authMiddleware);
+
+  router.post(
+    '/dev/visit-reminders/tick',
+    adminOnly,
+    async (req: AuthRequest, res: Response) => {
+      if (!devVisitPreviewAllowed(req.tenant?.id)) {
+        res.status(404).json({ error: 'Not found' });
+        return;
+      }
+      const input = z
+        .object({ bookingId: z.string().uuid(), now: z.string().datetime() })
+        .safeParse(req.body);
+      if (!input.success) {
+        res.status(400).json({ error: 'bookingId and ISO now are required' });
+        return;
+      }
+      try {
+        res.json(
+          await previewVisitReminders(
+            input.data.bookingId,
+            req.tenant!.id,
+            new Date(input.data.now)
+          )
+        );
+      } catch {
+        res.status(500).json({ error: 'Preview failed' });
+      }
+    }
+  );
 
   router.get('/notices', async (req: AuthRequest, res: Response) => {
     const role = String(req.user?.role || '').toLowerCase();

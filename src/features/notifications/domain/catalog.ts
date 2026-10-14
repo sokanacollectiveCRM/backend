@@ -12,6 +12,9 @@ export const BIRTH_OUTCOME_GRACE_DAYS = 5;
 export const BIRTH_OUTCOME_REPEAT_HOURS = 48;
 export const BIRTH_OUTCOME_ADMIN_AFTER_REMINDERS = 3;
 export const NOTE_OVERDUE_DAYS = 7;
+export const VISIT_REMINDER_LEAD_HOURS = 24;
+export const VISIT_MORNING_SEND_HOUR_LOCAL = 7;
+export const VISIT_DEFAULT_TIME_ZONE = 'America/Chicago';
 
 export interface NotificationRule {
   readonly enabled: boolean;
@@ -32,6 +35,8 @@ const fixed = (
 });
 
 export const NOTIFICATION_RULES = {
+  visit_reminder_24h: fixed(true),
+  visit_reminder_morning: fixed(true),
   contract_day0_sign_by: fixed(true),
   contract_day3_client: fixed(true),
   contract_day3_doula: fixed(true),

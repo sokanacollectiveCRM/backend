@@ -22,9 +22,9 @@ params, bodies, and status codes are locked:
 - `GET /api/scheduling/admin/bookings?doulaId&clientId&status&from&to`
 - `GET /api/scheduling/admin/doulas/:doulaId/availability`
 
-Success wrappers: `{ success, slots|booking|bookings|records }`.
-Times: ISO UTC. Visits: 60 minutes. `403` `CONTRACT_STAGE_REQUIRED` when the
-gate is on. `409` `BOOKING_OUTSIDE_WINDOW` / `BOOKING_BLACKOUT` / `BOOKING_OVERLAP`.
+Success wrappers: `{ success, slots|booking|bookings|records }`. Times: ISO UTC.
+Visits: 60 minutes. `403` `CONTRACT_STAGE_REQUIRED` when the gate is on. `409`
+`BOOKING_OUTSIDE_WINDOW` / `BOOKING_BLACKOUT` / `BOOKING_OVERLAP`.
 
 Keep using existing `/api/doulas/availability*` for doula window/blackout CRUD.
 Fix ProfileTab so saving "Available" does not delete future blackouts.

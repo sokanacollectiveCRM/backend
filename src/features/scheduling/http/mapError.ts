@@ -1,7 +1,7 @@
 import { Response } from 'express';
 
-import { SAFE_INTERNAL_ERROR_MESSAGE } from '../../../common/utils/safeLogging';
 import { logger } from '../../../common/utils/logger';
+import { SAFE_INTERNAL_ERROR_MESSAGE } from '../../../common/utils/safeLogging';
 import {
   AuthenticationError,
   AuthorizationError,

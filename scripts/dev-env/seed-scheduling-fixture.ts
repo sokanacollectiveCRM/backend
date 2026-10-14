@@ -85,9 +85,11 @@ async function cleanup(pool: Pool): Promise<void> {
   await pool.query(`DELETE FROM public.doulas WHERE lower(email) = $1`, [
     FIXTURE.doulaEmail,
   ]);
-  await pool.query(`DELETE FROM public.admins WHERE lower(email) = $1`, [
-    FIXTURE.adminEmail,
-  ]).catch(() => undefined);
+  await pool
+    .query(`DELETE FROM public.admins WHERE lower(email) = $1`, [
+      FIXTURE.adminEmail,
+    ])
+    .catch(() => undefined);
   console.log('Removed scheduling fixture rows for', emails.join(', '));
 }
 
@@ -186,17 +188,20 @@ async function seed(pool: Pool): Promise<void> {
       )
     ).rows[0].id;
 
-  await pool.query(
-    `
+  await pool
+    .query(
+      `
     INSERT INTO public.admins (id, full_name, first_name, last_name, email, created_at, updated_at)
     SELECT gen_random_uuid(), $1, 'Pilot', 'Admin', $2, NOW(), NOW()
     WHERE NOT EXISTS (SELECT 1 FROM public.admins WHERE lower(email) = $2)
     `,
-    [FIXTURE.adminName, FIXTURE.adminEmail]
-  ).catch(() => undefined);
+      [FIXTURE.adminName, FIXTURE.adminEmail]
+    )
+    .catch(() => undefined);
 
-  await pool.query(
-    `
+  await pool
+    .query(
+      `
     INSERT INTO public.doula_assignments (
       client_id, doula_id, role, services, assigned_at, status, ended_at
     )
@@ -207,50 +212,57 @@ async function seed(pool: Pool): Promise<void> {
       ended_at = NULL,
       updated_at = NOW()
     `,
-    [clientId, doulaId]
-  ).catch(async () => {
-    await pool.query(
-      `
+      [clientId, doulaId]
+    )
+    .catch(async () => {
+      await pool.query(
+        `
       INSERT INTO public.doula_assignments (client_id, doula_id, role, status)
       VALUES ($1::uuid, $2::uuid, 'primary', 'active')
       ON CONFLICT (client_id, doula_id) DO UPDATE SET status = 'active', role = 'primary'
       `,
-      [clientId, doulaId]
-    );
-  });
+        [clientId, doulaId]
+      );
+    });
 
-  await pool.query(
-    `
+  await pool
+    .query(
+      `
     INSERT INTO public.phi_contracts (id, client_id, status, created_at, updated_at)
     SELECT gen_random_uuid(), $1::uuid, 'draft', NOW(), NOW()
     WHERE NOT EXISTS (
       SELECT 1 FROM public.phi_contracts WHERE client_id = $1::uuid
     )
     `,
-    [clientId]
-  ).catch(async () => {
-    await pool.query(
-      `
+      [clientId]
+    )
+    .catch(async () => {
+      await pool.query(
+        `
       INSERT INTO public.phi_contracts (id, client_id, created_at)
       SELECT gen_random_uuid(), $1::uuid, NOW()
       WHERE NOT EXISTS (SELECT 1 FROM public.phi_contracts WHERE client_id = $1::uuid)
       `,
-      [clientId]
-    );
-  });
+        [clientId]
+      );
+    });
 
   await maybeLinkIdentity(pool, 'doulas', FIXTURE.doulaEmail);
   await maybeLinkIdentity(pool, 'phi_clients', FIXTURE.clientEmail);
   await maybeLinkIdentity(pool, 'admins', FIXTURE.adminEmail);
 
   console.log('Seeded scheduling fixture:');
-  console.log(`  Doula  ${FIXTURE.doulaName} <${FIXTURE.doulaEmail}> id=${doulaId}`);
+  console.log(
+    `  Doula  ${FIXTURE.doulaName} <${FIXTURE.doulaEmail}> id=${doulaId}`
+  );
   console.log(
     `  Client ${FIXTURE.clientFirst} ${FIXTURE.clientLast} <${FIXTURE.clientEmail}> id=${clientId}`
   );
   console.log(`  Admin  ${FIXTURE.adminName} <${FIXTURE.adminEmail}>`);
   console.log('  Assignment: active primary');
-  console.log('  Contract row: present (for BOOKING_REQUIRE_CONTRACT_STAGE=true)');
+  console.log(
+    '  Contract row: present (for BOOKING_REQUIRE_CONTRACT_STAGE=true)'
+  );
 }
 
 async function main(): Promise<void> {

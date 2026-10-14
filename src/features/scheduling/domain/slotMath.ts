@@ -14,14 +14,18 @@ export function parseIsoDateTime(value: unknown, fieldName: string): Date {
   }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    throw new ValidationError(`${fieldName} must be a valid ISO datetime string`);
+    throw new ValidationError(
+      `${fieldName} must be a valid ISO datetime string`
+    );
   }
   return date;
 }
 
 export function validateRange(startAt: Date, endAt: Date): void {
   if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) {
-    throw new ValidationError('startAt and endAt must be valid ISO datetime strings');
+    throw new ValidationError(
+      'startAt and endAt must be valid ISO datetime strings'
+    );
   }
   if (!(startAt < endAt)) {
     throw new ValidationError('startAt must be earlier than endAt');
@@ -72,7 +76,10 @@ export function intervalsOverlap(a: TimeInterval, b: TimeInterval): boolean {
   return a.startAt < b.endAt && a.endAt > b.startAt;
 }
 
-export function isFullyInside(inner: TimeInterval, outer: TimeInterval): boolean {
+export function isFullyInside(
+  inner: TimeInterval,
+  outer: TimeInterval
+): boolean {
   return inner.startAt >= outer.startAt && inner.endAt <= outer.endAt;
 }
 

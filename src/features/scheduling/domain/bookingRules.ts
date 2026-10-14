@@ -35,7 +35,9 @@ export function assertBookingTransition(input: {
       throw new AuthorizationError('Clients can only cancel their own visits');
     }
     if (currentStatus !== 'pending' && currentStatus !== 'approved') {
-      throw new ValidationError('Only pending or approved visits can be cancelled');
+      throw new ValidationError(
+        'Only pending or approved visits can be cancelled'
+      );
     }
     return;
   }

@@ -118,9 +118,9 @@ describe('scheduling authorization matrix', () => {
         )
       ).status
     ).toBe(403);
-    expect((await request(app).get('/api/scheduling/client/bookings')).status).toBe(
-      403
-    );
+    expect(
+      (await request(app).get('/api/scheduling/client/bookings')).status
+    ).toBe(403);
 
     currentUser = client;
     expect(
@@ -130,29 +130,29 @@ describe('scheduling authorization matrix', () => {
         )
       ).status
     ).toBe(200);
-    expect((await request(app).get('/api/scheduling/client/bookings')).status).toBe(
-      200
-    );
+    expect(
+      (await request(app).get('/api/scheduling/client/bookings')).status
+    ).toBe(200);
   });
 
   it('keeps doula booking list doula-only', async () => {
     const app = buildApp(mockService());
     currentUser = client;
-    expect((await request(app).get('/api/scheduling/doula/bookings')).status).toBe(
-      403
-    );
+    expect(
+      (await request(app).get('/api/scheduling/doula/bookings')).status
+    ).toBe(403);
     currentUser = doula;
-    expect((await request(app).get('/api/scheduling/doula/bookings')).status).toBe(
-      200
-    );
+    expect(
+      (await request(app).get('/api/scheduling/doula/bookings')).status
+    ).toBe(200);
   });
 
   it('keeps admin list/availability admin-only', async () => {
     const app = buildApp(mockService());
     currentUser = client;
-    expect((await request(app).get('/api/scheduling/admin/bookings')).status).toBe(
-      403
-    );
+    expect(
+      (await request(app).get('/api/scheduling/admin/bookings')).status
+    ).toBe(403);
     expect(
       (
         await request(app).get(
@@ -161,9 +161,9 @@ describe('scheduling authorization matrix', () => {
       ).status
     ).toBe(403);
     currentUser = admin;
-    expect((await request(app).get('/api/scheduling/admin/bookings')).status).toBe(
-      200
-    );
+    expect(
+      (await request(app).get('/api/scheduling/admin/bookings')).status
+    ).toBe(200);
     expect(
       (
         await request(app).get(

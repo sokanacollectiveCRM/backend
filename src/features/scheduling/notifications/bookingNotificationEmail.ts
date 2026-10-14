@@ -79,7 +79,12 @@ export function buildSchedulingLoginUrl(
   return base ? `${base}/client-dashboard` : '/client-dashboard';
 }
 
-function wrapHtml(title: string, body: string, url: string, cta: string): string {
+function wrapHtml(
+  title: string,
+  body: string,
+  url: string,
+  cta: string
+): string {
   const safeTitle = escapeHtml(title);
   const safeUrl = escapeHtml(url);
   const safeCta = escapeHtml(cta);

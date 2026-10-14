@@ -27,9 +27,10 @@ describe('booking notification emails', () => {
     for (const kind of kinds) {
       const content = buildBookingNotificationEmail({
         kind,
-        audience: kind === 'request_created' || kind === 'cancelled_client'
-          ? 'doula'
-          : 'client',
+        audience:
+          kind === 'request_created' || kind === 'cancelled_client'
+            ? 'doula'
+            : 'client',
         startAt,
         frontendBaseUrl: 'https://crm.example.com',
         clientNumber: 'CL-PILOT-001',
@@ -37,9 +38,7 @@ describe('booking notification emails', () => {
       expect(content.text).not.toContain(note);
       expect(content.html).not.toContain(note);
       expect(content.text).toMatch(/log in/i);
-      expect(
-        bookingEmailContainsForbiddenLabels(content, [note])
-      ).toEqual([]);
+      expect(bookingEmailContainsForbiddenLabels(content, [note])).toEqual([]);
       for (const label of BOOKING_EMAIL_FORBIDDEN_LABELS) {
         expect(content.text).not.toContain(label);
         expect(content.html).not.toContain(label);

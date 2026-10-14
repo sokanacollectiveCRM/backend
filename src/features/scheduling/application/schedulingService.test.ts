@@ -41,7 +41,9 @@ function booking(overrides: Partial<BookingRecord> = {}): BookingRecord {
   };
 }
 
-function createStore(overrides: Partial<SchedulingStore> = {}): SchedulingStore {
+function createStore(
+  overrides: Partial<SchedulingStore> = {}
+): SchedulingStore {
   return {
     resolveClientId: jest.fn().mockResolvedValue(CLIENT_ID),
     assignmentIsActive: jest.fn().mockResolvedValue(true),
@@ -57,9 +59,9 @@ function createStore(overrides: Partial<SchedulingStore> = {}): SchedulingStore 
     updateBookingStatusInTransaction: jest
       .fn()
       .mockResolvedValue(booking({ status: 'approved' })),
-    getDoulaRecipient: jest
-      .fn()
-      .mockResolvedValue({ email: 'jerry+sokanadoula@techluminateacademy.com' }),
+    getDoulaRecipient: jest.fn().mockResolvedValue({
+      email: 'jerry+sokanadoula@techluminateacademy.com',
+    }),
     getClientRecipient: jest.fn().mockResolvedValue({
       email: 'jerry+sokanaclient@techluminateacademy.com',
       clientNumber: 'CL-PILOT-001',
@@ -166,7 +168,7 @@ describe('SchedulingService', () => {
     expect(result.slots).toHaveLength(2);
   });
 
-  it('stops a client from booking another client\'s doula', async () => {
+  it("stops a client from booking another client's doula", async () => {
     const store = createStore({
       resolveClientId: jest.fn().mockResolvedValue(CLIENT_ID),
     });
@@ -193,7 +195,10 @@ describe('SchedulingService', () => {
           )
         )
         .mockRejectedValueOnce(
-          new SchedulingConflictError('Doula is unavailable', 'BOOKING_BLACKOUT')
+          new SchedulingConflictError(
+            'Doula is unavailable',
+            'BOOKING_BLACKOUT'
+          )
         )
         .mockRejectedValueOnce(
           new SchedulingConflictError('overlap', 'BOOKING_OVERLAP')
@@ -249,7 +254,7 @@ describe('SchedulingService', () => {
     expect(listed).toEqual([]);
   });
 
-  it('blocks a doula from approving another doula\'s booking', async () => {
+  it("blocks a doula from approving another doula's booking", async () => {
     const store = createStore({
       getBookingById: jest
         .fn()
@@ -308,7 +313,10 @@ describe('SchedulingService', () => {
     });
     expect(bookings[0].clientFirstName).toBe('Jordan');
     expect(bookings[0].clientNumber).toBe('CL-PILOT-001');
-    await service.listAdminAvailability({ actor: adminActor, doulaId: DOULA_ID });
+    await service.listAdminAvailability({
+      actor: adminActor,
+      doulaId: DOULA_ID,
+    });
     expect(store.listAvailabilityByDoulaId).toHaveBeenCalledWith(DOULA_ID);
   });
 

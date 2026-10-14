@@ -2,6 +2,8 @@ import type { Pool, PoolClient } from 'pg';
 
 import { getPool } from '../../../db/cloudSqlPool';
 import { NotFoundError } from '../../../domains/errors';
+import type { RecipientLookup, SchedulingStore } from '../application/ports';
+import { SchedulingConflictError } from '../application/schedulingService';
 import { isFullyInsideAnyWindow } from '../domain/slotMath';
 import type {
   AdminBookingRecord,
@@ -10,8 +12,6 @@ import type {
   BookingStatus,
   TimeInterval,
 } from '../domain/types';
-import type { RecipientLookup, SchedulingStore } from '../application/ports';
-import { SchedulingConflictError } from '../application/schedulingService';
 
 interface BookingRow {
   id: string;
@@ -163,7 +163,10 @@ export class CloudSqlSchedulingStore implements SchedulingStore {
     }
   }
 
-  async assignmentIsActive(clientId: string, doulaId: string): Promise<boolean> {
+  async assignmentIsActive(
+    clientId: string,
+    doulaId: string
+  ): Promise<boolean> {
     try {
       const { rowCount } = await this.pool.query(
         `

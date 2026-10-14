@@ -1,9 +1,15 @@
 import { NodemailerService } from '../../../services/emailService';
+import { buildAuthenticatedCrmClientUrl } from '../../intake/notifications/intakeStaffNotificationEmail';
 import { CONTACT_EMAIL } from '../domain/catalog';
 import { displayFirstName } from '../domain/names';
 import { postponementReasonLabel } from '../domain/postponement';
 import type { PostponementReason } from '../domain/postponement';
 import { formatLongNewYorkDate } from '../domain/time';
+import { visitRelativeDay, visitTimeZone } from '../domain/visitReminders';
+import type {
+  VisitRecipientRole,
+  VisitReminderCandidate,
+} from '../domain/visitReminders';
 
 function escapeHtml(value: string): string {
   return value
@@ -13,7 +19,59 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
+export function buildVisitReminderEmail(
+  row: VisitReminderCandidate,
+  role: VisitRecipientRole,
+  now: Date
+): { subject: string; text: string; html: string } {
+  const timeZone = visitTimeZone(row.timeZone);
+  const time = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  }).format(row.startAt);
+  const date = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(row.startAt);
+  const first = displayFirstName(
+    role === 'client' ? row.doulaFirstName : row.clientFirstName
+  );
+  const subject =
+    role === 'client'
+      ? `Reminder: your visit with ${first} ${visitRelativeDay(row, now)} at ${time}`
+      : `Reminder: visit with ${first} ${visitRelativeDay(row, now)} at ${time}`;
+  const detail =
+    role === 'client'
+      ? `Need to reschedule? Reply to this email or contact ${CONTACT_EMAIL}.`
+      : buildAuthenticatedCrmClientUrl(process.env.FRONTEND_URL, row.clientId);
+  const text = `${subject}\n\n${date} at ${time}\n\n${detail}`;
+  const html =
+    `<p>${escapeHtml(subject)}</p><p>${escapeHtml(date)} at ${escapeHtml(time)}</p>` +
+    (role === 'client'
+      ? `<p>${escapeHtml(detail)}</p>`
+      : `<p><a href="${escapeHtml(detail)}">Open client in Sokana360</a></p>`);
+  return { subject, text, html };
+}
+
 export class NotificationEmail {
+  async sendVisitReminder(
+    row: VisitReminderCandidate,
+    role: VisitRecipientRole,
+    now: Date
+  ): Promise<void> {
+    const to = role === 'client' ? row.clientEmail : row.doulaEmail;
+    if (!to) throw new Error('Missing visit recipient');
+    const message = buildVisitReminderEmail(row, role, now);
+    await this.mail.sendEmail(to, message.subject, message.text, message.html, {
+      replyTo: CONTACT_EMAIL,
+    });
+  }
+
   constructor(private readonly mail = new NodemailerService()) {}
 
   async sendContractSignBy(input: {

@@ -1,10 +1,11 @@
-import { execFileSync, spawn } from 'child_process';
 import { readFileSync } from 'fs';
-import { Pool } from 'pg';
 import { resolve } from 'path';
+import { Pool } from 'pg';
 
-import { CloudSqlSchedulingStore } from './schedulingStore';
+import { execFileSync, spawn } from 'child_process';
+
 import { SchedulingConflictError } from '../application/schedulingService';
+import { CloudSqlSchedulingStore } from './schedulingStore';
 
 const DOULA_ID = '11111111-1111-4111-8111-111111111111';
 const CLIENT_ID = '22222222-2222-4222-8222-222222222222';
@@ -180,7 +181,10 @@ describe('scheduling Cloud SQL integration', () => {
       })
     ).rejects.toMatchObject({ code: 'BOOKING_OUTSIDE_WINDOW' });
 
-    const windows = await store.listAvailabilityIntervals(DOULA_ID, 'available');
+    const windows = await store.listAvailabilityIntervals(
+      DOULA_ID,
+      'available'
+    );
     expect(windows).toHaveLength(1);
     expect(await store.assignmentIsActive(CLIENT_ID, DOULA_ID)).toBe(true);
     expect(await store.isClientInContractStage(CLIENT_ID)).toBe(true);

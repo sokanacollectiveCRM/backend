@@ -59,27 +59,41 @@ This file is intentionally updateable as frontend work finishes.
 ## Preflight Update 2026-10-12 (notification rules)
 
 ### Task
-- Set Sokana360 notification rules in the backend. Rules are fixed in code. No editor UI. One pull request against main, not merged. Test API only.
+
+- Set Sokana360 notification rules in the backend. Rules are fixed in code. No
+  editor UI. One pull request against main, not merged. Test API only.
 
 ### Files Scanned
-- `frontend-crm` has no notification-rules screen and no dashboard notices client.
-- `src/features/contracts/application/contractService.ts` (contract-sent email and signing link)
+
+- `frontend-crm` has no notification-rules screen and no dashboard notices
+  client.
+- `src/features/contracts/application/contractService.ts` (contract-sent email
+  and signing link)
 - `src/features/dashboard/http/dashboardRoutes.ts` (stats only; no alert list)
-- `src/features/clients/http/clientController.ts` (notes are `client_activities`)
+- `src/features/clients/http/clientController.ts` (notes are
+  `client_activities`)
 - `src/features/portal/domain/eligibility.ts` (deposit paid statuses)
 
 ### Contract Findings
-- The dashboard does not read a notices API today. Alerts are stored and returned by `GET /api/notifications/notices`.
+
+- The dashboard does not read a notices API today. Alerts are stored and
+  returned by `GET /api/notifications/notices`.
 - Signing links stay on `/signing#invitation=`.
-- Client first name is the only personal detail these emails use. Note text and birth-outcome answers stay out of email.
+- Client first name is the only personal detail these emails use. Note text and
+  birth-outcome answers stay out of email.
 
 ### Drift Risk
-- A later dashboard list must use `GET /api/notifications/notices`. Rule timings are not editable.
+
+- A later dashboard list must use `GET /api/notifications/notices`. Rule timings
+  are not editable.
 
 ### Required Compatibility
-- Existing contract send, note create, and headshot update responses stay the same. Notification work is additional.
+
+- Existing contract send, note create, and headshot update responses stay the
+  same. Notification work is additional.
 
 ### Action
+
 - [x] Context updated
 - [x] Implementation started
 
@@ -6265,21 +6279,21 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 ### Task
 
 - Build the backend half of the Sokana360 pilot scheduling MVP
-  (`/api/scheduling/*`) so a separate frontend agent can implement
-  Schedule / Book visit / Admin Visits against a locked contract.
+  (`/api/scheduling/*`) so a separate frontend agent can implement Schedule /
+  Book visit / Admin Visits against a locked contract.
 
 ### Gate
 
 - `run_preflight`
-- Handoff inbox: `no_open_handoff_tasks` for `frontend->backend`.
-  Open files are older architecture / Supabase-exit tickets, not scheduling.
-  User explicitly requested this backend MVP.
+- Handoff inbox: `no_open_handoff_tasks` for `frontend->backend`. Open files are
+  older architecture / Supabase-exit tickets, not scheduling. User explicitly
+  requested this backend MVP.
 
 ### Files Scanned
 
 Frontend repo is **not** in this workspace (expected path
-`/Users/jerrybony/Documents/GitHub/sokana-crm-frontend/frontend-crm`).
-Scanned backend consumers and the living frontend notes instead:
+`/Users/jerrybony/Documents/GitHub/sokana-crm-frontend/frontend-crm`). Scanned
+backend consumers and the living frontend notes instead:
 
 - Prior notes: `doulaService.ts` availability CRUD
   (`{ success, records|record }`, camelCase `startAt`/`endAt`)
@@ -6288,19 +6302,20 @@ Scanned backend consumers and the living frontend notes instead:
 - Prior notes: `ProfileTab.tsx` upserts one `unavailable` row; saving
   "Available" deletes every unavailable record (frontend must fix)
 - Prior notes: `ClientProfileTab.tsx` uses `GET /clients/:id/assigned-doulas`
-  + `canClientViewDoulaScheduling`; does **not** call booking-requests
+  - `canClientViewDoulaScheduling`; does **not** call booking-requests
 - Prior notes: Playwright stubs in `e2e/helpers/doulaE2eStubs.ts`
 - Backend: `src/features/matching/infrastructure/doulaAvailabilityService.ts`
 - Backend: `src/features/clients/http/clientController.ts`
   `createDoulaBookingRequest`
 - Backend: `src/features/doulas/http/doulaRoutes.ts` availability CRUD
-- Backend: `src/features/assignments/notifications/doulaAssignmentNotificationEmail.ts`
+- Backend:
+  `src/features/assignments/notifications/doulaAssignmentNotificationEmail.ts`
 
 ### Contract Findings
 
 - Existing availability CRUD stays at `/api/doulas/availability*`.
-- Existing `POST /clients/:id/assigned-doulas/:doulaId/booking-requests`
-  returns `201 { success: true, bookingRequest }` and is **unchanged**.
+- Existing `POST /clients/:id/assigned-doulas/:doulaId/booking-requests` returns
+  `201 { success: true, bookingRequest }` and is **unchanged**.
 - Frontend currently has no `/api/scheduling` client. `docs/SCHEDULING_MVP.md`
   is the source of truth for the frontend agent.
 - Auth: doula `req.user.id` is `public.doulas.id`; client `req.user.id` is
@@ -6311,11 +6326,11 @@ Scanned backend consumers and the living frontend notes instead:
 
 ### Drift Risk
 
-- If the frontend agent invents different paths or wrappers, the pilot UI
-  will 404 / fail to parse.
-- `BOOKING_REQUIRE_CONTRACT_STAGE` defaults to `true`. Pilot clients without
-  a `phi_contracts` row get `403` `CONTRACT_STAGE_REQUIRED` unless Jerry sets
-  the flag to `false` on **dev**.
+- If the frontend agent invents different paths or wrappers, the pilot UI will
+  404 / fail to parse.
+- `BOOKING_REQUIRE_CONTRACT_STAGE` defaults to `true`. Pilot clients without a
+  `phi_contracts` row get `403` `CONTRACT_STAGE_REQUIRED` unless Jerry sets the
+  flag to `false` on **dev**.
 - ProfileTab blackout wipe is a **frontend** bug.
 
 ### Required Compatibility

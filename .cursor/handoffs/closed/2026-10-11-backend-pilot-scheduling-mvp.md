@@ -39,10 +39,8 @@ overlap checks, and emails did not.
 
 ## Completion Summary
 
-Implemented `src/features/scheduling/` mounted at `/api/scheduling`.
-Contract: `docs/SCHEDULING_MVP.md`. Fixture:
-`scripts/dev-env/seed-scheduling-fixture.ts` (dev-only guard).
-Emails: PHI-minimized builders; notes never logged or mailed.
-Integration test applied
-`add_doula_availability_and_scheduling_cloudsql.sql` against local Postgres
-and confirmed overlap 409.
+Implemented `src/features/scheduling/` mounted at `/api/scheduling`. Contract:
+`docs/SCHEDULING_MVP.md`. Fixture: `scripts/dev-env/seed-scheduling-fixture.ts`
+(dev-only guard). Emails: PHI-minimized builders; notes never logged or mailed.
+Integration test applied `add_doula_availability_and_scheduling_cloudsql.sql`
+against local Postgres and confirmed overlap 409.

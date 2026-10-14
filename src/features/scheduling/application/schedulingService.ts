@@ -196,7 +196,9 @@ export class SchedulingService {
     }
 
     if (input.actor.role === 'doula' && existing.doulaId !== input.actor.id) {
-      throw new AuthorizationError('Forbidden: cannot update another doula visit');
+      throw new AuthorizationError(
+        'Forbidden: cannot update another doula visit'
+      );
     }
     if (input.actor.role === 'client') {
       const ownClientId = await this.requireOwnClientId(input.actor);
@@ -275,7 +277,12 @@ export class SchedulingService {
           clientNumber: client?.clientNumber,
         });
         sends.push(
-          this.mail.sendEmail(doula.email, content.subject, content.text, content.html)
+          this.mail.sendEmail(
+            doula.email,
+            content.subject,
+            content.text,
+            content.html
+          )
         );
       }
 
@@ -311,7 +318,12 @@ export class SchedulingService {
           clientNumber: client?.clientNumber,
         });
         sends.push(
-          this.mail.sendEmail(doula.email, content.subject, content.text, content.html)
+          this.mail.sendEmail(
+            doula.email,
+            content.subject,
+            content.text,
+            content.html
+          )
         );
       }
 

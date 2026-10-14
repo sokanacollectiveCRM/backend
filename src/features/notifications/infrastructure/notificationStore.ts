@@ -1,6 +1,7 @@
 import { queryCloudSql } from '../../../db/cloudSqlPool';
 import { PAID_INSTALLMENT_STATUSES } from '../../portal/domain/eligibility';
 import type { PostponementReason } from '../domain/postponement';
+import type { VisitReminderCandidate } from '../domain/visitReminders';
 
 export interface SigningCandidate {
   contractId: string;
@@ -42,6 +43,56 @@ export interface NoteCandidate {
 const PAID = [...PAID_INSTALLMENT_STATUSES];
 
 export class NotificationStore {
+  /** Joins establish owner tenancy even on legacy booking tables without tenant_id. */
+  async listVisitCandidates(
+    now: Date,
+    bookingId?: string,
+    tenantId?: string
+  ): Promise<VisitReminderCandidate[]> {
+    const { rows } = await queryCloudSql<VisitReminderCandidate>(
+      `
+      SELECT b.id AS "bookingId", c.tenant_id AS "tenantId", b.client_id AS "clientId", b.doula_id AS "doulaId",
+        b.start_at AS "startAt", b.created_at AS "createdAt", b.status,
+        c.email AS "clientEmail", c.first_name AS "clientFirstName",
+        d.email AS "doulaEmail", COALESCE(to_jsonb(d)->>'first_name', split_part(d.full_name, ' ', 1)) AS "doulaFirstName",
+        COALESCE(to_jsonb(ts)->>'timezone', to_jsonb(ts)->>'time_zone', 'America/Chicago') AS "timeZone",
+        EXISTS (SELECT 1 FROM public.client_postponements p WHERE p.client_id=c.id AND p.status='active') AS postponed
+      FROM public.doula_booking_requests b
+      JOIN public.phi_clients c ON c.id=b.client_id
+      JOIN public.doulas d ON d.id=b.doula_id AND d.tenant_id=c.tenant_id
+      LEFT JOIN public.tenant_settings ts ON ts.tenant_id=c.tenant_id
+      WHERE b.status='approved' AND b.start_at>$1 AND b.start_at<=$1::timestamptz + interval '24 hours'
+        AND ($2::uuid IS NULL OR b.id=$2::uuid) AND ($3::uuid IS NULL OR c.tenant_id=$3::uuid)
+    `,
+      [now, bookingId ?? null, tenantId ?? null]
+    );
+    return rows;
+  }
+
+  /** Visit sends are at most once, including ambiguous SMTP failures. */
+  async claimVisit(input: {
+    dedupeKey: string;
+    ruleId: string;
+    role: string;
+    bookingId: string;
+    tenantId: string;
+  }): Promise<boolean> {
+    const { rows } = await queryCloudSql(
+      `INSERT INTO public.notification_deliveries
+      (dedupe_key, rule_id, channel, subject_type, subject_id, status, tenant_id)
+      VALUES ($1,$2,$3,'booking',$4::uuid,'pending',$5::uuid)
+      ON CONFLICT (dedupe_key) DO NOTHING RETURNING id`,
+      [
+        input.dedupeKey,
+        input.ruleId,
+        `email_${input.role}`,
+        input.bookingId,
+        input.tenantId,
+      ]
+    );
+    return rows.length > 0;
+  }
+
   async isKilled(): Promise<boolean> {
     if (process.env.NOTIFICATION_RULES_KILL_SWITCH === 'true') return true;
     const { rows } = await queryCloudSql<{ kill_switch: boolean }>(
