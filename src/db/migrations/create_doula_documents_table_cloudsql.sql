@@ -27,13 +27,15 @@ BEGIN
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       CONSTRAINT doula_documents_document_type_check
         CHECK (document_type IN (
-          'background_check',
-          'liability_insurance_certificate',
           'training_certificate',
-          'w9',
-          'direct_deposit_form',
+          'liability_insurance_certificate',
+          'illinois_medicaid_certification',
+          'miscellaneous',
           'license',
-          'other'
+          'other',
+          'background_check',
+          'w9',
+          'direct_deposit_form'
         )),
       CONSTRAINT doula_documents_status_check
         CHECK (status IN ('uploaded', 'approved', 'rejected'))

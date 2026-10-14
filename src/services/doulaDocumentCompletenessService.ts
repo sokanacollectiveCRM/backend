@@ -1,8 +1,8 @@
-import { DoulaDocumentRepository } from '../repositories/doulaDocumentRepository';
 import {
   REQUIRED_DOULA_DOCUMENT_TYPES,
   type RequiredDoulaDocumentType,
 } from '../constants/doulaDocuments';
+import { DoulaDocumentRepository } from '../repositories/doulaDocumentRepository';
 
 export interface DocumentStatusItem {
   documentType: RequiredDoulaDocumentType;
@@ -24,13 +24,15 @@ export interface DocumentCompletenessSummary {
 
 /**
  * Computes document completeness for a doula.
- * Active requires all 5 required documents to be approved.
+ * Active requires every document in REQUIRED_DOULA_DOCUMENT_TYPES to be approved.
+ * Optional and retired rows do not affect canBeActive.
  */
 export class DoulaDocumentCompletenessService {
   constructor(private documentRepository: DoulaDocumentRepository) {}
 
   async getCompleteness(doulaId: string): Promise<DocumentCompletenessSummary> {
-    const currentDocs = await this.documentRepository.getCurrentDocumentsByDoulaId(doulaId);
+    const currentDocs =
+      await this.documentRepository.getCurrentDocumentsByDoulaId(doulaId);
     const docByType = new Map<string, (typeof currentDocs)[0]>();
     for (const doc of currentDocs) {
       docByType.set(doc.documentType, doc);
@@ -42,7 +44,9 @@ export class DoulaDocumentCompletenessService {
     for (const type of REQUIRED_DOULA_DOCUMENT_TYPES) {
       const doc = docByType.get(type);
       const status: DocumentStatusItem['status'] = doc
-        ? (doc.status === 'pending' ? 'uploaded' : doc.status)
+        ? doc.status === 'pending'
+          ? 'uploaded'
+          : doc.status
         : 'missing';
 
       items.push({

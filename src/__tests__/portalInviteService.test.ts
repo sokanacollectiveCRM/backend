@@ -123,7 +123,7 @@ describe('PortalInviteService', () => {
     );
     expect(sendPortalInviteEmail).toHaveBeenCalledWith(
       'jane@example.com',
-      'Jane Doe',
+      'Jane',
       'https://portal.example/auth/set-password?mode=resetPassword&oobCode=code-1'
     );
     expect(repository.markInvited).toHaveBeenCalledWith(clientId, authUserId);
