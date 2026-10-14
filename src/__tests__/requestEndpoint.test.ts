@@ -372,19 +372,23 @@ describe('Request Endpoint Tests', () => {
       const confirmationEmailCall = mockSendMail.mock.calls[1][0];
       expect(confirmationEmailCall.to).toBe('jane.doe@example.com');
       expect(confirmationEmailCall.subject).toBe(
-        "Request Received - We're Working on Your Match"
+        'We Received Your Request for Services'
       );
       expect(confirmationEmailCall.text).toContain(
-        'Thank you for submitting your request for doula services'
+        'Thank you for submitting a request for services with Sokana Collective.'
       );
       expect(confirmationEmailCall.text).toContain(
-        'We have received your information and are working on finding the perfect match for you'
+        'We have received your request and our team is working on your match.'
       );
       expect(confirmationEmailCall.text).not.toContain('Dear Jane');
-      expect(confirmationEmailCall.html).toContain('Request Received');
+      expect(confirmationEmailCall.html).toContain('Hi Jane,');
+      expect(confirmationEmailCall.replyTo).toBe('hello@sokanacollective.com');
+      expect(mockQuery.mock.invocationCallOrder[0]).toBeLessThan(
+        mockSendMail.mock.invocationCallOrder[1]
+      );
       expect(confirmationEmailCall.html).not.toContain('Dear Jane');
       expect(confirmationEmailCall.html).toContain(
-        'Thank you for submitting your request for doula services'
+        'Thank you for submitting a request for services with Sokana Collective.'
       );
     });
   });
