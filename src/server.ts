@@ -16,6 +16,10 @@ import {
   getAllowedOrigins,
   nativeContracts,
 } from './config/env';
+import {
+  createNotificationRoutes,
+  createNotificationTickRouter,
+} from './features/notifications/http/routes';
 import { authController } from './index';
 import { validateBody } from './middleware/validateRequest';
 import emailRoutes from './routes/EmailRoutes';
@@ -125,6 +129,8 @@ app.post(
   (req, res) => authController.login(req, res)
 );
 app.use('/auth', asMiddleware(authRoutes));
+app.use('/internal/cron', createNotificationTickRouter());
+app.use('/api/notifications', createNotificationRoutes());
 if (nativeContracts.enabled) {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const native = require('./features/contracts/composition');
@@ -155,6 +161,10 @@ app.use('/requestService', asMiddleware(requestRouter));
 app.use(
   '/api/intake-forms',
   asMiddleware(require('./features/intake/http/intakeFormRoutes').default)
+);
+app.use(
+  '/api/scheduling',
+  asMiddleware(require('./features/scheduling/http/schedulingRoutes').default)
 );
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires

@@ -185,7 +185,7 @@ describe('DoulaController.renameDocument', () => {
     const updateDocumentMetadata = jest.fn().mockResolvedValue({
       id: documentId,
       doulaId: ownerId,
-      documentType: 'w9',
+      documentType: 'illinois_medicaid_certification',
       fileName: 'old-name.pdf',
       uploadedAt: new Date('2026-03-20T10:00:00.000Z'),
       updatedAt: new Date('2026-03-24T15:30:00.000Z'),
@@ -198,7 +198,7 @@ describe('DoulaController.renameDocument', () => {
     const req = {
       user: { id: ownerId, email: 'doula@example.com', role: 'doula' },
       params: { documentId },
-      body: { document_type: 'w9' },
+      body: { document_type: 'illinois_medicaid_certification' },
     } as unknown as AuthRequest;
     const res = buildRes();
 
@@ -209,14 +209,36 @@ describe('DoulaController.renameDocument', () => {
       success: true,
       document: expect.objectContaining({
         id: documentId,
-        document_type: 'w9',
+        document_type: 'illinois_medicaid_certification',
         file_name: 'old-name.pdf',
       }),
     });
     expect(updateDocumentMetadata).toHaveBeenCalledWith(documentId, {
       fileName: undefined,
-      documentType: 'w9',
+      documentType: 'illinois_medicaid_certification',
     });
+  });
+
+  it('returns 400 when changing a document to a retired type', async () => {
+    const updateDocumentMetadata = jest.fn();
+    const controller = buildController({
+      getDocumentById: jest.fn(),
+      updateDocumentMetadata,
+    });
+    const req = {
+      user: { id: ownerId, email: 'doula@example.com', role: 'doula' },
+      params: { documentId },
+      body: { document_type: 'w9' },
+    } as unknown as AuthRequest;
+    const res = buildRes();
+
+    await controller.renameDocument(req, res as any);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      error: expect.stringMatching(/no longer accepted/i),
+    });
+    expect(updateDocumentMetadata).not.toHaveBeenCalled();
   });
 
   it('returns 400 when neither file_name nor document_type is provided', async () => {

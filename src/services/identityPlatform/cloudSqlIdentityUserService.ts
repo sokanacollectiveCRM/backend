@@ -151,7 +151,7 @@ const PROFILE_QUERY = `
       3
     FROM public.phi_clients c
     WHERE c.identity_platform_uid = $1
-       OR ($2::uuid IS NOT NULL AND (c.user_id = $2::uuid OR c.id = $2::uuid))
+       OR ($2::uuid IS NOT NULL AND (c.user_id::text = $2::text OR c.id = $2::uuid))
        OR ($3::text IS NOT NULL AND lower(c.email) = $3::text)
   )
   SELECT

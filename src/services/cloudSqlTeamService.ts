@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 
 import { getPool } from '../db/cloudSqlPool';
+import type { Certification } from '../features/doulas/domain/profile';
 import { DoulaAvailabilityService } from './doulaAvailabilityService';
 import {
   resolveProfilePictureFields,
@@ -22,6 +23,8 @@ export interface TeamMemberDto {
   state: string | null;
   country: string | null;
   zip_code: string | null;
+  certifications?: Certification[] | null;
+  profile_submitted_at?: string | null;
   bio?: string | null;
   profile_picture?: string | null;
   gender?: string | null;
@@ -52,6 +55,8 @@ interface DoulaRow {
   state?: string | null;
   country?: string | null;
   zip_code?: string | null;
+  certifications?: Certification[] | null;
+  profile_submitted_at?: string | null;
   bio?: string | null;
   profile_picture?: string | null;
   gender?: string | null;
@@ -134,6 +139,8 @@ function mapRow(row: DoulaRow): TeamMemberDto {
     state: row.state ?? null,
     country: row.country ?? null,
     zip_code: row.zip_code ?? null,
+    certifications: row.certifications ?? [],
+    profile_submitted_at: row.profile_submitted_at ?? null,
     bio: row.bio ?? null,
     profile_picture: row.profile_picture ?? null,
     gender: row.gender ?? null,
@@ -270,7 +277,7 @@ export class CloudSqlTeamService {
     const { rows } = await pool.query<DoulaRow>(
       `
       SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, scheduling_url,
-             gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details,
+             certifications, profile_submitted_at, gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details,
              created_at, updated_at
       FROM public.doulas
       WHERE lower(email) = $1
@@ -286,7 +293,7 @@ export class CloudSqlTeamService {
     const { rows } = await pool.query<DoulaRow>(
       `
       SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, scheduling_url,
-             gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details,
+             certifications, profile_submitted_at, gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details,
              created_at, updated_at
       FROM public.doulas
       WHERE id = $1::uuid
@@ -453,6 +460,7 @@ export class CloudSqlTeamService {
       country?: string | null;
       zip_code?: string | null;
       account_status?: string;
+      certifications?: Certification[];
       bio?: string | null;
       gender?: string | null;
       pronouns?: string | null;
@@ -584,10 +592,11 @@ export class CloudSqlTeamService {
           other_demographic_details = $16,
           scheduling_url = $17,
           profile_picture = $18,
+          certifications = COALESCE($20::jsonb, certifications),
           updated_at = NOW()
       WHERE id = $19::uuid
       RETURNING id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture,
-               gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details, scheduling_url,
+               certifications, profile_submitted_at, gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details, scheduling_url,
                 created_at, updated_at
       `,
       [
@@ -610,6 +619,9 @@ export class CloudSqlTeamService {
         schedulingUrl,
         profilePicture,
         id,
+        input.certifications === undefined
+          ? null
+          : JSON.stringify(input.certifications),
       ]
     );
     return this.withResolvedProfilePicture(rows[0] ? mapRow(rows[0]) : null);
@@ -660,6 +672,16 @@ export class CloudSqlTeamService {
       `,
       [profilePictureUrl, doulaId]
     );
+    if ((result.rowCount ?? 0) > 0) {
+      try {
+        const { recordHeadshotNotice } = await import(
+          '../features/notifications/application/eventNotices'
+        );
+        await recordHeadshotNotice(doulaId);
+      } catch {
+        // A missing notice table must not block the headshot save.
+      }
+    }
     return (result.rowCount ?? 0) > 0;
   }
 
