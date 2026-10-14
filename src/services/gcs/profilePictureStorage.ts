@@ -67,6 +67,19 @@ export async function resolveProfilePictureFields<
   );
 }
 
+/**
+ * Replace a stored profile_picture path with a displayable URL in place.
+ * Used by auth responses before `user.toJSON()`.
+ */
+export async function attachDisplayProfilePicture(user: {
+  profile_picture?: unknown;
+}): Promise<void> {
+  const stored =
+    typeof user.profile_picture === 'string' ? user.profile_picture : null;
+  (user as { profile_picture: string | null }).profile_picture =
+    await resolveProfilePictureUrl(stored);
+}
+
 export async function uploadProfilePictureObject(
   userId: string,
   file: MulterFile

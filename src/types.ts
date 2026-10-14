@@ -2,6 +2,7 @@ import { Request } from 'express';
 import type { File as MulterFile } from 'multer';
 
 import { User } from './entities/User';
+import type { TenantView } from './features/tenancy';
 
 export enum ServiceTypes {
   LABOR_SUPPORT = 'Labor Support',
@@ -78,6 +79,7 @@ export enum IncomeLevel {
 export interface AuthRequest extends Request {
   user?: User;
   file?: MulterFile;
+  tenant?: TenantView;
 }
 
 export interface UpdateRequest extends Request {
