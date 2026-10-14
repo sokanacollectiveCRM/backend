@@ -34,9 +34,10 @@ export async function submitDoulaProfile(
       );
     }
     const certificate = await client.query(
-      `SELECT 1 FROM public.doula_documents
-      WHERE doula_id=$1::text AND tenant_id=$2::uuid AND document_type='training_certificate'
-      AND status IN ('uploaded','approved') AND NULLIF(file_path, '') IS NOT NULL LIMIT 1`,
+      `SELECT 1 FROM public.doula_documents doc
+      JOIN public.doulas owner ON owner.id::text=doc.doula_id
+      WHERE doc.doula_id=$1::text AND owner.tenant_id=$2::uuid AND doc.document_type='training_certificate'
+      AND doc.status IN ('uploaded','approved') AND NULLIF(doc.file_path, '') IS NOT NULL LIMIT 1`,
       [doulaId, tenantId]
     );
     if (!certificate.rowCount)

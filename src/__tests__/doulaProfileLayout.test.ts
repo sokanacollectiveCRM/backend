@@ -137,6 +137,10 @@ describe('submission for review', () => {
         'doula-profile-submitted:tenant:doula',
       ]
     );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('owner.tenant_id=$2::uuid'),
+      ['doula', 'tenant']
+    );
     expect(query).toHaveBeenCalledWith('COMMIT');
   });
   it('does not notify again on repeated submission', async () => {

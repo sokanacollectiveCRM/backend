@@ -67,6 +67,7 @@ export class DoulaDocumentRepository {
       `
       INSERT INTO public.doula_documents (
         doula_id,
+        tenant_id,
         document_type,
         file_name,
         file_path,
@@ -76,7 +77,8 @@ export class DoulaDocumentRepository {
         notes,
         status
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'uploaded')
+      SELECT $1, owner.tenant_id, $2, $3, $4, $5, $6, $7, $8, 'uploaded'
+      FROM public.doulas owner WHERE owner.id::text = $1
       RETURNING *
       `,
       [
