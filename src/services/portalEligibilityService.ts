@@ -40,7 +40,8 @@ export class PortalEligibilityService {
   }
 
   getPortalEligibility(clientId: string): Promise<PortalEligibilitySnapshot> {
-    return this.computeAndPersist(clientId);
+    // Reading portal readiness must not send invitations. Event recomputations use computeAndPersist.
+    return computeAndPersistPortalEligibility(this.deps, clientId);
   }
 
   getPortalEligibilityBatch(
