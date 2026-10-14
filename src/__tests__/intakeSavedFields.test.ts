@@ -18,9 +18,12 @@ it('writes family name, contacts, requested services, due date and notes in the 
     email: 'jerry+family@example.com',
     phone_number: '5551234567',
     address: '1 Fictional Lane',
+    city: 'Chicago',
+    state: 'IL',
+    zip_code: '60601',
     service_needed: 'Labor Support',
     services_interested: ['Labor Support'],
-    due_date: '2027-03-15',
+    due_date: new Date('2027-03-15T00:00:00Z'),
     health_notes: 'Fictional notes',
     service_support_details: 'Fictional service preferences',
   } as RequestFormData);
