@@ -52,17 +52,15 @@ describe('profile layout validation', () => {
   it('PUT ignores unknown keys and cannot set approval or submission state', async () => {
     const c = Object.create(DoulaController.prototype) as any;
     c.cloudSqlTeamService = {
-      updateTeamMember: jest
-        .fn()
-        .mockResolvedValue({
-          id: 'doula',
-          role: 'doula',
-          ...complete,
-          fullName: 'Maya Rivers',
-          certifications: [],
-          created_at: '2026-01-01',
-          updated_at: '2026-01-01',
-        }),
+      updateTeamMember: jest.fn().mockResolvedValue({
+        id: 'doula',
+        role: 'doula',
+        ...complete,
+        fullName: 'Maya Rivers',
+        certifications: [],
+        created_at: '2026-01-01',
+        updated_at: '2026-01-01',
+      }),
     };
     c.doulaAvailabilityService = {
       getCurrentAvailabilityStatus: jest

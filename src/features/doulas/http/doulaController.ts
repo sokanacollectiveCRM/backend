@@ -1756,14 +1756,12 @@ export class DoulaController {
           : error instanceof NotFoundError
             ? 404
             : 500;
-      res
-        .status(status)
-        .json({
-          error:
-            status === 500
-              ? 'Could not submit your profile. Please try again.'
-              : (error as Error).message,
-        });
+      res.status(status).json({
+        error:
+          status === 500
+            ? 'Could not submit your profile. Please try again.'
+            : (error as Error).message,
+      });
     }
   }
 
