@@ -448,6 +448,8 @@ export class ContractRepository {
              unsigned_document_path = $2,
              unsigned_document_hash = $3, unsigned_document_generation = $4,
              sent_at = COALESCE(sent_at, CURRENT_TIMESTAMP),
+             signing_window_started_at = COALESCE(signing_window_started_at, CURRENT_TIMESTAMP),
+             signing_window_phase = COALESCE(signing_window_phase, 'standard'),
              updated_at = CURRENT_TIMESTAMP
          WHERE id = $1::uuid`,
         [

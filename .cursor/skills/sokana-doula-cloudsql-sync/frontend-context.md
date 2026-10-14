@@ -56,6 +56,30 @@ This file is intentionally updateable as frontend work finishes.
 
 ### Action
 
+## Preflight Update 2026-10-12 (notification rules)
+
+### Task
+- Set Sokana360 notification rules in the backend. Rules are fixed in code. No editor UI. One pull request against main, not merged. Test API only.
+
+### Files Scanned
+- `frontend-crm` has no notification-rules screen and no dashboard notices client.
+- `src/features/contracts/application/contractService.ts` (contract-sent email and signing link)
+- `src/features/dashboard/http/dashboardRoutes.ts` (stats only; no alert list)
+- `src/features/clients/http/clientController.ts` (notes are `client_activities`)
+- `src/features/portal/domain/eligibility.ts` (deposit paid statuses)
+
+### Contract Findings
+- The dashboard does not read a notices API today. Alerts are stored and returned by `GET /api/notifications/notices`.
+- Signing links stay on `/signing#invitation=`.
+- Client first name is the only personal detail these emails use. Note text and birth-outcome answers stay out of email.
+
+### Drift Risk
+- A later dashboard list must use `GET /api/notifications/notices`. Rule timings are not editable.
+
+### Required Compatibility
+- Existing contract send, note create, and headshot update responses stay the same. Notification work is additional.
+
+### Action
 - [x] Context updated
 - [x] Implementation started
 
