@@ -339,7 +339,7 @@ export class CloudSqlTeamService {
         id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, scheduling_url, created_at, updated_at
       )
       VALUES (
-        COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, 'approved', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NOW(), NOW()
+        COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, 'pending', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NOW(), NOW()
       )
       RETURNING id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, scheduling_url, created_at, updated_at
       `,
