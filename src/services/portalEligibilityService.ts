@@ -9,6 +9,7 @@ import {
   getCachedPortalEligibilityBatch,
   loadOnboardingGates,
 } from '../features/portal';
+import { maybeAutoInviteFamily } from '../features/portal/application/maybeAutoInviteFamily';
 import { createPortalEligibilityDeps } from '../features/portal/composition';
 
 export type { InviteEligibility, OnboardingGateSnapshot };
@@ -25,11 +26,17 @@ export class PortalEligibilityService {
     return loadOnboardingGates(this.deps, clientId);
   }
 
-  computeAndPersist(
+  async computeAndPersist(
     clientId: string,
     options?: ComputeAndPersistOptions
   ): Promise<PortalEligibilitySnapshot> {
-    return computeAndPersistPortalEligibility(this.deps, clientId, options);
+    const snapshot = await computeAndPersistPortalEligibility(
+      this.deps,
+      clientId,
+      options
+    );
+    await maybeAutoInviteFamily(clientId, snapshot);
+    return snapshot;
   }
 
   getPortalEligibility(clientId: string): Promise<PortalEligibilitySnapshot> {

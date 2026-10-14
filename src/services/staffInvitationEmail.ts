@@ -20,7 +20,7 @@ export function buildStaffInvitationEmail(input: {
 }): { subject: string; text: string; html: string } {
   const supportEmail = 'hello@sokanacollective.com';
   const introduction =
-    'You’ve been invited to set up your account in Sokana360, Sokana Collective’s new platform for managing doula information, services, and assignments.';
+    "You've been invited to set up your account in Sokana360, Sokana Collective's new platform for managing doula information, services, and assignments.";
   const steps = [
     [
       'Reset your password.',
@@ -45,14 +45,14 @@ export function buildStaffInvitationEmail(input: {
     'If you have questions or need assistance with the setup process, please contact';
   const logoUrl = new URL('/sokana360-logo.png', input.frontendUrl).toString();
   return {
-    subject: 'You’re invited to set up your Sokana360 account',
+    subject: "You're Invited to Set Up Your Sokana360 Account",
     text: `Hi ${input.firstname},\n\n${introduction}\n\nTo complete your account setup:\n\n${steps.map(([title, detail], i) => `${i + 1}. ${title} ${detail}`).join('\n')}\n\nGet started here: ${input.setupUrl}\n\n${reminder}\n\n${assistance} ${supportEmail}\n\nThank you,\n\nSokana360`,
     html: `<div style="font-family: Arial, sans-serif; color: #173d47; font-size: 16px; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 24px;">
       <p>Hi ${escapeHtml(input.firstname)},</p>
       <p>${introduction}</p>
       <p><strong>To complete your account setup:</strong></p>
       <ol style="padding-left: 24px;">${steps.map(([title, detail]) => `<li style="margin-bottom: 12px;"><strong>${title}</strong> ${escapeHtml(detail)}</li>`).join('')}</ol>
-      <p><strong>Get started here:</strong> <a href="${escapeHtml(input.setupUrl)}" style="color: #0f766e; font-weight: bold;">Sokana360 Account Setup</a></p>
+      <p><strong>Get started here:</strong> <a href="${escapeHtml(input.setupUrl)}" style="color: #0f766e; font-weight: bold;">Set up my account</a></p>
       <p>${reminder}</p>
       <p>${assistance} <a href="mailto:${supportEmail}" style="color: #0f766e;">${supportEmail}</a></p>
       <p>Thank you,<br><br>Sokana360</p>

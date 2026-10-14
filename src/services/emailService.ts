@@ -6,6 +6,7 @@ import {
   buildAuthenticatedDoulaClientActivitiesUrl,
   buildDoulaAssignmentNotificationEmail,
 } from '../features/assignments';
+import { buildFamilyInvitationEmail } from '../features/portal/application/familyInvitationEmail';
 import { getLimitedBillingViewUrl } from '../utils/billingViewUrl';
 import { buildStaffPasswordSetupUrl } from './identityPlatform/staffPasswordSetup';
 import { EmailService } from './interface/emailServiceInterface';
@@ -105,7 +106,7 @@ export class NodemailerService implements EmailService {
     subject: string,
     text: string,
     html?: string,
-    options?: { from?: string }
+    options?: { from?: string; replyTo?: string }
   ): Promise<void> {
     // Check if we're in test mode
     if (process.env.USE_TEST_EMAIL === 'true') {
@@ -124,6 +125,7 @@ export class NodemailerService implements EmailService {
           process.env.EMAIL_FROM ||
           'Sokana CRM <hello@sokanacollective.com>',
         to,
+        replyTo: options?.replyTo,
         subject,
         text,
         html: html || undefined,
@@ -550,23 +552,13 @@ The Sokana Team`;
     clientName: string,
     setPasswordUrl: string
   ): Promise<void> {
-    const subject = 'Welcome to Your Sokana Client Portal';
-    const text = `Dear ${clientName},\n\nYou have been invited to access your Sokana client portal. Please set your password using the following link:\n\n${setPasswordUrl}\n\nThis link will expire in 24 hours.\n\nIf you did not request this invitation, please ignore this email.\n\nBest regards,\nThe Sokana Team`;
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #333;">Welcome to Your Sokana Client Portal</h2>
-        <p>Dear ${clientName},</p>
-        <p>You have been invited to access your Sokana client portal. This portal allows you to view your contract details, payment information, and communicate with your doula team.</p>
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${setPasswordUrl}" style="background-color: #4CAF50; color: white; padding: 14px 28px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Set Your Password</a>
-        </div>
-        <p style="color: #666; font-size: 14px;">This link will expire in 24 hours. If you need a new link, please contact your doula or the Sokana team.</p>
-        <p style="color: #999; font-size: 12px; margin-top: 30px;">If you did not request this invitation, please ignore this email.</p>
-        <p style="margin-top: 30px;">Best regards,<br>The Sokana Team</p>
-      </div>
-    `;
-
-    await this.sendEmail(to, subject, text, html);
+    const mail = buildFamilyInvitationEmail({
+      firstName: clientName,
+      setupUrl: setPasswordUrl,
+    });
+    await this.sendEmail(to, mail.subject, mail.text, mail.html, {
+      replyTo: 'hello@sokanacollective.com',
+    });
   }
 
   async sendDoulaInviteEmail(
