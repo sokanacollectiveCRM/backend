@@ -13,6 +13,13 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max for documents
 });
 
+doulaRoutes.post(
+  '/profile/submit',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['doula']),
+  (req, res) => doulaController.submitMyProfile(req, res)
+);
+
 // Profile picture upload: 5MB max, images only
 const profilePictureUpload = multer({
   storage: multer.memoryStorage(),

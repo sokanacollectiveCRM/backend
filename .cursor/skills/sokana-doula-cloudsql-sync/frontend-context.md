@@ -2,6 +2,63 @@
 
 This file is intentionally updateable as frontend work finishes.
 
+## Preflight Update 2026-10-13 (Oct 21 doula documents)
+
+### Task
+
+- Change the doula document set: only `training_certificate` is required.
+  Liability insurance is optional with helper text. Add Illinois Medicaid
+  certification and miscellaneous uploads. Hide retired W9, direct deposit, and
+  background check from the doula portal. Admins still see those rows under
+  Archived documents.
+
+### Files Scanned
+
+- `frontend-crm/src/api/doulas/doulaService.ts`
+- `frontend-crm/src/features/doula-dashboard/components/DocumentsTab.tsx`
+- `frontend-crm/src/features/hours/components/AdminDoulaDocumentsSection.tsx`
+- `frontend-crm/src/features/hours/components/DoulaDetailPage.tsx`
+- `frontend-crm/src/features/teams/teams.tsx`
+- `backend/src/constants/doulaDocuments.ts`
+- `backend/src/services/doulaDocumentCompletenessService.ts`
+- `backend/src/features/doulas/http/doulaController.ts`
+
+### Contract Findings
+
+- `GET /api/doulas/documents` returns `documents` plus `completeness`
+  (`total_required`, `total_complete`, `missing_types`,
+  `has_all_required_documents`, `can_be_active`, `items`).
+- Activation still uses `can_be_active`, which is true only when every required
+  document is approved.
+- The doula portal renders `PORTAL_DOULA_DOCUMENT_TYPES` from
+  `DOULA_DOCUMENT_META` (label, required, helperText, multiple).
+- `POST /api/doulas/documents` rejects retired types with HTTP 400.
+  `miscellaneous` may have more than one row. Other types still replace the
+  current file.
+- Admin `GET /api/admin/doulas/:doulaId/documents` still returns retired rows.
+  The UI groups them under Archived documents.
+
+### Drift Risk
+
+- If the frontend keeps treating W9, direct deposit, background check, or
+  liability insurance as required, a doula with an approved training certificate
+  stays locked.
+- If the database check constraint is not widened, new Illinois Medicaid and
+  miscellaneous uploads fail.
+
+### Required Compatibility
+
+- Stored value stays `training_certificate`. Label is "Doula training
+  certificate".
+- Existing W9, direct deposit, and background check rows stay in the database.
+  New uploads of those types are rejected.
+- `can_be_active` ignores optional and retired documents.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
 ## Preflight Update 2026-10-08 (inbox verification — doula + client)
 
 ### Task

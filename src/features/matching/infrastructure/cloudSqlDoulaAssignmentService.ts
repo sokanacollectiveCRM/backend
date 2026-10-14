@@ -1,4 +1,5 @@
 import { getPool } from '../../../db/cloudSqlPool';
+import { resolveProfilePictureUrl } from '../../../services/gcs/profilePictureStorage';
 import {
   type DoulaAssignmentRole,
   normalizeAssignmentServices,
@@ -41,6 +42,10 @@ export interface CloudSqlAssignedDoula {
     email: string;
     phone_number?: string;
     scheduling_url?: string | null;
+    bio?: string | null;
+    pronouns?: string | null;
+    profile_picture?: string | null;
+    certifications?: string[];
   };
 }
 
@@ -187,6 +192,10 @@ export class CloudSqlDoulaAssignmentService {
       doula_phone: string | null;
       full_name: string | null;
       scheduling_url: string | null;
+      bio: string | null;
+      pronouns: string | null;
+      profile_picture: string | null;
+      certifications: { name: string }[] | null;
     }>(
       `
       SELECT
@@ -198,7 +207,7 @@ export class CloudSqlDoulaAssignmentService {
         d.email AS doula_email,
         d.phone AS doula_phone,
         d.full_name,
-        d.scheduling_url
+        d.scheduling_url, d.bio, d.pronouns, d.profile_picture, d.certifications
       FROM public.doula_assignments da
       LEFT JOIN public.doulas d ON d.id = da.doula_id
       WHERE da.client_id = $1::uuid
@@ -208,27 +217,37 @@ export class CloudSqlDoulaAssignmentService {
       [clientId]
     );
 
-    return rows.map((row) => {
-      const fullName = row.full_name || '';
-      const [first = '', ...rest] = fullName.trim().split(/\s+/);
-      const last = rest.join(' ');
-      const normalizedRole = normalizeDoulaAssignmentRole(row.role);
-      return {
-        id: `${row.client_id}:${row.doula_id}`,
-        doulaId: row.doula_id,
-        services: row.services ?? [],
-        assignedAt: row.assigned_at ? new Date(row.assigned_at) : null,
-        role: normalizedRole,
-        status: 'active',
-        doula: {
-          id: row.doula_id,
-          firstname: first,
-          lastname: last,
-          email: row.doula_email || '',
-          phone_number: row.doula_phone || undefined,
-          scheduling_url: row.scheduling_url ?? null,
-        },
-      };
-    });
+    return Promise.all(
+      rows.map(async (row) => {
+        const fullName = row.full_name || '';
+        const [first = '', ...rest] = fullName.trim().split(/\s+/);
+        const last = rest.join(' ');
+        const normalizedRole = normalizeDoulaAssignmentRole(row.role);
+        return {
+          id: `${row.client_id}:${row.doula_id}`,
+          doulaId: row.doula_id,
+          services: row.services ?? [],
+          assignedAt: row.assigned_at ? new Date(row.assigned_at) : null,
+          role: normalizedRole,
+          status: 'active',
+          doula: {
+            id: row.doula_id,
+            firstname: first,
+            lastname: last,
+            email: row.doula_email || '',
+            phone_number: row.doula_phone || undefined,
+            scheduling_url: row.scheduling_url ?? null,
+            bio: row.bio ?? null,
+            pronouns: row.pronouns ?? null,
+            profile_picture: await resolveProfilePictureUrl(
+              row.profile_picture
+            ),
+            certifications: Array.isArray(row.certifications)
+              ? row.certifications.map((c) => c.name).filter(Boolean)
+              : [],
+          },
+        };
+      })
+    );
   }
 }

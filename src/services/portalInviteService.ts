@@ -121,7 +121,7 @@ export class PortalInviteService {
     const setPasswordUrl = await this.buildSetPasswordUrl(client.email!);
     await this.emailService.sendPortalInviteEmail(
       client.email!,
-      this.getClientDisplayName(client),
+      client.first_name || 'there',
       setPasswordUrl
     );
     return authUserId;
@@ -149,7 +149,22 @@ export class PortalInviteService {
     if (!client.email) {
       throw new ValidationError('Client has no email address');
     }
-    await this.ensureEligible(clientId);
+    if (adminUserId === 'system:auto') {
+      const { snapshot } =
+        await portalEligibilityService.getInviteEligibility(clientId);
+      if (
+        client.portal_status !== 'not_invited' ||
+        !snapshot?.is_eligible ||
+        !snapshot.contract_signed ||
+        !snapshot.deposit_paid
+      ) {
+        throw new ValidationError(
+          'Automatic invitation requirements are not met'
+        );
+      }
+    } else {
+      await this.ensureEligible(clientId);
+    }
     this.assertCanSend(client);
 
     let authUserId: string;
