@@ -35,7 +35,7 @@ export async function submitDoulaProfile(
     }
     const certificate = await client.query(
       `SELECT 1 FROM public.doula_documents
-      WHERE doula_id=$1::uuid AND tenant_id=$2::uuid AND document_type='training_certificate'
+      WHERE doula_id=$1::text AND tenant_id=$2::uuid AND document_type='training_certificate'
       AND status IN ('uploaded','approved') AND NULLIF(file_path, '') IS NOT NULL LIMIT 1`,
       [doulaId, tenantId]
     );
