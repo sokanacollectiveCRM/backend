@@ -162,6 +162,7 @@ app.use(
   '/api/intake-forms',
   asMiddleware(require('./features/intake/http/intakeFormRoutes').default)
 );
+app.use('/api/scheduling', asMiddleware(require('./features/scheduling/http/schedulingRoutes').default));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const paymentMethodRoutes = require('./routes/paymentMethodRoutes').default;
