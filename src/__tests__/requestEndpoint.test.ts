@@ -383,9 +383,9 @@ describe('Request Endpoint Tests', () => {
       expect(confirmationEmailCall.text).not.toContain('Dear Jane');
       expect(confirmationEmailCall.html).toContain('Hi Jane,');
       expect(confirmationEmailCall.replyTo).toBe('hello@sokanacollective.com');
-      expect(mockQuery.mock.invocationCallOrder[0]).toBeLessThan(
-        mockSendMail.mock.invocationCallOrder[1]
-      );
+      expect(
+        (requestFormService.newForm as jest.Mock).mock.invocationCallOrder[0]
+      ).toBeLessThan(mockSendMail.mock.invocationCallOrder[1]);
       expect(confirmationEmailCall.html).not.toContain('Dear Jane');
       expect(confirmationEmailCall.html).toContain(
         'Thank you for submitting a request for services with Sokana Collective.'
