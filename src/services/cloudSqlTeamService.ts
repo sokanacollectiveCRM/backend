@@ -2,6 +2,7 @@ import crypto from 'crypto';
 
 import { getPool } from '../db/cloudSqlPool';
 import type { Certification } from '../features/doulas/domain/profile';
+import { readTenantRequestState } from '../features/tenancy/application/tenantRequestStore';
 import { DoulaAvailabilityService } from './doulaAvailabilityService';
 import {
   resolveProfilePictureFields,
@@ -685,32 +686,90 @@ export class CloudSqlTeamService {
     return (result.rowCount ?? 0) > 0;
   }
 
-  async deleteTeamMember(id: string): Promise<boolean> {
-    const pool = getPool();
-    const result = await pool.query(
-      `
-      DELETE FROM public.doulas
-      WHERE id = $1::uuid
-      `,
-      [id]
-    );
-    if ((result.rowCount ?? 0) > 0) return true;
-
+  async deleteTeamMember(
+    id: string,
+    tenantId = readTenantRequestState().tenantId
+  ): Promise<boolean> {
+    if (!tenantId)
+      throw new Error('A tenant is required to remove a team member');
+    const client = await getPool().connect();
     try {
-      const adminResult = await pool.query(
-        `
-        DELETE FROM public.admins
-        WHERE id = $1::uuid
-        `,
-        [id]
+      await client.query('BEGIN');
+      let table: 'doulas' | 'admins' = 'doulas';
+      let result = await client.query(
+        'SELECT id, email, identity_platform_uid FROM public.doulas WHERE id = $1::uuid AND tenant_id = $2::uuid FOR UPDATE',
+        [id, tenantId]
       );
-      return (adminResult.rowCount ?? 0) > 0;
-    } catch (error) {
-      const msg = (error as Error)?.message || '';
-      if (msg.includes('public.admins') && msg.includes('does not exist')) {
+      if (!result.rows.length) {
+        table = 'admins';
+        result = await client.query(
+          'SELECT id, email, identity_platform_uid FROM public.admins WHERE id = $1::uuid AND tenant_id = $2::uuid FOR UPDATE',
+          [id, tenantId]
+        );
+      }
+      const member = result.rows[0];
+      if (!member) {
+        await client.query('ROLLBACK');
         return false;
       }
+      const auth = getFirebaseAuth();
+      let uid: string | null = member.identity_platform_uid;
+      if (!uid && member.email) {
+        try {
+          uid = (await auth.getUserByEmail(member.email)).uid;
+        } catch (error) {
+          if ((error as { code?: string }).code !== 'auth/user-not-found')
+            throw error;
+        }
+      }
+      // Do not remove a global sign-in identity used by another profile or tenant.
+      const shared = await client.query(
+        `SELECT EXISTS (
+          SELECT 1 FROM public.doulas WHERE id <> $1::uuid AND
+            (identity_platform_uid = $2 OR lower(email) = lower($3))
+          UNION ALL SELECT 1 FROM public.admins WHERE id <> $1::uuid AND
+            (identity_platform_uid = $2 OR lower(email) = lower($3))
+          UNION ALL SELECT 1 FROM public.phi_clients WHERE
+            (identity_platform_uid = $2 OR lower(email) = lower($3))
+          UNION ALL SELECT 1 FROM public.platform_admins WHERE
+            (identity_platform_uid = $2 OR lower(email) = lower($3))
+          UNION ALL SELECT 1 FROM public.memberships WHERE
+            (identity_platform_uid = $2 OR lower(email) = lower($3)) AND
+            (tenant_id <> $4::uuid OR principal_id::text <> $1::text)
+        ) AS shared`,
+        [id, uid, member.email, tenantId]
+      );
+      if (shared.rows[0]?.shared) {
+        throw new Error(
+          'This sign-in account is linked to another profile or organization. Contact support before removing it.'
+        );
+      }
+      await client.query(
+        'DELETE FROM public.memberships WHERE tenant_id = $1::uuid AND principal_id::text = $2',
+        [tenantId, id]
+      );
+      await client.query(
+        `DELETE FROM public.${table} WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+        [id, tenantId]
+      );
+      // Check deferred foreign keys before touching Firebase. A failed Firebase
+      // deletion rolls the SQL removal back, keeping the row available to retry.
+      await client.query('SET CONSTRAINTS ALL IMMEDIATE');
+      if (uid) {
+        try {
+          await auth.deleteUser(uid);
+        } catch (error) {
+          if ((error as { code?: string }).code !== 'auth/user-not-found')
+            throw error;
+        }
+      }
+      await client.query('COMMIT');
+      return true;
+    } catch (error) {
+      await client.query('ROLLBACK');
       throw error;
+    } finally {
+      client.release();
     }
   }
 }
