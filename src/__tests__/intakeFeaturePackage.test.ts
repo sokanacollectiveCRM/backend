@@ -81,6 +81,9 @@ describe('PR 8 intake use case', () => {
         lastname: 'Lovelace',
         email: 'ada@example.com',
         phone_number: '5551234567',
+        due_date: '2027-03-15',
+        health_notes: 'Fictional intake notes',
+        service_specifics: 'Fictional service preferences',
         address: '1 Analytical Eng',
         city: 'London',
         state: 'MA',
@@ -118,6 +121,16 @@ describe('PR 8 intake use case', () => {
     );
 
     expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject({
+      firstname: 'Ada',
+      lastname: 'Lovelace',
+      email: 'ada@example.com',
+      phone_number: '5551234567',
+      service_needed: 'Labor Support',
+      due_date: '2027-03-15',
+      health_notes: 'Fictional intake notes',
+      service_specifics: 'Fictional service preferences',
+    });
     expect(form.id).toBe('lead-1');
     expect(form.email).toBe('ada@example.com');
   });

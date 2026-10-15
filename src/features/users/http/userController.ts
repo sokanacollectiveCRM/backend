@@ -98,7 +98,10 @@ export class UserController {
   async deleteMember(req: AuthRequest, res: Response): Promise<void> {
     try {
       const userId = req.params.id;
-      const removed = await this.cloudSqlTeamService.deleteTeamMember(userId);
+      const removed = await this.cloudSqlTeamService.deleteTeamMember(
+        userId,
+        req.tenant?.id
+      );
       if (!removed) {
         res
           .status(404)

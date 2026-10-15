@@ -248,7 +248,7 @@ export async function acceptStaffInvitation(input: {
         invitation.role === 'doula'
           ? `INSERT INTO public.doulas (
                id, full_name, email, phone, account_status, identity_platform_uid, tenant_id, created_at, updated_at
-             ) VALUES (gen_random_uuid(), $1, $2, NULL, 'approved', $3, $4::uuid, now(), now())
+             ) VALUES (gen_random_uuid(), $1, $2, NULL, 'pending', $3, $4::uuid, now(), now())
              RETURNING id`
           : `INSERT INTO public.admins (
                id, full_name, first_name, last_name, email, identity_platform_uid, tenant_id, created_at, updated_at

@@ -8,7 +8,7 @@
 export const INTAKE_STAFF_NOTIFICATION_SUBJECT = 'New lead submitted';
 
 export const INTAKE_SUBMITTER_CONFIRMATION_SUBJECT =
-  "Request Received - We're Working on Your Match";
+  'We Received Your Request for Services';
 
 /** Clinical / identity markers that must never appear in staff notification content. */
 export const INTAKE_EMAIL_FORBIDDEN_FIELD_LABELS = [
@@ -110,36 +110,30 @@ Do not reply to this message with client details.`;
   };
 }
 
-/**
- * Submitter confirmation — no clinical payload; no name/identity in subject or body.
- * Delivery address is the SMTP `to` field only.
- */
-export function buildIntakeSubmitterConfirmationEmail(): IntakeEmailContent {
-  const text = `Thank you for submitting your request for doula services. We have received your information and are working on finding the perfect match for you.
+/** Confirmation sent only to the submitting family, after persistence. */
+export function buildIntakeSubmitterConfirmationEmail(
+  firstName = 'there'
+): IntakeEmailContent {
+  const text = `Hi ${firstName},
 
-Best regards,
-The Sokana Collective Team`;
+Thank you for submitting a request for services with Sokana Collective. We have received your request and our team is working on your match.
 
-  const html = `
-                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f9f9f9; padding: 20px;">
-                    <div style="background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                      <h1 style="color: #4CAF50; text-align: center; margin-bottom: 30px; border-bottom: 3px solid #4CAF50; padding-bottom: 10px;">Request Received</h1>
-                      <p style="font-size: 16px; color: #555; line-height: 1.6; margin-bottom: 20px;">
-                        Thank you for submitting your request for doula services. We have received your information and are working on finding the perfect match for you.
-                      </p>
-                      <div style="text-align: center; margin-top: 30px; padding: 20px; background-color: #f5f5f5; border-radius: 5px;">
-                        <p style="margin: 0; font-weight: bold; color: #333;">Best regards,</p>
-                        <p style="margin: 5px 0 0 0; color: #4CAF50; font-weight: bold;">The Sokana Collective Team</p>
-                      </div>
-                    </div>
-                  </div>
-                `;
+Our next step is to identify a doula who may be a good fit for your needs and availability. Once we identify a match, we will connect you to arrange an initial visit with the doula(s).
 
-  return {
-    subject: INTAKE_SUBMITTER_CONFIRMATION_SUBJECT,
-    text,
-    html,
-  };
+In the meantime, if you have any questions or need to update the information you submitted, simply reply to this email.
+
+Thank you for considering Sokana Collective. We look forward to connecting with you!
+
+Sokana Collective
+Removing Barriers to Access`;
+  const html =
+    '<div style="font-family: Arial, sans-serif; line-height: 1.6; max-width: 600px; margin: auto;">' +
+    escapeHtml(text)
+      .split('\n\n')
+      .map((paragraph) => '<p>' + paragraph.replace(/\n/g, '<br>') + '</p>')
+      .join('') +
+    '</div>';
+  return { subject: INTAKE_SUBMITTER_CONFIRMATION_SUBJECT, text, html };
 }
 
 /** True when subject/text/html contain any forbidden clinical/identity field labels. */
