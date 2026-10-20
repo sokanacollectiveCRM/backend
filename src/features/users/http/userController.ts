@@ -529,12 +529,10 @@ export class UserController {
             missingProfileFields(member as unknown as Record<string, unknown>)
               .length
           ) {
-            res
-              .status(400)
-              .json({
-                error:
-                  'The doula must complete and submit their profile before approval.',
-              });
+            res.status(400).json({
+              error:
+                'The doula must complete and submit their profile before approval.',
+            });
             return;
           }
 
