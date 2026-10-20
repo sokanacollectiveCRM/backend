@@ -213,13 +213,14 @@ export class CloudSqlTeamService {
     try {
       const { rows } = await pool.query<DoulaRow & { role: 'admin' | 'doula' }>(
         `
-        SELECT id, full_name, NULL::text AS first_name, NULL::text AS last_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, 'doula'::text AS role, created_at, updated_at
-        FROM public.doulas
+        SELECT id, full_name, NULL::text AS first_name, NULL::text AS last_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, certifications, profile_submitted_at, 'doula'::text AS role, created_at, updated_at
+        FROM public.doulas WHERE tenant_id = $1::uuid
         UNION ALL
-        SELECT id, full_name, first_name, last_name, email, phone, 'approved'::text, address, city, state, country, zip_code, bio, profile_picture, NULL::text[], NULL::text, 'admin'::text AS role, created_at, updated_at
-        FROM public.admins
+        SELECT id, full_name, first_name, last_name, email, phone, 'approved'::text, address, city, state, country, zip_code, bio, profile_picture, NULL::text[], NULL::text, NULL::jsonb, NULL::timestamptz, 'admin'::text AS role, created_at, updated_at
+        FROM public.admins WHERE tenant_id = $1::uuid
         ORDER BY full_name ASC
-        `
+        `,
+        [readTenantRequestState().tenantId]
       );
       const withAvailability = await this.withAvailabilitySummary(
         rows.map((r) =>
@@ -233,10 +234,11 @@ export class CloudSqlTeamService {
       if (msg.includes('public.admins') && msg.includes('does not exist')) {
         const { rows } = await pool.query<DoulaRow>(
           `
-          SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, created_at, updated_at
-          FROM public.doulas
+          SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, certifications, profile_submitted_at, created_at, updated_at
+          FROM public.doulas WHERE tenant_id = $1::uuid
           ORDER BY full_name ASC
-          `
+          `,
+          [readTenantRequestState().tenantId]
         );
         const withAvailability = await this.withAvailabilitySummary(
           rows.map(mapRow)
@@ -396,53 +398,66 @@ export class CloudSqlTeamService {
     role: TeamRole;
     phone_number: string | null;
   }> {
+    const tenantId = readTenantRequestState().tenantId;
+    if (!tenantId)
+      throw new Error('An organization is required to invite a team member.');
     const normalizedEmail = input.email.toLowerCase().trim();
-    const normalizedRole = input.role;
-    const tempPassword = crypto.randomBytes(18).toString('base64url');
     const auth = getFirebaseAuth();
     const createdAuth = await auth.createUser({
       email: normalizedEmail,
-      password: tempPassword,
+      password: crypto.randomBytes(18).toString('base64url'),
       emailVerified: true,
       displayName: `${input.firstname.trim()} ${input.lastname.trim()}`.trim(),
     });
-
+    let client;
     try {
-      if (normalizedRole === 'doula') {
-        const doula = await this.addDoula({
-          firstname: input.firstname,
-          lastname: input.lastname,
-          email: normalizedEmail,
-          phone_number: input.phone_number ?? null,
-        });
-
-        return {
-          id: doula.id,
-          firstname: doula.firstname,
-          lastname: doula.lastname,
-          email: doula.email,
-          role: 'doula',
-          phone_number: doula.phone_number ?? null,
-        };
-      }
-
-      const admin = await this.addAdmin({
-        firstname: input.firstname,
-        lastname: input.lastname,
-        email: normalizedEmail,
-        phone_number: input.phone_number ?? null,
-      });
+      client = await getPool().connect();
+      await client.query('BEGIN');
+      const firstname = input.firstname.trim();
+      const lastname = input.lastname.trim();
+      const values = [
+        `${firstname} ${lastname}`.trim(),
+        normalizedEmail,
+        input.phone_number ?? null,
+        createdAuth.uid,
+        tenantId,
+      ];
+      const inserted =
+        input.role === 'doula'
+          ? await client.query(
+              `INSERT INTO public.doulas
+            (id, full_name, email, phone, identity_platform_uid, tenant_id, account_status)
+           VALUES (gen_random_uuid(), $1, $2, $3, $4, $5::uuid, 'pending') RETURNING id`,
+              values
+            )
+          : await client.query(
+              `INSERT INTO public.admins
+            (id, full_name, email, phone, identity_platform_uid, tenant_id, first_name, last_name)
+           VALUES (gen_random_uuid(), $1, $2, $3, $4, $5::uuid, $6, $7) RETURNING id`,
+              [...values, firstname, lastname]
+            );
+      const id = inserted.rows[0].id;
+      await client.query(
+        `INSERT INTO public.memberships
+          (tenant_id, principal_type, principal_id, identity_platform_uid, email, role, status)
+         VALUES ($1::uuid, $2, $3::uuid, $4, $5, $2, 'active')`,
+        [tenantId, input.role, id, createdAuth.uid, normalizedEmail]
+      );
+      await client.query('COMMIT');
       return {
-        id: admin.id,
-        firstname: admin.firstname,
-        lastname: admin.lastname,
-        email: admin.email,
-        role: 'admin',
-        phone_number: admin.phone_number ?? null,
+        id,
+        firstname,
+        lastname,
+        email: normalizedEmail,
+        role: input.role,
+        phone_number: input.phone_number ?? null,
       };
     } catch (err) {
+      if (client) await client.query('ROLLBACK');
       await auth.deleteUser(createdAuth.uid);
       throw err;
+    } finally {
+      client?.release();
     }
   }
 

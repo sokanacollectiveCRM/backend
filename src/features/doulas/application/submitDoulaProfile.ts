@@ -44,7 +44,7 @@ export async function submitDoulaProfile(
       throw new ValidationError(
         'Upload your Doula training certificate before submitting.'
       );
-    const crmLink = `${(process.env.FRONTEND_URL || 'http://localhost:3001').replace(/\/+$/, '')}/hours/${doulaId}`;
+    const crmLink = `${(process.env.FRONTEND_URL || 'http://localhost:3001').replace(/\/+$/, '')}/team?review=${encodeURIComponent(doulaId)}`;
     const body = `${profile.full_name}\n${crmLink}`;
     const notices = await client.query(
       "SELECT to_regclass('public.dashboard_notices') AS name"
@@ -62,22 +62,28 @@ export async function submitDoulaProfile(
           `doula-profile-submitted:${tenantId}:${doulaId}`,
         ]
       );
-    } else {
-      const settings = await client.query(
-        'SELECT intake_notification_email FROM public.tenant_settings WHERE tenant_id=$1::uuid',
-        [tenantId]
-      );
-      const recipient = settings.rows[0]?.intake_notification_email?.trim();
-      if (!recipient)
-        throw new ValidationError(
-          'Your organization must configure its notification email before profile submission.'
-        );
-      await new NodemailerService().sendEmail(
-        recipient,
-        'Doula profile submitted for review',
-        body
-      );
     }
+    const recipients = await client.query(
+      `SELECT intake_notification_email AS email FROM public.tenant_settings
+       WHERE tenant_id=$1::uuid AND NULLIF(trim(intake_notification_email), '') IS NOT NULL
+       UNION SELECT email FROM public.admins WHERE tenant_id=$1::uuid
+       AND NULLIF(trim(email), '') IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM public.tenant_settings WHERE tenant_id=$1::uuid
+         AND NULLIF(trim(intake_notification_email), '') IS NOT NULL)`,
+      [tenantId]
+    );
+    const addresses = [
+      ...new Set(recipients.rows.map((row) => String(row.email).trim())),
+    ];
+    if (!addresses.length)
+      throw new ValidationError(
+        'Your organization must configure an admin email before profile submission.'
+      );
+    await new NodemailerService().sendEmail(
+      addresses.join(','),
+      'Sokana360: Doula profile ready for review',
+      `${profile.full_name} has marked their profile complete.\n\nOpen Teams to review their profile and uploaded documents. Approve the required training certificate, then select Approve account. The account remains pending until approved.\n\nReview profile and documents: ${crmLink}`
+    );
     const submitted = await client.query(
       `UPDATE public.doulas SET profile_submitted_at=now(), updated_at=now()
       WHERE id=$1::uuid AND tenant_id=$2::uuid RETURNING profile_submitted_at`,

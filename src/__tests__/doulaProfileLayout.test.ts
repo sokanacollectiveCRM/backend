@@ -6,6 +6,11 @@ import {
 } from '../features/doulas/domain/profile';
 import { DoulaController } from '../features/doulas/http/doulaController';
 
+const sendEmail = jest.fn().mockResolvedValue(undefined);
+jest.mock('../services/emailService', () => ({
+  NodemailerService: jest.fn().mockImplementation(() => ({ sendEmail })),
+}));
+
 jest.mock('../db/cloudSqlPool', () => ({ getPool: jest.fn() }));
 
 const complete = {
@@ -118,6 +123,8 @@ describe('submission for review', () => {
         };
       if (sql.includes('FROM public.doula_documents'))
         return { rowCount: certificate ? 1 : 0, rows: [] };
+      if (sql.includes('intake_notification_email AS email'))
+        return { rows: [{ email: 'admin@example.com' }] };
       if (sql.includes('to_regclass'))
         return { rows: [{ name: 'dashboard_notices' }] };
       if (sql.includes('RETURNING profile_submitted_at'))
@@ -133,7 +140,7 @@ describe('submission for review', () => {
       [
         'tenant',
         'doula',
-        expect.stringContaining('/hours/doula'),
+        expect.stringContaining('/team?review=doula'),
         'doula-profile-submitted:tenant:doula',
       ]
     );
@@ -142,6 +149,11 @@ describe('submission for review', () => {
       ['doula', 'tenant']
     );
     expect(query).toHaveBeenCalledWith('COMMIT');
+    expect(sendEmail).toHaveBeenCalledWith(
+      'admin@example.com',
+      expect.stringContaining('ready for review'),
+      expect.stringContaining('/team?review=doula')
+    );
   });
   it('does not notify again on repeated submission', async () => {
     setup(true);
@@ -149,6 +161,15 @@ describe('submission for review', () => {
     expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO'))).toBe(
       false
     );
+  });
+  it('rolls back submission if the admin email fails', async () => {
+    setup();
+    sendEmail.mockRejectedValueOnce(new Error('SMTP failed'));
+    await expect(submitDoulaProfile('doula', 'tenant')).rejects.toThrow(
+      'SMTP failed'
+    );
+    expect(query).toHaveBeenCalledWith('ROLLBACK');
+    expect(query).not.toHaveBeenCalledWith('COMMIT');
   });
   it('requires a training certificate and rolls back on failure', async () => {
     setup(false, false);
