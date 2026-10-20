@@ -5,6 +5,7 @@ import { logger } from '../../../common/utils/logger';
 import authMiddleware from '../../../middleware/authMiddleware';
 import authorizeRoles from '../../../middleware/authorizeRoles';
 import type { AuthRequest } from '../../../types';
+import { deliverProfileReviewEmails } from '../../doulas/application/profileReviewEmail';
 import {
   devVisitPreviewAllowed,
   previewVisitReminders,
@@ -45,6 +46,7 @@ export function createNotificationTickRouter(): Router {
     }
     try {
       const result = await runNotificationTick();
+      if (!result.killed) await deliverProfileReviewEmails();
       res.status(200).json(result);
     } catch (error) {
       logger.error(

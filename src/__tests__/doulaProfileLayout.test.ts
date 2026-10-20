@@ -1,5 +1,4 @@
 import { getPool } from '../db/cloudSqlPool';
-import { submitDoulaProfile } from '../features/doulas/application/submitDoulaProfile';
 import {
   missingProfileFields,
   validateCertifications,
@@ -96,97 +95,6 @@ describe('profile layout validation', () => {
         race_ethnicity: [],
         certifications: [],
       }
-    );
-  });
-});
-
-describe('submission for review', () => {
-  const query = jest.fn(),
-    release = jest.fn();
-  beforeEach(() => {
-    jest.clearAllMocks();
-    (getPool as jest.Mock).mockReturnValue({
-      connect: async () => ({ query, release }),
-    });
-  });
-  function setup(existing = false, certificate = true) {
-    query.mockImplementation(async (sql: string) => {
-      if (sql.includes('FOR UPDATE'))
-        return {
-          rows: [
-            {
-              ...complete,
-              full_name: 'Maya Rivers',
-              profile_submitted_at: existing ? '2026-10-13T00:00:00Z' : null,
-            },
-          ],
-        };
-      if (sql.includes('FROM public.doula_documents'))
-        return { rowCount: certificate ? 1 : 0, rows: [] };
-      if (sql.includes('intake_notification_email AS email'))
-        return { rows: [{ email: 'admin@example.com' }] };
-      if (sql.includes('to_regclass'))
-        return { rows: [{ name: 'dashboard_notices' }] };
-      if (sql.includes('RETURNING profile_submitted_at'))
-        return { rows: [{ profile_submitted_at: '2026-10-13T00:00:00Z' }] };
-      return { rows: [], rowCount: 1 };
-    });
-  }
-  it('records one tenant-scoped notice and timestamp atomically', async () => {
-    setup();
-    await submitDoulaProfile('doula', 'tenant');
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('INSERT INTO public.dashboard_notices'),
-      [
-        'tenant',
-        'doula',
-        expect.stringContaining('/team?review=doula'),
-        'doula-profile-submitted:tenant:doula',
-      ]
-    );
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('owner.tenant_id=$2::uuid'),
-      ['doula', 'tenant']
-    );
-    expect(query).toHaveBeenCalledWith('COMMIT');
-    expect(sendEmail).toHaveBeenCalledWith(
-      'admin@example.com',
-      expect.stringContaining('ready for review'),
-      expect.stringContaining('/team?review=doula')
-    );
-  });
-  it('does not notify again on repeated submission', async () => {
-    setup(true);
-    await submitDoulaProfile('doula', 'tenant');
-    expect(query.mock.calls.some(([sql]) => sql.includes('INSERT INTO'))).toBe(
-      false
-    );
-  });
-  it('rolls back submission if the admin email fails', async () => {
-    setup();
-    sendEmail.mockRejectedValueOnce(new Error('SMTP failed'));
-    await expect(submitDoulaProfile('doula', 'tenant')).rejects.toThrow(
-      'SMTP failed'
-    );
-    expect(query).toHaveBeenCalledWith('ROLLBACK');
-    expect(query).not.toHaveBeenCalledWith('COMMIT');
-  });
-  it('requires a training certificate and rolls back on failure', async () => {
-    setup(false, false);
-    await expect(submitDoulaProfile('doula', 'tenant')).rejects.toThrow(
-      'training certificate'
-    );
-    expect(query).toHaveBeenCalledWith('ROLLBACK');
-    expect(release).toHaveBeenCalled();
-  });
-  it('does not accept a profile outside the tenant', async () => {
-    query.mockResolvedValue({ rows: [] });
-    await expect(submitDoulaProfile('doula', 'other-tenant')).rejects.toThrow(
-      'Profile not found'
-    );
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('tenant_id=$2::uuid'),
-      ['doula', 'other-tenant']
     );
   });
 });

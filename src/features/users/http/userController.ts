@@ -1,7 +1,6 @@
 import { Response } from 'express';
 
 import { logger } from '../../../common/utils/logger';
-import { getPool } from '../../../db/cloudSqlPool';
 import {
   AuthenticationError,
   AuthorizationError,
@@ -20,7 +19,7 @@ import {
   parseHourType,
 } from '../../../utils/hourTypes';
 import { canAccessSensitive } from '../../../utils/sensitiveAccess';
-import { missingProfileFields } from '../../doulas/domain/profile';
+import { transitionDoulaProfile } from '../../doulas/application/submitDoulaProfile';
 
 export class UserController {
   private userUseCase: UserUseCase;
@@ -509,48 +508,31 @@ export class UserController {
       const userId = req.params.id;
       const updateData = req.body;
 
-      // When setting account_status to 'approved' for a doula, enforce document completeness
-      const newStatus = updateData.account_status?.trim?.();
-      if (newStatus === 'approved' && this.documentCompletenessService) {
-        const member = await this.cloudSqlTeamService.getTeamMemberById(userId);
-        if (member && member.role === 'doula') {
-          const scoped = await getPool().query(
-            'SELECT id FROM public.doulas WHERE id=$1::uuid AND tenant_id=$2::uuid',
-            [userId, req.tenant?.id ?? null]
+      if (
+        String(updateData.account_status ?? '')
+          .trim()
+          .toLowerCase() === 'approved' ||
+        updateData.review_action === 'changes_requested'
+      ) {
+        if (!req.tenant?.id || !req.user?.id)
+          throw new ValidationError(
+            'An organization and reviewer are required.'
           );
-          if (!scoped.rowCount) {
-            res
-              .status(404)
-              .json({ error: 'Doula not found in your organization.' });
-            return;
-          }
-          if (
-            !member.profile_submitted_at ||
-            missingProfileFields(member as unknown as Record<string, unknown>)
-              .length
-          ) {
-            res.status(400).json({
-              error:
-                'The doula must complete and submit their profile before approval.',
-            });
-            return;
-          }
-
-          const completeness =
-            await this.documentCompletenessService.getCompleteness(userId);
-          if (!completeness.canBeActive) {
-            const missing = completeness.missingTypes.join(', ');
-            const notApproved = completeness.items
-              .filter((i) => i.status !== 'approved')
-              .map((i) => i.documentType)
-              .join(', ');
-            const msg = notApproved
-              ? `Cannot activate doula: required documents not all approved. Pending: ${notApproved}`
-              : `Cannot activate doula: missing required documents. Missing: ${missing}`;
-            res.status(400).json({ error: msg });
-            return;
-          }
-        }
+        await transitionDoulaProfile({
+          doulaId: userId,
+          tenantId: req.tenant.id,
+          actorId: req.user.id,
+          action:
+            updateData.review_action === 'changes_requested'
+              ? 'changes_requested'
+              : 'approved',
+          reason: updateData.review_reason,
+          expectedVersion: updateData.profile_review_version,
+        });
+        res
+          .status(200)
+          .json(await this.cloudSqlTeamService.getTeamMemberById(userId));
+        return;
       }
 
       const updatedMember = await this.cloudSqlTeamService.updateTeamMember(

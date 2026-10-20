@@ -26,6 +26,9 @@ export interface TeamMemberDto {
   zip_code: string | null;
   certifications?: Certification[] | null;
   profile_submitted_at?: string | null;
+  profile_review_status?: string;
+  profile_review_reason?: string | null;
+  profile_review_version?: number;
   bio?: string | null;
   profile_picture?: string | null;
   gender?: string | null;
@@ -58,6 +61,9 @@ interface DoulaRow {
   zip_code?: string | null;
   certifications?: Certification[] | null;
   profile_submitted_at?: string | null;
+  profile_review_status?: string;
+  profile_review_reason?: string | null;
+  profile_review_version?: number;
   bio?: string | null;
   profile_picture?: string | null;
   gender?: string | null;
@@ -142,6 +148,15 @@ function mapRow(row: DoulaRow): TeamMemberDto {
     zip_code: row.zip_code ?? null,
     certifications: row.certifications ?? [],
     profile_submitted_at: row.profile_submitted_at ?? null,
+    profile_review_status:
+      row.profile_review_status ??
+      (row.account_status === 'approved'
+        ? 'approved'
+        : row.profile_submitted_at
+          ? 'submitted'
+          : 'draft'),
+    profile_review_reason: row.profile_review_reason ?? null,
+    profile_review_version: row.profile_review_version ?? 0,
     bio: row.bio ?? null,
     profile_picture: row.profile_picture ?? null,
     gender: row.gender ?? null,
@@ -213,10 +228,10 @@ export class CloudSqlTeamService {
     try {
       const { rows } = await pool.query<DoulaRow & { role: 'admin' | 'doula' }>(
         `
-        SELECT id, full_name, NULL::text AS first_name, NULL::text AS last_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, certifications, profile_submitted_at, 'doula'::text AS role, created_at, updated_at
+        SELECT id, full_name, NULL::text AS first_name, NULL::text AS last_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, certifications, profile_submitted_at, profile_review_status, profile_review_reason, profile_review_version, 'doula'::text AS role, created_at, updated_at
         FROM public.doulas WHERE tenant_id = $1::uuid
         UNION ALL
-        SELECT id, full_name, first_name, last_name, email, phone, 'approved'::text, address, city, state, country, zip_code, bio, profile_picture, NULL::text[], NULL::text, NULL::jsonb, NULL::timestamptz, 'admin'::text AS role, created_at, updated_at
+        SELECT id, full_name, first_name, last_name, email, phone, 'approved'::text, address, city, state, country, zip_code, bio, profile_picture, NULL::text[], NULL::text, NULL::jsonb, NULL::timestamptz, 'approved'::text, NULL::text, 0::integer, 'admin'::text AS role, created_at, updated_at
         FROM public.admins WHERE tenant_id = $1::uuid
         ORDER BY full_name ASC
         `,
@@ -234,7 +249,7 @@ export class CloudSqlTeamService {
       if (msg.includes('public.admins') && msg.includes('does not exist')) {
         const { rows } = await pool.query<DoulaRow>(
           `
-          SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, certifications, profile_submitted_at, created_at, updated_at
+          SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, certifications, profile_submitted_at, profile_review_status, profile_review_reason, profile_review_version, created_at, updated_at
           FROM public.doulas WHERE tenant_id = $1::uuid
           ORDER BY full_name ASC
           `,
@@ -280,7 +295,7 @@ export class CloudSqlTeamService {
     const { rows } = await pool.query<DoulaRow>(
       `
       SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, scheduling_url,
-             certifications, profile_submitted_at, gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details,
+             certifications, profile_submitted_at, profile_review_status, profile_review_reason, profile_review_version, gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details,
              created_at, updated_at
       FROM public.doulas
       WHERE lower(email) = $1
@@ -296,7 +311,7 @@ export class CloudSqlTeamService {
     const { rows } = await pool.query<DoulaRow>(
       `
       SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, scheduling_url,
-             certifications, profile_submitted_at, gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details,
+             certifications, profile_submitted_at, profile_review_status, profile_review_reason, profile_review_version, gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details,
              created_at, updated_at
       FROM public.doulas
       WHERE id = $1::uuid
@@ -612,7 +627,7 @@ export class CloudSqlTeamService {
           updated_at = NOW()
       WHERE id = $19::uuid
       RETURNING id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture,
-               certifications, profile_submitted_at, gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details, scheduling_url,
+               certifications, profile_submitted_at, profile_review_status, profile_review_reason, profile_review_version, gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details, scheduling_url,
                 created_at, updated_at
       `,
       [

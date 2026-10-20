@@ -1,100 +1,217 @@
+import { randomUUID } from 'crypto';
+
 import { getPool } from '../../../db/cloudSqlPool';
 import { NotFoundError, ValidationError } from '../../../domains/errors';
-import { NodemailerService } from '../../../services/emailService';
 import { missingProfileFields } from '../domain/profile';
+import { deliverProfileReviewEmails } from './profileReviewEmail';
 
-/** Row lock and one transaction make repeated/concurrent submissions idempotent. */
-export async function submitDoulaProfile(
-  doulaId: string,
-  tenantId: string
-): Promise<string> {
+type ReviewAction = 'submitted' | 'changes_requested' | 'approved';
+export async function transitionDoulaProfile(input: {
+  doulaId: string;
+  tenantId: string;
+  actorId: string;
+  action: ReviewAction;
+  reason?: unknown;
+  expectedVersion?: unknown;
+}): Promise<string | null> {
   const client = await getPool().connect();
+  let eventId: string | undefined;
+  let submittedAt: string | null = null;
   try {
     await client.query('BEGIN');
     const { rows } = await client.query(
-      `SELECT id, full_name, address, city, state, country, zip_code, bio, profile_submitted_at
-      FROM public.doulas WHERE id=$1::uuid AND tenant_id=$2::uuid FOR UPDATE`,
-      [doulaId, tenantId]
+      `SELECT * FROM public.doulas WHERE id=$1::uuid AND tenant_id=$2::uuid FOR UPDATE`,
+      [input.doulaId, input.tenantId]
     );
     const profile = rows[0];
     if (!profile) throw new NotFoundError('Profile not found.');
-    if (profile.profile_submitted_at) {
-      await client.query('COMMIT');
-      return new Date(profile.profile_submitted_at).toISOString();
-    }
-    const [firstname, ...rest] = String(profile.full_name || '')
-      .trim()
-      .split(/\s+/);
+    const state = profile.profile_review_status;
+    submittedAt = profile.profile_submitted_at
+      ? new Date(profile.profile_submitted_at).toISOString()
+      : null;
     if (
-      missingProfileFields({ ...profile, firstname, lastname: rest.join(' ') })
-        .length
+      (input.action === 'submitted' &&
+        (state === 'submitted' || state === 'approved')) ||
+      (input.action === 'approved' && state === 'approved')
+    ) {
+      await client.query('COMMIT');
+      return submittedAt;
+    }
+    if (
+      input.action !== 'submitted' &&
+      (!Number.isInteger(input.expectedVersion) ||
+        input.expectedVersion !== profile.profile_review_version)
     ) {
       throw new ValidationError(
-        'Complete your name, address, and bio before submitting.'
+        'This profile has changed. Refresh it before reviewing.'
       );
     }
-    const certificate = await client.query(
-      `SELECT 1 FROM public.doula_documents doc
-      JOIN public.doulas owner ON owner.id::text=doc.doula_id
-      WHERE doc.doula_id=$1::text AND owner.tenant_id=$2::uuid AND doc.document_type='training_certificate'
-      AND doc.status IN ('uploaded','approved') AND NULLIF(doc.file_path, '') IS NOT NULL LIMIT 1`,
-      [doulaId, tenantId]
-    );
-    if (!certificate.rowCount)
+    if (input.action !== 'submitted' && state !== 'submitted')
       throw new ValidationError(
-        'Upload your Doula training certificate before submitting.'
+        'The doula must submit their profile before you can review it.'
       );
-    const crmLink = `${(process.env.FRONTEND_URL || 'http://localhost:3001').replace(/\/+$/, '')}/team?review=${encodeURIComponent(doulaId)}`;
-    const body = `${profile.full_name}\n${crmLink}`;
-    const notices = await client.query(
-      "SELECT to_regclass('public.dashboard_notices') AS name"
-    );
-    if (notices.rows[0]?.name) {
-      await client.query(
-        `INSERT INTO public.dashboard_notices
-        (tenant_id, audience, doula_id, rule_id, severity, title, body, dedupe_key, blocks_payout)
-        VALUES ($1::uuid, 'admin', $2::uuid, 'doula_profile_submitted', 'info', 'Doula profile submitted for review', $3, $4, false)
-        ON CONFLICT DO NOTHING`,
-        [
-          tenantId,
-          doulaId,
-          body,
-          `doula-profile-submitted:${tenantId}:${doulaId}`,
-        ]
+    if (
+      input.action === 'submitted' &&
+      !['draft', 'changes_requested'].includes(state)
+    )
+      throw new ValidationError(
+        'This profile cannot be submitted in its current state.'
       );
+    const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
+    if (
+      input.action === 'changes_requested' &&
+      (!reason || reason.length > 2000)
+    )
+      throw new ValidationError(
+        'Provide a reason for the requested changes (1–2000 characters).'
+      );
+    if (input.action !== 'changes_requested') {
+      const [firstname, ...rest] = String(profile.full_name || '')
+        .trim()
+        .split(/\s+/);
+      if (
+        missingProfileFields({
+          ...profile,
+          firstname,
+          lastname: rest.join(' '),
+        }).length
+      )
+        throw new ValidationError(
+          'Complete your name, address, and bio before submitting.'
+        );
+      const certificate = await client.query(
+        `SELECT 1 FROM public.doula_documents WHERE doula_id=$1::text
+         AND document_type='training_certificate' AND NULLIF(file_path,'') IS NOT NULL
+         AND (status='approved' OR ($2::text='submitted' AND status='uploaded')) LIMIT 1`,
+        [input.doulaId, input.action]
+      );
+      if (!certificate.rowCount)
+        throw new ValidationError(
+          input.action === 'approved'
+            ? 'Approve the required training certificate before approving the account.'
+            : 'Upload your Doula training certificate before submitting.'
+        );
+      if (input.action === 'submitted') {
+        const rejected = await client.query(
+          "SELECT 1 FROM public.doula_documents WHERE doula_id=$1::text AND status='rejected' AND document_type IN ('training_certificate','liability_insurance_certificate','illinois_medicaid_certification','miscellaneous','license','other') LIMIT 1",
+          [input.doulaId]
+        );
+        if (rejected.rowCount)
+          throw new ValidationError(
+            'Replace or remove rejected documents before resubmitting.'
+          );
+      }
     }
     const recipients = await client.query(
       `SELECT intake_notification_email AS email FROM public.tenant_settings
-       WHERE tenant_id=$1::uuid AND NULLIF(trim(intake_notification_email), '') IS NOT NULL
-       UNION SELECT email FROM public.admins WHERE tenant_id=$1::uuid
-       AND NULLIF(trim(email), '') IS NOT NULL
-       AND NOT EXISTS (SELECT 1 FROM public.tenant_settings WHERE tenant_id=$1::uuid
-         AND NULLIF(trim(intake_notification_email), '') IS NOT NULL)`,
-      [tenantId]
+       WHERE tenant_id=$1::uuid AND NULLIF(trim(intake_notification_email),'') IS NOT NULL
+       UNION SELECT email FROM public.admins WHERE tenant_id=$1::uuid AND NULLIF(trim(email),'') IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM public.tenant_settings WHERE tenant_id=$1::uuid AND NULLIF(trim(intake_notification_email),'') IS NOT NULL)`,
+      [input.tenantId]
     );
-    const addresses = [
-      ...new Set(recipients.rows.map((row) => String(row.email).trim())),
-    ];
-    if (!addresses.length)
+    if (!recipients.rows.length || !profile.email)
       throw new ValidationError(
-        'Your organization must configure an admin email before profile submission.'
+        'An admin email and doula email are required for review notifications.'
       );
-    await new NodemailerService().sendEmail(
-      addresses.join(','),
-      'Sokana360: Doula profile ready for review',
-      `${profile.full_name} has marked their profile complete.\n\nOpen Teams to review their profile and uploaded documents. Approve the required training certificate, then select Approve account. The account remains pending until approved.\n\nReview profile and documents: ${crmLink}`
+    const version = profile.profile_review_version + 1;
+    eventId = randomUUID();
+    await client.query(
+      `INSERT INTO public.doula_profile_reviews(id,tenant_id,doula_id,version,action,reason,actor_id)
+      VALUES($1,$2,$3,$4,$5,$6,$7)`,
+      [
+        eventId,
+        input.tenantId,
+        input.doulaId,
+        version,
+        input.action,
+        reason || null,
+        input.actorId,
+      ]
     );
-    const submitted = await client.query(
-      `UPDATE public.doulas SET profile_submitted_at=now(), updated_at=now()
+    const updated = await client.query(
+      `UPDATE public.doulas SET profile_review_status=$3,
+      profile_review_reason=$4, profile_review_version=$5,
+      profile_submitted_at=CASE WHEN $3='submitted' THEN now() ELSE profile_submitted_at END,
+      account_status=CASE WHEN $3='approved' THEN 'approved' ELSE 'pending' END, updated_at=now()
       WHERE id=$1::uuid AND tenant_id=$2::uuid RETURNING profile_submitted_at`,
-      [doulaId, tenantId]
+      [
+        input.doulaId,
+        input.tenantId,
+        input.action,
+        input.action === 'changes_requested' ? reason : null,
+        version,
+      ]
+    );
+    submittedAt = updated.rows[0].profile_submitted_at
+      ? new Date(updated.rows[0].profile_submitted_at).toISOString()
+      : null;
+    const base = (process.env.FRONTEND_URL || 'http://localhost:3001').replace(
+      /\/+$/,
+      ''
+    );
+    const reviewUrl = `${base}/team?review=${encodeURIComponent(input.doulaId)}`;
+    const profileUrl = `${base}/doula-dashboard/profile`;
+    const resubmitted =
+      input.action === 'submitted' && state === 'changes_requested';
+    const subject =
+      input.action === 'approved'
+        ? 'Sokana360: Doula account approved'
+        : input.action === 'changes_requested'
+          ? 'Sokana360: Changes requested to your profile'
+          : resubmitted
+            ? 'Sokana360: Profile resubmitted for review'
+            : 'Sokana360: Profile submitted for review';
+    const summary =
+      input.action === 'approved'
+        ? `${profile.full_name}’s profile and documents have been approved. The doula account is now active.`
+        : input.action === 'changes_requested'
+          ? `Changes are needed for ${profile.full_name}’s profile before approval.\n\nRequested changes:\n${reason}\n\nUpdate the profile and any rejected documents, then select Resubmit for review. The account remains pending.`
+          : `${profile.full_name} has ${resubmitted ? 'resubmitted' : 'submitted'} their profile and documents. The account remains pending until an admin approves it.`;
+    for (const recipient of new Set([
+      profile.email,
+      ...recipients.rows.map((row) => row.email),
+    ])) {
+      const isDoula = recipient === profile.email;
+      await client.query(
+        `INSERT INTO public.doula_review_emails(event_id,recipient,subject,body) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
+        [
+          eventId,
+          recipient,
+          subject,
+          `${summary}\n\n${isDoula ? 'View your profile' : 'Review in Teams'}: ${isDoula ? profileUrl : reviewUrl}\n\nSokana360`,
+        ]
+      );
+    }
+    await client.query(
+      `INSERT INTO public.dashboard_notices(tenant_id,audience,doula_id,rule_id,severity,title,body,dedupe_key,blocks_payout)
+      VALUES($1,'admin',$2,'doula_profile_submitted','info',$3,$4,$5,false) ON CONFLICT DO NOTHING`,
+      [
+        input.tenantId,
+        input.doulaId,
+        subject,
+        `${profile.full_name}\n${reviewUrl}`,
+        `doula-review:${eventId}`,
+      ]
     );
     await client.query('COMMIT');
-    return new Date(submitted.rows[0].profile_submitted_at).toISOString();
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
   } finally {
     client.release();
   }
+  // Delivery failures leave committed emails queued for the scheduled retry.
+  if (eventId) await deliverProfileReviewEmails(eventId).catch(() => undefined);
+  return submittedAt;
+}
+export async function submitDoulaProfile(
+  doulaId: string,
+  tenantId: string
+): Promise<string> {
+  return (await transitionDoulaProfile({
+    doulaId,
+    tenantId,
+    actorId: doulaId,
+    action: 'submitted',
+  }))!;
 }

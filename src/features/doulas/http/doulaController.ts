@@ -10,6 +10,7 @@ import {
   doulaDocumentUploadRejection,
   isRetiredDoulaDocumentType,
 } from '../../../constants/doulaDocuments';
+import { getPool } from '../../../db/cloudSqlPool';
 import { NotFoundError, ValidationError } from '../../../domains/errors';
 import {
   MAX_DOULA_DOCUMENT_FILE_NAME_LENGTH,
@@ -484,6 +485,28 @@ export class DoulaController {
         res
           .status(400)
           .json({ error: 'status must be "approved" or "rejected"' });
+        return;
+      }
+
+      if (
+        status === 'rejected' &&
+        (typeof rejection_reason !== 'string' ||
+          !rejection_reason.trim() ||
+          rejection_reason.trim().length > 2000)
+      ) {
+        res
+          .status(400)
+          .json({ error: 'Provide a rejection reason (1–2000 characters).' });
+        return;
+      }
+      const scoped = await getPool().query(
+        'SELECT id FROM public.doulas WHERE id=$1::uuid AND tenant_id=$2::uuid',
+        [doulaId, req.tenant?.id ?? null]
+      );
+      if (!scoped.rowCount) {
+        res
+          .status(404)
+          .json({ error: 'Doula not found in your organization.' });
         return;
       }
 
@@ -1806,6 +1829,9 @@ export class DoulaController {
       zip_code: member.zip_code ?? '',
       certifications: member.certifications ?? [],
       profile_submitted_at: member.profile_submitted_at ?? null,
+      profile_review_status: member.profile_review_status,
+      profile_review_reason: member.profile_review_reason,
+      profile_review_version: member.profile_review_version,
       bio: member.bio ?? '',
       gender: member.gender ?? '',
       pronouns: member.pronouns ?? '',
