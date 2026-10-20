@@ -81,6 +81,16 @@ function mailSpy(): MailPort & { sendEmail: jest.Mock } {
 }
 
 describe('SchedulingService', () => {
+  beforeEach(() => {
+    jest.useFakeTimers({
+      now: new Date('2026-10-12T00:00:00.000Z'),
+      doNotFake: ['setImmediate'],
+    });
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   const clientActor = {
     id: CLIENT_ID,
     role: 'client' as const,
@@ -232,6 +242,21 @@ describe('SchedulingService', () => {
         endAt: '2026-10-20T15:30:00.000Z',
       })
     ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('rejects a visit that has already started', async () => {
+    jest.setSystemTime(new Date(startAt));
+    const store = createStore();
+    const service = new SchedulingService(store, config, mailSpy());
+    await expect(
+      service.createClientBooking({
+        actor: clientActor,
+        doulaId: DOULA_ID,
+        startAt,
+        endAt,
+      })
+    ).rejects.toThrow('Visit start must be in the future');
+    expect(store.createBookingInTransaction).not.toHaveBeenCalled();
   });
 
   it('lets an admin pass clientId and a doula only see own bookings', async () => {
