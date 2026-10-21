@@ -1,10 +1,11 @@
 # Endpoint authorization matrix (PR 4)
 
-**Status:** live policy as of 2026-08-12  
+**Status:** live policy as of 2026-10-11 (scheduling MVP added)  
 **Source of truth:** `src/server.ts` mounts + `src/routes/*.ts` +
+`src/features/scheduling/http/schedulingRoutes.ts` +
 `src/security/authorizationPolicies.ts`  
 **Companion inventory:** `docs/ROUTE_RESPONSE_CONTRACT_INVENTORY.md` (response
-shapes)
+shapes) · `docs/SCHEDULING_MVP.md`
 
 Classification legend:
 
@@ -89,6 +90,21 @@ unchanged (roles tightened only where listed above for history ownership
 behavior).
 
 ---
+
+## Pilot scheduling MVP (2026-10-11)
+
+| Method | Canonical path                                       | Aliases | Classification                     | Allowed roles        | Ownership                                                     | Middleware             |
+| ------ | ---------------------------------------------------- | ------- | ---------------------------------- | -------------------- | ------------------------------------------------------------- | ---------------------- |
+| GET    | `/api/scheduling/client/doulas/:doulaId/slots`       | —       | Client-owned resource              | client               | own client + active assignment                                | auth + roles + handler |
+| POST   | `/api/scheduling/client/bookings`                    | —       | Client-owned / staff               | client, admin        | client → own; admin passes `clientId`                         | auth + roles + handler |
+| GET    | `/api/scheduling/client/bookings`                    | —       | Client-owned resource              | client               | own bookings                                                  | auth + roles + handler |
+| GET    | `/api/scheduling/doula/bookings`                     | —       | Doula-owned resource               | doula                | own bookings                                                  | auth + roles + handler |
+| GET    | `/api/scheduling/admin/bookings`                     | —       | Admin                              | admin                | all (client number + first name only)                         | auth + roles           |
+| PATCH  | `/api/scheduling/bookings/:id`                       | —       | Client-owned / Doula-owned / Admin | client, doula, admin | client cancel own; doula approve/reject/cancel own; admin any | auth + roles + handler |
+| GET    | `/api/scheduling/admin/doulas/:doulaId/availability` | —       | Admin                              | admin                | read-only                                                     | auth + roles           |
+
+Doula/client callers still require inbox verification (`EMAIL_NOT_VERIFIED`)
+except the existing auth exempt paths.
 
 ## Already protected (unchanged behavior summary)
 

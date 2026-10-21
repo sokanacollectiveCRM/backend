@@ -1,6 +1,8 @@
 import crypto from 'crypto';
 
 import { getPool } from '../db/cloudSqlPool';
+import type { Certification } from '../features/doulas/domain/profile';
+import { readTenantRequestState } from '../features/tenancy/application/tenantRequestStore';
 import { DoulaAvailabilityService } from './doulaAvailabilityService';
 import {
   resolveProfilePictureFields,
@@ -22,6 +24,11 @@ export interface TeamMemberDto {
   state: string | null;
   country: string | null;
   zip_code: string | null;
+  certifications?: Certification[] | null;
+  profile_submitted_at?: string | null;
+  profile_review_status?: string;
+  profile_review_reason?: string | null;
+  profile_review_version?: number;
   bio?: string | null;
   profile_picture?: string | null;
   gender?: string | null;
@@ -52,6 +59,11 @@ interface DoulaRow {
   state?: string | null;
   country?: string | null;
   zip_code?: string | null;
+  certifications?: Certification[] | null;
+  profile_submitted_at?: string | null;
+  profile_review_status?: string;
+  profile_review_reason?: string | null;
+  profile_review_version?: number;
   bio?: string | null;
   profile_picture?: string | null;
   gender?: string | null;
@@ -134,6 +146,17 @@ function mapRow(row: DoulaRow): TeamMemberDto {
     state: row.state ?? null,
     country: row.country ?? null,
     zip_code: row.zip_code ?? null,
+    certifications: row.certifications ?? [],
+    profile_submitted_at: row.profile_submitted_at ?? null,
+    profile_review_status:
+      row.profile_review_status ??
+      (row.account_status === 'approved'
+        ? 'approved'
+        : row.profile_submitted_at
+          ? 'submitted'
+          : 'draft'),
+    profile_review_reason: row.profile_review_reason ?? null,
+    profile_review_version: row.profile_review_version ?? 0,
     bio: row.bio ?? null,
     profile_picture: row.profile_picture ?? null,
     gender: row.gender ?? null,
@@ -205,13 +228,14 @@ export class CloudSqlTeamService {
     try {
       const { rows } = await pool.query<DoulaRow & { role: 'admin' | 'doula' }>(
         `
-        SELECT id, full_name, NULL::text AS first_name, NULL::text AS last_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, 'doula'::text AS role, created_at, updated_at
-        FROM public.doulas
+        SELECT id, full_name, NULL::text AS first_name, NULL::text AS last_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, certifications, profile_submitted_at, profile_review_status, profile_review_reason, profile_review_version, 'doula'::text AS role, created_at, updated_at
+        FROM public.doulas WHERE tenant_id = $1::uuid
         UNION ALL
-        SELECT id, full_name, first_name, last_name, email, phone, 'approved'::text, address, city, state, country, zip_code, bio, profile_picture, NULL::text[], NULL::text, 'admin'::text AS role, created_at, updated_at
-        FROM public.admins
+        SELECT id, full_name, first_name, last_name, email, phone, 'approved'::text, address, city, state, country, zip_code, bio, profile_picture, NULL::text[], NULL::text, NULL::jsonb, NULL::timestamptz, 'approved'::text, NULL::text, 0::integer, 'admin'::text AS role, created_at, updated_at
+        FROM public.admins WHERE tenant_id = $1::uuid
         ORDER BY full_name ASC
-        `
+        `,
+        [readTenantRequestState().tenantId]
       );
       const withAvailability = await this.withAvailabilitySummary(
         rows.map((r) =>
@@ -225,10 +249,11 @@ export class CloudSqlTeamService {
       if (msg.includes('public.admins') && msg.includes('does not exist')) {
         const { rows } = await pool.query<DoulaRow>(
           `
-          SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, created_at, updated_at
-          FROM public.doulas
+          SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, certifications, profile_submitted_at, profile_review_status, profile_review_reason, profile_review_version, created_at, updated_at
+          FROM public.doulas WHERE tenant_id = $1::uuid
           ORDER BY full_name ASC
-          `
+          `,
+          [readTenantRequestState().tenantId]
         );
         const withAvailability = await this.withAvailabilitySummary(
           rows.map(mapRow)
@@ -270,7 +295,7 @@ export class CloudSqlTeamService {
     const { rows } = await pool.query<DoulaRow>(
       `
       SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, scheduling_url,
-             gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details,
+             certifications, profile_submitted_at, profile_review_status, profile_review_reason, profile_review_version, gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details,
              created_at, updated_at
       FROM public.doulas
       WHERE lower(email) = $1
@@ -286,7 +311,7 @@ export class CloudSqlTeamService {
     const { rows } = await pool.query<DoulaRow>(
       `
       SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, scheduling_url,
-             gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details,
+             certifications, profile_submitted_at, profile_review_status, profile_review_reason, profile_review_version, gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details,
              created_at, updated_at
       FROM public.doulas
       WHERE id = $1::uuid
@@ -332,7 +357,7 @@ export class CloudSqlTeamService {
         id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, scheduling_url, created_at, updated_at
       )
       VALUES (
-        COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, 'approved', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NOW(), NOW()
+        COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, 'active', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NOW(), NOW()
       )
       RETURNING id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, scheduling_url, created_at, updated_at
       `,
@@ -388,53 +413,66 @@ export class CloudSqlTeamService {
     role: TeamRole;
     phone_number: string | null;
   }> {
+    const tenantId = readTenantRequestState().tenantId;
+    if (!tenantId)
+      throw new Error('An organization is required to invite a team member.');
     const normalizedEmail = input.email.toLowerCase().trim();
-    const normalizedRole = input.role;
-    const tempPassword = crypto.randomBytes(18).toString('base64url');
     const auth = getFirebaseAuth();
     const createdAuth = await auth.createUser({
       email: normalizedEmail,
-      password: tempPassword,
+      password: crypto.randomBytes(18).toString('base64url'),
       emailVerified: true,
       displayName: `${input.firstname.trim()} ${input.lastname.trim()}`.trim(),
     });
-
+    let client;
     try {
-      if (normalizedRole === 'doula') {
-        const doula = await this.addDoula({
-          firstname: input.firstname,
-          lastname: input.lastname,
-          email: normalizedEmail,
-          phone_number: input.phone_number ?? null,
-        });
-
-        return {
-          id: doula.id,
-          firstname: doula.firstname,
-          lastname: doula.lastname,
-          email: doula.email,
-          role: 'doula',
-          phone_number: doula.phone_number ?? null,
-        };
-      }
-
-      const admin = await this.addAdmin({
-        firstname: input.firstname,
-        lastname: input.lastname,
-        email: normalizedEmail,
-        phone_number: input.phone_number ?? null,
-      });
+      client = await getPool().connect();
+      await client.query('BEGIN');
+      const firstname = input.firstname.trim();
+      const lastname = input.lastname.trim();
+      const values = [
+        `${firstname} ${lastname}`.trim(),
+        normalizedEmail,
+        input.phone_number ?? null,
+        createdAuth.uid,
+        tenantId,
+      ];
+      const inserted =
+        input.role === 'doula'
+          ? await client.query(
+              `INSERT INTO public.doulas
+            (id, full_name, email, phone, identity_platform_uid, tenant_id, account_status)
+           VALUES (gen_random_uuid(), $1, $2, $3, $4, $5::uuid, 'active') RETURNING id`,
+              values
+            )
+          : await client.query(
+              `INSERT INTO public.admins
+            (id, full_name, email, phone, identity_platform_uid, tenant_id, first_name, last_name)
+           VALUES (gen_random_uuid(), $1, $2, $3, $4, $5::uuid, $6, $7) RETURNING id`,
+              [...values, firstname, lastname]
+            );
+      const id = inserted.rows[0].id;
+      await client.query(
+        `INSERT INTO public.memberships
+          (tenant_id, principal_type, principal_id, identity_platform_uid, email, role, status)
+         VALUES ($1::uuid, $2, $3::uuid, $4, $5, $2, 'active')`,
+        [tenantId, input.role, id, createdAuth.uid, normalizedEmail]
+      );
+      await client.query('COMMIT');
       return {
-        id: admin.id,
-        firstname: admin.firstname,
-        lastname: admin.lastname,
-        email: admin.email,
-        role: 'admin',
-        phone_number: admin.phone_number ?? null,
+        id,
+        firstname,
+        lastname,
+        email: normalizedEmail,
+        role: input.role,
+        phone_number: input.phone_number ?? null,
       };
     } catch (err) {
+      if (client) await client.query('ROLLBACK');
       await auth.deleteUser(createdAuth.uid);
       throw err;
+    } finally {
+      client?.release();
     }
   }
 
@@ -453,6 +491,7 @@ export class CloudSqlTeamService {
       country?: string | null;
       zip_code?: string | null;
       account_status?: string;
+      certifications?: Certification[];
       bio?: string | null;
       gender?: string | null;
       pronouns?: string | null;
@@ -584,10 +623,11 @@ export class CloudSqlTeamService {
           other_demographic_details = $16,
           scheduling_url = $17,
           profile_picture = $18,
+          certifications = COALESCE($20::jsonb, certifications),
           updated_at = NOW()
       WHERE id = $19::uuid
       RETURNING id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture,
-               gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details, scheduling_url,
+               certifications, profile_submitted_at, profile_review_status, profile_review_reason, profile_review_version, gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details, scheduling_url,
                 created_at, updated_at
       `,
       [
@@ -610,6 +650,9 @@ export class CloudSqlTeamService {
         schedulingUrl,
         profilePicture,
         id,
+        input.certifications === undefined
+          ? null
+          : JSON.stringify(input.certifications),
       ]
     );
     return this.withResolvedProfilePicture(rows[0] ? mapRow(rows[0]) : null);
@@ -660,35 +703,103 @@ export class CloudSqlTeamService {
       `,
       [profilePictureUrl, doulaId]
     );
+    if ((result.rowCount ?? 0) > 0) {
+      try {
+        const { recordHeadshotNotice } = await import(
+          '../features/notifications/application/eventNotices'
+        );
+        await recordHeadshotNotice(doulaId);
+      } catch {
+        // A missing notice table must not block the headshot save.
+      }
+    }
     return (result.rowCount ?? 0) > 0;
   }
 
-  async deleteTeamMember(id: string): Promise<boolean> {
-    const pool = getPool();
-    const result = await pool.query(
-      `
-      DELETE FROM public.doulas
-      WHERE id = $1::uuid
-      `,
-      [id]
-    );
-    if ((result.rowCount ?? 0) > 0) return true;
-
+  async deleteTeamMember(
+    id: string,
+    tenantId = readTenantRequestState().tenantId
+  ): Promise<boolean> {
+    if (!tenantId)
+      throw new Error('A tenant is required to remove a team member');
+    const client = await getPool().connect();
     try {
-      const adminResult = await pool.query(
-        `
-        DELETE FROM public.admins
-        WHERE id = $1::uuid
-        `,
-        [id]
+      await client.query('BEGIN');
+      let table: 'doulas' | 'admins' = 'doulas';
+      let result = await client.query(
+        'SELECT id, email, identity_platform_uid FROM public.doulas WHERE id = $1::uuid AND tenant_id = $2::uuid FOR UPDATE',
+        [id, tenantId]
       );
-      return (adminResult.rowCount ?? 0) > 0;
-    } catch (error) {
-      const msg = (error as Error)?.message || '';
-      if (msg.includes('public.admins') && msg.includes('does not exist')) {
+      if (!result.rows.length) {
+        table = 'admins';
+        result = await client.query(
+          'SELECT id, email, identity_platform_uid FROM public.admins WHERE id = $1::uuid AND tenant_id = $2::uuid FOR UPDATE',
+          [id, tenantId]
+        );
+      }
+      const member = result.rows[0];
+      if (!member) {
+        await client.query('ROLLBACK');
         return false;
       }
+      const auth = getFirebaseAuth();
+      let uid: string | null = member.identity_platform_uid;
+      if (!uid && member.email) {
+        try {
+          uid = (await auth.getUserByEmail(member.email)).uid;
+        } catch (error) {
+          if ((error as { code?: string }).code !== 'auth/user-not-found')
+            throw error;
+        }
+      }
+      // Do not remove a global sign-in identity used by another profile or tenant.
+      const shared = await client.query(
+        `SELECT EXISTS (
+          SELECT 1 FROM public.doulas WHERE id <> $1::uuid AND
+            (identity_platform_uid = $2 OR lower(email) = lower($3))
+          UNION ALL SELECT 1 FROM public.admins WHERE id <> $1::uuid AND
+            (identity_platform_uid = $2 OR lower(email) = lower($3))
+          UNION ALL SELECT 1 FROM public.phi_clients WHERE
+            (identity_platform_uid = $2 OR lower(email) = lower($3))
+          UNION ALL SELECT 1 FROM public.platform_admins WHERE
+            (identity_platform_uid = $2 OR lower(email) = lower($3))
+          UNION ALL SELECT 1 FROM public.memberships WHERE
+            (identity_platform_uid = $2 OR lower(email) = lower($3)) AND
+            (tenant_id <> $4::uuid OR principal_id::text <> $1::text)
+        ) AS shared`,
+        [id, uid, member.email, tenantId]
+      );
+      if (shared.rows[0]?.shared) {
+        throw new Error(
+          'This sign-in account is linked to another profile or organization. Contact support before removing it.'
+        );
+      }
+      await client.query(
+        'DELETE FROM public.memberships WHERE tenant_id = $1::uuid AND principal_id::text = $2',
+        [tenantId, id]
+      );
+      await client.query(
+        `DELETE FROM public.${table} WHERE id = $1::uuid AND tenant_id = $2::uuid`,
+        [id, tenantId]
+      );
+      // Check deferred foreign keys before touching Firebase. A failed Firebase
+      // deletion rolls the SQL removal back, keeping the row available to retry.
+      await client.query('SET CONSTRAINTS ALL IMMEDIATE');
+      if (uid) {
+        try {
+          await auth.deleteUser(uid);
+        } catch (error) {
+          if ((error as { code?: string }).code !== 'auth/user-not-found')
+            throw error;
+        }
+      }
+      await client.query('COMMIT');
+      return true;
+    } catch (error) {
+      await client.query('ROLLBACK');
       throw error;
+    } finally {
+      client.release();
     }
   }
 }

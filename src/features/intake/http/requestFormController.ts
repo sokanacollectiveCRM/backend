@@ -319,12 +319,15 @@ export class RequestFormController {
       }
 
       try {
-        const confirmation = buildIntakeSubmitterConfirmationEmail();
+        const confirmation = buildIntakeSubmitterConfirmationEmail(
+          savedForm.firstname
+        );
         await emailService.sendEmail(
           savedForm.email,
           confirmation.subject,
           confirmation.text,
-          confirmation.html
+          confirmation.html,
+          { replyTo: 'hello@sokanacollective.com' }
         );
       } catch {
         logger.warn(

@@ -8,6 +8,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../../domains/errors';
+import { isAccountActive } from '../../../security/accountAccess';
 import { ApiErrorCode } from '../../../security/errorCodes';
 import { CloudSqlTeamService } from '../../../services/cloudSqlTeamService';
 import { DoulaDocumentCompletenessService } from '../../../services/doulaDocumentCompletenessService';
@@ -19,6 +20,7 @@ import {
   parseHourType,
 } from '../../../utils/hourTypes';
 import { canAccessSensitive } from '../../../utils/sensitiveAccess';
+import { transitionDoulaProfile } from '../../doulas/application/submitDoulaProfile';
 
 export class UserController {
   private userUseCase: UserUseCase;
@@ -98,7 +100,10 @@ export class UserController {
   async deleteMember(req: AuthRequest, res: Response): Promise<void> {
     try {
       const userId = req.params.id;
-      const removed = await this.cloudSqlTeamService.deleteTeamMember(userId);
+      const removed = await this.cloudSqlTeamService.deleteTeamMember(
+        userId,
+        req.tenant?.id
+      );
       if (!removed) {
         res
           .status(404)
@@ -177,7 +182,7 @@ export class UserController {
 
   async addNewHours(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { role, id: userId, account_status } = req.user ?? {};
+      const { role, id: userId } = req.user ?? {};
       const pathDoulaId = req.params.id;
       const {
         doula_id: bodyDoulaId,
@@ -206,7 +211,7 @@ export class UserController {
         return;
       }
 
-      if (account_status && account_status !== 'approved') {
+      if (!req.user || !isAccountActive(req.user)) {
         this.logAddHoursDenied(req, normalizedRole);
         res.status(403).json({
           error: 'Not authorized to log service hours',
@@ -504,26 +509,31 @@ export class UserController {
       const userId = req.params.id;
       const updateData = req.body;
 
-      // When setting account_status to 'approved' for a doula, enforce document completeness
-      const newStatus = updateData.account_status?.trim?.();
-      if (newStatus === 'approved' && this.documentCompletenessService) {
-        const member = await this.cloudSqlTeamService.getTeamMemberById(userId);
-        if (member && member.role === 'doula') {
-          const completeness =
-            await this.documentCompletenessService.getCompleteness(userId);
-          if (!completeness.canBeActive) {
-            const missing = completeness.missingTypes.join(', ');
-            const notApproved = completeness.items
-              .filter((i) => i.status !== 'approved')
-              .map((i) => i.documentType)
-              .join(', ');
-            const msg = notApproved
-              ? `Cannot activate doula: required documents not all approved. Pending: ${notApproved}`
-              : `Cannot activate doula: missing required documents. Missing: ${missing}`;
-            res.status(400).json({ error: msg });
-            return;
-          }
-        }
+      if (
+        String(updateData.account_status ?? '')
+          .trim()
+          .toLowerCase() === 'approved' ||
+        updateData.review_action === 'changes_requested'
+      ) {
+        if (!req.tenant?.id || !req.user?.id)
+          throw new ValidationError(
+            'An organization and reviewer are required.'
+          );
+        await transitionDoulaProfile({
+          doulaId: userId,
+          tenantId: req.tenant.id,
+          actorId: req.user.id,
+          action:
+            updateData.review_action === 'changes_requested'
+              ? 'changes_requested'
+              : 'approved',
+          reason: updateData.review_reason,
+          expectedVersion: updateData.profile_review_version,
+        });
+        res
+          .status(200)
+          .json(await this.cloudSqlTeamService.getTeamMemberById(userId));
+        return;
       }
 
       const updatedMember = await this.cloudSqlTeamService.updateTeamMember(

@@ -2,6 +2,101 @@
 
 This file is intentionally updateable as frontend work finishes.
 
+## Preflight Update 2026-10-13 (Oct 21 doula documents)
+
+### Task
+
+- Change the doula document set: only `training_certificate` is required.
+  Liability insurance is optional with helper text. Add Illinois Medicaid
+  certification and miscellaneous uploads. Hide retired W9, direct deposit, and
+  background check from the doula portal. Admins still see those rows under
+  Archived documents.
+
+### Files Scanned
+
+- `frontend-crm/src/api/doulas/doulaService.ts`
+- `frontend-crm/src/features/doula-dashboard/components/DocumentsTab.tsx`
+- `frontend-crm/src/features/hours/components/AdminDoulaDocumentsSection.tsx`
+- `frontend-crm/src/features/hours/components/DoulaDetailPage.tsx`
+- `frontend-crm/src/features/teams/teams.tsx`
+- `backend/src/constants/doulaDocuments.ts`
+- `backend/src/services/doulaDocumentCompletenessService.ts`
+- `backend/src/features/doulas/http/doulaController.ts`
+
+### Contract Findings
+
+- `GET /api/doulas/documents` returns `documents` plus `completeness`
+  (`total_required`, `total_complete`, `missing_types`,
+  `has_all_required_documents`, `can_be_active`, `items`).
+- Activation still uses `can_be_active`, which is true only when every required
+  document is approved.
+- The doula portal renders `PORTAL_DOULA_DOCUMENT_TYPES` from
+  `DOULA_DOCUMENT_META` (label, required, helperText, multiple).
+- `POST /api/doulas/documents` rejects retired types with HTTP 400.
+  `miscellaneous` may have more than one row. Other types still replace the
+  current file.
+- Admin `GET /api/admin/doulas/:doulaId/documents` still returns retired rows.
+  The UI groups them under Archived documents.
+
+### Drift Risk
+
+- If the frontend keeps treating W9, direct deposit, background check, or
+  liability insurance as required, a doula with an approved training certificate
+  stays locked.
+- If the database check constraint is not widened, new Illinois Medicaid and
+  miscellaneous uploads fail.
+
+### Required Compatibility
+
+- Stored value stays `training_certificate`. Label is "Doula training
+  certificate".
+- Existing W9, direct deposit, and background check rows stay in the database.
+  New uploads of those types are rejected.
+- `can_be_active` ignores optional and retired documents.
+
+### Action
+
+## Preflight Update 2026-10-12 (notification rules)
+
+### Task
+
+- Set Sokana360 notification rules in the backend. Rules are fixed in code. No
+  editor UI. One pull request against main, not merged. Test API only.
+
+### Files Scanned
+
+- `frontend-crm` has no notification-rules screen and no dashboard notices
+  client.
+- `src/features/contracts/application/contractService.ts` (contract-sent email
+  and signing link)
+- `src/features/dashboard/http/dashboardRoutes.ts` (stats only; no alert list)
+- `src/features/clients/http/clientController.ts` (notes are
+  `client_activities`)
+- `src/features/portal/domain/eligibility.ts` (deposit paid statuses)
+
+### Contract Findings
+
+- The dashboard does not read a notices API today. Alerts are stored and
+  returned by `GET /api/notifications/notices`.
+- Signing links stay on `/signing#invitation=`.
+- Client first name is the only personal detail these emails use. Note text and
+  birth-outcome answers stay out of email.
+
+### Drift Risk
+
+- A later dashboard list must use `GET /api/notifications/notices`. Rule timings
+  are not editable.
+
+### Required Compatibility
+
+- Existing contract send, note create, and headshot update responses stay the
+  same. Notification work is additional.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started
+
 ## Preflight Update 2026-10-08 (inbox verification — doula + client)
 
 ### Task
@@ -6178,3 +6273,72 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 - **Action**:
   - [x] Context updated
   - [x] Implementation completed
+
+## Preflight Update 2026-10-11 (pilot scheduling MVP — backend)
+
+### Task
+
+- Build the backend half of the Sokana360 pilot scheduling MVP
+  (`/api/scheduling/*`) so a separate frontend agent can implement Schedule /
+  Book visit / Admin Visits against a locked contract.
+
+### Gate
+
+- `run_preflight`
+- Handoff inbox: `no_open_handoff_tasks` for `frontend->backend`. Open files are
+  older architecture / Supabase-exit tickets, not scheduling. User explicitly
+  requested this backend MVP.
+
+### Files Scanned
+
+Frontend repo is **not** in this workspace (expected path
+`/Users/jerrybony/Documents/GitHub/sokana-crm-frontend/frontend-crm`). Scanned
+backend consumers and the living frontend notes instead:
+
+- Prior notes: `doulaService.ts` availability CRUD
+  (`{ success, records|record }`, camelCase `startAt`/`endAt`)
+- Prior notes: `DoulaDashboard.tsx` routes are profile / documents / clients /
+  hours / activities — **no schedule page yet**
+- Prior notes: `ProfileTab.tsx` upserts one `unavailable` row; saving
+  "Available" deletes every unavailable record (frontend must fix)
+- Prior notes: `ClientProfileTab.tsx` uses `GET /clients/:id/assigned-doulas`
+  - `canClientViewDoulaScheduling`; does **not** call booking-requests
+- Prior notes: Playwright stubs in `e2e/helpers/doulaE2eStubs.ts`
+- Backend: `src/features/matching/infrastructure/doulaAvailabilityService.ts`
+- Backend: `src/features/clients/http/clientController.ts`
+  `createDoulaBookingRequest`
+- Backend: `src/features/doulas/http/doulaRoutes.ts` availability CRUD
+- Backend:
+  `src/features/assignments/notifications/doulaAssignmentNotificationEmail.ts`
+
+### Contract Findings
+
+- Existing availability CRUD stays at `/api/doulas/availability*`.
+- Existing `POST /clients/:id/assigned-doulas/:doulaId/booking-requests` returns
+  `201 { success: true, bookingRequest }` and is **unchanged**.
+- Frontend currently has no `/api/scheduling` client. `docs/SCHEDULING_MVP.md`
+  is the source of truth for the frontend agent.
+- Auth: doula `req.user.id` is `public.doulas.id`; client `req.user.id` is
+  `COALESCE(phi_clients.user_id, phi_clients.id)`.
+- Times are ISO UTC strings. Email zone label is `America/Chicago`.
+- Booking notes may contain PHI: API returns them to assigned doula / client /
+  admin only. Emails and logs must never include notes.
+
+### Drift Risk
+
+- If the frontend agent invents different paths or wrappers, the pilot UI will
+  404 / fail to parse.
+- `BOOKING_REQUIRE_CONTRACT_STAGE` defaults to `true`. Pilot clients without a
+  `phi_contracts` row get `403` `CONTRACT_STAGE_REQUIRED` unless Jerry sets the
+  flag to `false` on **dev**.
+- ProfileTab blackout wipe is a **frontend** bug.
+
+### Required Compatibility
+
+See `docs/SCHEDULING_MVP.md`. Visits are **60 minutes**. Success wrappers are
+`{ success, slots|booking|bookings|records }`. Errors are `{ error, code? }`.
+
+### Action
+
+- [x] Context updated
+- [x] Implementation started

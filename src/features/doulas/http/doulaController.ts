@@ -5,10 +5,13 @@ import { logger } from '../../../common/utils/logger';
 import { sanitizeDoulaRaceEthnicity } from '../../../constants/doulaDemographics';
 import {
   ALLOWED_MIME_TYPES,
-  ALL_DOULA_DOCUMENT_TYPES,
   MAX_DOCUMENT_SIZE_BYTES,
+  allowsMultipleDoulaDocuments,
+  doulaDocumentUploadRejection,
+  isRetiredDoulaDocumentType,
 } from '../../../constants/doulaDocuments';
-import { NotFoundError } from '../../../domains/errors';
+import { getPool } from '../../../db/cloudSqlPool';
+import { NotFoundError, ValidationError } from '../../../domains/errors';
 import {
   MAX_DOULA_DOCUMENT_FILE_NAME_LENGTH,
   renameDoulaDocumentSchema,
@@ -32,6 +35,8 @@ import {
   parseHourFilter,
   parseHourType,
 } from '../../../utils/hourTypes';
+import { submitDoulaProfile } from '../application/submitDoulaProfile';
+import { type Certification, validateCertifications } from '../domain/profile';
 
 export class DoulaController {
   private documentRepository: DoulaDocumentRepository;
@@ -163,11 +168,9 @@ export class DoulaController {
         return;
       }
 
-      const validTypes = ALL_DOULA_DOCUMENT_TYPES;
-      if (!validTypes.includes(document_type)) {
-        res.status(400).json({
-          error: `Invalid document_type. Must be one of: ${validTypes.join(', ')}`,
-        });
+      const typeRejection = doulaDocumentUploadRejection(String(document_type));
+      if (typeRejection) {
+        res.status(400).json({ error: typeRejection });
         return;
       }
 
@@ -185,15 +188,17 @@ export class DoulaController {
         return;
       }
 
-      // Replace: if doula already has a document of this type, delete old one first
-      const existingDoc =
-        await this.documentRepository.getCurrentDocumentByType(
-          doulaId,
-          document_type
-        );
-      if (existingDoc) {
-        await this.uploadService.deleteDocument(existingDoc.filePath);
-        await this.documentRepository.deleteDocument(existingDoc.id);
+      // Single-file types replace the current file. Miscellaneous keeps every upload.
+      if (!allowsMultipleDoulaDocuments(String(document_type))) {
+        const existingDoc =
+          await this.documentRepository.getCurrentDocumentByType(
+            doulaId,
+            document_type
+          );
+        if (existingDoc) {
+          await this.uploadService.deleteDocument(existingDoc.filePath);
+          await this.documentRepository.deleteDocument(existingDoc.id);
+        }
       }
 
       const uploadedDoc = await this.uploadService.uploadDocument(
@@ -253,8 +258,9 @@ export class DoulaController {
         return;
       }
 
-      const documents =
-        await this.documentRepository.getDocumentsByDoulaId(doulaId);
+      const documents = (
+        await this.documentRepository.getDocumentsByDoulaId(doulaId)
+      ).filter((doc) => !isRetiredDoulaDocumentType(doc.documentType));
       const completeness =
         await this.completenessService.getCompleteness(doulaId);
 
@@ -482,6 +488,28 @@ export class DoulaController {
         return;
       }
 
+      if (
+        status === 'rejected' &&
+        (typeof rejection_reason !== 'string' ||
+          !rejection_reason.trim() ||
+          rejection_reason.trim().length > 2000)
+      ) {
+        res
+          .status(400)
+          .json({ error: 'Provide a rejection reason (1–2000 characters).' });
+        return;
+      }
+      const scoped = await getPool().query(
+        'SELECT id FROM public.doulas WHERE id=$1::uuid AND tenant_id=$2::uuid',
+        [doulaId, req.tenant?.id ?? null]
+      );
+      if (!scoped.rowCount) {
+        res
+          .status(404)
+          .json({ error: 'Doula not found in your organization.' });
+        return;
+      }
+
       const document =
         await this.documentRepository.getDocumentById(documentId);
       if (!document) {
@@ -585,6 +613,16 @@ export class DoulaController {
       if (!documentId) {
         res.status(400).json({ error: 'Missing document ID' });
         return;
+      }
+
+      if (typeof req.body?.document_type === 'string') {
+        const typeRejection = doulaDocumentUploadRejection(
+          req.body.document_type
+        );
+        if (typeRejection) {
+          res.status(400).json({ error: typeRejection });
+          return;
+        }
       }
 
       const parsed = renameDoulaDocumentSchema.safeParse(req.body);
@@ -1578,6 +1616,7 @@ export class DoulaController {
         country?: string | null;
         zip_code?: string | null;
         account_status?: string;
+        certifications?: Certification[];
         bio?: string | null;
         gender?: string | null;
         pronouns?: string | null;
@@ -1626,12 +1665,23 @@ export class DoulaController {
         cloudSqlUpdateData.country = fieldsToUpdate.country;
       if (fieldsToUpdate.zip_code !== undefined)
         cloudSqlUpdateData.zip_code = fieldsToUpdate.zip_code;
-      if (fieldsToUpdate.account_status !== undefined)
-        cloudSqlUpdateData.account_status = String(
-          fieldsToUpdate.account_status
+
+      if (
+        Object.prototype.hasOwnProperty.call(req.body || {}, 'certifications')
+      ) {
+        cloudSqlUpdateData.certifications = validateCertifications(
+          req.body.certifications
         );
-      if (fieldsToUpdate.bio !== undefined)
-        cloudSqlUpdateData.bio = fieldsToUpdate.bio;
+      }
+      if (fieldsToUpdate.bio !== undefined) {
+        if (
+          typeof fieldsToUpdate.bio !== 'string' ||
+          !fieldsToUpdate.bio.trim()
+        ) {
+          throw new ValidationError('Bio is required.');
+        }
+        cloudSqlUpdateData.bio = fieldsToUpdate.bio.trim();
+      }
       if (fieldsToUpdate.gender !== undefined) {
         const g = String(fieldsToUpdate.gender).trim();
         cloudSqlUpdateData.gender = g.length ? g : null;
@@ -1698,12 +1748,42 @@ export class DoulaController {
         profile,
       });
     } catch (error: any) {
+      if (error instanceof ValidationError) {
+        res.status(400).json({ error: error.message });
+        return;
+      }
       console.error(
         `Error updating profile for doula ${req.user?.id}:`,
         error?.message || error
       );
       res.status(500).json({
         error: error.message || 'Failed to update profile',
+      });
+    }
+  }
+
+  async submitMyProfile(req: AuthRequest, res: Response): Promise<void> {
+    if (!req.user?.id || !req.tenant?.id) {
+      res
+        .status(403)
+        .json({ error: 'A tenant-scoped doula account is required.' });
+      return;
+    }
+    try {
+      const submittedAt = await submitDoulaProfile(req.user.id, req.tenant.id);
+      res.json({ success: true, profile_submitted_at: submittedAt });
+    } catch (error) {
+      const status =
+        error instanceof ValidationError
+          ? 400
+          : error instanceof NotFoundError
+            ? 404
+            : 500;
+      res.status(status).json({
+        error:
+          status === 500
+            ? 'Could not submit your profile. Please try again.'
+            : (error as Error).message,
       });
     }
   }
@@ -1747,6 +1827,11 @@ export class DoulaController {
       state: member.state ?? '',
       country: member.country ?? '',
       zip_code: member.zip_code ?? '',
+      certifications: member.certifications ?? [],
+      profile_submitted_at: member.profile_submitted_at ?? null,
+      profile_review_status: member.profile_review_status,
+      profile_review_reason: member.profile_review_reason,
+      profile_review_version: member.profile_review_version,
       bio: member.bio ?? '',
       gender: member.gender ?? '',
       pronouns: member.pronouns ?? '',

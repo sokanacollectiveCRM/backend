@@ -1,4 +1,6 @@
+import { queryCloudSql } from '../../../db/cloudSqlPool';
 import { NodemailerService } from '../../../services/emailService';
+import { signingCancelDate } from '../../notifications/domain/time';
 import {
   ContractCalculationService,
   DepositInput,
@@ -108,6 +110,7 @@ export interface ContractInvitationMailer {
     contractTitle: string;
     signingUrl: string;
     expiresAt: Date;
+    cancelBy?: Date;
   }): Promise<void>;
 }
 
@@ -127,6 +130,7 @@ export class NodemailerContractInvitationMailer
     contractTitle: string;
     signingUrl: string;
     expiresAt: Date;
+    cancelBy?: Date;
   }): Promise<void> {
     await this.email.sendNativeContractInvitation({
       clientEmail: input.recipientEmail,
@@ -134,6 +138,7 @@ export class NodemailerContractInvitationMailer
       contractTitle: input.contractTitle,
       signingUrl: input.signingUrl,
       expiresAt: input.expiresAt,
+      cancelBy: input.cancelBy,
     });
   }
 }
@@ -327,12 +332,25 @@ export class ContractService {
       replaceInvitation,
     });
 
+    const { rows } = await queryCloudSql<{
+      window_started_at: Date | string | null;
+    }>(
+      `SELECT COALESCE(signing_window_started_at, sent_at) AS window_started_at
+       FROM public.phi_contracts
+       WHERE id = $1::uuid`,
+      [contractId]
+    );
+    const windowStartedAt = rows[0]?.window_started_at
+      ? new Date(rows[0].window_started_at)
+      : new Date();
+
     await this.invitationMailer.send({
       recipientEmail: contract.snapshot.client.email,
       recipientName: contract.snapshot.client.name,
       contractTitle: contract.snapshot.serviceType,
       signingUrl: `${this.signingBaseUrl}#invitation=${encodeURIComponent(prepared.token)}`,
       expiresAt: prepared.input.expiresAt,
+      cancelBy: signingCancelDate(windowStartedAt),
     });
 
     return this.toSafeDto(sent);
