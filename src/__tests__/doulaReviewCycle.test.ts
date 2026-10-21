@@ -38,7 +38,7 @@ beforeEach(() => {
       return { rowCount: rejected ? 1 : 0, rows: [] };
     if (sql.includes('FROM public.doula_documents'))
       return { rowCount: certificate ? 1 : 0, rows: [] };
-    if (sql.includes('intake_notification_email AS email'))
+    if (sql.includes('FROM public.tenant_settings'))
       return { rows: [{ email: 'admin@example.com' }] };
     if (sql.includes('UPDATE public.doulas')) {
       profile.profile_review_status = args[2];
@@ -159,3 +159,45 @@ it('does not access another tenant’s profile', async () => {
     ['doula', 'tenant']
   );
 });
+
+it.each(['submitted', 'changes_requested', 'approved'] as const)(
+  'notifies all organization admins for %s even when an intake mailbox is configured',
+  async (action) => {
+    const original = query.getMockImplementation()!;
+    query.mockImplementation(async (sql: string, args: any[] = []) => {
+      if (sql.includes('FROM public.tenant_settings')) {
+        expect(args).toEqual(['tenant']);
+        expect(sql).toContain(
+          'UNION SELECT lower(trim(email)) AS email FROM public.admins'
+        );
+        expect(sql).toContain('WHERE tenant_id=$1::uuid');
+        expect(sql).not.toContain('NOT EXISTS');
+        return {
+          rows: [
+            { email: 'hello@sokanacollective.com' },
+            { email: 'admin-one@example.com' },
+            { email: 'admin-two@example.com' },
+            { email: ' ADMIN-ONE@example.com ' },
+          ],
+        };
+      }
+      return original(sql, args);
+    });
+    if (action !== 'submitted') profile.profile_review_status = 'submitted';
+    await run(action, {
+      expectedVersion: 0,
+      reason: 'Please update your bio.',
+    });
+    const emails = query.mock.calls.filter(([sql]) =>
+      sql.includes('INSERT INTO public.doula_review_emails')
+    );
+    expect(emails.map(([, args]) => args[1])).toEqual([
+      'maya@example.com',
+      'hello@sokanacollective.com',
+      'admin-one@example.com',
+      'admin-two@example.com',
+    ]);
+    for (const [, args] of emails.slice(1))
+      expect(args[3]).toContain('Review in Teams');
+  }
+);

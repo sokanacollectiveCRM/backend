@@ -103,10 +103,10 @@ export async function transitionDoulaProfile(input: {
       }
     }
     const recipients = await client.query(
-      `SELECT intake_notification_email AS email FROM public.tenant_settings
+      `SELECT lower(trim(intake_notification_email)) AS email FROM public.tenant_settings
        WHERE tenant_id=$1::uuid AND NULLIF(trim(intake_notification_email),'') IS NOT NULL
-       UNION SELECT email FROM public.admins WHERE tenant_id=$1::uuid AND NULLIF(trim(email),'') IS NOT NULL
-       AND NOT EXISTS (SELECT 1 FROM public.tenant_settings WHERE tenant_id=$1::uuid AND NULLIF(trim(intake_notification_email),'') IS NOT NULL)`,
+       UNION SELECT lower(trim(email)) AS email FROM public.admins
+       WHERE tenant_id=$1::uuid AND NULLIF(trim(email),'') IS NOT NULL`,
       [input.tenantId]
     );
     if (!recipients.rows.length || !profile.email)
@@ -167,11 +167,13 @@ export async function transitionDoulaProfile(input: {
         : input.action === 'changes_requested'
           ? `Changes are needed for ${profile.full_name}’s profile before approval.\n\nRequested changes:\n${reason}\n\nUpdate the profile and any rejected documents, then select Resubmit for review. Profile approval remains pending. Dashboard access remains available.`
           : `${profile.full_name} has ${resubmitted ? 'resubmitted' : 'submitted'} their profile and documents. Profile approval is pending. The doula can continue using dashboard tools while awaiting review.`;
-    for (const recipient of new Set([
-      profile.email,
-      ...recipients.rows.map((row) => row.email),
-    ])) {
-      const isDoula = recipient === profile.email;
+    const doulaEmail = profile.email.trim().toLowerCase();
+    for (const recipient of new Set(
+      [doulaEmail, ...recipients.rows.map((row) => row.email)]
+        .map((email: string) => email.trim().toLowerCase())
+        .filter(Boolean)
+    )) {
+      const isDoula = recipient === doulaEmail;
       await client.query(
         `INSERT INTO public.doula_review_emails(event_id,recipient,subject,body) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
         [
