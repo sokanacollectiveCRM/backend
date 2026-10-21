@@ -132,7 +132,7 @@ export async function transitionDoulaProfile(input: {
       `UPDATE public.doulas SET profile_review_status=$3,
       profile_review_reason=$4, profile_review_version=$5,
       profile_submitted_at=CASE WHEN $3='submitted' THEN now() ELSE profile_submitted_at END,
-      account_status=CASE WHEN $3='approved' THEN 'approved' ELSE 'pending' END, updated_at=now()
+      updated_at=now()
       WHERE id=$1::uuid AND tenant_id=$2::uuid RETURNING profile_submitted_at`,
       [
         input.doulaId,
@@ -163,10 +163,10 @@ export async function transitionDoulaProfile(input: {
             : 'Sokana360: Profile submitted for review';
     const summary =
       input.action === 'approved'
-        ? `${profile.full_name}’s profile and documents have been approved. The doula account is now active.`
+        ? `${profile.full_name}’s profile and documents have been approved. Profile completion is now approved. Dashboard access remains available.`
         : input.action === 'changes_requested'
-          ? `Changes are needed for ${profile.full_name}’s profile before approval.\n\nRequested changes:\n${reason}\n\nUpdate the profile and any rejected documents, then select Resubmit for review. The account remains pending.`
-          : `${profile.full_name} has ${resubmitted ? 'resubmitted' : 'submitted'} their profile and documents. The account remains pending until an admin approves it.`;
+          ? `Changes are needed for ${profile.full_name}’s profile before approval.\n\nRequested changes:\n${reason}\n\nUpdate the profile and any rejected documents, then select Resubmit for review. Profile approval remains pending. Dashboard access remains available.`
+          : `${profile.full_name} has ${resubmitted ? 'resubmitted' : 'submitted'} their profile and documents. Profile approval is pending. The doula can continue using dashboard tools while awaiting review.`;
     for (const recipient of new Set([
       profile.email,
       ...recipients.rows.map((row) => row.email),

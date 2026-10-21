@@ -36,7 +36,7 @@ export function buildStaffInvitationEmail(input: {
     ],
     [
       'Wait for review.',
-      'Once you submit your information and documents, the Sokana team will review your profile. Your account will become active once your information has been reviewed and approved.',
+      'Once you submit your information and documents, the Sokana team will review your profile. Your account is active after setup, so you can log hours, record birth outcomes, and use your assigned-work tools while your profile and documents are pending review.',
     ],
   ];
   const reminder =

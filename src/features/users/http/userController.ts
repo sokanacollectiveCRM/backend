@@ -8,6 +8,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../../domains/errors';
+import { isAccountActive } from '../../../security/accountAccess';
 import { ApiErrorCode } from '../../../security/errorCodes';
 import { CloudSqlTeamService } from '../../../services/cloudSqlTeamService';
 import { DoulaDocumentCompletenessService } from '../../../services/doulaDocumentCompletenessService';
@@ -181,7 +182,7 @@ export class UserController {
 
   async addNewHours(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { role, id: userId, account_status } = req.user ?? {};
+      const { role, id: userId } = req.user ?? {};
       const pathDoulaId = req.params.id;
       const {
         doula_id: bodyDoulaId,
@@ -210,7 +211,7 @@ export class UserController {
         return;
       }
 
-      if (account_status && account_status !== 'approved') {
+      if (!req.user || !isAccountActive(req.user)) {
         this.logAddHoursDenied(req, normalizedRole);
         res.status(403).json({
           error: 'Not authorized to log service hours',

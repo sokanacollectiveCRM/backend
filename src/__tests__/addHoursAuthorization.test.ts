@@ -1,7 +1,7 @@
 import { Response } from 'express';
 
-import { UserController } from '../controllers/userController';
 import { logger } from '../common/utils/logger';
+import { UserController } from '../controllers/userController';
 import { AuthRequest, ROLE } from '../types';
 import { UserUseCase } from '../usecase/userUseCase';
 import * as sensitiveAccess from '../utils/sensitiveAccess';
@@ -68,34 +68,37 @@ describe('POST /users/:id/addhours authorization (HIPAA-13E)', () => {
     } as unknown as AuthRequest;
   }
 
-  it('allows assigned doula to log hours for assigned client', async () => {
-    const req = buildReq(
-      {
-        id: doulaId,
-        role: ROLE.DOULA,
-        account_status: 'approved',
-      } as any,
-      { id: doulaId },
-      { ...validBody, doula_id: doulaId }
-    );
+  it.each(['active', 'pending', 'approved'])(
+    'allows assigned doula with %s account to log hours',
+    async (accountStatus) => {
+      const req = buildReq(
+        {
+          id: doulaId,
+          role: ROLE.DOULA,
+          account_status: accountStatus,
+        } as any,
+        { id: doulaId },
+        { ...validBody, doula_id: doulaId }
+      );
 
-    await controller.addNewHours(req, mockResponse as Response);
+      await controller.addNewHours(req, mockResponse as Response);
 
-    expect(sensitiveAccess.canAccessSensitive).toHaveBeenCalledWith(
-      req.user,
-      clientId
-    );
-    expect(mockUserUseCase.addNewHours).toHaveBeenCalledWith(
-      doulaId,
-      clientId,
-      new Date(validBody.start_time),
-      new Date(validBody.end_time),
-      '',
-      'prenatal'
-    );
-    expect(mockResponse.status).not.toHaveBeenCalledWith(403);
-    expect(mockResponse.json).toHaveBeenCalled();
-  });
+      expect(sensitiveAccess.canAccessSensitive).toHaveBeenCalledWith(
+        req.user,
+        clientId
+      );
+      expect(mockUserUseCase.addNewHours).toHaveBeenCalledWith(
+        doulaId,
+        clientId,
+        new Date(validBody.start_time),
+        new Date(validBody.end_time),
+        '',
+        'prenatal'
+      );
+      expect(mockResponse.status).not.toHaveBeenCalledWith(403);
+      expect(mockResponse.json).toHaveBeenCalled();
+    }
+  );
 
   it('allows admin to log hours without assignment check', async () => {
     const req = buildReq(
@@ -142,7 +145,11 @@ describe('POST /users/:id/addhours authorization (HIPAA-13E)', () => {
 
   it('rejects client role with 403', async () => {
     const req = buildReq(
-      { id: 'client-user', role: ROLE.CLIENT, account_status: 'approved' } as any,
+      {
+        id: 'client-user',
+        role: ROLE.CLIENT,
+        account_status: 'approved',
+      } as any,
       { id: 'client-user' },
       { ...validBody, doula_id: 'client-user' }
     );
@@ -156,7 +163,11 @@ describe('POST /users/:id/addhours authorization (HIPAA-13E)', () => {
 
   it('rejects billing role with 403', async () => {
     const req = buildReq(
-      { id: 'billing-user', role: ROLE.BILLING, account_status: 'approved' } as any,
+      {
+        id: 'billing-user',
+        role: ROLE.BILLING,
+        account_status: 'approved',
+      } as any,
       { id: 'billing-user' },
       { ...validBody, doula_id: 'billing-user' }
     );
@@ -167,19 +178,22 @@ describe('POST /users/:id/addhours authorization (HIPAA-13E)', () => {
     expect(mockUserUseCase.addNewHours).not.toHaveBeenCalled();
   });
 
-  it('rejects inactive (non-approved) doula with 403', async () => {
-    const req = buildReq(
-      { id: doulaId, role: ROLE.DOULA, account_status: 'pending' } as any,
-      { id: doulaId },
-      { ...validBody, doula_id: doulaId }
-    );
+  it.each(['inactive', 'disabled', 'suspended', 'rejected'])(
+    'rejects %s doula with 403',
+    async (accountStatus) => {
+      const req = buildReq(
+        { id: doulaId, role: ROLE.DOULA, account_status: accountStatus } as any,
+        { id: doulaId },
+        { ...validBody, doula_id: doulaId }
+      );
 
-    await controller.addNewHours(req, mockResponse as Response);
+      await controller.addNewHours(req, mockResponse as Response);
 
-    expect(mockResponse.status).toHaveBeenCalledWith(403);
-    expect(mockUserUseCase.addNewHours).not.toHaveBeenCalled();
-    expect(sensitiveAccess.canAccessSensitive).not.toHaveBeenCalled();
-  });
+      expect(mockResponse.status).toHaveBeenCalledWith(403);
+      expect(mockUserUseCase.addNewHours).not.toHaveBeenCalled();
+      expect(sensitiveAccess.canAccessSensitive).not.toHaveBeenCalled();
+    }
+  );
 
   it('rejects doula when path id is altered', async () => {
     const req = buildReq(
@@ -243,7 +257,11 @@ describe('POST /users/:id/addhours authorization (HIPAA-13E)', () => {
   it('logs authorization denials without PHI fields', async () => {
     const warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
     const req = buildReq(
-      { id: 'client-user', role: ROLE.CLIENT, account_status: 'approved' } as any,
+      {
+        id: 'client-user',
+        role: ROLE.CLIENT,
+        account_status: 'approved',
+      } as any,
       { id: 'client-user' },
       { ...validBody, doula_id: 'client-user' }
     );

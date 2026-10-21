@@ -42,7 +42,7 @@ it.each(['doula', 'admin'] as const)(
     );
     if (role === 'doula')
       expect(query).toHaveBeenCalledWith(
-        expect.stringContaining("'pending'"),
+        expect.stringContaining("'active'"),
         expect.any(Array)
       );
     expect(query).toHaveBeenCalledWith('COMMIT');

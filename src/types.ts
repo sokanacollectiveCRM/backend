@@ -335,6 +335,7 @@ export enum CLIENT_STATUS {
 }
 
 export enum ACCOUNT_STATUS {
+  ACTIVE = 'active',
   PENDING = 'pending',
   APPROVED = 'approved',
 }

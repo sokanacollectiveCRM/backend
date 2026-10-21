@@ -75,6 +75,11 @@ it('completes submit, request changes, resubmit, approve and queues both recipie
   expect(profile.profile_review_reason).toBeNull();
   await run('approved', { expectedVersion: 3 });
   expect(profile.profile_review_status).toBe('approved');
+  expect(
+    query.mock.calls
+      .filter(([sql]) => sql.includes('UPDATE public.doulas'))
+      .every(([sql]) => !sql.includes('account_status='))
+  ).toBe(true);
   const emails = query.mock.calls.filter(([sql]) =>
     sql.includes('INSERT INTO public.doula_review_emails')
   );
@@ -90,7 +95,7 @@ it('completes submit, request changes, resubmit, approve and queues both recipie
     'admin@example.com',
   ]);
   expect(emails[4][1][2]).toContain('resubmitted');
-  expect(emails[6][1][3]).toContain('now active');
+  expect(emails[6][1][3]).toContain('Dashboard access remains available');
   expect(
     query.mock.calls.filter(([sql]) =>
       sql.includes('INSERT INTO public.doula_profile_reviews')
