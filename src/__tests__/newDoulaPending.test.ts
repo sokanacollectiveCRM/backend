@@ -21,14 +21,14 @@ beforeEach(() => {
   (getPool as jest.Mock).mockReturnValue({ query });
 });
 
-it('creates a pending doula through the current Team creation flow', async () => {
+it('creates an active doula through the current Team creation flow', async () => {
   query.mockResolvedValue({
     rows: [
       {
         id: 'doula',
         full_name: 'Maya Rivers',
         email: 'maya@example.com',
-        account_status: 'pending',
+        account_status: 'active',
       },
     ],
   });
@@ -37,11 +37,11 @@ it('creates a pending doula through the current Team creation flow', async () =>
     lastname: 'Rivers',
     email: 'maya@example.com',
   });
-  expect(query.mock.calls[0][0]).toContain("$4, 'pending', NULL");
-  expect(result.account_status).toBe('pending');
+  expect(query.mock.calls[0][0]).toContain("$4, 'active', NULL");
+  expect(result.account_status).toBe('active');
 });
 
-it('creates a pending doula when accepting a token invitation', async () => {
+it('creates an active doula when accepting a token invitation', async () => {
   query.mockImplementation(async (sql: string) => {
     if (sql.includes('FROM public.staff_invitations i'))
       return {
@@ -73,7 +73,7 @@ it('creates a pending doula when accepting a token invitation', async () => {
   const insert = query.mock.calls.find(([sql]) =>
     sql.includes('INSERT INTO public.doulas')
   );
-  expect(insert?.[0]).toContain("NULL, 'pending', $3");
+  expect(insert?.[0]).toContain("NULL, 'active', $3");
 });
 
 it('keeps pending doula accounts able to authenticate for onboarding', async () => {
