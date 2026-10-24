@@ -89,6 +89,7 @@
     "zod": "^3.25.67"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.11",
     "@eslint/js": "latest",
     "@trivago/prettier-plugin-sort-imports": "latest",
     "@types/cookie-parser": "^1.4.8",
