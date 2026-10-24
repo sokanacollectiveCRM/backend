@@ -36,7 +36,11 @@ import {
   parseHourType,
 } from '../../../utils/hourTypes';
 import { submitDoulaProfile } from '../application/submitDoulaProfile';
-import { type Certification, validateCertifications } from '../domain/profile';
+import {
+  type Certification,
+  serializeCertifications,
+  validateCertifications,
+} from '../domain/profile';
 
 export class DoulaController {
   private documentRepository: DoulaDocumentRepository;
@@ -1827,7 +1831,7 @@ export class DoulaController {
       state: member.state ?? '',
       country: member.country ?? '',
       zip_code: member.zip_code ?? '',
-      certifications: member.certifications ?? [],
+      certifications: serializeCertifications(member.certifications),
       profile_submitted_at: member.profile_submitted_at ?? null,
       profile_review_status: member.profile_review_status,
       profile_review_reason: member.profile_review_reason,

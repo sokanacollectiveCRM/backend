@@ -1,7 +1,10 @@
 import crypto from 'crypto';
 
 import { getPool } from '../db/cloudSqlPool';
-import type { Certification } from '../features/doulas/domain/profile';
+import {
+  type Certification,
+  serializeCertifications,
+} from '../features/doulas/domain/profile';
 import { readTenantRequestState } from '../features/tenancy/application/tenantRequestStore';
 import { DoulaAvailabilityService } from './doulaAvailabilityService';
 import {
@@ -146,7 +149,7 @@ function mapRow(row: DoulaRow): TeamMemberDto {
     state: row.state ?? null,
     country: row.country ?? null,
     zip_code: row.zip_code ?? null,
-    certifications: row.certifications ?? [],
+    certifications: serializeCertifications(row.certifications),
     profile_submitted_at: row.profile_submitted_at ?? null,
     profile_review_status:
       row.profile_review_status ??
@@ -652,7 +655,18 @@ export class CloudSqlTeamService {
         id,
         input.certifications === undefined
           ? null
-          : JSON.stringify(input.certifications),
+          : JSON.stringify(
+              input.certifications.map((entry) => {
+                const previous = existing.certifications?.find(
+                  (stored) =>
+                    stored.name === entry.name &&
+                    stored.issuingOrganization === entry.issuingOrganization
+                );
+                return previous?.year !== undefined && entry.year === undefined
+                  ? { ...entry, year: previous.year }
+                  : entry;
+              })
+            ),
       ]
     );
     return this.withResolvedProfilePicture(rows[0] ? mapRow(rows[0]) : null);

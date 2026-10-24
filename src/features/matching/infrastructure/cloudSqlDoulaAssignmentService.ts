@@ -1,6 +1,10 @@
 import { getPool } from '../../../db/cloudSqlPool';
 import { resolveProfilePictureUrl } from '../../../services/gcs/profilePictureStorage';
 import {
+  type Certification,
+  serializeCertifications,
+} from '../../doulas/domain/profile';
+import {
   type DoulaAssignmentRole,
   normalizeAssignmentServices,
   normalizeDoulaAssignmentRole,
@@ -46,6 +50,7 @@ export interface CloudSqlAssignedDoula {
     pronouns?: string | null;
     profile_picture?: string | null;
     certifications?: string[];
+    structuredCertifications?: Certification[];
   };
 }
 
@@ -195,7 +200,7 @@ export class CloudSqlDoulaAssignmentService {
       bio: string | null;
       pronouns: string | null;
       profile_picture: string | null;
-      certifications: { name: string }[] | null;
+      certifications: Certification[] | null;
     }>(
       `
       SELECT
@@ -241,6 +246,9 @@ export class CloudSqlDoulaAssignmentService {
             pronouns: row.pronouns ?? null,
             profile_picture: await resolveProfilePictureUrl(
               row.profile_picture
+            ),
+            structuredCertifications: serializeCertifications(
+              row.certifications
             ),
             certifications: Array.isArray(row.certifications)
               ? row.certifications.map((c) => c.name).filter(Boolean)
