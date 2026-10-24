@@ -101,6 +101,19 @@ export function validateCertifications(value: unknown): Certification[] {
   return result;
 }
 
+export function isValidPhone(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    /^(?:[0-9]{10}|[0-9]{3}-[0-9]{3}-[0-9]{4})$/.test(value)
+  );
+}
+
+export function normalizePhone(value: unknown): string {
+  if (!isValidPhone(value))
+    throw new ValidationError('Enter a 10-digit phone number');
+  return value.replace(/-/g, '');
+}
+
 export const PROFILE_REQUIRED_FIELDS = [
   'firstname',
   'lastname',
@@ -114,7 +127,10 @@ export const PROFILE_REQUIRED_FIELDS = [
 export function missingProfileFields(
   profile: Record<string, unknown>
 ): string[] {
-  return PROFILE_REQUIRED_FIELDS.filter(
+  const missing: string[] = PROFILE_REQUIRED_FIELDS.filter(
     (key) => !String(profile[key] ?? '').trim()
   );
+  if (!isValidPhone(profile.phone ?? profile.phone_number))
+    missing.push('phone_number');
+  return missing;
 }

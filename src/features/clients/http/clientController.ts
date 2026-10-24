@@ -3223,7 +3223,20 @@ export class ClientController {
           ...assignment,
           availabilityStatus: availability,
           doula: {
-            ...assignment.doula,
+            ...(req.user?.role === 'admin'
+              ? assignment.doula
+              : {
+                  id: assignment.doula.id,
+                  firstname: assignment.doula.firstname,
+                  lastname: assignment.doula.lastname,
+                  email: assignment.doula.email,
+                  bio: assignment.doula.bio,
+                  pronouns: assignment.doula.pronouns,
+                  profile_picture: assignment.doula.profile_picture,
+                  certifications: assignment.doula.certifications,
+                  structuredCertifications:
+                    assignment.doula.structuredCertifications,
+                }),
             scheduling_url: includeSchedulingLink
               ? (assignment.doula.scheduling_url ?? null)
               : null,

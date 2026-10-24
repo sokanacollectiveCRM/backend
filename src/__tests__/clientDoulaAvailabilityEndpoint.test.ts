@@ -1,4 +1,5 @@
 import { Response } from 'express';
+
 import { ClientController } from '../controllers/clientController';
 import { ConflictError } from '../domains/errors';
 import { AuthRequest, ROLE } from '../types';
@@ -25,6 +26,9 @@ describe('Client doula availability and booking protections', () => {
             firstname: 'Avery',
             lastname: 'Jones',
             email: 'avery@example.com',
+            phone_number: '5555550100',
+            phone: '555-555-0100',
+            phoneNumber: '5555550100',
             scheduling_url: 'https://calendar.example.com/avery',
           },
         },
@@ -33,17 +37,19 @@ describe('Client doula availability and booking protections', () => {
     };
 
     (controller as any).doulaAvailabilityService = {
-      getAvailabilityStatusForDoulas: jest.fn().mockResolvedValue(new Map([
-        [
-          doulaId,
-          {
-            status: 'unavailable',
-            reason: 'vacation',
-            startAt: '2026-06-20T10:00:00.000Z',
-            endAt: '2026-06-20T12:00:00.000Z',
-          },
-        ],
-      ])),
+      getAvailabilityStatusForDoulas: jest.fn().mockResolvedValue(
+        new Map([
+          [
+            doulaId,
+            {
+              status: 'unavailable',
+              reason: 'vacation',
+              startAt: '2026-06-20T10:00:00.000Z',
+              endAt: '2026-06-20T12:00:00.000Z',
+            },
+          ],
+        ])
+      ),
       isClientInContractStage: jest.fn(),
       createBookingRequest: jest.fn(),
     };
@@ -61,7 +67,9 @@ describe('Client doula availability and booking protections', () => {
 
   it('hides scheduling links from clients before contract stage but still returns availability status', async () => {
     const controller = buildController();
-    (controller as any).doulaAvailabilityService.isClientInContractStage.mockResolvedValue(false);
+    (
+      controller as any
+    ).doulaAvailabilityService.isClientInContractStage.mockResolvedValue(false);
     const res = buildResponse();
     const req = {
       params: { id: clientId },
@@ -70,13 +78,22 @@ describe('Client doula availability and booking protections', () => {
 
     await controller.getAssignedDoulas(req, res);
 
-    expect((res.json as jest.Mock).mock.calls[0][0].doulas[0].doula.scheduling_url).toBeNull();
-    expect((res.json as jest.Mock).mock.calls[0][0].doulas[0].availabilityStatus.status).toBe('unavailable');
+    const payload = (res.json as jest.Mock).mock.calls[0][0];
+    expect(JSON.stringify(payload)).not.toMatch(
+      /5555550100|555-555-0100|phone/i
+    );
+    expect(payload.doulas[0].doula.scheduling_url).toBeNull();
+    expect(
+      (res.json as jest.Mock).mock.calls[0][0].doulas[0].availabilityStatus
+        .status
+    ).toBe('unavailable');
   });
 
   it('returns scheduling links to clients in contract stage', async () => {
     const controller = buildController();
-    (controller as any).doulaAvailabilityService.isClientInContractStage.mockResolvedValue(true);
+    (
+      controller as any
+    ).doulaAvailabilityService.isClientInContractStage.mockResolvedValue(true);
     const res = buildResponse();
     const req = {
       params: { id: clientId },
@@ -85,15 +102,22 @@ describe('Client doula availability and booking protections', () => {
 
     await controller.getAssignedDoulas(req, res);
 
-    expect((res.json as jest.Mock).mock.calls[0][0].doulas[0].doula.scheduling_url).toBe(
-      'https://calendar.example.com/avery'
-    );
+    expect(
+      JSON.stringify((res.json as jest.Mock).mock.calls[0][0])
+    ).not.toMatch(/5555550100|555-555-0100|phone/i);
+    expect(
+      (res.json as jest.Mock).mock.calls[0][0].doulas[0].doula.scheduling_url
+    ).toBe('https://calendar.example.com/avery');
   });
 
   it('rejects booking requests that overlap unavailable periods', async () => {
     const controller = buildController();
-    (controller as any).doulaAvailabilityService.isClientInContractStage.mockResolvedValue(true);
-    (controller as any).doulaAvailabilityService.createBookingRequest.mockRejectedValue(
+    (
+      controller as any
+    ).doulaAvailabilityService.isClientInContractStage.mockResolvedValue(true);
+    (
+      controller as any
+    ).doulaAvailabilityService.createBookingRequest.mockRejectedValue(
       new ConflictError('Doula is unavailable for the requested time.')
     );
     const res = buildResponse();

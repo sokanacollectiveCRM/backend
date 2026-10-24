@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 
 import { getPool } from '../../../db/cloudSqlPool';
 import { NotFoundError, ValidationError } from '../../../domains/errors';
-import { missingProfileFields } from '../domain/profile';
+import { isValidPhone, missingProfileFields } from '../domain/profile';
 import { deliverProfileReviewEmails } from './profileReviewEmail';
 
 type ReviewAction = 'submitted' | 'changes_requested' | 'approved';
@@ -25,6 +25,8 @@ export async function transitionDoulaProfile(input: {
     );
     const profile = rows[0];
     if (!profile) throw new NotFoundError('Profile not found.');
+    if (input.action !== 'changes_requested' && !isValidPhone(profile.phone))
+      throw new ValidationError('Enter a 10-digit phone number');
     const state = profile.profile_review_status;
     submittedAt = profile.profile_submitted_at
       ? new Date(profile.profile_submitted_at).toISOString()
@@ -77,7 +79,7 @@ export async function transitionDoulaProfile(input: {
         }).length
       )
         throw new ValidationError(
-          'Complete your name, address, and bio before submitting.'
+          'Complete your name, phone number, address, and bio before submitting.'
         );
       const certificate = await client.query(
         `SELECT 1 FROM public.doula_documents WHERE doula_id=$1::text

@@ -18,6 +18,7 @@ beforeEach(() => {
   profile = {
     full_name: 'Maya Rivers',
     email: 'maya@example.com',
+    phone: '5555550100',
     address: '1 Fictional Way',
     city: 'Chicago',
     state: 'IL',

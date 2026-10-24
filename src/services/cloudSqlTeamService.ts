@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 
 import { getPool } from '../db/cloudSqlPool';
+import { normalizePhone } from '../features/doulas/domain/profile';
 import {
   type Certification,
   serializeCertifications,
@@ -516,8 +517,12 @@ export class CloudSqlTeamService {
       `${firstName} ${lastName}`.trim() ||
       existing.fullName;
     const email = input.email?.trim().toLowerCase() || existing.email;
+    const phoneInput =
+      input.phone !== undefined ? input.phone : input.phone_number;
     const phone =
-      input.phone ?? input.phone_number ?? existing.phone_number ?? null;
+      existing.role === 'doula' && phoneInput !== undefined
+        ? normalizePhone(phoneInput)
+        : (phoneInput ?? existing.phone_number ?? null);
     const address =
       input.address !== undefined ? input.address : (existing.address ?? null);
     const city =

@@ -38,6 +38,7 @@ import {
 import { submitDoulaProfile } from '../application/submitDoulaProfile';
 import {
   type Certification,
+  normalizePhone,
   serializeCertifications,
   validateCertifications,
 } from '../domain/profile';
@@ -1655,10 +1656,13 @@ export class DoulaController {
         cloudSqlUpdateData.fullName = String(fieldsToUpdate.fullName);
       if (fieldsToUpdate.email !== undefined)
         cloudSqlUpdateData.email = String(fieldsToUpdate.email);
-      if (fieldsToUpdate.phone !== undefined)
-        cloudSqlUpdateData.phone = fieldsToUpdate.phone;
-      if (fieldsToUpdate.phone_number !== undefined)
-        cloudSqlUpdateData.phone_number = fieldsToUpdate.phone_number;
+      // Profile saves require a phone even for accounts created before P-15.
+      // Login and read endpoints remain compatible with a missing phone.
+      cloudSqlUpdateData.phone_number = normalizePhone(
+        Object.prototype.hasOwnProperty.call(req.body || {}, 'phone_number')
+          ? req.body.phone_number
+          : req.body?.phone
+      );
       if (fieldsToUpdate.address !== undefined)
         cloudSqlUpdateData.address = fieldsToUpdate.address;
       if (fieldsToUpdate.city !== undefined)

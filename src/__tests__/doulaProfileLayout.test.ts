@@ -21,6 +21,7 @@ const complete = {
   country: 'US',
   zip_code: '60601',
   bio: 'I am a doula.',
+  phone_number: '5555550100',
 };
 describe('profile layout validation', () => {
   it('allows empty demographics while requiring bio', () => {
@@ -157,6 +158,7 @@ describe('profile layout validation', () => {
       {
         user: { id: 'fictional-doula' },
         body: {
+          phone_number: '5555550100',
           certifications: [
             {
               name: 'Fictional training',
@@ -216,6 +218,7 @@ describe('profile layout validation', () => {
       {
         user: { id: 'doula' },
         body: {
+          phone_number: '555-555-0100',
           bio: ' I am a doula. ',
           pronouns: '',
           race_ethnicity: [],
@@ -230,6 +233,7 @@ describe('profile layout validation', () => {
     expect(c.cloudSqlTeamService.updateTeamMember).toHaveBeenCalledWith(
       'doula',
       {
+        phone_number: '5555550100',
         bio: 'I am a doula.',
         pronouns: null,
         race_ethnicity: [],
