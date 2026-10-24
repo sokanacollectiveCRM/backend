@@ -33,7 +33,10 @@ async function main() {
     const after = (await db.query('SELECT * FROM public.doulas ORDER BY id'))
       .rows;
     assert.deepEqual(
-      after.map(({ unit_number, ...row }) => row),
+      after.map(({ unit_number, ...row }) => {
+        assert.equal(unit_number, null);
+        return row;
+      }),
       before
     );
     assert(after.every((row) => row.unit_number === null));
