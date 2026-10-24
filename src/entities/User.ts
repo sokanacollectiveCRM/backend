@@ -9,6 +9,7 @@ export class User {
   updated_at?: Date;
   role?: ROLE;
   address?: string;
+  unit_number?: string | null;
   city?: string;
   state?: STATE;
   country?: string;
@@ -105,6 +106,7 @@ export class User {
     updated_at?: Date;
     role?: ROLE;
     address?: string;
+    unit_number?: string | null;
     children_expected?: string;
     service_needed?: string;
     pronouns?: string;
@@ -205,6 +207,7 @@ export class User {
     this.address = data.address || '';
     this.city = data.city || '';
     this.state = data.state || STATE.IL;
+    this.unit_number = data.unit_number;
     this.country = data.country || '';
     this.zip_code = data.zip_code || -1;
     this.profile_picture = data.profile_picture || null;
@@ -303,6 +306,7 @@ export class User {
       role: this.role,
       emailVerified: this.emailVerified,
       address: this.address,
+      unit_number: this.unit_number,
       city: this.city,
       state: this.state,
       country: this.country,
