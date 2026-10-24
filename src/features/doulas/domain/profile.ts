@@ -120,7 +120,6 @@ export const PROFILE_REQUIRED_FIELDS = [
   'address',
   'city',
   'state',
-  'country',
   'zip_code',
   'bio',
 ] as const;
@@ -133,4 +132,24 @@ export function missingProfileFields(
   if (!isValidPhone(profile.phone ?? profile.phone_number))
     missing.push('phone_number');
   return missing;
+}
+
+export const DEFAULT_ADDRESS_COUNTRY = 'United States';
+export function defaultAddressCountry(
+  existing: string | null | undefined
+): string {
+  return existing || DEFAULT_ADDRESS_COUNTRY;
+}
+export function normalizeUnitNumber(value: unknown): string | null {
+  if (value === null || value === '') return null;
+  if (
+    typeof value !== 'string' ||
+    value.trim().length > 100 ||
+    /[\r\n\u0000-\u001f\u007f]/.test(value)
+  ) {
+    throw new ValidationError(
+      'Unit / Apt # must be text of 100 characters or fewer on one line.'
+    );
+  }
+  return value.trim() || null;
 }

@@ -1,7 +1,11 @@
 import crypto from 'crypto';
 
 import { getPool } from '../db/cloudSqlPool';
-import { normalizePhone } from '../features/doulas/domain/profile';
+import {
+  defaultAddressCountry,
+  normalizePhone,
+  normalizeUnitNumber,
+} from '../features/doulas/domain/profile';
 import {
   type Certification,
   serializeCertifications,
@@ -24,6 +28,7 @@ export interface TeamMemberDto {
   account_status: string;
   phone_number: string | null;
   address: string | null;
+  unit_number?: string | null;
   city: string | null;
   state: string | null;
   country: string | null;
@@ -59,6 +64,7 @@ interface DoulaRow {
   phone: string | null;
   account_status?: string | null;
   address?: string | null;
+  unit_number?: string | null;
   city?: string | null;
   state?: string | null;
   country?: string | null;
@@ -91,6 +97,7 @@ interface AdminRow {
   bio?: string | null;
   profile_picture?: string | null;
   address?: string | null;
+  unit_number?: string | null;
   city?: string | null;
   state?: string | null;
   country?: string | null;
@@ -146,9 +153,10 @@ function mapRow(row: DoulaRow): TeamMemberDto {
     account_status: row.account_status ?? 'approved',
     phone_number: row.phone ?? null,
     address: row.address ?? null,
+    unit_number: row.unit_number ?? null,
     city: row.city ?? null,
     state: row.state ?? null,
-    country: row.country ?? null,
+    country: defaultAddressCountry(row.country),
     zip_code: row.zip_code ?? null,
     certifications: serializeCertifications(row.certifications),
     profile_submitted_at: row.profile_submitted_at ?? null,
@@ -232,10 +240,10 @@ export class CloudSqlTeamService {
     try {
       const { rows } = await pool.query<DoulaRow & { role: 'admin' | 'doula' }>(
         `
-        SELECT id, full_name, NULL::text AS first_name, NULL::text AS last_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, certifications, profile_submitted_at, profile_review_status, profile_review_reason, profile_review_version, 'doula'::text AS role, created_at, updated_at
+        SELECT id, unit_number, full_name, NULL::text AS first_name, NULL::text AS last_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, certifications, profile_submitted_at, profile_review_status, profile_review_reason, profile_review_version, 'doula'::text AS role, created_at, updated_at
         FROM public.doulas WHERE tenant_id = $1::uuid
         UNION ALL
-        SELECT id, full_name, first_name, last_name, email, phone, 'approved'::text, address, city, state, country, zip_code, bio, profile_picture, NULL::text[], NULL::text, NULL::jsonb, NULL::timestamptz, 'approved'::text, NULL::text, 0::integer, 'admin'::text AS role, created_at, updated_at
+        SELECT id, NULL::text AS unit_number, full_name, first_name, last_name, email, phone, 'approved'::text, address, city, state, country, zip_code, bio, profile_picture, NULL::text[], NULL::text, NULL::jsonb, NULL::timestamptz, 'approved'::text, NULL::text, 0::integer, 'admin'::text AS role, created_at, updated_at
         FROM public.admins WHERE tenant_id = $1::uuid
         ORDER BY full_name ASC
         `,
@@ -253,7 +261,7 @@ export class CloudSqlTeamService {
       if (msg.includes('public.admins') && msg.includes('does not exist')) {
         const { rows } = await pool.query<DoulaRow>(
           `
-          SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, certifications, profile_submitted_at, profile_review_status, profile_review_reason, profile_review_version, created_at, updated_at
+          SELECT id, unit_number, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, certifications, profile_submitted_at, profile_review_status, profile_review_reason, profile_review_version, created_at, updated_at
           FROM public.doulas WHERE tenant_id = $1::uuid
           ORDER BY full_name ASC
           `,
@@ -280,7 +288,7 @@ export class CloudSqlTeamService {
     const pool = getPool();
     const { rows } = await pool.query<AdminRow>(
       `
-      SELECT id, full_name, first_name, last_name, email, phone, bio, profile_picture, address, city, state, country, zip_code, created_at, updated_at
+      SELECT id, NULL::text AS unit_number, full_name, first_name, last_name, email, phone, bio, profile_picture, address, city, state, country, zip_code, created_at, updated_at
       FROM public.admins
       WHERE lower(email) = $1
       LIMIT 1
@@ -298,7 +306,7 @@ export class CloudSqlTeamService {
     const pool = getPool();
     const { rows } = await pool.query<DoulaRow>(
       `
-      SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, scheduling_url,
+      SELECT id, unit_number, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, scheduling_url,
              certifications, profile_submitted_at, profile_review_status, profile_review_reason, profile_review_version, gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details,
              created_at, updated_at
       FROM public.doulas
@@ -314,7 +322,7 @@ export class CloudSqlTeamService {
     const pool = getPool();
     const { rows } = await pool.query<DoulaRow>(
       `
-      SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, scheduling_url,
+      SELECT id, unit_number, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, scheduling_url,
              certifications, profile_submitted_at, profile_review_status, profile_review_reason, profile_review_version, gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details,
              created_at, updated_at
       FROM public.doulas
@@ -328,7 +336,7 @@ export class CloudSqlTeamService {
     try {
       const { rows: adminRows } = await pool.query<AdminRow>(
         `
-        SELECT id, full_name, first_name, last_name, email, phone, bio, profile_picture, address, city, state, country, zip_code, created_at, updated_at
+        SELECT id, NULL::text AS unit_number, full_name, first_name, last_name, email, phone, bio, profile_picture, address, city, state, country, zip_code, created_at, updated_at
         FROM public.admins
         WHERE id = $1::uuid
         LIMIT 1
@@ -361,9 +369,9 @@ export class CloudSqlTeamService {
         id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, scheduling_url, created_at, updated_at
       )
       VALUES (
-        COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, 'active', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NOW(), NOW()
+        COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, 'active', NULL, NULL, NULL, 'United States', NULL, NULL, NULL, NOW(), NOW()
       )
-      RETURNING id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, scheduling_url, created_at, updated_at
+      RETURNING id, unit_number, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, scheduling_url, created_at, updated_at
       `,
       [
         input.id ?? null,
@@ -490,6 +498,7 @@ export class CloudSqlTeamService {
       phone_number?: string | null;
       phone?: string | null;
       address?: string | null;
+      unit_number?: string | null;
       city?: string | null;
       state?: string | null;
       country?: string | null;
@@ -530,7 +539,15 @@ export class CloudSqlTeamService {
     const state =
       input.state !== undefined ? input.state : (existing.state ?? null);
     const country =
-      input.country !== undefined ? input.country : (existing.country ?? null);
+      existing.role === 'doula'
+        ? defaultAddressCountry(existing.country)
+        : input.country !== undefined
+          ? input.country
+          : (existing.country ?? null);
+    const unitNumber =
+      input.unit_number !== undefined
+        ? normalizeUnitNumber(input.unit_number)
+        : (existing.unit_number ?? null);
     const zipCode =
       input.zip_code !== undefined
         ? input.zip_code
@@ -631,10 +648,11 @@ export class CloudSqlTeamService {
           other_demographic_details = $16,
           scheduling_url = $17,
           profile_picture = $18,
+          unit_number = $21,
           certifications = COALESCE($20::jsonb, certifications),
           updated_at = NOW()
       WHERE id = $19::uuid
-      RETURNING id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture,
+      RETURNING id, unit_number, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture,
                certifications, profile_submitted_at, profile_review_status, profile_review_reason, profile_review_version, gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details, scheduling_url,
                 created_at, updated_at
       `,
@@ -672,6 +690,7 @@ export class CloudSqlTeamService {
                   : entry;
               })
             ),
+        unitNumber,
       ]
     );
     return this.withResolvedProfilePicture(rows[0] ? mapRow(rows[0]) : null);

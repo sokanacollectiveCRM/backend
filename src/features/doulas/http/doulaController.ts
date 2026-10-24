@@ -39,6 +39,7 @@ import { submitDoulaProfile } from '../application/submitDoulaProfile';
 import {
   type Certification,
   normalizePhone,
+  normalizeUnitNumber,
   serializeCertifications,
   validateCertifications,
 } from '../domain/profile';
@@ -1616,6 +1617,7 @@ export class DoulaController {
         phone?: string | null;
         phone_number?: string | null;
         address?: string | null;
+        unit_number?: string | null;
         city?: string | null;
         state?: string | null;
         country?: string | null;
@@ -1669,8 +1671,11 @@ export class DoulaController {
         cloudSqlUpdateData.city = fieldsToUpdate.city;
       if (fieldsToUpdate.state !== undefined)
         cloudSqlUpdateData.state = fieldsToUpdate.state;
-      if (fieldsToUpdate.country !== undefined)
-        cloudSqlUpdateData.country = fieldsToUpdate.country;
+      // Country is defaulted/preserved by CloudSqlTeamService, including older clients.
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, 'unit_number'))
+        cloudSqlUpdateData.unit_number = normalizeUnitNumber(
+          req.body.unit_number
+        );
       if (fieldsToUpdate.zip_code !== undefined)
         cloudSqlUpdateData.zip_code = fieldsToUpdate.zip_code;
 
@@ -1831,6 +1836,7 @@ export class DoulaController {
       role: 'doula' as const,
       phone_number: member.phone_number,
       address: member.address ?? '',
+      unit_number: member.unit_number ?? null,
       city: member.city ?? '',
       state: member.state ?? '',
       country: member.country ?? '',

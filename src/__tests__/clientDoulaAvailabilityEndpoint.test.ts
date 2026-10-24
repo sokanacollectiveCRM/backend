@@ -29,6 +29,12 @@ describe('Client doula availability and booking protections', () => {
             phone_number: '5555550100',
             phone: '555-555-0100',
             phoneNumber: '5555550100',
+            address: '100 Fictional Way',
+            unit_number: 'Apt 4B',
+            city: 'Chicago',
+            state: 'IL',
+            zip_code: '60601',
+            country: 'United States',
             scheduling_url: 'https://calendar.example.com/avery',
           },
         },
@@ -80,7 +86,7 @@ describe('Client doula availability and booking protections', () => {
 
     const payload = (res.json as jest.Mock).mock.calls[0][0];
     expect(JSON.stringify(payload)).not.toMatch(
-      /5555550100|555-555-0100|phone/i
+      /5555550100|555-555-0100|phone|address|unit_number|Fictional Way|Apt 4B|60601|country/i
     );
     expect(payload.doulas[0].doula.scheduling_url).toBeNull();
     expect(
@@ -104,7 +110,9 @@ describe('Client doula availability and booking protections', () => {
 
     expect(
       JSON.stringify((res.json as jest.Mock).mock.calls[0][0])
-    ).not.toMatch(/5555550100|555-555-0100|phone/i);
+    ).not.toMatch(
+      /5555550100|555-555-0100|phone|address|unit_number|Fictional Way|Apt 4B|60601|country/i
+    );
     expect(
       (res.json as jest.Mock).mock.calls[0][0].doulas[0].doula.scheduling_url
     ).toBe('https://calendar.example.com/avery');

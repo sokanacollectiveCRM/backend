@@ -383,6 +383,7 @@ export class UserController {
               typeof updateData.address === 'string'
                 ? updateData.address
                 : undefined,
+            unit_number: updateData.unit_number as string | null | undefined,
             city:
               typeof updateData.city === 'string' ? updateData.city : undefined,
             state:
