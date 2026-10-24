@@ -6,10 +6,15 @@ import {
   getClientPaymentSchedule,
 } from '../../../controllers/clientBillingController';
 import { PortalController } from '../../../controllers/portalController';
-import { clientController, userController } from '../../../index';
+import {
+  clientController,
+  doulaController,
+  userController,
+} from '../../../index';
 import authMiddleware from '../../../middleware/authMiddleware';
 import authorizeRoles from '../../../middleware/authorizeRoles';
 import { PortalInviteService } from '../../../services/portalInviteService';
+import { AuthRequest } from '../../../types';
 
 const clientRoutes: Router = express.Router();
 const clientDocumentUpload = multer({
@@ -47,7 +52,17 @@ clientRoutes.put(
   '/team/:id',
   authMiddleware,
   (req, res, next) => authorizeRoles(req, res, next, ['admin']),
-  (req, res) => userController.updateTeamMember(req, res)
+  clientDocumentUpload.single('certification_files'),
+  (req, res) => {
+    if ((req as AuthRequest).file) {
+      // Legacy admin certification picker uses the same document policy and
+      // review lifecycle as the doula portal; the existing admin gate stays above.
+      req.body.document_type = 'training_certificate';
+      void doulaController.uploadDocument(req, res, req.params.id);
+    } else {
+      void userController.updateTeamMember(req, res);
+    }
+  }
 );
 
 clientRoutes.post(

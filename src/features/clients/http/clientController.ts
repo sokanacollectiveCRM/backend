@@ -16,8 +16,6 @@ import {
   toSafeProviderError,
 } from '../../../common/utils/safeLogging';
 import {
-  CLIENT_DOCUMENT_ALLOWED_EXTENSIONS,
-  CLIENT_DOCUMENT_ALLOWED_MIME_TYPES,
   CLIENT_DOCUMENT_CATEGORY_BILLING,
   CLIENT_DOCUMENT_TYPE_INSURANCE_CARD,
   MAX_CLIENT_DOCUMENT_SIZE_BYTES,
@@ -48,6 +46,7 @@ import {
   ClientDocumentRepository,
 } from '../../../repositories/clientDocumentRepository';
 import { ClientRepository } from '../../../repositories/interface/clientRepository';
+import { validateDocumentFile } from '../../../security/documentUpload';
 import { ClientDocumentUploadService } from '../../../services/clientDocumentUploadService';
 import { CloudSqlDoulaAssignmentService } from '../../../services/cloudSqlDoulaAssignmentService';
 import { syncMatchedClientToQuickBooks } from '../../../services/customer/syncMatchedClientToQuickBooks';
@@ -954,18 +953,9 @@ export class ClientController {
         return;
       }
 
-      const fileExtension = this.getFileExtension(file.originalname);
-      const hasAllowedExtension = CLIENT_DOCUMENT_ALLOWED_EXTENSIONS.includes(
-        fileExtension as (typeof CLIENT_DOCUMENT_ALLOWED_EXTENSIONS)[number]
-      );
-      const hasAllowedMimeType = CLIENT_DOCUMENT_ALLOWED_MIME_TYPES.includes(
-        file.mimetype as (typeof CLIENT_DOCUMENT_ALLOWED_MIME_TYPES)[number]
-      );
-      if (!hasAllowedExtension || !hasAllowedMimeType) {
-        res.status(400).json({
-          error:
-            'Unsupported file type. Allowed: JPEG/PNG/WebP/HEIC/PDF (.jpg, .jpeg, .png, .webp, .heic, .heif, .pdf)',
-        });
+      const validationError = validateDocumentFile(file);
+      if (validationError) {
+        res.status(400).json({ error: validationError });
         return;
       }
 

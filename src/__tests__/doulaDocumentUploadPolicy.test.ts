@@ -1,5 +1,8 @@
 import { DoulaController } from '../controllers/doulaController';
-import type { AuthRequest } from '../types';
+import { getPool } from '../db/cloudSqlPool';
+import { DOCUMENT_TYPE_ERROR } from '../security/documentUpload';
+import { DOCUMENT_FIXTURES } from '../test/fixtures/documentFiles';
+import { type AuthRequest, ROLE } from '../types';
 
 jest.mock('../services/cloudSqlTeamService', () => ({
   CloudSqlTeamService: jest.fn().mockImplementation(() => ({
@@ -8,7 +11,16 @@ jest.mock('../services/cloudSqlTeamService', () => ({
   })),
 }));
 
+jest.mock('../db/cloudSqlPool', () => ({ getPool: jest.fn() }));
+
 describe('DoulaController.uploadDocument document types', () => {
+  beforeEach(() => {
+    (getPool as jest.Mock).mockReturnValue({
+      query: jest
+        .fn()
+        .mockResolvedValue({ rows: [{ id: 'fictional-target' }] }),
+    });
+  });
   const doulaId = 'doula-owner-1';
 
   function buildController(overrides: {
@@ -41,7 +53,7 @@ describe('DoulaController.uploadDocument document types', () => {
         originalname: 'certificate.pdf',
         mimetype: 'application/pdf',
         size: 1024,
-        buffer: Buffer.from('%PDF'),
+        buffer: Buffer.from('%PDF-1.4 fictional fixture'),
       },
     } as unknown as AuthRequest;
   }
@@ -150,5 +162,123 @@ describe('DoulaController.uploadDocument document types', () => {
 
     expect(deleteStored).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(201);
+  });
+  it.each(['jpg', 'jpeg', 'png', 'pdf'])(
+    'admin certification uploads accept %s and uppercase extensions',
+    async (extension) => {
+      const buffer = Buffer.from(
+        DOCUMENT_FIXTURES[extension === 'jpeg' ? 'jpg' : extension],
+        'base64'
+      );
+      const mime =
+        extension === 'pdf'
+          ? 'application/pdf'
+          : extension === 'png'
+            ? 'image/png'
+            : 'image/jpeg';
+      const uploadDocument = jest.fn().mockResolvedValue({
+        filePath: 'fictional/path',
+        fileName: `fictional.${extension}`,
+        fileSize: buffer.length,
+        mimeType: mime,
+      });
+      const controller = buildController({
+        repo: {
+          getCurrentDocumentByType: jest.fn(),
+          createDocument: jest.fn().mockResolvedValue({
+            id: 'fictional-doc',
+            filePath: 'fictional/path',
+          }),
+          getSignedUrl: jest
+            .fn()
+            .mockResolvedValue('https://example.test/signed'),
+        },
+        upload: { uploadDocument },
+      });
+      (
+        controller as any
+      ).cloudSqlTeamService.getTeamMemberById.mockResolvedValue({
+        role: 'doula',
+        id: 'fictional-target',
+      });
+      for (const suffix of [extension, extension.toUpperCase()]) {
+        const req = buildReq('training_certificate');
+        req.user = { ...req.user, role: ROLE.ADMIN } as AuthRequest['user'];
+        req.tenant = { id: 'fictional-tenant' } as AuthRequest['tenant'];
+        req.file = {
+          originalname: `fictional.${suffix}`,
+          mimetype: mime,
+          buffer,
+          size: buffer.length,
+        } as any;
+        const res = buildRes();
+        await controller.uploadDocument(req, res, 'fictional-target');
+        expect(res.status).toHaveBeenCalledWith(201);
+      }
+      expect(uploadDocument).toHaveBeenCalledWith(
+        expect.anything(),
+        'fictional-target',
+        'training_certificate'
+      );
+    }
+  );
+
+  it.each(['exe', 'docx', 'gif', 'pdf'])(
+    'admin certification rejects unsupported/disguised %s before replacing documents',
+    async (extension) => {
+      const getCurrentDocumentByType = jest.fn();
+      const uploadDocument = jest.fn();
+      const controller = buildController({
+        repo: { getCurrentDocumentByType },
+        upload: { uploadDocument },
+      });
+      (
+        controller as any
+      ).cloudSqlTeamService.getTeamMemberById.mockResolvedValue({
+        role: 'doula',
+      });
+      const req = buildReq('training_certificate');
+      req.user = { ...req.user, role: ROLE.ADMIN } as AuthRequest['user'];
+      req.tenant = { id: 'fictional-tenant' } as AuthRequest['tenant'];
+      req.file = {
+        originalname: `fictional.${extension}`,
+        mimetype: 'application/pdf',
+        buffer: Buffer.from('fictional text'),
+        size: 14,
+      } as any;
+      const res = buildRes();
+      await controller.uploadDocument(req, res, 'fictional-target');
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ error: DOCUMENT_TYPE_ERROR });
+      expect(getCurrentDocumentByType).not.toHaveBeenCalled();
+      expect(uploadDocument).not.toHaveBeenCalled();
+    }
+  );
+
+  it('does not let doulas target another user through the admin upload helper', async () => {
+    const uploadDocument = jest.fn();
+    const controller = buildController({ upload: { uploadDocument } });
+    const res = buildRes();
+    await controller.uploadDocument(
+      buildReq('training_certificate'),
+      res,
+      'fictional-other'
+    );
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(uploadDocument).not.toHaveBeenCalled();
+  });
+  it('rejects an admin certificate upload for another organization', async () => {
+    (getPool as jest.Mock).mockReturnValue({
+      query: jest.fn().mockResolvedValue({ rows: [] }),
+    });
+    const uploadDocument = jest.fn();
+    const controller = buildController({ upload: { uploadDocument } });
+    const req = buildReq('training_certificate');
+    req.user = { ...req.user, role: ROLE.ADMIN } as AuthRequest['user'];
+    req.tenant = { id: 'fictional-tenant' } as AuthRequest['tenant'];
+    const res = buildRes();
+    await controller.uploadDocument(req, res, 'fictional-other-tenant');
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(uploadDocument).not.toHaveBeenCalled();
   });
 });

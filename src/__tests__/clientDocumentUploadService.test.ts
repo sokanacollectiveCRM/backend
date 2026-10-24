@@ -21,7 +21,7 @@ describe('ClientDocumentUploadService', () => {
         originalname: 'insurance-card.pdf',
         mimetype: 'application/pdf',
         size: 1024,
-        buffer: Buffer.from('fake-pdf'),
+        buffer: Buffer.from('%PDF-1.4 fictional fixture'),
       } as any,
       'client-123',
       'insurance_card'
@@ -55,7 +55,7 @@ describe('ClientDocumentUploadService', () => {
         'client-123',
         'insurance_card'
       )
-    ).rejects.toThrow(/Unsupported client document mime type/);
+    ).rejects.toThrow(/Please upload a JPEG, PNG or PDF/);
 
     expect(uploadObject).not.toHaveBeenCalled();
   });
