@@ -8,9 +8,6 @@ export const CLIENT_DOCUMENT_BUCKET_MIME_TYPES = [
   'image/jpeg',
   'image/jpg',
   'image/png',
-  'image/webp',
-  'image/heic',
-  'image/heif',
   'application/pdf',
 ] as const;
 
@@ -19,9 +16,6 @@ export const CLIENT_DOCUMENT_ALLOWED_EXTENSIONS = [
   '.jpeg',
   '.png',
   '.pdf',
-  '.webp',
-  '.heic',
-  '.heif',
 ] as const;
 export const CLIENT_DOCUMENT_ALLOWED_MIME_TYPES =
   CLIENT_DOCUMENT_BUCKET_MIME_TYPES;

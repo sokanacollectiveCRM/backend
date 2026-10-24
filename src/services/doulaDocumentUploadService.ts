@@ -1,6 +1,9 @@
 import { File as MulterFile } from 'multer';
 
-import { ALLOWED_MIME_TYPES } from '../constants/doulaDocuments';
+import {
+  documentContentType,
+  validateDocumentFile,
+} from '../security/documentUpload';
 import {
   GCS_PREFIX,
   deleteObject,
@@ -33,9 +36,9 @@ export class DoulaDocumentUploadService {
   ): Promise<UploadedDocument> {
     void _accessToken;
 
-    if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
-      throw new Error(`Unsupported doula document mime type: ${file.mimetype}`);
-    }
+    const validationError = validateDocumentFile(file);
+    if (validationError) throw new Error(validationError);
+    const mimeType = documentContentType(file.buffer)!;
 
     const timestamp = Date.now();
     const sanitizedFileName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
@@ -45,7 +48,7 @@ export class DoulaDocumentUploadService {
       await uploadObject(
         this.resolveObjectName(filePath),
         file.buffer,
-        file.mimetype,
+        mimeType,
         false
       );
     } catch (err) {
@@ -57,7 +60,7 @@ export class DoulaDocumentUploadService {
       filePath,
       fileName: file.originalname,
       fileSize: file.size,
-      mimeType: file.mimetype,
+      mimeType,
     };
   }
 

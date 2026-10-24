@@ -21,7 +21,7 @@ describe('DoulaDocumentUploadService', () => {
         originalname: 'background-check.pdf',
         mimetype: 'application/pdf',
         size: 2048,
-        buffer: Buffer.from('fake-pdf'),
+        buffer: Buffer.from('%PDF-1.4 fictional fixture'),
       } as any,
       'doula-123',
       'background_check'
@@ -55,7 +55,7 @@ describe('DoulaDocumentUploadService', () => {
         'doula-123',
         'background_check'
       )
-    ).rejects.toThrow(/Unsupported doula document mime type/);
+    ).rejects.toThrow(/Please upload a JPEG, PNG or PDF/);
 
     expect(uploadObject).not.toHaveBeenCalled();
   });

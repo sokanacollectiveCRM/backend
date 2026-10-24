@@ -1,6 +1,9 @@
 import { File as MulterFile } from 'multer';
 
-import { CLIENT_DOCUMENT_BUCKET_MIME_TYPES } from '../constants/clientDocuments';
+import {
+  documentContentType,
+  validateDocumentFile,
+} from '../security/documentUpload';
 import {
   GCS_PREFIX,
   deleteObject,
@@ -31,12 +34,9 @@ export class ClientDocumentUploadService {
     clientId: string,
     documentType: string
   ): Promise<UploadedClientDocument> {
-    const mimeList = CLIENT_DOCUMENT_BUCKET_MIME_TYPES as readonly string[];
-    if (!mimeList.includes(file.mimetype)) {
-      throw new Error(
-        `Unsupported client document mime type: ${file.mimetype}`
-      );
-    }
+    const validationError = validateDocumentFile(file);
+    if (validationError) throw new Error(validationError);
+    const mimeType = documentContentType(file.buffer)!;
 
     const timestamp = Date.now();
     const sanitizedFileName = file.originalname.replace(
@@ -49,7 +49,7 @@ export class ClientDocumentUploadService {
       await uploadObject(
         this.resolveObjectName(filePath),
         file.buffer,
-        file.mimetype,
+        mimeType,
         false
       );
     } catch (err) {
@@ -61,7 +61,7 @@ export class ClientDocumentUploadService {
       filePath,
       fileName: file.originalname,
       fileSize: file.size,
-      mimeType: file.mimetype,
+      mimeType,
     };
   }
 

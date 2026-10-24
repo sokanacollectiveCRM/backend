@@ -77,7 +77,7 @@ describe('Client document endpoints', () => {
         originalname: 'insurance-card-front.png',
         mimetype: 'image/png',
         size: 1280,
-        buffer: Buffer.from('fake-image'),
+        buffer: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
       },
     } as unknown as AuthRequest;
     const res = buildResponse();
@@ -144,7 +144,7 @@ describe('Client document endpoints', () => {
         originalname: 'insurance-card.pdf',
         mimetype: 'application/pdf',
         size: 1024,
-        buffer: Buffer.from('fake-pdf'),
+        buffer: Buffer.from('%PDF-1.4 fictional fixture'),
       },
     } as unknown as AuthRequest;
     const res = buildResponse();

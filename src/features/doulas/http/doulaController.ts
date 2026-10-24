@@ -4,7 +4,6 @@ import { File as MulterFile } from 'multer';
 import { logger } from '../../../common/utils/logger';
 import { sanitizeDoulaRaceEthnicity } from '../../../constants/doulaDemographics';
 import {
-  ALLOWED_MIME_TYPES,
   MAX_DOCUMENT_SIZE_BYTES,
   allowsMultipleDoulaDocuments,
   doulaDocumentUploadRejection,
@@ -20,6 +19,7 @@ import { ActivityDTO } from '../../../dto/response/ActivityDTO';
 import { ActivityMapper } from '../../../mappers/ActivityMapper';
 import { DoulaDocumentRepository } from '../../../repositories/doulaDocumentRepository';
 import { ActivityRepository } from '../../../repositories/interface/activityRepository';
+import { validateDocumentFile } from '../../../security/documentUpload';
 import { CloudSqlTeamService } from '../../../services/cloudSqlTeamService';
 import type { TeamMemberDto } from '../../../services/cloudSqlTeamService';
 import { DoulaAvailabilityService } from '../../../services/doulaAvailabilityService';
@@ -153,9 +153,32 @@ export class DoulaController {
    * Upload a document (background check, license, etc.)
    * POST /api/doulas/documents
    */
-  async uploadDocument(req: AuthRequest, res: Response): Promise<void> {
+  async uploadDocument(
+    req: AuthRequest,
+    res: Response,
+    adminTargetId?: string
+  ): Promise<void> {
     try {
-      const doulaId = await this.resolveDocumentDoulaId(req);
+      if (adminTargetId) {
+        if (req.user?.role !== 'admin') {
+          res.status(403).json({ error: 'Forbidden' });
+          return;
+        }
+        if (!req.tenant?.id) {
+          res.status(403).json({ error: 'An organization is required.' });
+          return;
+        }
+        const { rows } = await getPool().query(
+          'SELECT id FROM public.doulas WHERE id::text = $1 AND tenant_id = $2::uuid',
+          [adminTargetId, req.tenant.id]
+        );
+        if (!rows[0]) {
+          res.status(404).json({ error: 'Doula not found' });
+          return;
+        }
+      }
+      const doulaId = adminTargetId || (await this.resolveDocumentDoulaId(req));
+
       if (!doulaId) {
         res.status(401).json({ error: 'Unauthorized' });
         return;
@@ -186,10 +209,9 @@ export class DoulaController {
         });
         return;
       }
-      if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
-        res.status(400).json({
-          error: `Invalid file type. Allowed: PDF, PNG, JPG, JPEG`,
-        });
+      const validationError = validateDocumentFile(file);
+      if (validationError) {
+        res.status(400).json({ error: validationError });
         return;
       }
 
