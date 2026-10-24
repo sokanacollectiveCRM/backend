@@ -1,0 +1,57 @@
+# Automatic API dev deployment. Update only the image to preserve runtime
+# settings, Cloud SQL attachment, service identity, secrets and environment.
+steps:
+  - name: bash
+    id: Verify-dev-branch
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        test "$BRANCH_NAME" = dev
+        test -n "$COMMIT_SHA"
+
+  - name: node:20
+    id: Test
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        npm ci
+        npm run build
+        npm test -- --runInBand
+        npm run test:security-smoke
+
+  - name: gcr.io/cloud-builders/docker
+    id: Build
+    args:
+      - build
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/backend/sokana-private-api-dev:$COMMIT_SHA
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    id: Push
+    args:
+      - push
+      - us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/backend/sokana-private-api-dev:$COMMIT_SHA
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    id: Deploy
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - update
+      - sokana-private-api-dev
+      - --project=$PROJECT_ID
+      - --region=us-central1
+      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/backend/sokana-private-api-dev:$COMMIT_SHA
+      - --quiet
+
+images:
+  - us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/backend/sokana-private-api-dev:$COMMIT_SHA
+
+options:
+  logging: CLOUD_LOGGING_ONLY
