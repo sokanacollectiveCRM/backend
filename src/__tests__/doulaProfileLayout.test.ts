@@ -242,3 +242,29 @@ describe('profile layout validation', () => {
     );
   });
 });
+
+describe('P-13 required address fields on ordinary saves', () => {
+  it.each(
+    ['address', 'city', 'state', 'zip_code'].flatMap((field) =>
+      ['', '   ', null, 123, {}].map((value) => [field, value])
+    )
+  )('rejects %s = %p before writing', async (field, value) => {
+    const controller = Object.create(DoulaController.prototype) as any;
+    controller.cloudSqlTeamService = { updateTeamMember: jest.fn() };
+    const res: any = { json: jest.fn(), status: jest.fn().mockReturnThis() };
+    await controller.updateMyProfile(
+      {
+        user: { id: 'doula' },
+        body: { ...complete, [field as string]: value },
+      },
+      res
+    );
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      error: expect.stringMatching(/required/),
+    });
+    expect(
+      controller.cloudSqlTeamService.updateTeamMember
+    ).not.toHaveBeenCalled();
+  });
+});

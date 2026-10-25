@@ -1620,6 +1620,21 @@ export class DoulaController {
         res.status(401).json({ error: 'Unauthorized' });
         return;
       }
+      // Validate before filtering nulls: explicit clearing of required address
+      // fields must fail for ordinary saves as well as review submissions.
+      for (const [field, label] of [
+        ['address', 'Address'],
+        ['city', 'City'],
+        ['state', 'State'],
+        ['zip_code', 'ZIP code'],
+      ] as const) {
+        if (Object.prototype.hasOwnProperty.call(req.body || {}, field)) {
+          const value = req.body[field];
+          if (typeof value !== 'string' || !value.trim()) {
+            throw new ValidationError(`${label} is required.`);
+          }
+        }
+      }
       // Filter out undefined/null values but keep empty strings for explicit clearing.
       const fieldsToUpdate = Object.entries(req.body || {}).reduce(
         (acc, [key, value]) => {
