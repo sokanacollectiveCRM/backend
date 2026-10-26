@@ -228,7 +228,7 @@ describe('DoulaController.renameDocument', () => {
     const req = {
       user: { id: ownerId, email: 'doula@example.com', role: 'doula' },
       params: { documentId },
-      body: { document_type: 'w9' },
+      body: { document_type: 'background_check' },
     } as unknown as AuthRequest;
     const res = buildRes();
 

@@ -58,7 +58,7 @@ describe('DoulaController.uploadDocument document types', () => {
     } as unknown as AuthRequest;
   }
 
-  it.each(['background_check', 'w9', 'direct_deposit_form'])(
+  it.each(['background_check'])(
     'returns 400 when uploading retired type %s',
     async (documentType) => {
       const uploadDocument = jest.fn();
@@ -77,55 +77,59 @@ describe('DoulaController.uploadDocument document types', () => {
     }
   );
 
-  it.each(['illinois_medicaid_certification', 'miscellaneous'])(
-    'uploads new document type %s',
-    async (documentType) => {
-      const uploadDocument = jest.fn().mockResolvedValue({
-        filePath: `${doulaId}/${documentType}/file.pdf`,
-        fileName: 'certificate.pdf',
-        fileSize: 1024,
-        mimeType: 'application/pdf',
-      });
-      const createDocument = jest.fn().mockResolvedValue({
-        id: 'doc-1',
-        documentType,
-        fileName: 'certificate.pdf',
-        filePath: `${doulaId}/${documentType}/file.pdf`,
-        fileSize: 1024,
-        uploadedAt: new Date('2026-10-13T12:00:00.000Z'),
-        status: 'uploaded',
-      });
-      const getSignedUrl = jest
-        .fn()
-        .mockResolvedValue('https://example.test/file.pdf');
-      const getCurrentDocumentByType = jest.fn();
-      const controller = buildController({
-        repo: {
-          createDocument,
-          getSignedUrl,
-          getCurrentDocumentByType,
-          deleteDocument: jest.fn(),
-        },
-        upload: { uploadDocument, deleteDocument: jest.fn() },
-      });
-      const res = buildRes();
+  it.each([
+    'illinois_medicaid_certification',
+    'miscellaneous',
+    'w9',
+    'direct_deposit_form',
+    'cpr',
+    'hipaa',
+  ])('uploads new document type %s', async (documentType) => {
+    const uploadDocument = jest.fn().mockResolvedValue({
+      filePath: `${doulaId}/${documentType}/file.pdf`,
+      fileName: 'certificate.pdf',
+      fileSize: 1024,
+      mimeType: 'application/pdf',
+    });
+    const createDocument = jest.fn().mockResolvedValue({
+      id: 'doc-1',
+      documentType,
+      fileName: 'certificate.pdf',
+      filePath: `${doulaId}/${documentType}/file.pdf`,
+      fileSize: 1024,
+      uploadedAt: new Date('2026-10-13T12:00:00.000Z'),
+      status: 'uploaded',
+    });
+    const getSignedUrl = jest
+      .fn()
+      .mockResolvedValue('https://example.test/file.pdf');
+    const getCurrentDocumentByType = jest.fn();
+    const controller = buildController({
+      repo: {
+        createDocument,
+        getSignedUrl,
+        getCurrentDocumentByType,
+        deleteDocument: jest.fn(),
+      },
+      upload: { uploadDocument, deleteDocument: jest.fn() },
+    });
+    const res = buildRes();
 
-      await controller.uploadDocument(buildReq(documentType), res);
+    await controller.uploadDocument(buildReq(documentType), res);
 
-      expect(uploadDocument).toHaveBeenCalledWith(
-        expect.objectContaining({ mimetype: 'application/pdf' }),
-        doulaId,
-        documentType
-      );
-      expect(createDocument).toHaveBeenCalledWith(
-        expect.objectContaining({ documentType, doulaId })
-      );
-      expect(res.status).toHaveBeenCalledWith(201);
-      if (documentType === 'miscellaneous') {
-        expect(getCurrentDocumentByType).not.toHaveBeenCalled();
-      }
+    expect(uploadDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ mimetype: 'application/pdf' }),
+      doulaId,
+      documentType
+    );
+    expect(createDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ documentType, doulaId })
+    );
+    expect(res.status).toHaveBeenCalledWith(201);
+    if (documentType === 'miscellaneous') {
+      expect(getCurrentDocumentByType).not.toHaveBeenCalled();
     }
-  );
+  });
 
   it('keeps every miscellaneous upload instead of replacing the previous file', async () => {
     const uploadDocument = jest.fn().mockResolvedValue({
@@ -280,5 +284,73 @@ describe('DoulaController.uploadDocument document types', () => {
     await controller.uploadDocument(req, res, 'fictional-other-tenant');
     expect(res.status).toHaveBeenCalledWith(404);
     expect(uploadDocument).not.toHaveBeenCalled();
+  });
+  it('keeps the current document when replacement storage fails', async () => {
+    const current = { id: 'old-document', filePath: 'fictional/old.pdf' };
+    const repo = {
+      getCurrentDocumentByType: jest.fn().mockResolvedValue(current),
+      deleteDocument: jest.fn(),
+      createDocument: jest.fn(),
+    };
+    const upload = {
+      uploadDocument: jest
+        .fn()
+        .mockRejectedValue(new Error('Fictional storage failure')),
+      deleteDocument: jest.fn(),
+    };
+    const controller = buildController({ repo, upload });
+    const res = buildRes();
+    await controller.uploadDocument(buildReq('w9'), res);
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(repo.deleteDocument).not.toHaveBeenCalled();
+    expect(upload.deleteDocument).not.toHaveBeenCalled();
+  });
+  it('persists a pending replacement before removing the old file', async () => {
+    const events: string[] = [];
+    const repo = {
+      getCurrentDocumentByType: jest
+        .fn()
+        .mockResolvedValue({
+          id: 'old-document',
+          filePath: 'fictional/old.pdf',
+        }),
+      createDocument: jest.fn().mockImplementation(async () => {
+        events.push('persist');
+        return {
+          id: 'new-document',
+          filePath: 'fictional/new.pdf',
+          status: 'uploaded',
+        };
+      }),
+      deleteDocument: jest
+        .fn()
+        .mockImplementation(async () => events.push('remove-old-row')),
+      getSignedUrl: jest
+        .fn()
+        .mockResolvedValue('https://fictional.example/signed'),
+    };
+    const upload = {
+      uploadDocument: jest.fn().mockImplementation(async () => {
+        events.push('store');
+        return { filePath: 'fictional/new.pdf', fileName: 'fictional-new.pdf' };
+      }),
+      deleteDocument: jest
+        .fn()
+        .mockImplementation(async () => events.push('remove-old-file')),
+    };
+    const controller = buildController({ repo, upload });
+    const res = buildRes();
+    await controller.uploadDocument(buildReq('direct_deposit_form'), res);
+    expect(events).toEqual([
+      'store',
+      'persist',
+      'remove-old-row',
+      'remove-old-file',
+    ]);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        document: expect.objectContaining({ status: 'uploaded' }),
+      })
+    );
   });
 });
