@@ -49,10 +49,12 @@ authRoutes.post('/invitations/accept', async (req: Request, res: Response) => {
     await acceptStaffInvitation({
       token: String(req.body?.token || ''),
       password: String(req.body?.password || ''),
+      idToken:
+        typeof req.body?.idToken === 'string' ? req.body.idToken : undefined,
     });
     res.status(200).json({
       message:
-        'Invitation accepted. Check your email to verify your address, then log in.',
+        'Invitation accepted. Sign in to continue; complete email verification if requested.',
     });
   } catch (error) {
     invitationError(error, res);

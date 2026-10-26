@@ -60,3 +60,20 @@ export function buildStaffInvitationEmail(input: {
     </div>`,
   };
 }
+
+export function buildOrganizationInvitationEmail(input: {
+  firstname: string;
+  organizationName: string;
+  role: string;
+  acceptUrl: string;
+}): { subject: string; text: string; html: string } {
+  const role = input.role === 'hr' ? 'HR' : input.role;
+  const instruction = `${input.organizationName} invited you to join as ${role}. Open the invitation to review and accept it. If you already have a Sokana360 account, sign in with your existing password; your password will not change. New users can create a password on the invitation page.`;
+  const separation =
+    'Your memberships in other organizations stay unchanged. Profiles and uploaded documents remain separate for each organization.';
+  return {
+    subject: `Invitation to join ${input.organizationName} on Sokana360`,
+    text: `Hi ${input.firstname},\n\n${instruction}\n\nAccept invitation: ${input.acceptUrl}\n\n${separation}\n\nIf you need help, contact hello@sokanacollective.com.\n\nThank you,\nSokana360`,
+    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;line-height:1.6"><p>Hi ${escapeHtml(input.firstname)},</p><p>${escapeHtml(instruction)}</p><p><a href="${escapeHtml(input.acceptUrl)}">Review and accept invitation</a></p><p>${separation}</p><p>If you need help, contact <a href="mailto:hello@sokanacollective.com">hello@sokanacollective.com</a>.</p><p>Thank you,<br>Sokana360</p></div>`,
+  };
+}

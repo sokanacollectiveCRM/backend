@@ -72,6 +72,7 @@ const corsOptions = {
     'Content-Type',
     'Authorization',
     'X-Session-Token',
+    'X-Tenant-Id',
     'X-Signing-Session',
     'Idempotency-Key',
   ],

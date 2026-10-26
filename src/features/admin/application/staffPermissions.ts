@@ -19,7 +19,7 @@ async function requireManager(db: Pick<PoolClient, 'query'>, req: AuthRequest) {
     throw new PermissionError(403, 'Staff permissions access denied.');
   const result = await db.query(
     `SELECT a.id FROM public.admins a
-    WHERE a.tenant_id=$1::uuid AND a.id::text=$2 AND (
+    WHERE a.tenant_id=$1::uuid AND a.id::text=$2 AND NOT EXISTS(SELECT 1 FROM public.memberships m WHERE m.tenant_id=a.tenant_id AND m.principal_id=a.id AND m.status='inactive') AND (
       to_jsonb(a)->>'is_super_admin'='true' OR
       to_jsonb(a)->>'role' IN ('super_admin','superadmin') OR EXISTS (
         SELECT 1 FROM public.doula_hr_permissions p WHERE p.tenant_id=a.tenant_id
@@ -43,7 +43,7 @@ export async function readStaffPermissions(req: AuthRequest) {
     `SELECT a.id, a.full_name AS name, a.email,
     EXISTS(SELECT 1 FROM public.doula_hr_permissions p WHERE p.tenant_id=a.tenant_id AND p.admin_id=a.id::text AND p.department='hr') AS hr,
     EXISTS(SELECT 1 FROM public.doula_hr_permissions p WHERE p.tenant_id=a.tenant_id AND p.admin_id=a.id::text AND p.department='payroll') AS payroll
-    FROM public.admins a WHERE a.tenant_id=$1::uuid ORDER BY lower(a.email),a.id`,
+    FROM public.admins a WHERE a.tenant_id=$1::uuid AND NOT EXISTS(SELECT 1 FROM public.memberships m WHERE m.tenant_id=a.tenant_id AND m.principal_id=a.id AND m.status='inactive') ORDER BY lower(a.email),a.id`,
     [req.tenant!.id]
   );
   const { rows } = await db.query(
@@ -77,7 +77,7 @@ export async function changeStaffPermission(req: AuthRequest) {
     const tenantId = req.tenant!.id,
       adminId = req.params.adminId;
     const target = await db.query(
-      'SELECT id FROM public.admins WHERE tenant_id=$1::uuid AND id::text=$2 FOR UPDATE',
+      `SELECT id FROM public.admins WHERE tenant_id=$1::uuid AND id::text=$2 AND NOT EXISTS(SELECT 1 FROM public.memberships m WHERE m.tenant_id=admins.tenant_id AND m.principal_id=admins.id AND m.status='inactive') FOR UPDATE`,
       [tenantId, adminId]
     );
     if (!target.rowCount) throw new PermissionError(404, 'Admin not found.');
@@ -90,7 +90,7 @@ export async function changeStaffPermission(req: AuthRequest) {
       if (!enabled) {
         const remaining = await db.query(
           `SELECT 1 FROM public.doula_hr_permissions p JOIN public.admins a ON a.tenant_id=p.tenant_id AND a.id::text=p.admin_id
-          WHERE p.tenant_id=$1::uuid AND NOT (p.admin_id=$2 AND p.department=$3) LIMIT 1`,
+          WHERE p.tenant_id=$1::uuid AND NOT (p.admin_id=$2 AND p.department=$3) AND NOT EXISTS(SELECT 1 FROM public.memberships m WHERE m.tenant_id=a.tenant_id AND m.principal_id=a.id AND m.status='inactive') LIMIT 1`,
           [tenantId, adminId, capability]
         );
         if (!remaining.rowCount)

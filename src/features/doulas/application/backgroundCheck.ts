@@ -22,7 +22,7 @@ export async function canManageHrDocuments(req: AuthRequest): Promise<boolean> {
   const result = await getPool().query(
     `SELECT 1 FROM public.doula_hr_permissions p JOIN public.admins a
      ON a.id::text=p.admin_id AND a.tenant_id=p.tenant_id
-     WHERE p.tenant_id=$1::uuid AND p.admin_id=$2 AND p.department IN ('hr','payroll')`,
+     WHERE p.tenant_id=$1::uuid AND p.admin_id=$2 AND p.department IN ('hr','payroll') AND NOT EXISTS(SELECT 1 FROM public.memberships m WHERE m.tenant_id=a.tenant_id AND m.principal_id=a.id AND m.status='inactive')`,
     [req.tenant.id, req.user.id]
   );
   return !!result.rowCount;

@@ -92,6 +92,16 @@ export class DoulaController {
   ): Promise<string | null> {
     const userId = req.user?.id;
     if (!userId) return null;
+    if (req.tenant?.id) {
+      const { rows } = await getPool().query(
+        `SELECT d.id FROM public.doulas d WHERE d.tenant_id=$1::uuid
+        AND (d.id::text=$2 OR d.identity_platform_uid=$2 OR lower(d.email)=lower($3))
+        AND NOT EXISTS(SELECT 1 FROM public.memberships m WHERE m.tenant_id=d.tenant_id AND m.principal_id=d.id AND m.status='inactive')
+        ORDER BY CASE WHEN d.id::text=$2 THEN 0 ELSE 1 END LIMIT 1`,
+        [req.tenant.id, String(userId), req.user?.email ?? null]
+      );
+      return rows[0]?.id ?? null;
+    }
     return this.documentIdResolver.resolveStorageDoulaId(
       String(userId),
       req.user?.email
@@ -1726,11 +1736,9 @@ export class DoulaController {
             key.startsWith('background_check') || key === 'backgroundCheck'
         )
       ) {
-        res
-          .status(403)
-          .json({
-            error: 'Only HR/payroll can change background check status.',
-          });
+        res.status(403).json({
+          error: 'Only HR/payroll can change background check status.',
+        });
         return;
       }
 

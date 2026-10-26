@@ -18,6 +18,7 @@ import {
 import { ApiErrorCode } from '../security/errorCodes';
 import { hrRequestAllowed } from '../security/hrAccessBoundary';
 import { SESSION_COOKIE } from '../security/sessionCookies';
+import { CloudSqlIdentityUserService } from '../services/identityPlatform/cloudSqlIdentityUserService';
 import { type AuthRequest, ROLE } from '../types';
 
 /** Cookie and header names for session token (canonical). */
@@ -130,10 +131,12 @@ const authMiddleware = async (
     recordTokenSource(source, req);
 
     let user_entity;
+    let firebaseUid: string | undefined;
     let emailVerified = true;
     try {
       const resolved = await identityTokenService.resolveSessionUser(token);
       user_entity = resolved.user;
+      firebaseUid = resolved.firebaseUid;
       emailVerified = resolved.emailVerified;
     } catch (verifyError) {
       logger.warn(
@@ -152,54 +155,9 @@ const authMiddleware = async (
       return;
     }
 
-    if (
-      !emailVerified &&
-      roleRequiresVerifiedEmail(user_entity.role) &&
-      !isEmailVerificationExemptRequest(req)
-    ) {
-      res.status(403).json({
-        error: 'Verify your email before accessing this resource.',
-        code: ApiErrorCode.EMAIL_NOT_VERIFIED,
-      });
-      return;
-    }
-
-    if (!(await isCurrentAccountActive(user_entity))) {
-      logger.warn(
-        {
-          service: 'backend-authn',
-          event: 'inactive_account_denied',
-          userId: String(user_entity.id || ''),
-          role: String(user_entity.role || '').toLowerCase(),
-          method: req.method,
-          path: req.path,
-          status: 403,
-        },
-        'Inactive account denied'
-      );
-      res.status(403).json({
-        error: 'Account is inactive',
-        code: ApiErrorCode.FORBIDDEN,
-      });
-      return;
-    }
-
-    req.user = user_entity;
-    if (
-      user_entity.role === ROLE.HR &&
-      !hrRequestAllowed(req.method, req.originalUrl)
-    ) {
-      res
-        .status(403)
-        .json({
-          error: 'This account is limited to the HR workspace.',
-          code: ApiErrorCode.FORBIDDEN,
-        });
-      return;
-    }
     const headerValue = req.header(TENANT_HEADER);
     const gate = await resolveTenantGate({
-      userId: String(user_entity.id || ''),
+      userId: firebaseUid || String(user_entity.id || ''),
       email: user_entity.email,
       requestedTenant: headerValue?.trim() || null,
       currentRole: user_entity.role ? String(user_entity.role) : null,
@@ -228,28 +186,57 @@ const authMiddleware = async (
 
     if (gate.action === 'attach') {
       req.tenant = gate.tenant;
-      if (isTenancyEnforced()) {
-        user_entity.role =
-          user_entity.role === ROLE.HR ? ROLE.HR : (gate.tenant.role as ROLE);
-      }
-      if (
-        user_entity.role === ROLE.HR &&
-        !hrRequestAllowed(req.method, req.originalUrl)
-      ) {
-        res
-          .status(403)
-          .json({
-            error: 'This account is limited to the HR workspace.',
+      if (gate.tenant.principalId) {
+        const scoped = await new CloudSqlIdentityUserService().findTenantUser(
+          gate.tenant.id,
+          gate.tenant.principalId
+        );
+        if (!scoped) {
+          res.status(403).json({
+            error: 'Organization profile is unavailable.',
             code: ApiErrorCode.FORBIDDEN,
           });
-        return;
+          return;
+        }
+        user_entity = scoped;
+        user_entity.emailVerified = emailVerified;
       }
-      runWithTenant(gate.tenant.id, () => {
-        next();
+      if (isTenancyEnforced())
+        user_entity.role =
+          user_entity.role === ROLE.HR ? ROLE.HR : (gate.tenant.role as ROLE);
+    }
+    if (
+      !emailVerified &&
+      roleRequiresVerifiedEmail(user_entity.role) &&
+      !isEmailVerificationExemptRequest(req)
+    ) {
+      res.status(403).json({
+        error: 'Verify your email before accessing this resource.',
+        code: ApiErrorCode.EMAIL_NOT_VERIFIED,
       });
       return;
     }
-
+    if (!(await isCurrentAccountActive(user_entity))) {
+      res
+        .status(403)
+        .json({ error: 'Account is inactive', code: ApiErrorCode.FORBIDDEN });
+      return;
+    }
+    req.user = user_entity;
+    if (
+      user_entity.role === ROLE.HR &&
+      !hrRequestAllowed(req.method, req.originalUrl)
+    ) {
+      res.status(403).json({
+        error: 'This account is limited to the HR workspace.',
+        code: ApiErrorCode.FORBIDDEN,
+      });
+      return;
+    }
+    if (gate.action === 'attach') {
+      runWithTenant(gate.tenant.id, () => next());
+      return;
+    }
     next();
   } catch (err: any) {
     logger.error(

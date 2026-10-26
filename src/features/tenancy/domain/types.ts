@@ -24,6 +24,7 @@ export interface TenantView {
   name: string;
   role: MembershipRole;
   membershipId: string;
+  principalId?: string;
   /** Sokana organization admins are not platform admins. */
   platformAdmin: false;
 }

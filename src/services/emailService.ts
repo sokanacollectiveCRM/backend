@@ -10,7 +10,10 @@ import { buildFamilyInvitationEmail } from '../features/portal/application/famil
 import { getLimitedBillingViewUrl } from '../utils/billingViewUrl';
 import { buildStaffPasswordSetupUrl } from './identityPlatform/staffPasswordSetup';
 import { EmailService } from './interface/emailServiceInterface';
-import { buildStaffInvitationEmail } from './staffInvitationEmail';
+import {
+  buildOrganizationInvitationEmail,
+  buildStaffInvitationEmail,
+} from './staffInvitationEmail';
 
 export interface ContractInitiatedBillingEmailInput {
   clientName: string;
@@ -506,11 +509,8 @@ The Sokana Team`;
     organizationName: string;
     acceptUrl: string;
   }): Promise<void> {
-    await this.sendAccountSetupInvitation(
-      input.to,
-      input.firstname,
-      input.acceptUrl
-    );
+    const message = buildOrganizationInvitationEmail(input);
+    await this.sendEmail(input.to, message.subject, message.text, message.html);
   }
 
   private async sendAccountSetupInvitation(

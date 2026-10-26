@@ -18,7 +18,10 @@ jest.mock('../services/identityPlatform/emailVerificationService', () => ({
 const query = jest.fn();
 beforeEach(() => {
   query.mockReset();
-  (getPool as jest.Mock).mockReturnValue({ query });
+  (getPool as jest.Mock).mockReturnValue({
+    query,
+    connect: async () => ({ query, release: jest.fn() }),
+  });
 });
 
 it('creates an active doula through the current Team creation flow', async () => {
@@ -58,11 +61,18 @@ it('creates an active doula when accepting a token invitation', async () => {
           },
         ],
       };
+    if (sql.includes('SELECT status,expires_at'))
+      return {
+        rows: [{ status: 'pending', expires_at: new Date(Date.now() + 60000) }],
+      };
     if (sql.includes('INSERT INTO public.doulas'))
       return { rows: [{ id: 'doula' }] };
     return { rows: [] };
   });
   (getFirebaseAuth as jest.Mock).mockReturnValue({
+    getUserByEmail: jest
+      .fn()
+      .mockRejectedValue({ code: 'auth/user-not-found' }),
     createUser: jest.fn().mockResolvedValue({ uid: 'fictional' }),
     deleteUser: jest.fn(),
   });
@@ -73,7 +83,7 @@ it('creates an active doula when accepting a token invitation', async () => {
   const insert = query.mock.calls.find(([sql]) =>
     sql.includes('INSERT INTO public.doulas')
   );
-  expect(insert?.[0]).toContain("NULL, 'active', $3");
+  expect(insert?.[0]).toContain("'active'");
 });
 
 it('keeps pending doula accounts able to authenticate for onboarding', async () => {

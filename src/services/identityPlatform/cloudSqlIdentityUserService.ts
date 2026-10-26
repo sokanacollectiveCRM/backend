@@ -102,6 +102,7 @@ const PROFILE_QUERY = `
       a.zip_code,
       a.bio,
       a.profile_picture,
+      a.tenant_id,
       1 AS priority
     FROM public.admins a
     WHERE a.identity_platform_uid = $1
@@ -126,6 +127,7 @@ const PROFILE_QUERY = `
       d.zip_code,
       d.bio,
       d.profile_picture,
+      d.tenant_id,
       2
     FROM public.doulas d
     WHERE d.identity_platform_uid = $1
@@ -150,6 +152,7 @@ const PROFILE_QUERY = `
       c.zip_code,
       c.bio,
       NULL::text,
+      c.tenant_id,
       3
     FROM public.phi_clients c
     WHERE c.identity_platform_uid = $1
@@ -198,6 +201,20 @@ export class CloudSqlIdentityUserService {
       );
       return rows[0] ? mapIdentityUser(rows[0]) : null;
     }
+  }
+
+  async findTenantUser(
+    tenantId: string,
+    principalId: string
+  ): Promise<User | null> {
+    const { rows } = await getPool().query<IdentityUserRow>(
+      PROFILE_QUERY.replace(
+        '  ORDER BY priority',
+        '  WHERE tenant_id=$4::uuid\n  ORDER BY priority'
+      ),
+      [principalId, principalId, null, tenantId]
+    );
+    return rows[0] ? mapIdentityUser(rows[0]) : null;
   }
 
   async findStaffByIdentifier(

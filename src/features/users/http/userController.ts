@@ -21,6 +21,7 @@ import {
 } from '../../../utils/hourTypes';
 import { canAccessSensitive } from '../../../utils/sensitiveAccess';
 import { transitionDoulaProfile } from '../../doulas/application/submitDoulaProfile';
+import { listPendingStaffInvitations } from '../../team/application/staffInvitationService';
 
 export class UserController {
   private userUseCase: UserUseCase;
@@ -70,7 +71,12 @@ export class UserController {
   async getAllTeamMembers(req: AuthRequest, res: Response): Promise<void> {
     try {
       const users = await this.cloudSqlTeamService.listTeamMembers();
-      res.status(200).json(users);
+      res
+        .status(200)
+        .json([
+          ...users,
+          ...(await listPendingStaffInvitations(req.tenant?.id)),
+        ]);
     } catch (error) {
       this.handleError(error, res);
     }
@@ -102,7 +108,8 @@ export class UserController {
       const userId = req.params.id;
       const removed = await this.cloudSqlTeamService.deleteTeamMember(
         userId,
-        req.tenant?.id
+        req.tenant?.id,
+        req.user?.id
       );
       if (!removed) {
         res
@@ -112,7 +119,8 @@ export class UserController {
       }
       res.status(200).json({
         success: true,
-        message: 'Team member has been deleted successfully',
+        message:
+          'Membership removed from this organization. Platform account and historical records retained.',
       });
     } catch (error) {
       this.handleError(error, res);
@@ -488,6 +496,7 @@ export class UserController {
         email: String(email).trim(),
         role: normalizedRole as 'admin' | 'doula' | 'hr',
         invitedById: req.user?.id,
+        invitedByEmail: req.user?.email,
         phone_number: typeof phone_number === 'string' ? phone_number : null,
       });
       res.status(201).json(newMember);

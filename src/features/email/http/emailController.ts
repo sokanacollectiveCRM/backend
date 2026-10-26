@@ -6,7 +6,9 @@ import {
   toSafeClientErrorBody,
   toSafeProviderError,
 } from '../../../common/utils/safeLogging';
+import { getPool } from '../../../db/cloudSqlPool';
 import { NodemailerService } from '../../../services/emailService';
+import type { AuthRequest } from '../../../types';
 
 export class EmailController {
   private emailService: NodemailerService;
@@ -55,6 +57,22 @@ export class EmailController {
         return;
       }
 
+      // Older clients send a second setup-email request after Team > Invite.
+      // A pending organization invitation must never become a password-reset flow.
+      const tenantId = (req as AuthRequest).tenant?.id;
+      if (tenantId) {
+        const pending = await getPool().query(
+          "SELECT 1 FROM public.staff_invitations WHERE tenant_id=$1::uuid AND lower(email)=lower($2) AND status='pending' AND expires_at>now() LIMIT 1",
+          [tenantId, email]
+        );
+        if (pending.rowCount) {
+          res.status(200).json({
+            success: true,
+            message: 'Organization invitation already sent.',
+          });
+          return;
+        }
+      }
       await this.emailService.sendTeamInviteEmail(
         email,
         firstname,

@@ -23,6 +23,7 @@ import {
 } from '../../../security/sessionCookies';
 import { CloudSqlTeamService } from '../../../services/cloudSqlTeamService';
 import { attachDisplayProfilePicture } from '../../../services/gcs/profilePictureStorage';
+import { CloudSqlIdentityUserService } from '../../../services/identityPlatform/cloudSqlIdentityUserService';
 import { EmailMfaChallengeService } from '../../../services/identityPlatform/emailMfaChallengeService';
 import {
   emailVerificationService,
@@ -153,8 +154,11 @@ export class AuthController {
         return;
       }
 
-      const { user: appUser } =
-        await this.identityTokenService.resolveSessionUser(token);
+      let {
+        user: appUser,
+        firebaseUid,
+        emailVerified,
+      } = await this.identityTokenService.resolveSessionUser(token);
       if (!appUser) {
         res.status(404).json({ error: 'User not found' });
         return;
@@ -162,12 +166,31 @@ export class AuthController {
 
       const requestedTenant = req.header(TENANT_HEADER);
       const gate = await resolveTenantGate({
-        userId: String(appUser.id || ''),
+        userId: firebaseUid || String(appUser.id || ''),
         email: appUser.email,
         requestedTenant: requestedTenant?.trim() || null,
         currentRole: appUser.role ? String(appUser.role) : null,
       });
       if (gate.action === 'deny') {
+        if (
+          !requestedTenant &&
+          gate.status === 403 &&
+          [
+            'Organization membership is inactive',
+            'No active organization membership',
+          ].includes(gate.error)
+        ) {
+          res.json({
+            id: firebaseUid || appUser.id,
+            email: appUser.email,
+            firstname: appUser.firstname,
+            lastname: appUser.lastname,
+            role: 'platform_member',
+            organizationAccess: 'none',
+          });
+          return;
+        }
+
         res.status(gate.status).json({
           error: gate.error,
           code: gate.code,
@@ -176,6 +199,21 @@ export class AuthController {
         return;
       }
 
+      if (gate.action === 'attach' && gate.tenant.principalId) {
+        const scoped = await new CloudSqlIdentityUserService().findTenantUser(
+          gate.tenant.id,
+          gate.tenant.principalId
+        );
+        if (!scoped) {
+          res.status(403).json({
+            error: 'Organization profile is unavailable.',
+            code: ApiErrorCode.FORBIDDEN,
+          });
+          return;
+        }
+        appUser = scoped;
+        appUser.emailVerified = emailVerified;
+      }
       await attachDisplayProfilePicture(appUser);
       const body = appUser.toJSON() as Record<string, unknown>;
       if (gate.action === 'attach') {

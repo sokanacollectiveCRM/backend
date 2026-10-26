@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 
 import { getPool } from '../db/cloudSqlPool';
+import { ConflictError } from '../domains/errors';
 import {
   defaultAddressCountry,
   normalizePhone,
@@ -245,10 +246,10 @@ export class CloudSqlTeamService {
       >(
         `
         SELECT id, unit_number, full_name, NULL::text AS first_name, NULL::text AS last_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, certifications, profile_submitted_at, profile_review_status, profile_review_reason, profile_review_version, 'doula'::text AS role, created_at, updated_at
-        FROM public.doulas WHERE tenant_id = $1::uuid
+        FROM public.doulas WHERE tenant_id = $1::uuid AND NOT EXISTS (SELECT 1 FROM public.memberships m WHERE m.tenant_id=doulas.tenant_id AND m.principal_id=doulas.id AND m.status='inactive')
         UNION ALL
         SELECT id, NULL::text AS unit_number, full_name, first_name, last_name, email, phone, 'approved'::text, address, city, state, country, zip_code, bio, profile_picture, NULL::text[], NULL::text, NULL::jsonb, NULL::timestamptz, 'approved'::text, NULL::text, 0::integer, COALESCE(to_jsonb(admins)->>'staff_role','admin') AS role, created_at, updated_at
-        FROM public.admins WHERE tenant_id = $1::uuid
+        FROM public.admins WHERE tenant_id = $1::uuid AND NOT EXISTS (SELECT 1 FROM public.memberships m WHERE m.tenant_id=admins.tenant_id AND m.principal_id=admins.id AND m.status='inactive')
         ORDER BY full_name ASC
         `,
         [readTenantRequestState().tenantId]
@@ -266,7 +267,7 @@ export class CloudSqlTeamService {
         const { rows } = await pool.query<DoulaRow>(
           `
           SELECT id, unit_number, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, certifications, profile_submitted_at, profile_review_status, profile_review_reason, profile_review_version, created_at, updated_at
-          FROM public.doulas WHERE tenant_id = $1::uuid
+          FROM public.doulas WHERE tenant_id = $1::uuid AND NOT EXISTS (SELECT 1 FROM public.memberships m WHERE m.tenant_id=doulas.tenant_id AND m.principal_id=doulas.id AND m.status='inactive')
           ORDER BY full_name ASC
           `,
           [readTenantRequestState().tenantId]
@@ -421,6 +422,7 @@ export class CloudSqlTeamService {
     email: string;
     role: TeamRole;
     invitedById?: string;
+    invitedByEmail?: string;
     phone_number?: string | null;
   }): Promise<{
     id: string;
@@ -429,6 +431,8 @@ export class CloudSqlTeamService {
     email: string;
     role: TeamRole;
     phone_number: string | null;
+    invitation_status?: 'pending';
+    account_status?: string;
   }> {
     const tenantId = readTenantRequestState().tenantId;
     if (!tenantId)
@@ -439,12 +443,32 @@ export class CloudSqlTeamService {
       throw new Error('An inviting admin is required for HR');
     const normalizedEmail = input.email.toLowerCase().trim();
     const auth = getFirebaseAuth();
-    const createdAuth = await auth.createUser({
-      email: normalizedEmail,
-      password: crypto.randomBytes(18).toString('base64url'),
-      emailVerified: true,
-      displayName: `${input.firstname.trim()} ${input.lastname.trim()}`.trim(),
-    });
+    let createdAuth;
+    try {
+      createdAuth = await auth.createUser({
+        email: normalizedEmail,
+        password: crypto.randomBytes(18).toString('base64url'),
+        emailVerified: true,
+        displayName:
+          `${input.firstname.trim()} ${input.lastname.trim()}`.trim(),
+      });
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'auth/email-already-exists')
+        throw error;
+      const { createStaffInvitation } = await import(
+        '../features/team/application/staffInvitationService'
+      );
+      const pending = await createStaffInvitation({
+        tenantId,
+        firstname: input.firstname,
+        lastname: input.lastname,
+        email: normalizedEmail,
+        role: input.role,
+        invitedByEmail: input.invitedByEmail ?? input.invitedById ?? null,
+        invitedById: input.invitedById,
+      });
+      return { ...pending, phone_number: null };
+    }
     let client;
     try {
       client = await getPool().connect();
@@ -782,88 +806,83 @@ export class CloudSqlTeamService {
 
   async deleteTeamMember(
     id: string,
-    tenantId = readTenantRequestState().tenantId
+    tenantId = readTenantRequestState().tenantId,
+    actorId = 'organization-admin'
   ): Promise<boolean> {
     if (!tenantId)
       throw new Error('A tenant is required to remove a team member');
-    const client = await getPool().connect();
+    const db = await getPool().connect();
     try {
-      await client.query('BEGIN');
-      let table: 'doulas' | 'admins' = 'doulas';
-      let result = await client.query(
-        'SELECT id, email, identity_platform_uid FROM public.doulas WHERE id = $1::uuid AND tenant_id = $2::uuid FOR UPDATE',
+      await db.query('BEGIN');
+      await db.query(
+        'LOCK TABLE public.doula_hr_permissions IN EXCLUSIVE MODE'
+      );
+      let kind = 'doula';
+      let result = await db.query(
+        'SELECT id,email,identity_platform_uid FROM public.doulas WHERE id=$1::uuid AND tenant_id=$2::uuid FOR UPDATE',
         [id, tenantId]
       );
       if (!result.rows.length) {
-        table = 'admins';
-        result = await client.query(
-          'SELECT id, email, identity_platform_uid FROM public.admins WHERE id = $1::uuid AND tenant_id = $2::uuid FOR UPDATE',
+        kind = 'admin';
+        result = await db.query(
+          'SELECT id,email,identity_platform_uid FROM public.admins WHERE id=$1::uuid AND tenant_id=$2::uuid FOR UPDATE',
           [id, tenantId]
         );
       }
       const member = result.rows[0];
       if (!member) {
-        await client.query('ROLLBACK');
+        await db.query('ROLLBACK');
         return false;
       }
-      const auth = getFirebaseAuth();
-      let uid: string | null = member.identity_platform_uid;
-      if (!uid && member.email) {
-        try {
-          uid = (await auth.getUserByEmail(member.email)).uid;
-        } catch (error) {
-          if ((error as { code?: string }).code !== 'auth/user-not-found')
-            throw error;
-        }
-      }
-      // Do not remove a global sign-in identity used by another profile or tenant.
-      const shared = await client.query(
-        `SELECT EXISTS (
-          SELECT 1 FROM public.doulas WHERE id <> $1::uuid AND
-            (identity_platform_uid = $2 OR lower(email) = lower($3))
-          UNION ALL SELECT 1 FROM public.admins WHERE id <> $1::uuid AND
-            (identity_platform_uid = $2 OR lower(email) = lower($3))
-          UNION ALL SELECT 1 FROM public.phi_clients WHERE
-            (identity_platform_uid = $2 OR lower(email) = lower($3))
-          UNION ALL SELECT 1 FROM public.platform_admins WHERE
-            (identity_platform_uid = $2 OR lower(email) = lower($3))
-          UNION ALL SELECT 1 FROM public.memberships WHERE
-            (identity_platform_uid = $2 OR lower(email) = lower($3)) AND
-            (tenant_id <> $4::uuid OR principal_id::text <> $1::text)
-        ) AS shared`,
-        [id, uid, member.email, tenantId]
-      );
-      if (shared.rows[0]?.shared) {
-        throw new Error(
-          'This sign-in account is linked to another profile or organization. Contact support before removing it.'
-        );
-      }
-      await client.query(
-        'DELETE FROM public.memberships WHERE tenant_id = $1::uuid AND principal_id::text = $2',
+      const prior = await db.query(
+        'SELECT status FROM public.memberships WHERE tenant_id=$1::uuid AND principal_id=$2::uuid FOR UPDATE',
         [tenantId, id]
       );
-      await client.query(
-        `DELETE FROM public.${table} WHERE id = $1::uuid AND tenant_id = $2::uuid`,
-        [id, tenantId]
-      );
-      // Check deferred foreign keys before touching Firebase. A failed Firebase
-      // deletion rolls the SQL removal back, keeping the row available to retry.
-      await client.query('SET CONSTRAINTS ALL IMMEDIATE');
-      if (uid) {
-        try {
-          await auth.deleteUser(uid);
-        } catch (error) {
-          if ((error as { code?: string }).code !== 'auth/user-not-found')
-            throw error;
-        }
+      if (prior.rows[0]?.status === 'inactive') {
+        await db.query('COMMIT');
+        return true;
       }
-      await client.query('COMMIT');
+      const grants = await db.query(
+        'SELECT department FROM public.doula_hr_permissions WHERE tenant_id=$1::uuid AND admin_id=$2',
+        [tenantId, id]
+      );
+      if (grants.rows.length) {
+        const remaining = await db.query(
+          `SELECT 1 FROM public.doula_hr_permissions p JOIN public.admins a ON a.tenant_id=p.tenant_id AND a.id::text=p.admin_id
+          WHERE p.tenant_id=$1::uuid AND p.admin_id<>$2 AND NOT EXISTS(SELECT 1 FROM public.memberships m WHERE m.tenant_id=p.tenant_id AND m.principal_id=a.id AND m.status='inactive') LIMIT 1`,
+          [tenantId, id]
+        );
+        if (!remaining.rowCount)
+          throw new ConflictError(
+            'Cannot remove the last person with HR/payroll access. Grant access to another admin first.'
+          );
+        await db.query(
+          `INSERT INTO public.staff_permission_events(tenant_id,actor_id,admin_id,capability,old_value,new_value)
+          SELECT tenant_id,$3,admin_id,department,true,false FROM public.doula_hr_permissions WHERE tenant_id=$1::uuid AND admin_id=$2`,
+          [tenantId, id, actorId]
+        );
+        await db.query(
+          'DELETE FROM public.doula_hr_permissions WHERE tenant_id=$1::uuid AND admin_id=$2',
+          [tenantId, id]
+        );
+      }
+      await db.query(
+        `INSERT INTO public.memberships(tenant_id,principal_type,principal_id,identity_platform_uid,email,role,status)
+        VALUES($1::uuid,$2,$3::uuid,$4,$5,$6,'inactive') ON CONFLICT(tenant_id,principal_type,principal_id)
+        DO UPDATE SET status='inactive',updated_at=now()`,
+        [tenantId, kind, id, member.identity_platform_uid, member.email, kind]
+      );
+      await db.query(
+        "INSERT INTO public.staff_membership_events(tenant_id,principal_id,event,actor_id) VALUES($1::uuid,$2::uuid,'removed',$3)",
+        [tenantId, id, actorId]
+      );
+      await db.query('COMMIT');
       return true;
     } catch (error) {
-      await client.query('ROLLBACK');
+      await db.query('ROLLBACK');
       throw error;
     } finally {
-      client.release();
+      db.release();
     }
   }
 }

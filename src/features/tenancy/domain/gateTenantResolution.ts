@@ -21,6 +21,7 @@ export function toTenantView(
     name: membership.name,
     role: membership.role,
     membershipId: membership.id,
+    principalId: membership.principalId,
     platformAdmin: false,
   };
 }
@@ -40,7 +41,9 @@ export function gateTenantResolution(input: {
       tenant: toTenantView(input.resolution.membership),
     };
   }
-  if (!input.enforce) return { action: 'continue' };
+  // Explicit revocation and organization boundaries apply even during legacy rollout.
+  if (!input.enforce && input.resolution.status === 'none')
+    return { action: 'continue' };
 
   if (input.resolution.status === 'selection_required') {
     return {

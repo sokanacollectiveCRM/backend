@@ -6,109 +6,120 @@ jest.mock('../db/cloudSqlPool', () => ({ getPool: jest.fn() }));
 jest.mock('../services/identityPlatform/firebaseAdmin', () => ({
   getFirebaseAuth: jest.fn(),
 }));
-const query = jest.fn();
-const release = jest.fn();
-const deleteUser = jest.fn();
-const getUserByEmail = jest.fn();
-let role: 'doulas' | 'admins';
-let uid: string | null;
-let shared: boolean;
+const query = jest.fn(),
+  release = jest.fn();
+let table = 'doulas',
+  status = 'active',
+  grants = false,
+  remaining = true;
 beforeEach(() => {
   jest.resetAllMocks();
-  role = 'doulas';
-  uid = 'firebase-uid';
-  shared = false;
+  table = 'doulas';
+  status = 'active';
+  grants = false;
+  remaining = true;
   (getPool as jest.Mock).mockReturnValue({
     connect: async () => ({ query, release }),
   });
-  (getFirebaseAuth as jest.Mock).mockReturnValue({
-    deleteUser,
-    getUserByEmail,
-  });
-  getUserByEmail.mockResolvedValue({ uid: 'legacy-uid' });
   query.mockImplementation(async (sql: string) => {
-    if (sql.startsWith('SELECT id'))
+    if (sql.startsWith('SELECT id,'))
       return {
-        rows: sql.includes('public.' + role)
+        rows: sql.includes('public.' + table)
           ? [
               {
                 id: 'member',
-                email: 'maya@example.com',
-                identity_platform_uid: uid,
+                email: 'fixture@example.test',
+                identity_platform_uid: 'shared-platform-uid',
               },
             ]
           : [],
       };
-    if (sql.startsWith('SELECT EXISTS')) return { rows: [{ shared }] };
+    if (sql.startsWith('SELECT status')) return { rows: [{ status }] };
+    if (sql.startsWith('SELECT department'))
+      return { rows: grants ? [{ department: 'hr' }] : [] };
+    if (sql.includes('SELECT 1 FROM public.doula_hr_permissions p JOIN'))
+      return { rows: remaining ? [{}] : [], rowCount: remaining ? 1 : 0 };
     return { rows: [], rowCount: 1 };
   });
 });
-it.each(['doulas', 'admins'] as const)(
-  'removes %s identity before committing SQL',
-  async (target) => {
-    role = target;
+it.each(['doulas', 'admins'])(
+  'removes only the organization membership for %s, retaining identity and profile',
+  async (name) => {
+    table = name;
     expect(
-      await new CloudSqlTeamService().deleteTeamMember('member', 'tenant')
+      await new CloudSqlTeamService().deleteTeamMember(
+        'member',
+        'tenant',
+        'actor'
+      )
     ).toBe(true);
-    expect(deleteUser).toHaveBeenCalledWith('firebase-uid');
-    const commit = query.mock.calls.findIndex(([sql]) => sql === 'COMMIT');
-    expect(deleteUser.mock.invocationCallOrder[0]).toBeLessThan(
-      query.mock.invocationCallOrder[commit]
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("DO UPDATE SET status='inactive'"),
+      expect.arrayContaining(['tenant', 'member', 'shared-platform-uid'])
     );
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('tenant_id = $2::uuid FOR UPDATE'),
-      ['member', 'tenant']
+      expect.stringContaining('INSERT INTO public.staff_membership_events'),
+      ['tenant', 'member', 'actor']
     );
+    expect(
+      query.mock.calls.some(([sql]) =>
+        /DELETE FROM public\.(doulas|admins|doula_documents)/.test(sql)
+      )
+    ).toBe(false);
+    expect(getFirebaseAuth).not.toHaveBeenCalled();
+    expect(query).toHaveBeenCalledWith('COMMIT');
     expect(release).toHaveBeenCalled();
   }
 );
-it('looks up legacy identities by email', async () => {
-  uid = null;
+it('is idempotent for an already removed membership', async () => {
+  status = 'inactive';
   await new CloudSqlTeamService().deleteTeamMember('member', 'tenant');
-  expect(getUserByEmail).toHaveBeenCalledWith('maya@example.com');
-  expect(deleteUser).toHaveBeenCalledWith('legacy-uid');
+  expect(query.mock.calls.some(([sql]) => sql.includes('INSERT'))).toBe(false);
+  expect(getFirebaseAuth).not.toHaveBeenCalled();
 });
-it('rolls back when Firebase deletion fails', async () => {
-  deleteUser.mockRejectedValue(new Error('permission denied'));
-  await expect(
-    new CloudSqlTeamService().deleteTeamMember('member', 'tenant')
-  ).rejects.toThrow('permission denied');
-  expect(query).toHaveBeenCalledWith('ROLLBACK');
-  expect(query).not.toHaveBeenCalledWith('COMMIT');
-});
-it('does not delete Firebase when SQL dependencies prevent removal', async () => {
+it('rolls back membership removal if its audit fails', async () => {
   const original = query.getMockImplementation()!;
   query.mockImplementation(async (sql: string, ...args: unknown[]) => {
-    if (sql.startsWith('DELETE FROM public.doulas'))
-      throw new Error('foreign key');
+    if (sql.includes('INSERT INTO public.staff_membership_events'))
+      throw Error('audit failed');
     return original(sql, ...args);
   });
   await expect(
     new CloudSqlTeamService().deleteTeamMember('member', 'tenant')
-  ).rejects.toThrow('foreign key');
-  expect(deleteUser).not.toHaveBeenCalled();
+  ).rejects.toThrow('audit failed');
+  expect(query).toHaveBeenCalledWith('ROLLBACK');
+  expect(query).not.toHaveBeenCalledWith('COMMIT');
+  expect(getFirebaseAuth).not.toHaveBeenCalled();
 });
-it('treats an already missing Firebase identity as successfully removed', async () => {
-  deleteUser.mockRejectedValue({ code: 'auth/user-not-found' });
-  expect(
-    await new CloudSqlTeamService().deleteTeamMember('member', 'tenant')
-  ).toBe(true);
-});
-it('protects identities shared with other profiles', async () => {
-  shared = true;
+it('blocks removal of the last HR/payroll holder', async () => {
+  grants = true;
+  remaining = false;
   await expect(
     new CloudSqlTeamService().deleteTeamMember('member', 'tenant')
-  ).rejects.toThrow('another profile');
-  expect(deleteUser).not.toHaveBeenCalled();
+  ).rejects.toThrow('last person');
+  expect(query).toHaveBeenCalledWith('ROLLBACK');
 });
-it('does not remove identities for missing or wrong-tenant members', async () => {
-  query.mockResolvedValue({ rows: [] });
+it('revokes and audits capabilities only in the removed organization', async () => {
+  grants = true;
+  await new CloudSqlTeamService().deleteTeamMember('member', 'tenant', 'actor');
+  expect(query).toHaveBeenCalledWith(
+    'DELETE FROM public.doula_hr_permissions WHERE tenant_id=$1::uuid AND admin_id=$2',
+    ['tenant', 'member']
+  );
+  expect(query).toHaveBeenCalledWith(
+    expect.stringContaining('INSERT INTO public.staff_permission_events'),
+    ['tenant', 'member', 'actor']
+  );
+});
+it('returns false for another organization or unknown member', async () => {
+  query.mockResolvedValue({ rows: [], rowCount: 0 });
   expect(
     await new CloudSqlTeamService().deleteTeamMember('member', 'other')
   ).toBe(false);
-  expect(deleteUser).not.toHaveBeenCalled();
+  expect(query).toHaveBeenCalledWith('ROLLBACK');
+  expect(getFirebaseAuth).not.toHaveBeenCalled();
 });
-it('requires tenant context', async () => {
+it('requires an organization', async () => {
   await expect(
     new CloudSqlTeamService().deleteTeamMember('member')
   ).rejects.toThrow('tenant');
