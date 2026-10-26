@@ -11,6 +11,12 @@ import {
 import authMiddleware from '../../../middleware/authMiddleware';
 import authorizeRoles from '../../../middleware/authorizeRoles';
 import { PortalInviteService } from '../../../services/portalInviteService';
+import {
+  changeStaffPermission,
+  readStaffPermissions,
+  staffPermissionHandler,
+  staffPermissionsAccess,
+} from '../application/staffPermissions';
 
 const adminRoutes: Router = express.Router();
 const adminController = new AdminController(
@@ -25,6 +31,18 @@ const portalController = new PortalController(portalInviteService);
 
 // All admin routes require authentication and admin role
 adminRoutes.use(authMiddleware);
+adminRoutes.get(
+  '/staff-permissions/access',
+  staffPermissionHandler(staffPermissionsAccess)
+);
+adminRoutes.get(
+  '/staff-permissions',
+  staffPermissionHandler(readStaffPermissions)
+);
+adminRoutes.patch(
+  '/staff-permissions/:adminId',
+  staffPermissionHandler(changeStaffPermission)
+);
 
 // Invite doula endpoint
 adminRoutes.post(

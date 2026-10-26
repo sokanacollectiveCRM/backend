@@ -10,8 +10,8 @@ export function isSensitiveDocument(type: string): boolean {
   return SENSITIVE_DOCUMENT_TYPES.includes(type);
 }
 
-// TODO P-23: expose HR/payroll assignment in the staff permission UI. Never infer
-// this capability from a generic admin/billing role or client-editable metadata.
+// Read current grants on every request; never infer this capability from a
+// generic admin/billing role or client-editable metadata.
 export async function canManageHrDocuments(req: AuthRequest): Promise<boolean> {
   if (req.user?.role !== 'admin' || !req.tenant?.id || !req.user.id)
     return false;
