@@ -7,6 +7,8 @@ it('explains accepting with the existing password and keeps organization records
     role: 'doula',
     acceptUrl: 'https://dev.example.test/accept-invite?token=fixture',
   });
+  expect(m.text).toContain('https://dev.example.test/forgot-password');
+  expect(m.html).toContain('Forgot your password? Reset password');
   expect(m.text).toContain('existing password');
   expect(m.text).toContain('password will not change');
   expect(m.text).toContain('documents remain separate');

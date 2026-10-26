@@ -31,7 +31,7 @@ profile, membership and audit updates; it never deletes an existing sign-in
 identity.
 
 Returning to the same organization restores its retained profile ID and
-documents. The doula profile returns to draft for renewed review; previous
+documents. The doula profile returns to Pending review for renewed review; previous
 document/status history stays with the original organization. Inviting into a
 different organization creates a new organization profile with no copied profile
 details or documents. A role change for a retained profile requires a separate
@@ -95,7 +95,7 @@ profile/documents. Do not remove a real organization's member to run this test.
    password.
 7. Accept with that email's existing platform password in the doula browser
    profile. Sign in normally. Confirm A returns as a membership, its original
-   profile ID and A-only documents return, and profile review is draft. B's data
+   profile ID and A-only documents return, and profile review is Pending review. The doula receives an email asking them to review saved information and update anything needed. Teams shows the returned profile for admin review. B's data
    must remain unchanged. Replay the invitation: expect rejection.
 8. Invite the same login into a third test organization C. Accept the
    invitation. Confirm a new profile ID and no A/B biography, document or

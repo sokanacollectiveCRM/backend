@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'crypto';
+import { createHash, randomBytes, randomUUID } from 'crypto';
 
 import { logger } from '../../../common/utils/logger';
 import { getPool } from '../../../db/cloudSqlPool';
@@ -9,6 +9,7 @@ import {
 } from '../../../domains/errors';
 import { NodemailerService } from '../../../services/emailService';
 import { getFirebaseAuth } from '../../../services/identityPlatform/firebaseAdmin';
+import { deliverProfileReviewEmails } from '../../doulas/application/profileReviewEmail';
 import { assertStaffInviteEmail } from '../../tenancy';
 import {
   runWithTenancyBypass,
@@ -274,6 +275,7 @@ export async function acceptStaffInvitation(input: {
     created = true;
   }
   const uid = identity.uid;
+  let reviewEventId: string | undefined;
   let db: import('pg').PoolClient | undefined;
   try {
     db = await getPool().connect();
@@ -330,7 +332,7 @@ export async function acceptStaffInvitation(input: {
       id = prior.id;
       if (table === 'doulas')
         await db.query(
-          `UPDATE public.doulas SET identity_platform_uid=$3,profile_review_status='draft',profile_review_reason=NULL,profile_review_version=profile_review_version+1,updated_at=now() WHERE id=$1::uuid AND tenant_id=$2::uuid`,
+          `UPDATE public.doulas SET identity_platform_uid=$3,profile_review_status='submitted',profile_submitted_at=now(),profile_review_reason=NULL,profile_review_version=profile_review_version+1,updated_at=now() WHERE id=$1::uuid AND tenant_id=$2::uuid`,
           [id, invitation.tenant_id, uid]
         );
       else
@@ -364,6 +366,35 @@ export async function acceptStaffInvitation(input: {
               ]
             );
       id = inserted.rows[0].id;
+    }
+    if (prior && table === 'doulas') {
+      // Reinstatement reopens review without transferring or discarding saved files.
+      reviewEventId = randomUUID();
+      await db.query(
+        `INSERT INTO public.doula_profile_reviews(id,tenant_id,doula_id,version,action,reason,actor_id)
+         SELECT $1,$2,id,profile_review_version,'submitted','Organization membership reinstated',$4
+         FROM public.doulas WHERE id=$3::uuid AND tenant_id=$2::uuid`,
+        [reviewEventId, invitation.tenant_id, id, uid]
+      );
+      const base = (
+        process.env.FRONTEND_URL || 'http://localhost:3001'
+      ).replace(/\/+$/, '');
+      const subject = 'Sokana360: Review your information after rejoining';
+      const message = `You have rejoined ${invitation.organization_name}. Your saved profile and documents for this organization are now pending admin review. Please look over your information and documents and update anything that has changed. Documents from other organizations have not been copied. An admin may send you specific requested changes.\n\nView your profile: ${base}/doula-dashboard/profile`;
+      await db.query(
+        `INSERT INTO public.doula_review_emails(event_id,recipient,subject,body) VALUES($1,$2,$3,$4)`,
+        [reviewEventId, invitation.email, subject, message]
+      );
+      await db.query(
+        `INSERT INTO public.dashboard_notices(tenant_id,audience,doula_id,rule_id,severity,title,body,dedupe_key,blocks_payout)
+         VALUES($1,'admin',$2,'doula_profile_submitted','info','Returning doula needs review',$3,$4,false) ON CONFLICT DO NOTHING`,
+        [
+          invitation.tenant_id,
+          id,
+          `Review the returning doula's saved information and documents: ${base}/team?review=${id}`,
+          `doula-review:${reviewEventId}`,
+        ]
+      );
     }
     await db.query(
       `INSERT INTO public.memberships(tenant_id,principal_type,principal_id,identity_platform_uid,email,role,status)
@@ -415,6 +446,8 @@ export async function acceptStaffInvitation(input: {
   } finally {
     db?.release();
   }
+  if (reviewEventId)
+    await deliverProfileReviewEmails(reviewEventId).catch(() => undefined);
   if (created && invitation.role === 'doula') {
     const { emailVerificationService } = await import(
       '../../../services/identityPlatform/emailVerificationService'

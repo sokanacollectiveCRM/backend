@@ -44,6 +44,7 @@ async function main() {
   });
   mock('../src/services/emailService.ts', {
     NodemailerService: class {
+      async sendEmail() {}
       async sendStaffInvitationEmail(input) {
         calls.mail++;
         sentToken = new URL(input.acceptUrl).searchParams.get('token');
@@ -77,7 +78,10 @@ async function main() {
   try {
     await db.exec(`CREATE TABLE tenants(id uuid PRIMARY KEY,slug text,name text,status text DEFAULT 'active');
  CREATE TABLE admins(id uuid PRIMARY KEY,tenant_id uuid,full_name text,first_name text,last_name text,email text UNIQUE,identity_platform_uid text,staff_role text DEFAULT 'admin',phone text,address text,city text,state text,country text,zip_code text,bio text,profile_picture text,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now());
- CREATE TABLE doulas(id uuid PRIMARY KEY,tenant_id uuid,full_name text,email text UNIQUE,identity_platform_uid text,account_status text DEFAULT 'active',phone text,address text,city text,state text,country text,zip_code text,bio text,profile_picture text,profile_review_status text DEFAULT 'draft',profile_review_reason text,profile_review_version int DEFAULT 1,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now());
+ CREATE TABLE doulas(id uuid PRIMARY KEY,tenant_id uuid,full_name text,email text UNIQUE,identity_platform_uid text,account_status text DEFAULT 'active',phone text,address text,city text,state text,country text,zip_code text,bio text,profile_picture text,profile_submitted_at timestamptz,profile_review_status text DEFAULT 'draft',profile_review_reason text,profile_review_version int DEFAULT 1,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now());
+ CREATE TABLE doula_profile_reviews(id uuid PRIMARY KEY,tenant_id uuid,doula_id uuid,version integer,action text,reason text,actor_id text);
+ CREATE TABLE doula_review_emails(id uuid DEFAULT gen_random_uuid(),event_id uuid,recipient text,subject text,body text,attempts integer DEFAULT 0,sent_at timestamptz,retry_at timestamptz DEFAULT now());
+ CREATE TABLE dashboard_notices(tenant_id uuid,audience text,doula_id uuid,rule_id text,severity text,title text,body text,dedupe_key text UNIQUE,blocks_payout boolean);
  CREATE TABLE phi_clients(id uuid,user_id text,tenant_id uuid,email text,identity_platform_uid text,first_name text,last_name text,portal_status text,phone text,address_line1 text,city text,state text,country text,zip_code text,bio text);
  CREATE TABLE memberships(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid,principal_type text,principal_id uuid,identity_platform_uid text,linked_user_id text,email text,role text,status text,updated_at timestamptz DEFAULT now(),UNIQUE(tenant_id,principal_type,principal_id));
  CREATE TABLE doula_hr_permissions(tenant_id uuid,admin_id text,department text,PRIMARY KEY(tenant_id,admin_id,department));
@@ -276,7 +280,26 @@ async function main() {
           pa,
         ])
       ).rows[0].profile_review_status,
-      'draft'
+      'submitted'
+    );
+    assert.equal(
+      (
+        await query(
+          'SELECT action,reason FROM doula_profile_reviews WHERE doula_id=$1',
+          [pa]
+        )
+      ).rows[0].action,
+      'submitted'
+    );
+    const notice = (
+      await query('SELECT recipient,body FROM doula_review_emails')
+    ).rows[0];
+    assert.equal(notice.recipient, email);
+    assert.match(notice.body, /look over your information and documents/);
+    assert.equal(
+      (await query('SELECT count(*)::int AS n FROM dashboard_notices')).rows[0]
+        .n,
+      1
     );
     assert.equal(await docs(), original);
     await assert.rejects(() =>
