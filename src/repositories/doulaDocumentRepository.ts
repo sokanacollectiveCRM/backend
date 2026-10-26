@@ -65,7 +65,10 @@ export class DoulaDocumentRepository {
   async createDocument(data: CreateDoulaDocumentData): Promise<DoulaDocument> {
     const { rows } = await queryCloudSql<DoulaDocumentRow>(
       `
-      INSERT INTO public.doula_documents (
+      WITH invalidated AS (
+        UPDATE public.doulas SET profile_review_status=CASE WHEN profile_review_status IN ('approved','submitted') THEN 'draft' ELSE profile_review_status END,
+        profile_review_version=profile_review_version+1, updated_at=now() WHERE id::text=$1 RETURNING id
+      ) INSERT INTO public.doula_documents (
         doula_id,
         tenant_id,
         document_type,
@@ -182,6 +185,11 @@ export class DoulaDocumentRepository {
   async deleteDocument(documentId: string): Promise<void> {
     await queryCloudSql(
       `
+      WITH invalidated AS (
+        UPDATE public.doulas SET profile_review_status=CASE WHEN profile_review_status IN ('approved','submitted') THEN 'draft' ELSE profile_review_status END,
+        profile_review_version=profile_review_version+1, updated_at=now()
+        WHERE id::text=(SELECT doula_id FROM public.doula_documents WHERE id=$1::uuid) RETURNING id
+      )
       DELETE FROM public.doula_documents
       WHERE id = $1::uuid
       `,
@@ -195,8 +203,17 @@ export class DoulaDocumentRepository {
   ): Promise<DoulaDocument | null> {
     const { rows } = await queryCloudSql<DoulaDocumentRow>(
       `
+      WITH invalidated AS (
+        UPDATE public.doulas SET profile_review_status=CASE WHEN profile_review_status IN ('approved','submitted') THEN 'draft' ELSE profile_review_status END,
+        profile_review_version=profile_review_version+1, updated_at=now()
+        WHERE id::text=(SELECT doula_id FROM public.doula_documents WHERE id=$1::uuid) RETURNING id
+      )
       UPDATE public.doula_documents
       SET file_name = COALESCE($2, file_name),
+          status = CASE WHEN $3::text IS NOT NULL AND $3<>document_type THEN 'uploaded' ELSE status END,
+          reviewed_at = CASE WHEN $3::text IS NOT NULL AND $3<>document_type THEN NULL ELSE reviewed_at END,
+          reviewed_by = CASE WHEN $3::text IS NOT NULL AND $3<>document_type THEN NULL ELSE reviewed_by END,
+          rejection_reason = CASE WHEN $3::text IS NOT NULL AND $3<>document_type THEN NULL ELSE rejection_reason END,
           document_type = COALESCE($3, document_type),
           updated_at = NOW()
       WHERE id = $1::uuid

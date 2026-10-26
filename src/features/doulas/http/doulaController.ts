@@ -5,6 +5,7 @@ import { logger } from '../../../common/utils/logger';
 import { sanitizeDoulaRaceEthnicity } from '../../../constants/doulaDemographics';
 import {
   MAX_DOCUMENT_SIZE_BYTES,
+  UPLOADABLE_DOULA_DOCUMENT_TYPES,
   allowsMultipleDoulaDocuments,
   doulaDocumentUploadRejection,
   isRetiredDoulaDocumentType,
@@ -35,7 +36,14 @@ import {
   parseHourFilter,
   parseHourType,
 } from '../../../utils/hourTypes';
+import {
+  canManageHrDocuments,
+  findTenantDoula,
+  isSensitiveDocument,
+  readBackgroundCheck,
+} from '../application/backgroundCheck';
 import { submitDoulaProfile } from '../application/submitDoulaProfile';
+import { PROFILE_REQUIREMENTS } from '../domain/documentPolicy';
 import {
   type Certification,
   normalizePhone,
@@ -197,6 +205,14 @@ export class DoulaController {
         return;
       }
 
+      if (
+        adminTargetId &&
+        isSensitiveDocument(String(document_type)) &&
+        !(await canManageHrDocuments(req))
+      ) {
+        res.status(403).json({ error: 'HR/payroll access required.' });
+        return;
+      }
       const typeRejection = doulaDocumentUploadRejection(String(document_type));
       if (typeRejection) {
         res.status(400).json({ error: typeRejection });
@@ -216,18 +232,13 @@ export class DoulaController {
         return;
       }
 
-      // Single-file types replace the current file. Miscellaneous keeps every upload.
-      if (!allowsMultipleDoulaDocuments(String(document_type))) {
-        const existingDoc =
-          await this.documentRepository.getCurrentDocumentByType(
+      // Keep the old document until its replacement is durably stored.
+      const existingDoc = !allowsMultipleDoulaDocuments(String(document_type))
+        ? await this.documentRepository.getCurrentDocumentByType(
             doulaId,
             document_type
-          );
-        if (existingDoc) {
-          await this.uploadService.deleteDocument(existingDoc.filePath);
-          await this.documentRepository.deleteDocument(existingDoc.id);
-        }
-      }
+          )
+        : null;
 
       const uploadedDoc = await this.uploadService.uploadDocument(
         file,
@@ -246,6 +257,14 @@ export class DoulaController {
         expiresAt: expires_at ? new Date(expires_at) : undefined,
         notes: notes || undefined,
       });
+
+      if (existingDoc) {
+        await this.documentRepository.deleteDocument(existingDoc.id);
+        // Storage cleanup must not turn a persisted replacement into an error.
+        await this.uploadService
+          .deleteDocument(existingDoc.filePath)
+          .catch(() => undefined);
+      }
 
       // Generate signed URL for the response (valid for 1 hour)
       const signedUrl = await this.documentRepository.getSignedUrl(
@@ -346,6 +365,8 @@ export class DoulaController {
       res.json({
         success: true,
         documents: documentsWithUrls,
+        policy: PROFILE_REQUIREMENTS,
+        backgroundCheck: await readBackgroundCheck(doulaId, req.tenant!.id),
         completeness: {
           total_required: completeness.totalRequired,
           total_complete: completeness.totalComplete,
@@ -394,9 +415,52 @@ export class DoulaController {
    * Get documents and completeness for a doula (admin only)
    * GET /api/admin/doulas/:doulaId/documents
    */
+  async setBackgroundCheck(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!(await canManageHrDocuments(req))) {
+        res.status(403).json({ error: 'HR/payroll access required.' });
+        return;
+      }
+      const { doulaId } = req.params;
+      if (!(await findTenantDoula(req, doulaId))) {
+        res.status(404).json({ error: 'Doula not found' });
+        return;
+      }
+      const status = req.body?.status;
+      if (!['not_cleared', 'cleared'].includes(status)) {
+        res
+          .status(400)
+          .json({ error: 'Status must be not_cleared or cleared.' });
+        return;
+      }
+      const result = await getPool().query(
+        `WITH updated AS (
+          UPDATE public.doulas SET background_check_status=$3, background_check_set_at=now(),
+          background_check_set_by=$4, profile_review_status=CASE WHEN profile_review_status IN ('approved','submitted') THEN 'draft' ELSE profile_review_status END,
+          profile_review_version=profile_review_version+1, updated_at=now()
+          WHERE id::text=$1 AND tenant_id=$2::uuid
+          RETURNING id, background_check_status AS status, background_check_set_at AS "setAt", background_check_set_by AS "setBy"
+        ), event AS (
+          INSERT INTO public.doula_background_check_events(tenant_id,doula_id,status,actor_id)
+          SELECT $2::uuid,id,$3,$4 FROM updated
+        ) SELECT status,"setAt","setBy" FROM updated`,
+        [doulaId, req.tenant!.id, status, req.user!.id]
+      );
+      res.json({ success: true, backgroundCheck: result.rows[0] });
+    } catch {
+      res.status(500).json({ error: 'Could not update background check.' });
+    }
+  }
+
   async getDoulaDocumentsAdmin(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { doulaId } = req.params;
+      if (!(await findTenantDoula(req, doulaId))) {
+        res.status(404).json({ error: 'Doula not found' });
+        return;
+      }
+      const hrAccess = await canManageHrDocuments(req);
+
       if (!doulaId) {
         res.status(400).json({ error: 'Missing doula ID' });
         return;
@@ -419,6 +483,15 @@ export class DoulaController {
       const completeness =
         await this.completenessService.getCompleteness(effectiveDocDoulaId);
 
+      documents = documents.filter(
+        (doc) => hrAccess || !isSensitiveDocument(doc.documentType)
+      );
+      completeness.items = completeness.items.filter(
+        (item) => hrAccess || !isSensitiveDocument(item.documentType)
+      );
+      completeness.missingTypes = completeness.missingTypes.filter(
+        (type) => hrAccess || !isSensitiveDocument(type)
+      );
       const documentsWithUrls = await Promise.all(
         documents.map(async (doc) => {
           try {
@@ -477,6 +550,19 @@ export class DoulaController {
 
       res.json({
         success: true,
+        policy: PROFILE_REQUIREMENTS,
+        visibleDocumentTypes: UPLOADABLE_DOULA_DOCUMENT_TYPES.filter(
+          (type) => hrAccess || !isSensitiveDocument(type)
+        ),
+        ...(hrAccess
+          ? {
+              backgroundCheck: await readBackgroundCheck(
+                doulaId,
+                req.tenant!.id
+              ),
+              canManageBackgroundCheck: true,
+            }
+          : {}),
         documents: documentsWithUrls,
         completeness: {
           total_required: completeness.totalRequired,
@@ -503,6 +589,12 @@ export class DoulaController {
     try {
       const adminId = req.user?.id;
       const { doulaId, documentId } = req.params;
+      if (!(await findTenantDoula(req, doulaId))) {
+        res.status(404).json({ error: 'Doula not found' });
+        return;
+      }
+      const hrAccess = await canManageHrDocuments(req);
+
       const { status, rejection_reason } = req.body;
 
       if (!adminId || !doulaId || !documentId) {
@@ -542,6 +634,10 @@ export class DoulaController {
         await this.documentRepository.getDocumentById(documentId);
       if (!document) {
         res.status(404).json({ error: 'Document not found' });
+        return;
+      }
+      if (isSensitiveDocument(document.documentType) && !hrAccess) {
+        res.status(403).json({ error: 'HR/payroll access required.' });
         return;
       }
       const isOwned = await this.documentIdResolver.isDocumentOwnedByDoula(
@@ -586,11 +682,20 @@ export class DoulaController {
   async getDocumentUrl(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { doulaId, documentId } = req.params;
+      if (!(await findTenantDoula(req, doulaId))) {
+        res.status(404).json({ error: 'Doula not found' });
+        return;
+      }
+      const hrAccess = await canManageHrDocuments(req);
 
       const document =
         await this.documentRepository.getDocumentById(documentId);
       if (!document) {
         res.status(404).json({ error: 'Document not found' });
+        return;
+      }
+      if (isSensitiveDocument(document.documentType) && !hrAccess) {
+        res.status(403).json({ error: 'HR/payroll access required.' });
         return;
       }
       const isOwned = await this.documentIdResolver.isDocumentOwnedByDoula(
@@ -1615,6 +1720,20 @@ export class DoulaController {
    */
   async updateMyProfile(req: AuthRequest, res: Response): Promise<void> {
     try {
+      if (
+        Object.keys(req.body || {}).some(
+          (key) =>
+            key.startsWith('background_check') || key === 'backgroundCheck'
+        )
+      ) {
+        res
+          .status(403)
+          .json({
+            error: 'Only HR/payroll can change background check status.',
+          });
+        return;
+      }
+
       const doulaId = req.user?.id;
       if (!doulaId) {
         res.status(401).json({ error: 'Unauthorized' });

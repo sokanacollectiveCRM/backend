@@ -1,6 +1,7 @@
 import { getPool } from '../db/cloudSqlPool';
 import { deliverProfileReviewEmails } from '../features/doulas/application/profileReviewEmail';
 import { transitionDoulaProfile } from '../features/doulas/application/submitDoulaProfile';
+import * as documentPolicy from '../features/doulas/domain/documentPolicy';
 
 jest.mock('../db/cloudSqlPool', () => ({ getPool: jest.fn() }));
 jest.mock('../features/doulas/application/profileReviewEmail', () => ({
@@ -16,6 +17,7 @@ beforeEach(() => {
   certificate = true;
   rejected = false;
   profile = {
+    background_check_status: 'cleared',
     full_name: 'Maya Rivers',
     email: 'maya@example.com',
     phone: '5555550100',
@@ -202,3 +204,65 @@ it.each(['submitted', 'changes_requested', 'approved'] as const)(
       expect(args[3]).toContain('Review in Teams');
   }
 );
+
+it('blocks submission and approval until HR clears the background check', async () => {
+  profile.background_check_status = 'not_cleared';
+  await expect(run('submitted')).rejects.toThrow('background check');
+  profile.profile_review_status = 'submitted';
+  await expect(run('approved', { expectedVersion: 0 })).rejects.toThrow(
+    'background check'
+  );
+  expect(
+    query.mock.calls.some(([sql]) =>
+      sql.includes('INSERT INTO public.doula_profile_reviews')
+    )
+  ).toBe(false);
+});
+it.each(['w9', 'direct_deposit_form', 'training_certificate'])(
+  'requires configured %s at submission and approval',
+  async (type) => {
+    const original = query.getMockImplementation()!;
+    query.mockImplementation(async (sql: string, args: any[] = []) => {
+      if (sql.includes('FROM public.doula_documents') && args[2] === type)
+        return { rows: [], rowCount: 0 };
+      return original(sql, args);
+    });
+    await expect(run('submitted')).rejects.toThrow('Required');
+    profile.profile_review_status = 'submitted';
+    await expect(run('approved', { expectedVersion: 0 })).rejects.toThrow(
+      'Required'
+    );
+  }
+);
+
+it('follows the clearance config flag when clearance becomes optional', async () => {
+  profile.background_check_status = 'not_cleared';
+  const property = jest.replaceProperty(
+    documentPolicy,
+    'BACKGROUND_CHECK_REQUIRED',
+    false
+  );
+  try {
+    await run('submitted');
+    expect(profile.profile_review_status).toBe('submitted');
+  } finally {
+    property.restore();
+  }
+});
+it('follows the configured upload list when W-9 and direct deposit become optional', async () => {
+  const property = jest.replaceProperty(
+    documentPolicy,
+    'REQUIRED_DOULA_DOCUMENT_TYPES',
+    ['training_certificate']
+  );
+  try {
+    await run('submitted');
+    expect(
+      query.mock.calls
+        .filter(([sql]) => sql.includes('document_type=$3'))
+        .map(([, args]) => args[2])
+    ).toEqual(['training_certificate']);
+  } finally {
+    property.restore();
+  }
+});

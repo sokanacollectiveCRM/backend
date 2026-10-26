@@ -27,7 +27,7 @@ export const renameDoulaDocumentSchema = z
       )
       .optional(),
     document_type: z
-      .enum(UPLOADABLE_DOULA_DOCUMENT_TYPES, {
+      .enum([...UPLOADABLE_DOULA_DOCUMENT_TYPES], {
         errorMap: () => ({
           message: `document_type must be one of: ${UPLOADABLE_DOULA_DOCUMENT_TYPES.join(', ')}`,
         }),

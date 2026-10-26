@@ -66,6 +66,12 @@ adminRoutes.post(
   (req, res) => portalController.disableAccess(req, res)
 );
 
+adminRoutes.patch(
+  '/doulas/:doulaId/background-check',
+  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
+  (req, res) => doulaController.setBackgroundCheck(req, res)
+);
+
 // Admin doula document management
 adminRoutes.get(
   '/doulas/:doulaId/documents',

@@ -1,38 +1,31 @@
+import {
+  OPTIONAL_DOULA_DOCUMENT_TYPES,
+  REQUIRED_DOULA_DOCUMENT_TYPES,
+  UPLOADABLE_DOULA_DOCUMENT_TYPES,
+  isRequiredDocument,
+} from '../features/doulas/domain/documentPolicy';
+
+export {
+  REQUIRED_DOULA_DOCUMENT_TYPES,
+  OPTIONAL_DOULA_DOCUMENT_TYPES,
+  UPLOADABLE_DOULA_DOCUMENT_TYPES,
+} from '../features/doulas/domain/documentPolicy';
 /**
  * Doula document types.
  * Activation requires every required type to be approved.
  * Retired types stay valid on existing rows. New uploads of those types are rejected.
  */
 
-export const REQUIRED_DOULA_DOCUMENT_TYPES = ['training_certificate'] as const;
-
 export type RequiredDoulaDocumentType =
   (typeof REQUIRED_DOULA_DOCUMENT_TYPES)[number];
-
-export const OPTIONAL_DOULA_DOCUMENT_TYPES = [
-  'liability_insurance_certificate',
-  'illinois_medicaid_certification',
-  'miscellaneous',
-  'license',
-  'other',
-] as const;
 
 export type OptionalDoulaDocumentType =
   (typeof OPTIONAL_DOULA_DOCUMENT_TYPES)[number];
 
-export const RETIRED_DOULA_DOCUMENT_TYPES = [
-  'background_check',
-  'w9',
-  'direct_deposit_form',
-] as const;
+export const RETIRED_DOULA_DOCUMENT_TYPES = ['background_check'] as const;
 
 export type RetiredDoulaDocumentType =
   (typeof RETIRED_DOULA_DOCUMENT_TYPES)[number];
-
-export const UPLOADABLE_DOULA_DOCUMENT_TYPES = [
-  ...REQUIRED_DOULA_DOCUMENT_TYPES,
-  ...OPTIONAL_DOULA_DOCUMENT_TYPES,
-] as const;
 
 export type UploadableDoulaDocumentType =
   (typeof UPLOADABLE_DOULA_DOCUMENT_TYPES)[number];
@@ -52,50 +45,50 @@ export interface DoulaDocumentMeta {
   retired?: boolean;
 }
 
-export const DOULA_DOCUMENT_META: Record<DoulaDocumentType, DoulaDocumentMeta> =
-  {
-    training_certificate: {
-      label: 'Doula training certificate',
-      required: true,
-    },
-    liability_insurance_certificate: {
-      label: 'Liability insurance',
-      required: false,
-      helperText: 'Required for Medicaid clients',
-    },
-    illinois_medicaid_certification: {
-      label: 'Illinois Medicaid certification',
-      required: false,
-    },
-    miscellaneous: {
-      label: 'Miscellaneous documents',
-      required: false,
-      multiple: true,
-    },
-    license: {
-      label: 'License',
-      required: false,
-    },
-    other: {
-      label: 'Other',
-      required: false,
-    },
-    background_check: {
-      label: 'Background check',
-      required: false,
-      retired: true,
-    },
-    w9: {
-      label: 'W9',
-      required: false,
-      retired: true,
-    },
-    direct_deposit_form: {
-      label: 'Direct deposit form',
-      required: false,
-      retired: true,
-    },
-  };
+const DOCUMENT_META: Record<
+  DoulaDocumentType,
+  Omit<DoulaDocumentMeta, 'required'>
+> = {
+  cpr: { label: 'CPR' },
+  hipaa: { label: 'HIPAA' },
+  training_certificate: {
+    label: 'Doula training certificate',
+  },
+  liability_insurance_certificate: {
+    label: 'Liability insurance',
+    helperText: 'Required for Medicaid clients',
+  },
+  illinois_medicaid_certification: {
+    label: 'Illinois Medicaid certification',
+  },
+  miscellaneous: {
+    label: 'Miscellaneous documents',
+    multiple: true,
+  },
+  license: {
+    label: 'License',
+  },
+  other: {
+    label: 'Other',
+  },
+  background_check: {
+    label: 'Background check',
+    retired: true,
+  },
+  w9: {
+    label: 'W-9',
+  },
+  direct_deposit_form: {
+    label: 'Direct deposit form',
+  },
+};
+
+export const DOULA_DOCUMENT_META = Object.fromEntries(
+  Object.entries(DOCUMENT_META).map(([type, meta]) => [
+    type,
+    { ...meta, required: isRequiredDocument(type) },
+  ])
+) as Record<DoulaDocumentType, DoulaDocumentMeta>;
 
 export const DOULA_DOCUMENT_STATUSES = [
   'missing',

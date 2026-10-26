@@ -1,7 +1,12 @@
 import { randomUUID } from 'crypto';
 
+import { UPLOADABLE_DOULA_DOCUMENT_TYPES } from '../../../constants/doulaDocuments';
 import { getPool } from '../../../db/cloudSqlPool';
 import { NotFoundError, ValidationError } from '../../../domains/errors';
+import {
+  REQUIRED_DOULA_DOCUMENT_TYPES,
+  backgroundCheckSatisfied,
+} from '../domain/documentPolicy';
 import { isValidPhone, missingProfileFields } from '../domain/profile';
 import { deliverProfileReviewEmails } from './profileReviewEmail';
 
@@ -81,22 +86,28 @@ export async function transitionDoulaProfile(input: {
         throw new ValidationError(
           'Complete your name, phone number, address, and bio before submitting.'
         );
-      const certificate = await client.query(
-        `SELECT 1 FROM public.doula_documents WHERE doula_id=$1::text
-         AND document_type='training_certificate' AND NULLIF(file_path,'') IS NOT NULL
-         AND (status='approved' OR ($2::text='submitted' AND status='uploaded')) LIMIT 1`,
-        [input.doulaId, input.action]
-      );
-      if (!certificate.rowCount)
+      if (!backgroundCheckSatisfied(profile.background_check_status))
         throw new ValidationError(
-          input.action === 'approved'
-            ? 'Approve the required training certificate before approving the account.'
-            : 'Upload your Doula training certificate before submitting.'
+          'HR/payroll must mark the background check Cleared before profile review.'
         );
+      for (const type of REQUIRED_DOULA_DOCUMENT_TYPES) {
+        const document = await client.query(
+          `SELECT 1 FROM (
+             SELECT status,file_path FROM public.doula_documents WHERE doula_id=$1::text
+             AND tenant_id=$4::uuid AND document_type=$3 ORDER BY uploaded_at DESC,id DESC LIMIT 1
+           ) current_document WHERE NULLIF(file_path,'') IS NOT NULL
+           AND (status='approved' OR ($2::text='submitted' AND status='uploaded'))`,
+          [input.doulaId, input.action, type, input.tenantId]
+        );
+        if (!document.rowCount)
+          throw new ValidationError(
+            `Required ${type === 'training_certificate' ? 'training certificate' : type} must be ${input.action === 'approved' ? 'approved' : 'uploaded'} before profile review.`
+          );
+      }
       if (input.action === 'submitted') {
         const rejected = await client.query(
-          "SELECT 1 FROM public.doula_documents WHERE doula_id=$1::text AND status='rejected' AND document_type IN ('training_certificate','liability_insurance_certificate','illinois_medicaid_certification','miscellaneous','license','other') LIMIT 1",
-          [input.doulaId]
+          "SELECT 1 FROM public.doula_documents WHERE doula_id=$1::text AND status='rejected' AND document_type=ANY($2::text[]) LIMIT 1",
+          [input.doulaId, UPLOADABLE_DOULA_DOCUMENT_TYPES]
         );
         if (rejected.rowCount)
           throw new ValidationError(
