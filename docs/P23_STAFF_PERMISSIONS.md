@@ -19,13 +19,11 @@ HR/Payroll holders can manage grants immediately once the feature and migration
 are released. Super-admin status alone does not grant access to sensitive
 documents; existing HR/Payroll document guards are unchanged.
 
-Apply `src/db/migrations/20261026_p23_staff_permissions.sql` after P-22 when an
-authorized DEV rollout is scheduled. This task only commits/pushes source; it
-does not migrate or deploy. The migration preserves grants and changes the
-primary key to permit both capabilities per admin, then creates the append-only
-audit table and application grants. It is idempotent. Audit history starts with
-changes made through this feature; it does not invent events for old operator
-grants.
+Both P-23 migrations and the backend/frontend were deployed to DEV on October
+26, 2026. Main and production were unchanged. The staff-permissions migration
+preserves existing grants, permits both capabilities per admin, and creates the
+audit table. Audit history starts with changes made through this feature. The
+HR-role migration preserves existing admin roles.
 
 Changes serialize using a database table lock, recheck the actor after taking
 the lock, and save the grant/revocation and audit event in the same transaction.
@@ -40,27 +38,115 @@ token refresh or redeploy is needed per change. Reload the document view to
 update what is already rendered. Previously downloaded files cannot be recalled.
 Document types and required-document rules are unchanged.
 
-## Pilot Tasks sheet — Nancy, Sonia and Teisha
+## Manual acceptance — Jerry first, pilot team after his pass
 
-Run only after this code and the P-22/P-23 migrations are available in DEV. Use
-an existing authorized HR/Payroll manager (or app-managed super admin), one
-existing ordinary DEV admin as the target, and a separate ordinary admin for the
-denial test. Use separate browser profiles for the manager and target. Keep
-another HR/Payroll holder throughout. Use a fictional DEV doula with W-9, Direct
-deposit form and historical background-check uploads.
+JERRY — TEST FIRST (DEV only; pilot team waits for your pass) DEV login:
+https://sokana-front-end-dev-46lcr3n2qa-uc.a.run.app/login
 
-| Tester | Action                                                                                                                                                                                                                                                         | Expected result                                                                                                                                                                                              |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Nancy  | As the manager, open Settings > Staff permissions. Find the existing target DEV admin with HR and Payroll both off; turn HR on.                                                                                                                                | HR saves on. Last change shows Nancy's manager account, target admin, HR, Off → On and timestamp. No email/notification is sent.                                                                             |
-| Sonia  | In the target admin's existing session, reload that doula's document view.                                                                                                                                                                                     | W-9, Direct deposit form, historical Background check upload and background-check status appear. Background check can be set to Cleared or Not cleared, with actor/date recorded. No logout/login is needed. |
-| Nancy  | Turn HR off for the target; leave Payroll off.                                                                                                                                                                                                                 | HR saves off. Last change shows actor, target, HR, On → Off and timestamp. No email/notification is sent.                                                                                                    |
-| Sonia  | In the same target session, reload the document view.                                                                                                                                                                                                          | W-9, Direct deposit form, historical Background check upload, background-check status and status-change controls disappear. Requests for their download URLs/status changes are denied.                      |
-| Teisha | As an ordinary admin with neither capability, open `/settings/staff-permissions` directly. Also try GET `/api/admin/staff-permissions` and PATCH `/api/admin/staff-permissions/<target-id>` with `{ "capability": "hr", "enabled": true }` using that session. | Sidebar link is absent. Screen shows access denied, no staff roster/checkboxes. Both API requests return 403 and no grant changes.                                                                           |
-| Teisha | As manager, attempt to remove the final HR/Payroll grant in the tenant (use an isolated fixture if other holders must remain).                                                                                                                                 | Save is rejected: Cannot remove the last person with HR/payroll access. Grant access to another admin first. Grant remains enabled; no change event is added.                                                |
+Setup: use your existing ordinary DEV admin with neither HR nor Payroll
+capability. Keep that session in browser profile A. Use profile B for the new HR
+account and a separate invited doula account for owner checks. Use a fictional
+DEV doula and made-up files. Record the doula name and current background status
+before changing it. An invitation/account-setup email IS expected: use a
+monitored test inbox. No email is expected merely from an HR/payroll capability
+change. No invitation has already been sent by this implementation.
 
-Repeat the grant/revoke flow with Payroll to verify it independently grants the
-same sensitive-document access. If both are on, revoke one and confirm access
-persists until both are off. Restore original grants when finished.
+1. Baseline as ordinary admin: open the fictional doula's documents / Review
+   profile & documents. Training certificate and optional documents may appear.
+   W-9, Direct deposit form, historical Background check uploads and
+   background-check status/controls must be absent. Open
+   /settings/staff-permissions directly: access denied, no staff roster or
+   toggles.
+
+2. Invite HR: open Team > Invite Member. Enter the HR name and a monitored
+   email, select “HR — doula profiles, documents and background checks,” then
+   Send Invitation. Use hr@sokanacollective.com only if you can receive its
+   setup email and it is available; if already in use, use an agreed unused
+   monitored test address and record it. Confirm the normal account-setup email
+   arrives. Never use an admin account as the HR account.
+
+3. Complete account setup in profile B and sign in through the normal DEV
+   login/MFA flow. Expect landing at /hr. The sidebar must offer only Doula
+   directory; logout remains available. No clients, billing, contracts, reports,
+   inbox, Team or Staff permissions navigation.
+
+4. Search for the fictional doula, select it, and check name/contact/address,
+   bio, certifications and account status against the saved profile. Confirm
+   client assignments, client notes, hours and financial data are absent.
+
+5. Confirm W-9 and Direct deposit form files are visible and open correctly. If
+   a historical Background check file exists, confirm it also opens. If none
+   exists, record “no historical upload fixture”; do not create a new Background
+   check upload field. Confirm the Background check status and Cleared/Not
+   cleared control appear.
+
+6. Select Mark Cleared. Refresh and confirm Cleared, timestamp and recorded
+   actor persist. Select Mark Not cleared and verify again. Return to the
+   original status when finished. A submitted/approved doula profile returns to
+   draft after a background-check change; HR has no profile/document approval,
+   upload or delete controls.
+
+7. As HR, directly open /clients, /billing/contracts, /contracts, /team, /inbox,
+   /demographics and /settings/staff-permissions. Each must show access denied
+   and no restricted data. Engineering check using the HR session: GET
+   /api/clients, GET /api/admin/staff-permissions and POST /clients/team/add
+   must return 403. Do not submit a real invitation during the denied-API test.
+
+8. Return to the inviting ordinary admin in profile A and refresh the doula
+   view. Sensitive files/background status must STILL be hidden; Staff
+   permissions must STILL be denied. Inviting HR must not grant the inviter
+   HR/payroll access.
+
+9. Check the doula owner session: own files/status remain visible, but
+   background-check status is read-only. Check an existing client-portal
+   session: no doula HR documents/status or HR workspace is exposed.
+
+10. Jerry engineering audit check: read the DEV staff_permission_events record
+    for the newly created HR user. Confirm actor_id = inviting admin, admin_id =
+    new HR profile, capability = hr, old_value = false, new_value = true, and a
+    server timestamp. The HR user itself cannot open the audit/Staff permissions
+    screen.
+
+11. Additional capability regression ONLY with an existing authorized admin
+    capability-manager account: grant HR to an existing ordinary DEV admin,
+    refresh that target's existing session and confirm sensitive files/status
+    appear; revoke it while Payroll is off and confirm they disappear after
+    refresh. No logout/login or redeploy is needed and no change email should
+    arrive. Confirm Last change shows actor, target, capability, old/new values
+    and timestamp. If both grants are on, access remains until both are off.
+    Attempt to remove the final HR/payroll holder in an isolated fixture: expect
+    the clear rejection, the grant unchanged, and no successful-change audit. If
+    no authorized manager/isolated fixture is available, record this subtest as
+    Pending; do not treat it as passed or attempt it with the restricted HR
+    account.
+
+12. Repeat the HR directory/document view on mobile or a narrow window. Record
+    pass/fail by step, browser, account role, fictional doula, expected
+    invitation email received, screenshots and errors. If a permission leak
+    occurs, record the exact route and stop the pilot handoff. Give
+    Nancy/Sonia/Teisha the go-ahead only after your first-pass checks pass; list
+    any explicitly pending engineering subtest.
+
+NANCY, SONIA AND TEISHA — AFTER JERRY'S PASS
+
+Nancy: as an ordinary DEV admin, verify HR is available in Team > Invite Member.
+Coordinate with Jerry before sending another invite; if an invite is part of
+your test, use a new monitored address and expect the setup email. Confirm
+ordinary-admin sensitive documents/status and Staff permissions remain
+hidden/denied.
+
+Sonia: use the dedicated HR account in a separate browser profile. Open /hr,
+search the same fictional doula, confirm limited profile details and W-9/Direct
+deposit/historical Background check documents. Change Cleared/Not cleared,
+refresh, and verify actor/date persist. Restore the original status.
+
+Teisha: as HR, test the direct routes in step 7 and narrow/mobile layout. As a
+separate ordinary admin, confirm /settings/staff-permissions is denied. Confirm
+HR has no upload, delete, profile approval or staff-management controls.
+
+Together: repeat the doula-owner read-only status and client-denial checks from
+step 9. Record individual pass/fail, browser, screenshots and exact failed
+route. Leave manual results unmarked until each tester actually runs them.
 
 ## Automated verification
 
@@ -116,23 +202,12 @@ retain the original capability-management workflow. Ordinary admins still cannot
 open Staff permissions or view sensitive files merely because they can invite
 HR.
 
-### Pilot follow-up
+### Test record
 
-1. As an ordinary DEV admin, open Team > Invite Team Member and choose HR. Use
-   `hr@sokanacollective.com` if it remains unused in DEV. Complete the standard
-   invite/account setup in a separate browser profile.
-2. Sign in as HR. Confirm landing at `/hr`, only Doula directory in navigation,
-   and no staff-permissions link. Open a fictional doula; confirm W-9, Direct
-   deposit form and historical Background check uploads, background-check status
-   and Cleared/Not cleared controls. Change the status and reload to confirm
-   actor/date persist.
-3. As HR, directly open `/clients`, `/billing/contracts`, `/contracts`, `/team`,
-   and `/settings/staff-permissions`: access denied. Direct requests to
-   corresponding authenticated APIs must return 403.
-4. Return to the inviting ordinary admin. Confirm sensitive files are still
-   hidden and Staff permissions is still denied.
+The manual checklist above is the current procedure. The connected Pilot Tasks
+sheet carries the same checklist in P-23 and the revised HR instructions in
+P-22. No manual result is marked passed by deployment alone.
 
-Additional tests: `npx playwright test --config=playwright.p23.config.ts` covers
-ordinary-admin HR invitation, limited navigation, sensitive documents,
-background clearance, root redirect and direct-route denial with fictional
-intercepted responses. No live invitations or emails are sent by this test.
+Additional browser coverage:
+`npx playwright test --config=playwright.p23.config.ts` uses fictional
+intercepted responses and sends no live invitations.
