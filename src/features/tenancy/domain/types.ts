@@ -1,4 +1,4 @@
-export type MembershipRole = 'admin' | 'billing' | 'doula' | 'client';
+export type MembershipRole = 'admin' | 'billing' | 'doula' | 'client' | 'hr';
 
 export type MembershipStatus = 'active' | 'inactive';
 

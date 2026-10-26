@@ -54,6 +54,7 @@ function isTenancySchemaMissing(error: unknown): boolean {
 
 function asRole(value: string): MembershipRole {
   if (
+    value === 'hr' ||
     value === 'admin' ||
     value === 'billing' ||
     value === 'doula' ||

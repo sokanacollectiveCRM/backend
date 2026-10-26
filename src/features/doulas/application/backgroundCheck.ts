@@ -13,7 +13,11 @@ export function isSensitiveDocument(type: string): boolean {
 // Read current grants on every request; never infer this capability from a
 // generic admin/billing role or client-editable metadata.
 export async function canManageHrDocuments(req: AuthRequest): Promise<boolean> {
-  if (req.user?.role !== 'admin' || !req.tenant?.id || !req.user.id)
+  if (
+    !['admin', 'hr'].includes(String(req.user?.role)) ||
+    !req.tenant?.id ||
+    !req.user?.id
+  )
     return false;
   const result = await getPool().query(
     `SELECT 1 FROM public.doula_hr_permissions p JOIN public.admins a

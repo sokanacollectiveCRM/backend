@@ -2,6 +2,7 @@ import type { MembershipRecord, MembershipRole, TenantChoice } from './types';
 
 const ROLE_RANK: Record<MembershipRole, number> = {
   admin: 0,
+  hr: 1,
   billing: 1,
   doula: 2,
   client: 3,

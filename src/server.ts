@@ -16,6 +16,7 @@ import {
   getAllowedOrigins,
   nativeContracts,
 } from './config/env';
+import hrRoutes from './features/hr/http/hrRoutes';
 import {
   createNotificationRoutes,
   createNotificationTickRouter,
@@ -154,6 +155,7 @@ app.use(
   asMiddleware(clientRoutes)
 );
 app.use('/api', asMiddleware(doulasRoutes));
+app.use('/api/hr', asMiddleware(hrRoutes));
 app.use('/api/admin', asMiddleware(adminRoutes));
 app.use('/api/doulas', asMiddleware(doulaRoutes));
 app.use('/email', asMiddleware(emailRoutes));

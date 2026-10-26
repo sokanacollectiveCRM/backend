@@ -73,3 +73,66 @@ Existing P-22 tests cover sensitive document downloads/review and status guards.
 Frontend: `npm run test:run`, `npm run build`; screen tests cover grant, revoke,
 audit display, denied access and last-holder message. Changed frontend files
 pass ESLint.
+
+## Dedicated HR role (confirmed follow-up)
+
+Any ordinary admin may choose **HR — doula profiles, documents and background
+checks** in Team > Invite Team Member. This uses the existing account-setup
+invitation flow. The account is a dedicated `hr` identity, never a full admin.
+Its membership, initial HR grant and capability audit record are created
+atomically; failed audit/membership creation rolls back the records and removes
+the new Firebase identity. Inviting HR does not grant the inviting admin
+sensitive-file access. No invitation was sent as part of
+implementation/deployment.
+
+Apply `20261026_p23_hr_role.sql` after the staff-permissions migration before
+deploying this follow-up. Existing admin roles remain admin. The dedicated HR
+role cannot use the staff-permissions management screen or API, invite
+colleagues, or access clients, hours, billing, contracts, reports, inbox or
+general staff-management routes. A method/path boundary in authentication denies
+HR requests to all authenticated API routes outside the HR workspace, including
+older routes that previously checked authentication alone. Role and capability
+are loaded from app-managed records on every request; token metadata is ignored.
+A stale admin membership cannot promote an HR profile.
+
+HR users land at `/hr`. Navigation contains only Doula directory and logout.
+They can search doulas in their organization, read a limited profile
+(contact/address, biography, certifications, account status), view documents
+including W-9, Direct deposit form and historical Background check uploads, and
+set Cleared/Not cleared with the existing timestamp/actor audit. They cannot
+upload, delete, approve profiles/documents, change requirements or view client
+assignments.
+
+New HR API routes:
+
+- `GET /api/hr/doulas`
+- `GET /api/hr/doulas/:doulaId`
+- `GET /api/hr/doulas/:doulaId/documents`
+- `GET /api/hr/doulas/:doulaId/documents/:documentId/url`
+- `PATCH /api/hr/doulas/:doulaId/background-check`
+
+All require a tenant-scoped, persisted HR/Payroll grant. Existing admin holders
+retain the original capability-management workflow. Ordinary admins still cannot
+open Staff permissions or view sensitive files merely because they can invite
+HR.
+
+### Pilot follow-up
+
+1. As an ordinary DEV admin, open Team > Invite Team Member and choose HR. Use
+   `hr@sokanacollective.com` if it remains unused in DEV. Complete the standard
+   invite/account setup in a separate browser profile.
+2. Sign in as HR. Confirm landing at `/hr`, only Doula directory in navigation,
+   and no staff-permissions link. Open a fictional doula; confirm W-9, Direct
+   deposit form and historical Background check uploads, background-check status
+   and Cleared/Not cleared controls. Change the status and reload to confirm
+   actor/date persist.
+3. As HR, directly open `/clients`, `/billing/contracts`, `/contracts`, `/team`,
+   and `/settings/staff-permissions`: access denied. Direct requests to
+   corresponding authenticated APIs must return 403.
+4. Return to the inviting ordinary admin. Confirm sensitive files are still
+   hidden and Staff permissions is still denied.
+
+Additional tests: `npx playwright test --config=playwright.p23.config.ts` covers
+ordinary-admin HR invitation, limited navigation, sensitive documents,
+background clearance, root redirect and direct-route denial with fictional
+intercepted responses. No live invitations or emails are sent by this test.

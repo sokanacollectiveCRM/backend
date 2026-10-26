@@ -16,6 +16,7 @@ import {
   roleRequiresVerifiedEmail,
 } from '../security/emailVerificationPolicy';
 import { ApiErrorCode } from '../security/errorCodes';
+import { hrRequestAllowed } from '../security/hrAccessBoundary';
 import { SESSION_COOKIE } from '../security/sessionCookies';
 import { type AuthRequest, ROLE } from '../types';
 
@@ -184,6 +185,18 @@ const authMiddleware = async (
     }
 
     req.user = user_entity;
+    if (
+      user_entity.role === ROLE.HR &&
+      !hrRequestAllowed(req.method, req.originalUrl)
+    ) {
+      res
+        .status(403)
+        .json({
+          error: 'This account is limited to the HR workspace.',
+          code: ApiErrorCode.FORBIDDEN,
+        });
+      return;
+    }
     const headerValue = req.header(TENANT_HEADER);
     const gate = await resolveTenantGate({
       userId: String(user_entity.id || ''),
@@ -216,7 +229,20 @@ const authMiddleware = async (
     if (gate.action === 'attach') {
       req.tenant = gate.tenant;
       if (isTenancyEnforced()) {
-        user_entity.role = gate.tenant.role as ROLE;
+        user_entity.role =
+          user_entity.role === ROLE.HR ? ROLE.HR : (gate.tenant.role as ROLE);
+      }
+      if (
+        user_entity.role === ROLE.HR &&
+        !hrRequestAllowed(req.method, req.originalUrl)
+      ) {
+        res
+          .status(403)
+          .json({
+            error: 'This account is limited to the HR workspace.',
+            code: ApiErrorCode.FORBIDDEN,
+          });
+        return;
       }
       runWithTenant(gate.tenant.id, () => {
         next();

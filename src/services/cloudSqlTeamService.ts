@@ -24,7 +24,7 @@ export interface TeamMemberDto {
   lastname: string;
   fullName: string;
   email: string;
-  role: 'admin' | 'doula';
+  role: 'admin' | 'doula' | 'hr';
   account_status: string;
   phone_number: string | null;
   address: string | null;
@@ -55,7 +55,7 @@ export interface TeamMemberDto {
   updated_at: string;
 }
 
-type TeamRole = 'admin' | 'doula';
+type TeamRole = 'admin' | 'doula' | 'hr';
 
 interface DoulaRow {
   id: string;
@@ -88,6 +88,8 @@ interface DoulaRow {
 }
 
 interface AdminRow {
+  staff_role?: 'admin' | 'hr';
+  role?: string;
   id: string;
   full_name: string;
   first_name?: string | null;
@@ -197,7 +199,7 @@ function mapAdminRow(row: AdminRow): TeamMemberDto {
     lastname,
     fullName: row.full_name || `${firstname} ${lastname}`.trim(),
     email: row.email ?? '',
-    role: 'admin',
+    role: row.staff_role === 'hr' || row.role === 'hr' ? 'hr' : 'admin',
     account_status: 'approved',
     phone_number: row.phone ?? null,
     address: row.address ?? null,
@@ -238,12 +240,14 @@ export class CloudSqlTeamService {
   async listTeamMembers(): Promise<TeamMemberDto[]> {
     const pool = getPool();
     try {
-      const { rows } = await pool.query<DoulaRow & { role: 'admin' | 'doula' }>(
+      const { rows } = await pool.query<
+        DoulaRow & { role: 'admin' | 'doula' | 'hr' }
+      >(
         `
         SELECT id, unit_number, full_name, NULL::text AS first_name, NULL::text AS last_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, certifications, profile_submitted_at, profile_review_status, profile_review_reason, profile_review_version, 'doula'::text AS role, created_at, updated_at
         FROM public.doulas WHERE tenant_id = $1::uuid
         UNION ALL
-        SELECT id, NULL::text AS unit_number, full_name, first_name, last_name, email, phone, 'approved'::text, address, city, state, country, zip_code, bio, profile_picture, NULL::text[], NULL::text, NULL::jsonb, NULL::timestamptz, 'approved'::text, NULL::text, 0::integer, 'admin'::text AS role, created_at, updated_at
+        SELECT id, NULL::text AS unit_number, full_name, first_name, last_name, email, phone, 'approved'::text, address, city, state, country, zip_code, bio, profile_picture, NULL::text[], NULL::text, NULL::jsonb, NULL::timestamptz, 'approved'::text, NULL::text, 0::integer, COALESCE(to_jsonb(admins)->>'staff_role','admin') AS role, created_at, updated_at
         FROM public.admins WHERE tenant_id = $1::uuid
         ORDER BY full_name ASC
         `,
@@ -251,7 +255,7 @@ export class CloudSqlTeamService {
       );
       const withAvailability = await this.withAvailabilitySummary(
         rows.map((r) =>
-          r.role === 'admin' ? mapAdminRow(r as unknown as AdminRow) : mapRow(r)
+          r.role !== 'doula' ? mapAdminRow(r as unknown as AdminRow) : mapRow(r)
         )
       );
       return this.withResolvedProfilePictures(withAvailability);
@@ -288,7 +292,7 @@ export class CloudSqlTeamService {
     const pool = getPool();
     const { rows } = await pool.query<AdminRow>(
       `
-      SELECT id, NULL::text AS unit_number, full_name, first_name, last_name, email, phone, bio, profile_picture, address, city, state, country, zip_code, created_at, updated_at
+      SELECT COALESCE(to_jsonb(admins)->>'staff_role','admin') AS staff_role, id, NULL::text AS unit_number, full_name, first_name, last_name, email, phone, bio, profile_picture, address, city, state, country, zip_code, created_at, updated_at
       FROM public.admins
       WHERE lower(email) = $1
       LIMIT 1
@@ -336,7 +340,7 @@ export class CloudSqlTeamService {
     try {
       const { rows: adminRows } = await pool.query<AdminRow>(
         `
-        SELECT id, NULL::text AS unit_number, full_name, first_name, last_name, email, phone, bio, profile_picture, address, city, state, country, zip_code, created_at, updated_at
+        SELECT COALESCE(to_jsonb(admins)->>'staff_role','admin') AS staff_role, id, NULL::text AS unit_number, full_name, first_name, last_name, email, phone, bio, profile_picture, address, city, state, country, zip_code, created_at, updated_at
         FROM public.admins
         WHERE id = $1::uuid
         LIMIT 1
@@ -416,6 +420,7 @@ export class CloudSqlTeamService {
     lastname: string;
     email: string;
     role: TeamRole;
+    invitedById?: string;
     phone_number?: string | null;
   }): Promise<{
     id: string;
@@ -428,6 +433,10 @@ export class CloudSqlTeamService {
     const tenantId = readTenantRequestState().tenantId;
     if (!tenantId)
       throw new Error('An organization is required to invite a team member.');
+    if (!['admin', 'doula', 'hr'].includes(input.role))
+      throw new Error('Invalid staff role');
+    if (input.role === 'hr' && !input.invitedById)
+      throw new Error('An inviting admin is required for HR');
     const normalizedEmail = input.email.toLowerCase().trim();
     const auth = getFirebaseAuth();
     const createdAuth = await auth.createUser({
@@ -459,17 +468,34 @@ export class CloudSqlTeamService {
             )
           : await client.query(
               `INSERT INTO public.admins
-            (id, full_name, email, phone, identity_platform_uid, tenant_id, first_name, last_name)
-           VALUES (gen_random_uuid(), $1, $2, $3, $4, $5::uuid, $6, $7) RETURNING id`,
-              [...values, firstname, lastname]
+            (id, full_name, email, phone, identity_platform_uid, tenant_id, first_name, last_name, staff_role)
+           VALUES (gen_random_uuid(), $1, $2, $3, $4, $5::uuid, $6, $7, $8) RETURNING id`,
+              [...values, firstname, lastname, input.role]
             );
       const id = inserted.rows[0].id;
-      await client.query(
-        `INSERT INTO public.memberships
+      if (input.role === 'hr') {
+        await client.query(
+          `INSERT INTO public.memberships
+          (tenant_id, principal_type, principal_id, identity_platform_uid, email, role, status)
+          VALUES ($1::uuid, 'admin', $2::uuid, $3, $4, 'hr', 'active')`,
+          [tenantId, id, createdAuth.uid, normalizedEmail]
+        );
+        await client.query(
+          `INSERT INTO public.doula_hr_permissions(tenant_id,admin_id,department) VALUES($1::uuid,$2,'hr')`,
+          [tenantId, id]
+        );
+        await client.query(
+          `INSERT INTO public.staff_permission_events(tenant_id,actor_id,admin_id,capability,old_value,new_value) VALUES($1::uuid,$2,$3,'hr',false,true)`,
+          [tenantId, input.invitedById, id]
+        );
+      } else {
+        await client.query(
+          `INSERT INTO public.memberships
           (tenant_id, principal_type, principal_id, identity_platform_uid, email, role, status)
          VALUES ($1::uuid, $2, $3::uuid, $4, $5, $2, 'active')`,
-        [tenantId, input.role, id, createdAuth.uid, normalizedEmail]
-      );
+          [tenantId, input.role, id, createdAuth.uid, normalizedEmail]
+        );
+      }
       await client.query('COMMIT');
       return {
         id,
@@ -586,7 +612,7 @@ export class CloudSqlTeamService {
         ? input.scheduling_url
         : (existing.scheduling_url ?? null);
 
-    if (existing.role === 'admin') {
+    if (existing.role === 'admin' || existing.role === 'hr') {
       const { rows } = await getPool().query<AdminRow>(
         `
         UPDATE public.admins
@@ -604,7 +630,7 @@ export class CloudSqlTeamService {
             zip_code = $12,
             updated_at = NOW()
         WHERE id = $13::uuid
-        RETURNING id, full_name, first_name, last_name, email, phone, bio, profile_picture, address, city, state, country, zip_code, created_at, updated_at
+        RETURNING staff_role, id, full_name, first_name, last_name, email, phone, bio, profile_picture, address, city, state, country, zip_code, created_at, updated_at
         `,
         [
           fullName,

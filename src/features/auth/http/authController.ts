@@ -30,7 +30,7 @@ import {
 } from '../../../services/identityPlatform/emailVerificationService';
 import { getFirebaseAuth } from '../../../services/identityPlatform/firebaseAdmin';
 import { IdentityPlatformTokenService } from '../../../services/identityPlatform/identityPlatformTokenService';
-import { AuthRequest, LoginBody, SignupBody } from '../../../types';
+import { AuthRequest, LoginBody, ROLE, SignupBody } from '../../../types';
 import { AuthUseCase } from '../../../usecase/authUseCase.js';
 
 export class AuthController {
@@ -186,7 +186,7 @@ export class AuthController {
           role: gate.tenant.role,
         };
         if (isTenancyEnforced()) {
-          body.role = gate.tenant.role;
+          body.role = appUser.role === ROLE.HR ? ROLE.HR : gate.tenant.role;
         }
       }
       res.json(body);

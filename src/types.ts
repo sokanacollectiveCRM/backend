@@ -342,6 +342,7 @@ export enum ACCOUNT_STATUS {
 
 export enum ROLE {
   ADMIN = 'admin',
+  HR = 'hr',
   DOULA = 'doula',
   CLIENT = 'client',
   BILLING = 'billing',

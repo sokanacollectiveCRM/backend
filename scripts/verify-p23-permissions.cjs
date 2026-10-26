@@ -67,6 +67,25 @@ async function main() {
     );
     await db.exec(migration);
     await db.exec(migration);
+    await db.exec(
+      "CREATE TABLE memberships(role text CHECK(role IN ('admin','billing','doula','client')))"
+    );
+    await db.exec("INSERT INTO memberships VALUES('admin')");
+    const hrMigration = readFileSync(
+      path.join(__dirname, '../src/db/migrations/20261026_p23_hr_role.sql'),
+      'utf8'
+    );
+    await db.exec(hrMigration);
+    await db.exec(hrMigration);
+    assert.equal(
+      (await query('SELECT staff_role FROM admins LIMIT 1')).rows[0].staff_role,
+      'admin'
+    );
+    assert.equal(
+      (await query('SELECT role FROM memberships')).rows[0].role,
+      'admin'
+    );
+    await db.exec("INSERT INTO memberships VALUES('hr')");
     assert.equal(await canManageHrDocuments(req(ids[0])), true);
     for (const denied of [
       req(ids[1]),

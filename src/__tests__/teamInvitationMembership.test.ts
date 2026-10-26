@@ -69,3 +69,45 @@ it('fails before creating an identity when organization context is missing', asy
   );
   expect(createUser).not.toHaveBeenCalled();
 });
+it('creates an HR identity with a restricted membership and audited HR grant atomically', async () => {
+  const result = await runWithTenant('inviting-tenant', () =>
+    new CloudSqlTeamService().addTeamMember({
+      ...input,
+      role: 'hr',
+      invitedById: 'ordinary-admin',
+    })
+  );
+  expect(result.role).toBe('hr');
+  expect(query).toHaveBeenCalledWith(
+    expect.stringContaining('staff_role'),
+    expect.arrayContaining(['hr'])
+  );
+  expect(query).toHaveBeenCalledWith(
+    expect.stringContaining("'hr', 'active'"),
+    ['inviting-tenant', 'new-member', 'firebase-uid', input.email]
+  );
+  expect(query).toHaveBeenCalledWith(
+    expect.stringContaining('INSERT INTO public.staff_permission_events'),
+    ['inviting-tenant', 'ordinary-admin', 'new-member']
+  );
+  expect(query).toHaveBeenCalledWith('COMMIT');
+});
+it('rolls back HR identity, membership and grant when audit creation fails', async () => {
+  query.mockImplementation(async (sql: string) => {
+    if (sql.includes('INSERT INTO public.staff_permission_events'))
+      throw new Error('audit failed');
+    return { rows: [{ id: 'new-member' }] };
+  });
+  await expect(
+    runWithTenant('tenant', () =>
+      new CloudSqlTeamService().addTeamMember({
+        ...input,
+        role: 'hr',
+        invitedById: 'admin',
+      })
+    )
+  ).rejects.toThrow('audit failed');
+  expect(query).toHaveBeenCalledWith('ROLLBACK');
+  expect(deleteUser).toHaveBeenCalledWith('firebase-uid');
+  expect(query).not.toHaveBeenCalledWith('COMMIT');
+});

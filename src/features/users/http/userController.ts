@@ -475,10 +475,10 @@ export class UserController {
       }
 
       const normalizedRole = String(role).toLowerCase();
-      if (normalizedRole !== 'doula' && normalizedRole !== 'admin') {
+      if (!['doula', 'admin', 'hr'].includes(normalizedRole)) {
         res
           .status(400)
-          .json({ error: 'Role must be either "admin" or "doula"' });
+          .json({ error: 'Role must be "admin", "doula" or "hr"' });
         return;
       }
 
@@ -486,7 +486,8 @@ export class UserController {
         firstname: String(firstname).trim(),
         lastname: String(lastname).trim(),
         email: String(email).trim(),
-        role: normalizedRole as 'admin' | 'doula',
+        role: normalizedRole as 'admin' | 'doula' | 'hr',
+        invitedById: req.user?.id,
         phone_number: typeof phone_number === 'string' ? phone_number : null,
       });
       res.status(201).json(newMember);

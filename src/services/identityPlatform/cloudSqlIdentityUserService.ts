@@ -8,7 +8,7 @@ interface IdentityUserRow {
   email: string | null;
   first_name: string | null;
   last_name: string | null;
-  role: 'admin' | 'doula' | 'client';
+  role: 'admin' | 'doula' | 'client' | 'hr';
   account_status: string | null;
   portal_status: string | null;
   phone_number: string | null;
@@ -30,7 +30,7 @@ export interface StaffIdentity {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'doula';
+  role: 'admin' | 'doula' | 'hr';
 }
 
 function normalizeEmail(email: string | null | undefined): string | null {
@@ -47,11 +47,13 @@ function mapIdentityUser(row: IdentityUserRow): User {
     first_name: row.first_name ?? '',
     last_name: row.last_name ?? '',
     role:
-      row.role === 'admin'
-        ? ROLE.ADMIN
-        : row.role === 'doula'
-          ? ROLE.DOULA
-          : ROLE.CLIENT,
+      row.role === 'hr'
+        ? ROLE.HR
+        : row.role === 'admin'
+          ? ROLE.ADMIN
+          : row.role === 'doula'
+            ? ROLE.DOULA
+            : ROLE.CLIENT,
     account_status: (row.account_status as any) ?? undefined,
     phone_number: row.phone_number ?? undefined,
     address: row.address ?? undefined,
@@ -89,7 +91,7 @@ const PROFILE_QUERY = `
         a.last_name,
         NULLIF(btrim(substr(a.full_name, length(split_part(a.full_name, ' ', 1)) + 1)), '')
       ) AS last_name,
-      'admin'::text AS role,
+      COALESCE(to_jsonb(a)->>'staff_role','admin') AS role,
       'approved'::text AS account_status,
       NULL::text AS portal_status,
       a.phone AS phone_number,
@@ -202,13 +204,23 @@ export class CloudSqlIdentityUserService {
     identifier: string
   ): Promise<StaffIdentity | null> {
     const user = await this.findUser({ uid: identifier });
-    if (user?.role !== ROLE.ADMIN && user?.role !== ROLE.DOULA) return null;
+    if (
+      user?.role !== ROLE.ADMIN &&
+      user?.role !== ROLE.DOULA &&
+      user?.role !== ROLE.HR
+    )
+      return null;
     const name = `${user.firstname ?? ''} ${user.lastname ?? ''}`.trim();
     return {
       id: user.id,
       name: name || user.email || 'Staff member',
       email: user.email || '',
-      role: user.role === ROLE.ADMIN ? 'admin' : 'doula',
+      role:
+        user.role === ROLE.HR
+          ? 'hr'
+          : user.role === ROLE.ADMIN
+            ? 'admin'
+            : 'doula',
     };
   }
 }

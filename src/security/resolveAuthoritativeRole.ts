@@ -7,9 +7,9 @@ import { getPool } from '../db/cloudSqlPool';
 import { ROLE } from '../types';
 import { normalizeRole } from './authorizationPolicies';
 
-export type AppRole = 'admin' | 'doula' | 'billing' | 'client';
+export type AppRole = 'admin' | 'doula' | 'billing' | 'client' | 'hr';
 
-export type CloudSqlRoleHint = 'admin' | 'doula' | 'client' | null;
+export type CloudSqlRoleHint = 'admin' | 'doula' | 'client' | 'hr' | null;
 
 export interface AuthoritativeRoleLookup {
   findCloudSqlRole(
@@ -18,7 +18,7 @@ export interface AuthoritativeRoleLookup {
   ): Promise<CloudSqlRoleHint>;
 }
 
-const STAFF_ROLES = new Set<AppRole>(['admin', 'doula', 'billing']);
+const STAFF_ROLES = new Set<AppRole>(['admin', 'doula', 'billing', 'hr']);
 
 /** Cloud SQL staff/client ids are UUIDs; Identity Platform UIDs often are not. */
 const UUID_RE =
@@ -35,6 +35,7 @@ export function isStaffRole(role: string | null | undefined): boolean {
 export function normalizeAppManagedRole(role: unknown): AppRole | null {
   const normalized = normalizeRole(role);
   if (
+    normalized === 'hr' ||
     normalized === 'admin' ||
     normalized === 'doula' ||
     normalized === 'billing' ||
@@ -57,14 +58,15 @@ export class DbAuthoritativeRoleLookup implements AuthoritativeRoleLookup {
     const idParam = uidIsUuid ? authUserId : null;
 
     const admin = await pool.query(
-      `SELECT 1
+      `SELECT COALESCE(to_jsonb(admins)->>'staff_role','admin') AS staff_role
        FROM public.admins
        WHERE ($1::uuid IS NOT NULL AND id = $1::uuid)
           OR ($2::text IS NOT NULL AND lower(email) = $2::text)
        LIMIT 1`,
       [idParam, normalizedEmail]
     );
-    if (admin.rowCount && admin.rowCount > 0) return 'admin';
+    if (admin.rowCount && admin.rowCount > 0)
+      return admin.rows[0]?.staff_role === 'hr' ? 'hr' : 'admin';
 
     const doula = await pool.query(
       `SELECT 1
@@ -171,6 +173,7 @@ export async function resolveAuthoritativeRole(input: {
     input.email ?? null
   );
 
+  if (cloud === 'hr') return 'hr';
   if (cloud === 'admin') return 'admin';
   if (cloud === 'doula') return 'doula';
 
@@ -183,6 +186,8 @@ export async function resolveAuthoritativeRole(input: {
 
 export function toRoleEnum(role: AppRole): ROLE {
   switch (role) {
+    case 'hr':
+      return ROLE.HR;
     case 'admin':
       return ROLE.ADMIN;
     case 'doula':

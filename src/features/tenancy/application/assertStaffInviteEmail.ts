@@ -5,7 +5,7 @@ import {
 } from '../domain/staffEmailDomain';
 import { findStaffEmailDomain } from '../infrastructure/staffEmailDomainRepository';
 
-export type StaffInviteRole = 'admin' | 'doula';
+export type StaffInviteRole = 'admin' | 'doula' | 'hr';
 
 export async function assertStaffInviteEmail(input: {
   tenantId: string | null | undefined;
