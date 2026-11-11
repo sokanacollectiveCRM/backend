@@ -117,11 +117,13 @@ it('requires a reason and the latest review version', async () => {
   await expect(run('approved')).rejects.toThrow('changed');
   expect(deliverProfileReviewEmails).not.toHaveBeenCalled();
 });
-it('cannot approve before submission or before certificate approval', async () => {
-  await expect(run('approved', { expectedVersion: 0 })).rejects.toThrow(
-    'submit'
-  );
-  profile.profile_review_status = 'submitted';
+it('allows approval before submission but still requires certificate approval', async () => {
+  await run('approved', { expectedVersion: 0 });
+  expect(profile.profile_review_status).toBe('approved');
+  expect(profile.profile_submitted_at).toBeNull();
+
+  profile.profile_review_status = 'draft';
+  profile.profile_review_version = 0;
   certificate = false;
   await expect(run('approved', { expectedVersion: 0 })).rejects.toThrow(
     'training certificate'
