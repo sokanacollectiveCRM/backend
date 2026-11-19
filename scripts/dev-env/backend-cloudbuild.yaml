@@ -1,0 +1,26 @@
+# Build isolated dev API from repo Dockerfile (node in PATH). Used by deploy-cloudrun.sh.
+substitutions:
+  _SERVICE_NAME: sokana-private-api-dev
+  _AR_HOSTNAME: us-central1-docker.pkg.dev
+  _AR_REPOSITORY: cloud-run-source-deploy
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: Build
+    args:
+      - build
+      - -t
+      - ${_AR_HOSTNAME}/$PROJECT_ID/${_AR_REPOSITORY}/backend/${_SERVICE_NAME}:$BUILD_ID
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    id: Push
+    args:
+      - push
+      - ${_AR_HOSTNAME}/$PROJECT_ID/${_AR_REPOSITORY}/backend/${_SERVICE_NAME}:$BUILD_ID
+
+images:
+  - ${_AR_HOSTNAME}/$PROJECT_ID/${_AR_REPOSITORY}/backend/${_SERVICE_NAME}:$BUILD_ID
+
+options:
+  logging: CLOUD_LOGGING_ONLY

@@ -22,12 +22,34 @@ export function createClientContractRoutes(
   controller: ContractController
 ): Router {
   const router = Router();
-  router.use(authMiddleware);
-  router.use((req, res, next) => authorizeRoles(req, res, next, ['client']));
+  const requireClient = (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): void => {
+    void authorizeRoles(req, res, next, ['client']);
+  };
 
-  router.get('/me/contracts', controller.listMine);
-  router.get('/me/contracts/:id', controller.getMine);
-  router.get('/me/contracts/:id/download', controller.downloadMine);
+  // Middleware must stay on these routes only. A router-level client check
+  // 403s admins on every later /api/clients/* mount (documents, activities).
+  router.get(
+    '/me/contracts',
+    authMiddleware,
+    requireClient,
+    controller.listMine
+  );
+  router.get(
+    '/me/contracts/:id',
+    authMiddleware,
+    requireClient,
+    controller.getMine
+  );
+  router.get(
+    '/me/contracts/:id/download',
+    authMiddleware,
+    requireClient,
+    controller.downloadMine
+  );
   router.use(safeError);
   return router;
 }

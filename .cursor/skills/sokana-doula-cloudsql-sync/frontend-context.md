@@ -2,6 +2,763 @@
 
 This file is intentionally updateable as frontend work finishes.
 
+## Preflight Update 2026-10-12 (team invite email)
+
+### Task
+- Team invite on the test site created doula rows and did not send email.
+
+### Files Scanned
+- `frontend-crm/src/features/teams/teams.tsx` (`POST /clients/team/add`, then `GET /clients/team/all`)
+- `src/features/users/http/userController.ts` in the notification-rules worktree
+- `src/features/team/application/staffInvitationService.ts`
+
+### Contract Findings
+- The team page expects `201` with a pending invitation and a list that includes `invitation_status: "pending"`.
+- The live test API created the doula immediately and skipped `sendStaffInvitationEmail`.
+
+### Drift Risk
+- A pending invite must stay in `GET /clients/team/all` or the team page hides it after refresh.
+
+### Required Compatibility
+- `POST /clients/team/add` sends the accept-invite email and returns the pending row.
+- Test API only.
+
+### Action
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-12 (practice run people)
+
+### Task
+- Rewrite the practice-run guide around Nancy, Ary, and one new doula. Remove Maya.
+
+### Files Scanned
+- `frontend-crm/src/common/data/sidebar-data.ts`
+- `frontend-crm/src/features/clients/domain/client.ts`
+- `frontend-crm/src/features/clients/components/dialog/LeadProfileModal.tsx`
+- `docs/PILOT_TEST_GUIDE.md`
+
+### Contract Findings
+- Leads are clients whose status is not `matched`. Customers are `matched`.
+- Doula assignment still requires backend status `matching`. The profile screen maps `matching` to the Matched label.
+- Public intake stays at `/request/sokana360`. Client login stays at `/auth/client-login`.
+
+### Drift Risk
+- A tester who picks Matched before assignment moves Ary to Customers and cannot assign a doula.
+
+### Required Compatibility
+- No API change. Guide text only.
+
+### Action
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-12 (notification rules)
+
+### Task
+- Set Sokana360 notification rules in the backend. Rules are fixed in code. No editor UI. One pull request against main, not merged. Test API only.
+
+### Files Scanned
+- `frontend-crm` has no notification-rules screen and no dashboard notices client.
+- `src/features/contracts/application/contractService.ts` (contract-sent email and signing link)
+- `src/features/dashboard/http/dashboardRoutes.ts` (stats only; no alert list)
+- `src/features/clients/application/createActivity.ts` (notes are `client_activities` with type `note`)
+- `src/features/portal/domain/eligibility.ts` (deposit paid statuses)
+
+### Contract Findings
+- The dashboard does not read a notices API today. Alerts are stored for a later read-only list.
+- Signing links stay on `/signing#invitation=`.
+- Client first name is the only personal detail these emails use. Note text and birth-outcome answers stay out of email.
+
+### Drift Risk
+- A dashboard that later lists notices must use `GET /api/notifications/notices` and must not expect rule timings to be editable.
+
+### Required Compatibility
+- Existing contract send, note create, and headshot update responses stay the same. Notification work is additional.
+
+### Action
+- [x] Context updated
+- [ ] Implementation started
+
+## Preflight Update 2026-10-12 (signing reminder cron)
+
+### Task
+- Create a test-environment Cloud Scheduler job that emails contract signing reminders.
+
+### Files Scanned
+- `src/features/contracts/application/contractService.ts`
+- `src/features/contracts/http/signingReminderCron.ts`
+- `frontend-crm` contract signing stays on `/signing`
+
+### Contract Findings
+- A reminder resends the existing “Please review and sign” email and replaces the previous signing link.
+- The dashboard does not call this route. Cloud Scheduler posts to the test API.
+
+### Drift Risk
+- Production Cloud Run is not the target. The job name is `sokana-dev-contract-signing-reminders`.
+
+### Required Compatibility
+- Reminder mail uses the same signing URL shape the client already opens.
+
+### Action
+- [x] Context updated
+- [x] Implementation started
+- [x] Test job `sokana-dev-contract-signing-reminders` is enabled on `sokana-private-api-dev` (daily 14:00 America/New_York). A manual run returned HTTP 200.
+
+## Preflight Update 2026-10-12 (pilot leads and role capabilities)
+
+### Task
+- Clear the test leads list, add doula upload files, and check admin, doula, and client capabilities.
+
+### Files Scanned
+- `frontend-crm/src/features/clients/Clients.tsx` (leads are records whose status is not `matched`)
+- `frontend-crm/src/features/doula-dashboard/infrastructure/doulaService.ts`
+- `backend/src/constants/doulaDocuments.ts`
+- `backend/src/common/data` sidebar roles via `AppSidebar.tsx`
+
+### Contract Findings
+- Leads list: `status !== 'matched'`. Customers stay when status is `matched`.
+- Doula activation needs approved uploads: background check, liability insurance, training certificate, W-9, and direct deposit. PDF, PNG, and JPEG are accepted.
+
+### Drift Risk
+- Deleting leads on `sokana_private_dev` only. Matched customers stay. Production is not a target.
+
+### Required Compatibility
+- Role menus stay as they are: admin office tools, doula dashboard, client profile and billing.
+
+### Action
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-12 (hide intake form menu)
+
+### Task
+- Hide the Intake form item in the test dashboard menu for the October 12 pilot.
+
+### Files Scanned
+- `frontend-crm/src/common/components/navigation/sidebar/AppSidebar.tsx`
+- `frontend-crm/src/common/data/sidebar-data.ts`
+- `docs/PILOT_TEST_GUIDE.md`
+
+### Contract Findings
+- The menu item is local UI. It calls no API when hidden. The public intake URL `/request/sokana360` stays available.
+
+### Drift Risk
+- The settings route `/settings/intake-form` still exists if someone opens it directly. It is not in the left menu.
+
+### Required Compatibility
+- Test dashboard only: `sokana-front-end-dev`. No request or response change.
+
+### Action
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-10 (test dashboard still on old intake page)
+
+### Task
+- Put the intake form builder on the test dashboard. The live test page still shows the old step grid and native file picker.
+
+### Files Scanned
+- `frontend-crm/src/features/intake-form/IntakeFormSettingsPage.tsx` at `0b50e2f` (clean checkout)
+- `frontend-crm/src/features/intake-form/IntakeFormBuilder.tsx`
+- Test Cloud Run revisions `sokana-front-end-dev-00033-z5r` and `sokana-private-api-dev-00053-gxr`
+
+### Contract Findings
+- The builder loads with `getIntakeDraft`. The test API revision currently serving does not include that route, so the new page needs the test API deploy as well as the test dashboard deploy.
+
+### Drift Risk
+- A dashboard-only deploy would show a load error instead of the builder until the test API is updated.
+
+### Required Compatibility
+- Test services only: `sokana-front-end-dev` and `sokana-private-api-dev`. Placeholder and columns stay optional on the draft definition.
+
+### Action
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-10 (intake logo buttons)
+
+### Task
+- Make the intake logo replace control look like a button.
+
+### Files Scanned
+- `frontend-crm/src/features/intake-form/IntakeFormSettingsPage.tsx`
+- `frontend-crm/src/common/components/ui/button.tsx`
+
+### Contract Findings
+- Logo upload is still `POST` the draft logo file. No request or response change.
+
+### Drift Risk
+- None for the API.
+
+### Required Compatibility
+- Accepted files stay PNG, JPEG, and WebP. Remove logo stays disabled until a draft logo exists.
+
+### Action
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-10 (intake form builder preview)
+
+### Task
+- Customize the intake form from the dashboard with a client-style preview on the left and field controls on the right.
+
+### Files Scanned
+- `frontend-crm/src/features/intake-form/IntakeFormSettingsPage.tsx`
+- `frontend-crm/src/features/intake-form/DynamicIntakeForm.tsx`
+- `frontend-crm/src/features/intake-form/types.ts`
+- `frontend-crm/src/features/intake/RequestForm.tsx`
+- `frontend-crm/src/features/intake/RequestRoutes.tsx`
+- `frontend-crm/src/Routes.tsx`
+- `backend/src/features/intake/domain/validateIntakeFormDefinition.ts`
+
+### Contract Findings
+- Draft questions already store `label`, `helpText`, `required`, `hidden`, and custom `type`.
+- A question may also store `placeholder` (plain text or empty) and `columns` (`1` full width or `2` half of a two-column row).
+- Missing `columns` keeps the current default: long text, radio, image, and multi-select span the row; other fields share a row.
+- Standard answer types stay fixed. Custom types stay editable until answers lock them.
+
+### Drift Risk
+- A save that drops `placeholder` or `columns` would reset the layout the admin just set.
+- The public `/request/:tenantSlug` page still uses the designed form, so the new tab is a client-styled preview of the draft, not the live public URL.
+
+### Required Compatibility
+- Older drafts without `placeholder` or `columns` still load and save.
+- Field keys, required flags, and `showWhen` stay unchanged.
+
+### Action
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-10 (intake thank-you brand color)
+
+### Task
+- The public intake thank-you card still uses the old teal fill. It should use the org brand colors.
+
+### Files Scanned
+- `frontend-crm/src/features/intake/RequestFormDesktop.tsx`
+- `frontend-crm/src/features/intake/RequestForm.tsx`
+- `frontend-crm/src/features/intake/intakeTheme.ts`
+- `frontend-crm/src/features/intake/contexts/IntakeBrandingContext.tsx`
+
+### Contract Findings
+- No request or response change. Brand colors come from public branding `primaryColor` and `accentColor`.
+- Defaults stay navy `#0a3147` and terracotta `#d6704d`.
+
+### Drift Risk
+- A hardcoded mint card ignores a later brand-color change.
+
+### Required Compatibility
+- Thank-you copy and submit response stay the same.
+
+### Action
+- Tint the thank-you card from the accent color and keep headings on the primary color.
+
+## Preflight Update 2026-10-10 (intake submit CORS)
+
+### Task
+- Public intake submit from the tester is blocked because the browser sends `Idempotency-Key`.
+
+### Files Scanned
+- `frontend-crm/src/features/intake/RequestForm.tsx`
+- `frontend-crm/src/features/intake/domain/intakeAbuse.ts`
+- `backend/src/server.ts`
+- `backend/src/features/intake/infrastructure/intakeAbuseProtection.ts`
+
+### Contract Findings
+- Submit is `POST /requestService/:tenantSlug/requestSubmission` with `Content-Type` and `Idempotency-Key`.
+- The API reads `idempotency-key` for replay protection.
+- CORS allow-list was missing that header, so the preflight failed before the handler ran.
+
+### Drift Risk
+- Removing the header from the frontend or the allow-list brings the same browser block back.
+
+### Required Compatibility
+- Keep `Idempotency-Key` on both the public submit request and `Access-Control-Allow-Headers`.
+
+### Action
+- Allow `Idempotency-Key` on the API CORS preflight.
+
+## Preflight Update 2026-10-10 (admin intake conditions)
+
+### Task
+- Keep show/hide rules on intake questions when an admin updates the form.
+
+### Files Scanned
+- `frontend-crm/src/features/intake-form/types.ts`
+- `frontend-crm/src/features/intake-form/IntakeFormSettingsPage.tsx`
+- `backend/src/features/intake/domain/intakeFormCatalog.ts`
+- `backend/src/features/intake/domain/validateIntakeFormDefinition.ts`
+
+### Contract Findings
+- A question may include `showWhen` with `questionKey` plus `equals`, `includes`, or `oneOf`.
+- Standard follow-up questions keep the catalog rule on save. Custom questions can set their own.
+
+### Drift Risk
+- An older draft without `showWhen` still loads. The editor fills the standard rules before display and save.
+
+### Required Compatibility
+- Field keys stay the same. Hidden and required flags stay. `showWhen` is optional.
+
+### Action
+- Show the condition in the admin question editor and persist it with the draft.
+- The admin test form hides a follow-up until its parent answer matches, including a follow-up of a follow-up.
+
+## Preflight Update 2026-10-10 (two-column intake steps)
+
+### Task
+- Use two columns on the short-field intake steps so the form is easier to read and update.
+
+### Files Scanned
+- `frontend-crm/src/features/intake/RequestForm.module.scss`
+- `frontend-crm/src/features/intake/Step1Personal.tsx`
+- `frontend-crm/src/features/intake/Step3Home.tsx`
+
+### Contract Findings
+- No request or response change. Field names stay the same.
+
+### Drift Risk
+- None for the API.
+
+### Required Compatibility
+- Notes and other full-width questions still span the row. Home Details stays one column.
+
+### Action
+- Desktop field grids use two columns. Full-width fields span both.
+
+## Preflight Update 2026-10-10 (borders on every intake field)
+
+### Task
+- Give Client Details fields a border, and use that same border on the fields in the other steps.
+
+### Files Scanned
+- `frontend-crm/src/features/intake/RequestForm.module.scss`
+- `frontend-crm/src/features/intake/Step1Personal.tsx`
+
+### Contract Findings
+- No request or response change. Field names stay the same.
+
+### Drift Risk
+- None for the API.
+
+### Required Compatibility
+- Labels stay above the fields. Back and Next stay centered.
+
+### Action
+- Text fields, dropdowns, dates, and notes all use a white box with a full border.
+
+## Preflight Update 2026-10-10 (intake back and next placement)
+
+### Task
+- Keep Back and Next together in the center, and repeat that pair at the top of each intake step.
+
+### Files Scanned
+- `frontend-crm/src/features/intake/RequestForm.tsx`
+- `frontend-crm/src/features/intake/RequestFormDesktop.tsx`
+- `frontend-crm/src/features/intake/RequestForm.module.scss`
+- `frontend-crm/src/features/intake/Step2Health.tsx`
+
+### Contract Findings
+- No request or response change. Next still validates the current step and submits on the last step.
+
+### Drift Risk
+- None for the API.
+
+### Required Compatibility
+- Back stays disabled on the first step. The last step still says Submit.
+
+### Action
+- Center the existing button row and render the same controls under the step title.
+
+## Preflight Update 2026-10-10 (age cannot go below zero)
+
+### Task
+- Stop the Client Details age field from accepting a negative number.
+
+### Files Scanned
+- `frontend-crm/src/features/intake/Step1Personal.tsx`
+- `frontend-crm/src/features/intake/application/useRequestForm.ts`
+
+### Contract Findings
+- Age is still a whole number from 1 to 120. The field name stays `age`.
+
+### Drift Risk
+- None. The input floor matches the existing rule that age is at least 1.
+
+### Required Compatibility
+- Submit still sends `age` as a number. Values below 0 are not entered.
+
+### Action
+- Block the minus sign and clamp the stepper so the age field cannot show a number below 0.
+
+## Preflight Update 2026-10-10 (step rail demographics label)
+
+### Task
+- Keep the step 9 block label inside its card. No API change.
+
+### Files Scanned
+- `frontend-crm/src/features/intake/components/StepNavigation.tsx`
+- `frontend-crm/src/features/intake/components/StepNavigation.module.scss`
+- `frontend-crm/src/features/intake/domain/stepConfig.ts`
+
+### Contract Findings
+- No request or response shape change. The page heading stays “Client Demographics.”
+
+### Drift Risk
+- None for the API.
+
+### Required Compatibility
+- The step rail uses the shorter label. The step heading still uses the full title.
+
+### Action
+- Show “Demographics” on the step block. The page heading stays “Client Demographics.”
+- The rail label scales inside the card (`clamp` on the step title) and each card keeps a 6.75rem minimum, so “Demographics” stays about 16px inside the border on a wide screen. Narrower desktops scroll the rail instead of letting the word hit the edge.
+
+## Preflight Update 2026-10-10 (public intake spacing)
+
+### Task
+- Make the public intake form easier to read: labels sit above the fields with a gap, and narrow screens stack to one column. No API change.
+
+### Files Scanned
+- `frontend-crm/src/features/intake/RequestForm.module.scss`
+- `frontend-crm/src/features/intake/Step1Personal.tsx`
+- `frontend-crm/src/features/intake/Step3Home.tsx`
+- `frontend-crm/src/features/intake/components/SupportPersonFields.tsx`
+
+### Contract Findings
+- No request or response shape change. Field names stay the same.
+
+### Drift Risk
+- None for the API. This is layout only.
+
+### Required Compatibility
+- Desktop keeps the four-column grid so existing half-width and full-width spans still line up. Viewports under 1100px stack each field.
+
+### Action
+- Labels stay above the control. Short text fields and single choices stay an underline. Notes, the services list, and the demographics multi-select use a bordered box. No API change.
+
+## Preflight Update 2026-10-10 (support details floating label)
+
+### Task
+- The public “Describe the support you are looking for” label should rest inside the field and rise when the field is focused or filled. No API change.
+
+### Files Scanned
+- `frontend-crm/src/features/intake/Step3Home.tsx` (`Step8ServicesInterested`)
+- `frontend-crm/src/features/intake/RequestForm.module.scss`
+
+### Contract Findings
+- No request or response shape change. The field is still `service_support_details`.
+
+### Drift Risk
+- None for the API. Label position is local CSS.
+
+### Required Compatibility
+- The label stays raised after blur when the textarea has text.
+
+### Action
+- Superseded by the spacing pass: this label now sits above the description box with the other fields.
+
+## Preflight Update 2026-10-10 (restore public intake design)
+
+### Task
+- Put `/request/:tenantSlug` back on the original designed intake form. The published definition stays for saving and for the settings editor.
+
+### Files Scanned
+- `frontend-crm/src/features/intake/RequestForm.tsx`
+- `frontend-crm/src/features/intake/RequestFormDesktop.tsx`
+- `frontend-crm/src/features/intake/components/StepNavigation.tsx`
+- `frontend-crm/src/features/intake-form/DynamicIntakeForm.tsx` (settings test submit only)
+
+### Contract Findings
+- `GET /requestService/public/:tenantSlug` still returns branding plus `form` after publish.
+- Public submit stays `POST /requestService/:tenantSlug/requestSubmission` with the original field names.
+
+### Drift Risk
+- A published custom question or hidden standard question will not appear on the public page until that page is rebuilt to match this design. Sokana360 version 1 is the original 9-step form.
+
+### Required Compatibility
+- Logo still uses `form.logoUrl` when the org uploaded one, otherwise the brand logo.
+
+### Action
+- Always render `RequestFormInner` on the public route.
+
+## Preflight Update 2026-10-10 (intake editor step blocks)
+
+### Task
+- The intake editor should show steps as blocks, then open one step to edit its questions. No API change.
+
+### Files Scanned
+- `frontend-crm/src/features/intake-form/IntakeFormSettingsPage.tsx`
+
+### Contract Findings
+- No request or response shape change. Draft save still sends the same definition.
+
+### Drift Risk
+- None for the API.
+
+### Required Compatibility
+- Step order, question keys, shown, and required stay on the definition.
+
+### Action
+- Render steps as a grid of blocks and edit the selected block.
+- Core dropdowns show their fixed choices. Custom dropdown and radio choices are edited on the question, one per line.
+
+## Preflight Update 2026-10-10 (desktop intake floating labels)
+
+### Task
+- On desktop, intake labels should sit inside the field and rise, with a clear gap above the typed or selected value. No API change.
+
+### Files Scanned
+- `frontend-crm/src/features/intake/Step3Home.tsx` (`Step8ServicesInterested`)
+- `frontend-crm/src/features/intake/Step1Personal.tsx`
+- `frontend-crm/src/features/intake/RequestForm.module.scss`
+
+### Contract Findings
+- No request or response shape change. This is layout only.
+
+### Drift Risk
+- None for the API. Desktop label position is local CSS.
+
+### Required Compatibility
+- Field names stay `services_interested` and `service_support_details`.
+
+### Action
+- [x] Context updated
+- [ ] Implementation started
+
+## Preflight Update 2026-10-10 (simpler intake field controls)
+
+### Task
+- Core fields can be shown or hidden and marked required or optional. Custom fields are text, number, image, dropdown, or radio. Images are PNG, JPEG, or WebP, 5 MB each, and a form can show 3 image questions.
+
+### Files Scanned
+- `frontend-crm/src/features/intake-form/IntakeFormSettingsPage.tsx`
+- `frontend-crm/src/features/intake-form/DynamicIntakeForm.tsx`
+- `frontend-crm/src/features/intake/RequestForm.tsx`
+- `backend/src/features/intake/domain/validateIntakeFormDefinition.ts`
+
+### Contract Findings
+- A hidden question stays in the draft with `hidden: true` and is left off the public form.
+- An image answer is the uploaded asset id. Public upload is `POST /requestService/:tenantSlug/intake-images`. Admin test upload is `POST /api/intake-forms/answer-images`.
+
+### Drift Risk
+- Hiding first name, last name, or both email and phone would leave a lead without a name or a way to reach the person.
+
+### Required Compatibility
+- First name, last name, and at least one of email or phone stay visible.
+- Dropdown is stored as `single_select`. Radio is `radio`. Text is `short_text`.
+
+### Action
+- Add show/hide, the five custom types, and the image size and count limits.
+
+## Preflight Update 2026-10-10 (publish Sokana360 current form)
+
+### Task
+- Store the current `/request/sokana360` form as published version 1 on the isolated dev database. No contract change.
+
+### Files Scanned
+- `frontend-crm/src/features/intake/domain/stepConfig.ts` (9 step titles)
+- `frontend-crm/src/features/intake/RequestForm.tsx` (published `form` switches the public page to the stored definition; otherwise the current form stays)
+- `backend/src/features/intake/domain/intakeFormCatalog.ts` (same 9 steps and standard questions)
+
+### Contract Findings
+- No response-shape change. After version 1 exists, `GET /requestService/public/sokana360` adds `form`.
+
+### Drift Risk
+- None. The stored definition uses the standard catalog that matches the current step titles and question keys.
+
+### Required Compatibility
+- Logo stays the existing brand logo because the published definition has no separate logo asset.
+
+### Action
+- Publish version 1 for slug `sokana360` on `sokana_private_dev` only.
+
+## Preflight Update 2026-10-10 (per-organization intake form)
+
+### Task
+- One versioned intake form per tenant. Org admins and platform support edit it. Public `/request/:tenantSlug` uses the published definition after version 1; until then the current Sokana form and normalizer stay.
+
+### Files Scanned
+- `frontend-crm/src/features/intake/RequestRoutes.tsx` (`/request/:tenantSlug`)
+- `frontend-crm/src/features/intake/RequestForm.tsx` (POST `/requestService/:tenantSlug/requestSubmission`)
+- `frontend-crm/src/features/intake/application/usePublicIntakeBranding.ts` (`GET /requestService/public/:tenantSlug` branding object)
+- `frontend-crm/src/features/intake/domain/stepConfig.ts` (9 steps, Services through Demographics)
+- `frontend-crm/src/features/intake/application/useRequestForm.ts`
+- `frontend-crm/src/Routes.tsx`, `src/common/data/sidebar-data.ts`, `src/common/types/user.ts`
+- `backend/src/features/intake/http/requestRoute.ts`
+- `backend/src/features/intake/domain/normalizePublicSubmission.ts`
+- `backend/src/features/intake/infrastructure/publicIntakeBrandingRepository.ts`
+- `backend/src/features/intake/infrastructure/intakeAbuseProtection.ts`
+
+### Contract Findings
+- Public branding is an unwrapped `{ slug, name, branding }`. The frontend treats a missing organization as an error string in `error`.
+- Public submit success is `{ message }` with an `Idempotency-Key` header. Rate limits use HTTP 429.
+- Legacy `POST /requestService/requestSubmission` stays pinned to Sokana.
+- `/auth/me` is an unwrapped user. Optional `platformSupport` may be added. Org admins are not platform admins.
+- The CRM does not send `X-Tenant-Id` today. Platform support passes `tenantId` on `/api/intake-forms` only.
+
+### Drift Risk
+- Requiring a `form` field on the branding payload before an organization publishes would replace the current Sokana form.
+- Changing standard question keys would stop answers mapping onto existing `phi_clients` columns.
+- Letting public callers set `is_test` would hide real leads from staff email, matching, and dashboard counts.
+
+### Required Compatibility
+- Until version 1 is published, `GET /requestService/public/:tenantSlug` stays the branding payload and submit uses `normalizePublicIntakeSubmission`.
+- After publish, the same GET adds `form: { version, definition, logoUrl, catalog }`.
+- Identity questions stay `firstname`, `lastname`, and at least one of `email` or `phone_number`.
+- Custom answers stay in `custom_answers` on the lead. Test submits are `is_test` and are excluded from staff email, matching, and dashboard client counts.
+
+### Action
+- [x] Context updated
+- [x] Implementation started
+
+## Preflight Update 2026-10-10 (extract assigned doulas list and unassign)
+
+### Task
+- Move `getAssignedDoulas` and `unassignDoula` out of the client controller into matching use cases. Same routes, status codes, and bodies.
+
+### Files Scanned
+- `frontend-crm/src/features/clients/infrastructure/doulaAssignments.ts`
+- `frontend-crm/src/features/client-dashboard/components/ClientProfileTab.tsx`
+- `frontend-crm/src/features/clients/components/DoulaAssignment.tsx`
+- `backend/src/features/clients/http/clientController.ts` (`getAssignedDoulas`, `unassignDoula`)
+- `backend/src/features/clients/http/clientRoutes.ts`
+
+### Contract Findings
+- Staff list reads `GET /clients/:id/assigned-doulas` and uses `result.doulas`.
+- The client profile accepts either a raw array or `payload.doulas`.
+- Unassign is `DELETE /clients/:id/assign-doula/:doulaId` and only checks `response.ok`.
+- List success stays `{ success: true, doulas }` with `availabilityStatus` and `doula.scheduling_url`.
+- A missing assignments table returns an empty list with status 200. Unassign does not use that fallback.
+
+### Drift Risk
+- Renaming `doulas`, dropping `scheduling_url` or `availabilityStatus`, or turning the empty-list fallback into an error breaks the assignment panels.
+
+### Required Compatibility
+- Keep `GET /clients/:id/assigned-doulas` and `DELETE /clients/:id/assign-doula/:doulaId`, including the `/client` and `/api` aliases mounted with the client router.
+- Hide `scheduling_url` unless the viewer is an admin or a client already in the contract stage.
+- Keep the client own-profile rewrite and the unassigned-doula 404.
+
+### Action
+- [x] Context updated
+- [x] Implementation started (behavior-preserving extract; list and unassign contracts unchanged)
+
+## Preflight Update 2026-10-10 (extract list client activities)
+
+### Task
+- Move `getClientActivities` out of the client controller into a use case. Same routes, status codes, and list body.
+
+### Files Scanned
+- `frontend-crm/src/api/services/activities.service.ts` (`GET /clients/:id/activities`, reads `ActivityDTO[]`)
+- `frontend-crm/src/features/clients/infrastructure/notes.ts` (also `GET /api/clients/:id/activities`, reads `data` or `activities`)
+- `backend/src/features/clients/http/clientController.ts` (`getClientActivities`)
+- `backend/src/features/clients/http/clientRoutes.ts`
+
+### Contract Findings
+- Success stays `{ success: true, data: ActivityDTO[], meta: { count } }`.
+- Clients only receive notes whose metadata `visibleToClient` or `visible_to_client` is boolean `true`.
+- A missing activities table returns an empty list with status 200, not an error.
+
+### Drift Risk
+- Changing the list envelope, dropping `meta.count`, or showing staff-only notes to clients breaks the notes tabs.
+
+### Required Compatibility
+- Keep `GET /clients/:id/activities` and the `/client`, `/api/clients`, and `/api/client` aliases.
+- Keep no-store cache headers, the client-only visibility filter, and the empty-list fallback.
+
+### Action
+- [x] Context updated
+- [x] Implementation started (behavior-preserving extract; list contract unchanged)
+
+## Preflight Update 2026-10-09 (extract create client activity)
+
+### Task
+- Move client activity creation out of `clientController` into a clients use case. Same routes, status codes, and response body.
+
+### Files Scanned
+- `frontend-crm/src/api/services/activities.service.ts`
+- `frontend-crm/src/api/mappers/activity.mapper.ts`
+- `frontend-crm/src/api/dto/activity.dto.ts`
+- `frontend-crm/src/features/clients/infrastructure/notes.ts`
+- `backend/src/features/clients/http/clientController.ts` (`createActivity`)
+- `backend/src/features/clients/http/clientRoutes.ts`
+- `backend/src/server.ts` mounts for `/clients`, `/client`, `/api/clients`, `/api/client`
+
+### Contract Findings
+- Staff notes post `{ activity_type, content, metadata? }` to `POST /api/clients/:id/activity` and accept `data`, `data.activity`, or `activity`.
+- The activities service posts `{ activity_type, content, visible_to_client? }` to `POST /clients/:id/activity` and maps `data` as an `ActivityDTO` (`id`, `client_id`, `activity_type`, `content`, `created_at`, `visible_to_client`, `metadata`).
+- Success envelope stays `{ success: true, data: ActivityDTO }`.
+
+### Drift Risk
+- Changing the success envelope, field names, or validation status codes breaks both note creators.
+
+### Required Compatibility
+- Keep `POST /clients/:id/activity` and the `/api/clients`, `/client`, and `/api/client` aliases.
+- Keep the current validation messages, 404 for a missing client, and the activity DTO fields above.
+
+### Action
+- [x] Context updated
+- [x] Implementation started (behavior-preserving extract; response contract unchanged)
+
+## Preflight Update 2026-10-09 (architecture discoverability report)
+
+### Task
+- Read-only report on package-by-feature layout and whether Gherkin would help onboarding. No API or payload changes.
+
+### Files Scanned
+- `src/server.ts`, `src/features/README.md`, `src/features/**`
+- Frontend not re-scanned; this task does not change request or response contracts.
+
+### Contract Findings
+- No changes needed. Public mounts stay in `src/server.ts`.
+
+### Drift Risk
+- None for this report. Structural notes only.
+
+### Required Compatibility
+- Unchanged.
+
+### Action
+- [x] Context updated
+- [x] No implementation (analysis only)
+
+## Preflight Update 2026-10-09 (Sokana 360 intake — Nancy retest)
+
+### Task
+
+- Check whether the public Sokana 360 intake form on dev is ready for Nancy to retest.
+
+### Files Scanned
+
+- Live dev API preflight: `POST /requestService/sokana360/requestSubmission`
+- Live frontend bundle: `sokana-front-end-dev` `/assets/index-DsWfcpcW.js`
+- Backend PR #98 (`cursor/intake-cors-optional-fields-bd5d`) and migration `20261009_phi_clients_primary_language_other.sql`
+- Frontend PR #103 (`cursor/fix-intake-form-pilot-bugs-ef42`)
+- Local `frontend-crm` is on `main` and does not contain the PR branch fixes
+
+### Contract Findings
+
+- Live frontend still sends `Idempotency-Key` on public intake submit.
+- Live API `Access-Control-Allow-Headers` is `Content-Type,Authorization,X-Session-Token,X-Signing-Session` (no `Idempotency-Key`).
+- Live bundle does not contain `primary_language_other`.
+- PR #98 makes Nancy’s extra fields optional and allowlists `Idempotency-Key`. It is open and not on the dev API.
+- PR #103 is the matching frontend. Lint and unit tests passed. Playwright smoke failed on an unrelated birth-outcomes heading.
+
+### Drift Risk
+
+- Deploying only one side leaves submit failing: old frontend plus new API, or new frontend plus old API that still rejects the header and still requires the extra fields.
+
+### Required Compatibility
+
+- Dev API must allow `Idempotency-Key` and accept Nancy’s required-field set.
+- Dev database `sokana_private_dev` needs nullable `phi_clients.primary_language_other`.
+- Do not run `npm run migrate:cloudsql` against repo `.env`: that file points at production `sokana_private` on port 5433.
+
+### Action
+
+- [x] Context updated
+- [ ] Dev migration and both PR deploys still outstanding (gcloud reauth required)
+
 ## Preflight Update 2026-10-08 (inbox verification — doula + client)
 
 ### Task
@@ -6178,3 +6935,91 @@ Frontend parser in `src/api/doulas/doulaService.ts` should:
 - **Action**:
   - [x] Context updated
   - [x] Implementation completed
+
+## Preflight Update 2026-10-09 (dev login branding regression)
+
+- **Gate Result**: `run_preflight`
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md` (deferred; user reported CRM
+  branding on dev).
+- **Task Intent**: Explain and fix Cove vs Sokana Collective on dev `/login`.
+- **Files Scanned**:
+  - `frontend-crm/index.html`
+  - `frontend-crm/src/common/components/navigation/navbar/NavBar.tsx`
+  - `frontend-crm/src/common/components/brand/Sokana360Logo.tsx`
+  - `frontend-crm/src/features/auth/Login.tsx`
+  - `.worktrees/intake-deploy-frontend/` same paths (Oct 9 pilot deploy source)
+  - Live dev HTML (`index-DXkc_1Lv.js`, title `SokanaCRM`)
+- **Contract Findings**: URL `sokana-front-end-dev-46lcr3n2qa-uc.a.run.app/login`
+  is the correct dev CRM login. Wrong look is **deploy branch drift**, not the
+  wrong environment. Intake PR worktree had legacy `NavBar` → `/logo.jpeg`
+  (Sokana Collective wordmark), `AuthFormLogo` → Sokana360 PNG, and document
+  title `SokanaCRM`. `frontend-crm` on main uses **Cove** (`AuthFormLogo` +
+  `<title>Cove</title>`), no Sign Up in public header.
+- **Drift Risk**: Any dev deploy from `cursor/fix-intake-form-pilot-bugs-*` without
+  merging main branding re-ships Collective header + SokanaCRM tab title.
+- **Required Compatibility**: Intake fixes on PR #103 stay; restore main branding
+  files only; no API change.
+- **Action**:
+  - [x] Context updated
+  - [x] Synced Cove branding into `.worktrees/intake-deploy-frontend` (NavBar,
+    Sokana360Logo, index.html, Login card logo)
+  - [x] Redeploy dev frontend from worktree → revision
+    `sokana-front-end-dev-00011-76f`, bundle `index-BdVxROdP.js`, `<title>Cove</title>`
+
+## Preflight Update 2026-10-09 (dev API auth session redeploy)
+
+- **Gate Result**: `run_preflight`
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md` (deferred).
+- **Task Intent**: Fix `POST /auth/session` 500 on dev after Identity password
+  sign-in; redeploy API with tenancy-bypass auth fixes.
+- **Files Scanned**:
+  - `src/services/identityPlatform/cloudSqlIdentityUserService.ts`
+  - `src/security/resolveAuthoritativeRole.ts`
+  - `src/security/accountAccess.ts`
+  - `src/features/auth/http/authController.ts`
+  - `.worktrees/intake-deploy-backend/` (intake PR #98 deploy source)
+- **Contract Findings**: Session start returns `200 { mfaRequired, challengeId,
+  emailHint, ... }` for staff; invalid token → `401`. Prior revision
+  `00025-dnz` was env-only (frontend deploy script); auth fix required new
+  Cloud Build image.
+- **Verification**: After deploy `sokana-private-api-dev-00026-w57`, Firebase +
+  `POST /auth/session` for `hello+tenantb@sokanacollective.com` → **200** MFA.
+  `DEV_ENV_ADMIN_PASSWORD` for `hello@` still **INVALID_LOGIN_CREDENTIALS** in
+  Firebase (password drift vs browser login).
+- **Action**:
+  - [x] Synced `accountAccess.ts` + `staffInvitationService.ts` into worktree
+  - [x] `DEV_REPO_ROOT=…/intake-deploy-backend` Cloud Build deploy → `00026-w57`
+
+## Preflight Update 2026-10-09 (dev intake test jerrybony5)
+
+- **Task Intent**: Submit second dev Sokana360 intake test with `jerrybony5@gmail.com`.
+- **Endpoint**: `POST /requestService/sokana360/requestSubmission` on dev API.
+- **Result**: `200` `{ message: "Form data received, onto processing" }`.
+- **Payload**: Jerry BonyTest, Chicago 60601, Labor Support, pilot note in
+  `service_support_details`.
+
+## Preflight Update 2026-10-09 (admin notes empty list false error)
+
+- **Handoff inbox**: `open_handoff_tasks_found`:
+  `2026-08-10-backend-architecture-boundary-refactor.md`,
+  `2026-08-25-full-supabase-exit-launch-ready.md` (deferred).
+- **Task Intent**: Fix Admin Notes showing "Failed to load notes" when API returns
+  zero activities.
+- **Files Scanned**: `frontend-crm/src/features/clients/infrastructure/notes.ts`,
+  `LeadProfileModal.tsx`, backend `GET /clients/:id/activities`.
+- **Root cause**: `getClientNotes` treated `flatMap` of successful empty arrays as
+  "all endpoints failed" (`successful.length === 0`).
+- **Fix**: Gate on fulfilled `Promise.allSettled` count, not merged note count.
+- **Context Updated**: yes
+
+## Preflight Update 2026-10-09 (lead profile modal accidental close)
+
+- **Task Intent**: Stop lead profile modal closing when user clicks a row and moves
+  the pointer quickly (overlay swallowing pointer-up).
+- **Files Scanned**: `LeadProfileModal.tsx`, `users-table.tsx`, `dialog.tsx` (Radix).
+- **Fix**: ~450ms outside-dismiss grace + defer row open via `requestAnimationFrame`.
+- **Context Updated**: yes

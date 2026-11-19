@@ -36,8 +36,8 @@ type TenantBrandingRow = {
 
 const DEFAULT_NOTIFICATION_EMAIL = 'hello@sokanacollective.com';
 const DEFAULT_PAGE_TITLE = 'Request for Service';
-const DEFAULT_PRIMARY_COLOR = '#009688';
-const DEFAULT_ACCENT_COLOR = '#00bcd4';
+const DEFAULT_PRIMARY_COLOR = '#0A3147';
+const DEFAULT_ACCENT_COLOR = '#D6704D';
 
 function mapRow(row: TenantBrandingRow): {
   public: PublicIntakeBranding;

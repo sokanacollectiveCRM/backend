@@ -636,6 +636,11 @@ slice is explicitly approved.
       `syncMatchedClientToQuickBooks` façade. Characterization tests first.
 - [x] Move doula assignment decisions into `src/features/matching` behind the
       client assign route and admin match route. Characterization tests first.
+- [x] Move assigned-doula listing and unassign into `src/features/matching`
+      behind `GET /clients/:id/assigned-doulas` and
+      `DELETE /clients/:id/assign-doula/:doulaId`. Characterization tests first.
+      Access checks stay in the client controller. A missing assignments table
+      still returns an empty list on read and a safe 500 on unassign.
 - [x] Move matching Cloud SQL and availability adapters into
       `src/features/matching/infrastructure`.
 - [x] Reshape `src/features/contracts` to domain/application/infrastructure/http

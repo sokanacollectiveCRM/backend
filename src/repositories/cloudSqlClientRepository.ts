@@ -252,6 +252,7 @@ function mapRowToClient(row: Record<string, any>): Client {
     row.client_number ?? undefined
   );
   client.qboCustomerId = row.qbo_customer_id ?? undefined;
+  client.isTest = row.is_test === true;
   client.quickbooksSyncStatus =
     row.quickbooks_sync_status ??
     (row.qbo_customer_id ? 'link_stale' : 'not_linked');

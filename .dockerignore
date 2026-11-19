@@ -9,6 +9,8 @@ outputs
 .env
 .env.*
 !.env.example
+scripts/dev-env/.local
+**/.local
 **/.DS_Store
 *.log
 annotated-*.pdf

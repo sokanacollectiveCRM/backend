@@ -25,7 +25,7 @@ const portalController = new PortalController(portalInviteService);
 clientRoutes.get(
   '/team/all',
   authMiddleware,
-  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
+  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
   (req, res) => userController.getAllTeamMembers(req, res)
 );
 

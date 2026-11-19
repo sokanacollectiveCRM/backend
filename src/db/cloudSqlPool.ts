@@ -4,7 +4,11 @@
  * Supabase is used only for auth; all client data comes from this pool.
  */
 
-import { Pool } from 'pg';
+import { Pool, type PoolClient } from 'pg';
+
+import { readTenantRequestState } from '../features/tenancy/application/tenantRequestStore';
+import { resolveTenantSession } from '../features/tenancy/domain/tenantSession';
+import { isTenancyEnforced } from '../features/tenancy/infrastructure/tenancyMode';
 
 const REQUIRED = [
   'CLOUD_SQL_HOST',
@@ -86,7 +90,8 @@ export function getPool(): Pool {
         ? { rejectUnauthorized: sslMode === 'verify-full' }
         : false;
 
-  pool = new Pool({
+  pool = installTenantSession(
+    new Pool({
     host,
     port,
     database,
@@ -100,8 +105,86 @@ export function getPool(): Pool {
       10
     ),
     max: parseInt(process.env.CLOUD_SQL_MAX_CLIENTS || '10', 10),
-  });
+  })
+  );
 
+  return pool;
+}
+
+const CLEAR_TENANT_SESSION = `SELECT set_config('app.tenant_id', '', false), set_config('app.tenancy_enforce', 'off', false)`;
+
+async function applyTenantSession(client: PoolClient): Promise<void> {
+  const state = readTenantRequestState();
+  const settings = resolveTenantSession({
+    enforce: isTenancyEnforced(),
+    bypass: state.bypass,
+    tenantId: state.tenantId,
+  });
+  await client.query(
+    `SELECT set_config('app.tenant_id', $1, false), set_config('app.tenancy_enforce', $2, false)`,
+    [settings.tenantId, settings.enforce]
+  );
+}
+
+function wrapRelease(client: PoolClient): void {
+  const release = client.release.bind(client);
+  let released = false;
+  client.release = (err?: Error | boolean) => {
+    if (released) return;
+    released = true;
+    client
+      .query(CLEAR_TENANT_SESSION)
+      .then(() => release(err))
+      .catch(() => release(err || true));
+  };
+}
+
+/**
+ * Every checked-out connection carries the request tenant. The session is
+ * cleared before the connection returns to the pool.
+ */
+function deliverTenantClient(
+  client: PoolClient,
+  callback: (err: Error | undefined, client?: PoolClient, done?: PoolClient['release']) => void
+): void {
+  applyTenantSession(client)
+    .then(() => {
+      wrapRelease(client);
+      callback(undefined, client, client.release);
+    })
+    .catch((error: unknown) => {
+      const failure = error instanceof Error ? error : new Error('tenant session failed');
+      client.release(failure);
+      callback(failure);
+    });
+}
+
+function installTenantSession(pool: Pool): Pool {
+  const originalConnect = pool.connect.bind(pool) as Pool['connect'];
+  pool.connect = ((
+    callback?: (err: Error | undefined, client?: PoolClient, done?: PoolClient['release']) => void
+  ) => {
+    // node-postgres pool.query checks out a client with the callback form.
+    if (typeof callback === 'function') {
+      return originalConnect((err, client) => {
+        if (err || !client) {
+          callback(err ?? new Error('Cloud SQL connection failed'));
+          return;
+        }
+        deliverTenantClient(client, callback);
+      });
+    }
+    return (originalConnect as () => Promise<PoolClient>)().then(async (client) => {
+      try {
+        await applyTenantSession(client);
+      } catch (error) {
+        client.release(error instanceof Error ? error : true);
+        throw error;
+      }
+      wrapRelease(client);
+      return client;
+    });
+  }) as Pool['connect'];
   return pool;
 }
 

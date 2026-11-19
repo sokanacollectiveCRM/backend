@@ -1,4 +1,9 @@
 import { getPool } from '../db/cloudSqlPool';
+import {
+  MemoryAuthoritativeRoleLookup,
+  resetAuthoritativeRoleLookupForTests,
+  setAuthoritativeRoleLookupForTests,
+} from '../security/resolveAuthoritativeRole';
 import { CloudSqlIdentityUserService } from '../services/identityPlatform/cloudSqlIdentityUserService';
 import { loadUserFromIdentityClaims } from '../services/identityPlatform/loadUserFromIdentity';
 import { ROLE } from '../types';
@@ -46,6 +51,9 @@ describe('CloudSqlIdentityUserService', () => {
       expect.stringContaining('identity_platform_uid'),
       ['identity-platform-non-uuid', null, 'doula@example.com']
     );
+    const sql = String(query.mock.calls[0][0]);
+    expect(sql).toContain('user_id::text = $2::text');
+    expect(sql).not.toContain('$2::uuid');
     expect(user).toMatchObject({
       id: doulaRow.principal_id,
       email: doulaRow.email,
@@ -108,6 +116,11 @@ describe('loadUserFromIdentityClaims', () => {
   beforeEach(() => {
     query.mockReset();
     mockedGetPool.mockReturnValue({ query } as any);
+    resetAuthoritativeRoleLookupForTests();
+  });
+
+  afterEach(() => {
+    resetAuthoritativeRoleLookupForTests();
   });
 
   it('defaults an authenticated but unlinked principal to client without Supabase', async () => {
@@ -124,5 +137,75 @@ describe('loadUserFromIdentityClaims', () => {
       role: ROLE.CLIENT,
     });
     expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it('grants admin when findUser misses but identity_platform_uid matches Cloud SQL', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    setAuthoritativeRoleLookupForTests(
+      new MemoryAuthoritativeRoleLookup({
+        admins: [
+          {
+            id: '528e4d28-b24a-47f1-a66b-d7ddd507b7b9',
+            email: 'hello+isolated@sokanacollective.com',
+            identityPlatformUid: 'F2Bjj6GdBsXTIKKzEmuBe7lQcBC3',
+          },
+        ],
+      })
+    );
+
+    await expect(
+      loadUserFromIdentityClaims({
+        uid: 'F2Bjj6GdBsXTIKKzEmuBe7lQcBC3',
+        email: 'hello+isolated@sokanacollective.com',
+      })
+    ).resolves.toMatchObject({
+      id: 'F2Bjj6GdBsXTIKKzEmuBe7lQcBC3',
+      role: ROLE.ADMIN,
+    });
+  });
+
+  it('upgrades a client profile to admin when Cloud SQL admins match the Identity UID', async () => {
+    query.mockResolvedValueOnce({
+      rows: [
+        {
+          principal_id: 'client-row-1',
+          email: 'hello+isolated@sokanacollective.com',
+          first_name: 'Test',
+          last_name: 'Admin',
+          role: 'client',
+          account_status: 'active',
+          portal_status: 'active',
+          phone_number: null,
+          address: null,
+          city: null,
+          state: null,
+          country: null,
+          zip_code: null,
+          bio: null,
+          profile_picture: null,
+        },
+      ],
+    });
+    setAuthoritativeRoleLookupForTests(
+      new MemoryAuthoritativeRoleLookup({
+        admins: [
+          {
+            id: '528e4d28-b24a-47f1-a66b-d7ddd507b7b9',
+            email: 'hello+isolated@sokanacollective.com',
+            identityPlatformUid: 'F2Bjj6GdBsXTIKKzEmuBe7lQcBC3',
+          },
+        ],
+      })
+    );
+
+    await expect(
+      loadUserFromIdentityClaims({
+        uid: 'F2Bjj6GdBsXTIKKzEmuBe7lQcBC3',
+        email: 'hello+isolated@sokanacollective.com',
+      })
+    ).resolves.toMatchObject({
+      id: 'client-row-1',
+      role: ROLE.ADMIN,
+    });
   });
 });

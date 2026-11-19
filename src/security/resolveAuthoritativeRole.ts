@@ -4,6 +4,7 @@
  * `public.users.role` — never from client-writable `user_metadata` / `app_metadata`.
  */
 import { getPool } from '../db/cloudSqlPool';
+import { runWithTenancyBypass } from '../features/tenancy';
 import { ROLE } from '../types';
 import { normalizeRole } from './authorizationPolicies';
 
@@ -17,6 +18,12 @@ export interface AuthoritativeRoleLookup {
     email: string | null
   ): Promise<CloudSqlRoleHint>;
 }
+
+type StaffLookupRow = {
+  id: string;
+  email?: string;
+  identityPlatformUid?: string;
+};
 
 const STAFF_ROLES = new Set<AppRole>(['admin', 'doula', 'billing']);
 
@@ -50,19 +57,30 @@ export class DbAuthoritativeRoleLookup implements AuthoritativeRoleLookup {
     authUserId: string,
     email: string | null
   ): Promise<CloudSqlRoleHint> {
+    return runWithTenancyBypass(async () =>
+      this.lookupCloudSqlRole(authUserId, email)
+    );
+  }
+
+  private async lookupCloudSqlRole(
+    authUserId: string,
+    email: string | null
+  ): Promise<CloudSqlRoleHint> {
     const pool = getPool();
     const normalizedEmail = email?.trim().toLowerCase() || null;
     const uidIsUuid = isUuid(authUserId);
     // Identity Platform UIDs are not always UUIDs — never cast non-UUIDs with ::uuid.
     const idParam = uidIsUuid ? authUserId : null;
+    const params = [idParam, normalizedEmail, authUserId];
 
     const admin = await pool.query(
       `SELECT 1
        FROM public.admins
        WHERE ($1::uuid IS NOT NULL AND id = $1::uuid)
+          OR identity_platform_uid::text = $3::text
           OR ($2::text IS NOT NULL AND lower(email) = $2::text)
        LIMIT 1`,
-      [idParam, normalizedEmail]
+      params
     );
     if (admin.rowCount && admin.rowCount > 0) return 'admin';
 
@@ -70,19 +88,22 @@ export class DbAuthoritativeRoleLookup implements AuthoritativeRoleLookup {
       `SELECT 1
        FROM public.doulas
        WHERE ($1::uuid IS NOT NULL AND id = $1::uuid)
+          OR identity_platform_uid::text = $3::text
           OR ($2::text IS NOT NULL AND lower(email) = $2::text)
        LIMIT 1`,
-      [idParam, normalizedEmail]
+      params
     );
     if (doula.rowCount && doula.rowCount > 0) return 'doula';
 
     const client = await pool.query(
       `SELECT 1
        FROM public.phi_clients
-       WHERE user_id = $1
+       WHERE user_id::text = $3::text
+          OR identity_platform_uid::text = $3::text
+          OR ($1::uuid IS NOT NULL AND id = $1::uuid)
           OR ($2::text IS NOT NULL AND lower(email) = $2::text)
        LIMIT 1`,
-      [authUserId, normalizedEmail]
+      params
     );
     if (client.rowCount && client.rowCount > 0) return 'client';
 
@@ -90,12 +111,24 @@ export class DbAuthoritativeRoleLookup implements AuthoritativeRoleLookup {
   }
 }
 
+function matchesStaffRow(
+  row: StaffLookupRow,
+  authUserId: string,
+  normalizedEmail: string | null
+): boolean {
+  return (
+    row.id === authUserId ||
+    row.identityPlatformUid === authUserId ||
+    Boolean(normalizedEmail && row.email?.toLowerCase() === normalizedEmail)
+  );
+}
+
 export class MemoryAuthoritativeRoleLookup implements AuthoritativeRoleLookup {
   constructor(
     private readonly rows: {
-      admins?: Array<{ id: string; email?: string }>;
-      doulas?: Array<{ id: string; email?: string }>;
-      clients?: Array<{ userId: string }>;
+      admins?: StaffLookupRow[];
+      doulas?: StaffLookupRow[];
+      clients?: Array<{ userId: string; identityPlatformUid?: string }>;
     } = {}
   ) {}
 
@@ -105,24 +138,25 @@ export class MemoryAuthoritativeRoleLookup implements AuthoritativeRoleLookup {
   ): Promise<CloudSqlRoleHint> {
     const normalizedEmail = email?.trim().toLowerCase() || null;
     if (
-      (this.rows.admins || []).some(
-        (row) =>
-          row.id === authUserId ||
-          (normalizedEmail && row.email?.toLowerCase() === normalizedEmail)
+      (this.rows.admins || []).some((row) =>
+        matchesStaffRow(row, authUserId, normalizedEmail)
       )
     ) {
       return 'admin';
     }
     if (
-      (this.rows.doulas || []).some(
-        (row) =>
-          row.id === authUserId ||
-          (normalizedEmail && row.email?.toLowerCase() === normalizedEmail)
+      (this.rows.doulas || []).some((row) =>
+        matchesStaffRow(row, authUserId, normalizedEmail)
       )
     ) {
       return 'doula';
     }
-    if ((this.rows.clients || []).some((row) => row.userId === authUserId)) {
+    if (
+      (this.rows.clients || []).some(
+        (row) =>
+          row.userId === authUserId || row.identityPlatformUid === authUserId
+      )
+    ) {
       return 'client';
     }
     return null;

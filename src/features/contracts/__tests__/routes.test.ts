@@ -66,6 +66,26 @@ describe('native contract routes', () => {
       .expect(200, { contracts: [] });
   });
 
+  it('does not 403 admin traffic for later /api/clients mounts', async () => {
+    const app = express();
+    app.use('/api/clients', createClientContractRoutes(contractController()));
+    app.get('/api/clients/:clientId/documents', (_req, res) => {
+      res.json({ ok: true });
+    });
+    app.get('/api/clients/:clientId/activities', (_req, res) => {
+      res.json({ ok: true });
+    });
+
+    await request(app)
+      .get('/api/clients/b7c5fadc-8367-50cf-bf95-4f8e8ac279aa/documents')
+      .set('x-test-role', 'admin')
+      .expect(200, { ok: true });
+    await request(app)
+      .get('/api/clients/b7c5fadc-8367-50cf-bf95-4f8e8ac279aa/activities')
+      .set('x-test-role', 'admin')
+      .expect(200, { ok: true });
+  });
+
   it('serves session routes without a session cookie and prevents referrer caching', async () => {
     const signingController = {
       exchange: (_req: any, res: any) =>

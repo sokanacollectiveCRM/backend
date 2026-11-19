@@ -23,8 +23,8 @@ SET
   intake_page_title = 'Request for Service',
   intake_notification_email = 'hello@sokanacollective.com',
   intake_enabled = true,
-  brand_primary_color = '#009688',
-  brand_accent_color = '#00bcd4',
+  brand_primary_color = '#0A3147',
+  brand_accent_color = '#D6704D',
   updated_at = now()
 WHERE tenant_id = '11111111-1111-4111-8111-111111111111';
 

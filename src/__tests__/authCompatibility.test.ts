@@ -71,6 +71,27 @@ describe('PR 6 authoritative roles', () => {
     ).resolves.toBe('admin');
   });
 
+  it('grants admin from identity_platform_uid when email is missing', async () => {
+    setAuthoritativeRoleLookupForTests(
+      new MemoryAuthoritativeRoleLookup({
+        admins: [
+          {
+            id: '528e4d28-b24a-47f1-a66b-d7ddd507b7b9',
+            email: 'hello@sokanacollective.com',
+            identityPlatformUid: 'F2Bjj6GdBsXTIKKzEmuBe7lQcBC3',
+          },
+        ],
+      })
+    );
+    await expect(
+      resolveAuthoritativeRole({
+        authUserId: 'F2Bjj6GdBsXTIKKzEmuBe7lQcBC3',
+        email: null,
+        appManagedRole: null,
+      })
+    ).resolves.toBe('admin');
+  });
+
   it('grants doula from Cloud SQL doulas row', async () => {
     setAuthoritativeRoleLookupForTests(
       new MemoryAuthoritativeRoleLookup({

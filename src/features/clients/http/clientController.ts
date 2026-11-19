@@ -62,7 +62,11 @@ import { ClientUseCase } from '../../../usecase/clientUseCase';
 import { mergePortalEligibilityFields } from '../../../utils/portalEligibilityResponse';
 import { ApiResponse } from '../../../utils/responseBuilder';
 import { canAccessSensitive } from '../../../utils/sensitiveAccess';
-import { assignDoulaOnClient } from '../../matching';
+import {
+  assignDoulaOnClient,
+  listAssignedDoulas,
+  unassignDoulaFromClient,
+} from '../../matching';
 import { ActivityRepository } from '../application/activityRepository';
 import { createActivity as runCreateActivity } from '../application/createActivity';
 import { listClientActivities } from '../application/listClientActivities';
@@ -3106,16 +3110,18 @@ export class ClientController {
     try {
       const { id: clientId, doulaId } = req.params;
 
-      if (!clientId || !doulaId) {
-        res.status(400).json({ error: 'Missing clientId or doulaId' });
-        return;
-      }
-
-      const removed = await this.cloudSqlAssignmentService.unassignDoula(
-        clientId,
-        doulaId
+      const outcome = await unassignDoulaFromClient(
+        {
+          unassignDoula: (id, doula) =>
+            this.cloudSqlAssignmentService.unassignDoula(id, doula),
+        },
+        { clientId, doulaId }
       );
-      if (!removed) {
+      if ('error' in outcome) {
+        if (outcome.error === 'MISSING_IDS') {
+          res.status(400).json({ error: 'Missing clientId or doulaId' });
+          return;
+        }
         res.status(404).json({ error: 'Assignment not found' });
         return;
       }
@@ -3180,46 +3186,31 @@ export class ClientController {
         }
       }
 
-      const doulas =
-        await this.cloudSqlAssignmentService.getAssignedDoulas(targetClientId);
-      const availabilityByDoulaId =
-        await this.doulaAvailabilityService.getAvailabilityStatusForDoulas(
-          doulas.map((doula) => doula.doulaId)
-        );
-      const includeSchedulingLink =
-        req.user?.role === 'admin' ||
-        (req.user?.role === 'client' &&
-          (await this.doulaAvailabilityService.isClientInContractStage(
-            targetClientId
-          )));
-      const enrichedDoulas = doulas.map((assignment) => {
-        const availability = availabilityByDoulaId.get(assignment.doulaId) ?? {
-          status: 'available' as const,
-          reason: null,
-          startAt: null,
-          endAt: null,
-        };
-        return {
-          ...assignment,
-          availabilityStatus: availability,
-          doula: {
-            ...assignment.doula,
-            scheduling_url: includeSchedulingLink
-              ? (assignment.doula.scheduling_url ?? null)
-              : null,
-          },
-        };
-      });
+      const listed = await listAssignedDoulas(
+        {
+          getAssignedDoulas: (id) =>
+            this.cloudSqlAssignmentService.getAssignedDoulas(id),
+          getAvailabilityStatusForDoulas: (ids) =>
+            this.doulaAvailabilityService.getAvailabilityStatusForDoulas(ids),
+          isClientInContractStage: (id) =>
+            this.doulaAvailabilityService.isClientInContractStage(id),
+        },
+        { clientId: targetClientId, viewerRole: req.user?.role }
+      );
+      if ('error' in listed) {
+        if (listed.error === 'ASSIGNMENTS_UNAVAILABLE') {
+          res.json({ success: true, doulas: [] });
+          return;
+        }
+        res.status(400).json({ error: 'Missing clientId' });
+        return;
+      }
 
       res.json({
         success: true,
-        doulas: enrichedDoulas,
+        doulas: listed.doulas,
       });
     } catch (error) {
-      if (ClientController.isTableMissing(error, 'assignments')) {
-        res.json({ success: true, doulas: [] });
-        return;
-      }
       const err = this.handleError(error as Error, res);
       res.status(err.status).json({ error: err.message });
     }

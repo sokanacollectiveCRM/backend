@@ -1,111 +1,115 @@
-# Sokana360 pilot test guide
+# Sokana360 Practice Run
 
-This is the **pilot site**. It looks like the live Sokana360 CRM, but it is a
-separate environment for testing before go-live.
+This is a practice website. It looks like the real Sokana360 CRM, but it uses
+made-up people only. Do not type real patient names, real card numbers, or real
+home addresses.
 
-Use **fictional people only**. Do not enter real patient names, real home
-addresses, or anyone’s real medical details.
+You try on each hat (Admin, Doula, Client), walk through the day-to-day jobs,
+and write down what felt easy, confusing, or broken.
 
-Email, QuickBooks, and card payments are **live** on this site. Mail goes out
-from `hello@sokanacollective.com`. Invoices and charges hit Sokana’s real
-QuickBooks company. Only charge a card you intend to charge.
-
-Work through each role (Admin, Doula, Client, Billing), follow the steps, and
-mark **Pass** or **Fail** with one sentence about what you saw.
+Sonia is not in this run. Her role is still open. Leads starts empty.
 
 ---
 
-## Site
+## Where to go
 
-Open this URL:
+Open this website, or the direct login page:
+
+**https://sokana-front-end-dev-46lcr3n2qa-uc.a.run.app/login**
+
+Front door:
 
 **https://sokana-front-end-dev-46lcr3n2qa-uc.a.run.app**
 
 You should see **Log In**.
 
-Do not open the API URL. That is not the CRM. It will show a short status
-message instead of Sokana screens.
+Do not open the API link. That page is only for computers. It will look like a
+tiny message, not the Sokana360 screens.
 
 ---
 
-## First login
+## Who is in this run
 
-| Field        | Value                                                                                       |
-| ------------ | ------------------------------------------------------------------------------------------- |
-| Email        | `hello@sokanacollective.com`                                                                |
-| Display name | **Test Admin**                                                                              |
-| Password     | The password for that Sokana inbox. Ask the person who set up this pilot if you are unsure. |
+| Hat | Who | Email |
+| --- | --- | --- |
+| Admin | Nancy Cowans | `nancy+dev@sokanacollective.com` |
+| Family | Ary Practice | `hello+pilot.ary@sokanacollective.com` |
+| Doula | One new doula | `hello+pilot.doula@sokanacollective.com` |
 
-After login, the home page should say:
+Use first name **Sam** and last name **Doula** for that one doula. That name is
+made up for this rehearsal.
 
-**Welcome back, Test Admin!**
+`hello@sokanacollective.com` is a second admin account named **Test Admin**. It
+is not a doula and it is not the family. Use it only if Nancy cannot sign in.
+If you use it, the home page says **Welcome back, Test Admin!**
 
-If it does not, stop and tell the person running the pilot. Later steps depend
-on this account.
+Nancy’s password is the one the setup person gave her. Do not guess.
 
-A test client named **Maya Tester** is already in the system.
+After Nancy signs in, the home page should greet Nancy. If it does not, stop
+and tell the setup person.
 
----
-
-## Rules
-
-1. Use fictional names only. Suggested:
-   - Client: **Maya Tester**
-   - Doula: **Sam Doula**
-   - Extra intake (optional): **Jordan Practice**
-2. If a button sends email, use it. Mail comes from
-   **hello@sokanacollective.com** and should arrive in a real inbox.
-3. Card charges and QuickBooks invoices are **real money**. Do not run a payment
-   unless you mean it.
-4. After each section, check **Pass** or **Fail** and write one sentence.
-5. If you get stuck, take a screenshot. Do not guess passwords.
+Mail from these `hello+...` addresses arrives in the `hello@sokanacollective.com`
+inbox. That mail is real.
 
 ---
 
-## Roles
+## House rules
 
-### Admin (start here)
+1. Use the people in the table above. Do not add a second doula.
+2. If a button sends email, use it. Write down if the email does not arrive.
+3. Do not charge a card.
+4. Do not connect QuickBooks unless the person running this practice run is
+   with you and says to. Connecting it uses Sokana’s real books.
+5. After each story, check Pass or Fail and write one sentence about what you saw.
+6. If you get stuck, take a screenshot.
 
-Office staff with full access. Matches clients to doulas, invites the team, and
-can open billing.
+**Intake form** is hidden in the left menu. Families use the public request
+link in Story 2. Do not hunt for an Intake form settings page.
 
-### Doula
-
-Care staff. Sees **only assigned clients**. Logs hours and notes. Cannot run the
-office.
-
-### Client
-
-The family. Sees **their own** profile, billing, and documents. Cannot see other
-families or staff tools.
-
-### Billing
-
-Staff limited to payment schedules and signed contracts. Should not see full
-health records or the matching board.
-
-**Billing-only logins today:** the role exists in the product. A billing-only
-user should land on **Signed Contracts** and see only the **Billing** menu.
-
-You **cannot** invite a billing user from **Team** yet. Team can add **Admin**
-or **Doula** only. For this pilot, **Test Admin** walks the billing screens. A
-separate billing login is follow-up work if leadership wants it for go-live.
+Sample files for the doula are in `pilot-test-documents/doula-portal/`. They are
+practice files, not real credentials.
 
 ---
 
-# 1 — Sign in as admin
+## The hats
 
-**Goal:** Confirm Test Admin can open the CRM.
+### 1. Admin (Nancy starts here)
 
-1. Open the pilot site.
-2. Enter the Test Admin email.
-3. Enter the password you were given.
+The office manager. Sees almost everything. Moves the family through phases.
+Invites the doula. Approves the doula’s documents. Can look at money papers.
+
+### 2. Doula
+
+One care person. Sees only the family they were given. Uploads eligibility
+documents. Writes hours and notes. Does not run the whole office.
+
+### 3. Client
+
+The family, Ary. Sees their own profile and billing. Cannot see other families.
+Cannot see the staff office.
+
+### 4. Billing person
+
+The money person is a costume in the software. You cannot invite a billing-only
+person from Team yet. Team can add Admin or Doula only. Nancy walks the billing
+screens in this run.
+
+---
+
+## Story 1 — Nancy opens the office
+
+**Goal:** Prove Nancy can sign in.
+
+1. Open the practice website.
+2. Type `nancy+dev@sokanacollective.com`.
+3. Type the password you were given.
 4. Click **Log In**.
-5. Confirm you see **Welcome back, Test Admin!**
-6. Check the left menu for **Dashboard**, **Inbox**, **Leads**, **Team**, and
-   billing items.
+5. Confirm the home page greets Nancy.
+6. Look at the left menu. You should see Dashboard, Inbox, Leads, Team, Doulas,
+   and billing items.
+7. Confirm **Intake form** is not in the menu.
 
-**Pass if:** you are in the CRM, not stuck on Log In.
+**Pass if:** you are inside the office, not stuck on Log In.
 
 | Pass | Fail | What I saw |
 | ---- | ---- | ---------- |
@@ -113,51 +117,25 @@ separate billing login is follow-up work if leadership wants it for go-live.
 
 ---
 
-# 2 — Submit a client request (no login)
+## Story 2 — Ary asks for help (no login)
 
-**Goal:** A family can submit an intake form without a staff account.
+**Goal:** The family can fill out the request form without being staff.
 
-1. Open a **new browser window** (or a private/incognito window).
+1. Open a new private window.
 2. Go to:  
    **https://sokana-front-end-dev-46lcr3n2qa-uc.a.run.app/request/sokana360**
-
-   (Legacy `/request` redirects to `/request/sokana360`.)
-
-3. You should see the request form, not the staff CRM.
-4. If you see **Fill with test data**, you may use it. Change the name to
-   **Jordan Practice** if it is not already clearly fictional. Do **not** reuse
-   Maya Tester — Maya is already in the CRM.
-5. If there is no fill button, enter:
-   - First name: Jordan
+3. You should see a form, not the staff office.
+4. Type:
+   - First name: Ary
    - Last name: Practice
-   - Email: `hello+pilot.jordan@sokanacollective.com`
+   - Email: `hello+pilot.ary@sokanacollective.com`
    - Phone: `555-010-0102`
    - Labor Support and/or Postpartum Support
-   - City/state can be fictional (example: Springfield, IL)
-6. Complete every step until the form confirms it was submitted.
+   - City and state can be made up (example: Springfield, IL)
+5. Click through every step until the form says it was sent.
 
-**Pass if:** the form confirms receipt and does **not** sign you into the staff
-CRM.
-
-| Pass | Fail | What I saw |
-| ---- | ---- | ---------- |
-| ☐    | ☐    |            |
-
----
-
-# 3 — Find the client
-
-**Goal:** Admin can see existing and new clients.
-
-1. Return to the window where you are **Test Admin**.
-2. Sign in again if needed.
-3. Open **Inbox** or **Leads**.
-4. Find **Maya Tester**. She should already be there.
-5. If you completed section 2, also look for **Jordan Practice**.
-6. Open Maya. You should see her name, not a blank page.
-
-**Pass if:** Maya Tester is on a list an admin can open. Jordan is optional if
-you finished section 2.
+**Pass if:** the form thanks you or says the request was received. It should
+not drop you into the staff dashboard.
 
 | Pass | Fail | What I saw |
 | ---- | ---- | ---------- |
@@ -165,44 +143,44 @@ you finished section 2.
 
 ---
 
-# 4 — Invite a doula
+## Story 3 — Nancy finds Ary and moves the phases
 
-**Goal:** Admin can add a doula to the team.
+**Goal:** The office can see the request and move Ary forward.
 
-1. Stay signed in as **Test Admin**.
+1. Go back to Nancy’s window.
+2. Open **Leads**. Inbox can stay empty. The new request shows on Leads.
+3. Open **Ary Practice**.
+4. Confirm the status is **Lead**.
+5. Change the status to **Contacted** and save.
+6. Leave Ary on **Leads**. Do not choose **Matched** yet. Matched moves Ary to
+   **Customers**, and you cannot assign a doula from there.
+
+**Pass if:** Ary is on Leads, the name matches what you typed, and the status
+is Contacted.
+
+| Pass | Fail | What I saw |
+| ---- | ---- | ---------- |
+| ☐    | ☐    |            |
+
+---
+
+## Story 4 — Nancy invites one doula
+
+**Goal:** The office adds one care person.
+
+1. Stay signed in as Nancy.
 2. Open **Team**.
-3. Click **Invite** (or the add-person control).
+3. Click **Invite Member**.
 4. Enter:
-   - First name: **Sam**
-   - Last name: **Doula**
+   - First name: Sam
+   - Last name: Doula
    - Email: `hello+pilot.doula@sokanacollective.com`
-   - Role: **Doula** (not Admin)
-5. Save / send the invite.
-6. Confirm Sam appears on the Team list. Filter to **Doula** if needed.
+   - Role: **Doula**
+5. Send the invite.
+6. Confirm Sam Doula appears on the Team list. Filter to Doula if you need to.
+7. Confirm the invite email arrives in the hello@ inbox.
 
-**Pass if:** Sam Doula is on the Team list as a doula, and an invite email
-arrives for `hello+pilot.doula@sokanacollective.com` (that still delivers to the
-hello@ inbox).
-
-| Pass | Fail | What I saw |
-| ---- | ---- | ---------- |
-| ☐    | ☐    |            |
-
----
-
-# 5 — Assign the doula
-
-**Goal:** Admin can assign Maya to Sam.
-
-1. Stay signed in as **Test Admin**.
-2. Open **Leads** and click **Maya Tester**.
-3. Find **assign** or **match**.
-4. Choose **Sam Doula**.
-5. If it asks primary or backup, choose **primary**.
-6. Save.
-7. Confirm Maya’s page lists Sam as her doula.
-
-**Pass if:** Maya’s record shows Sam as the assigned doula.
+**Pass if:** Sam is on the Team list as a doula and the invite email arrived.
 
 | Pass | Fail | What I saw |
 | ---- | ---- | ---------- |
@@ -210,24 +188,104 @@ hello@ inbox).
 
 ---
 
-# 6 — Contracts, billing, and QuickBooks
+## Story 5 — The doula uploads eligibility documents
 
-**Goal:** Admin can open billing screens and connect the real QuickBooks
-company.
+**Goal:** The doula turns in the papers required before they can be active.
 
-1. Stay signed in as **Test Admin**.
-2. Open **Contract Templates**. An empty list is fine; note whether the page
-   loads.
+Do this after the invite email arrives.
+
+1. Open the invite for `hello+pilot.doula@sokanacollective.com`.
+2. Set a password and sign in.
+3. Confirm the left menu shows Profile, Documents, Clients, Hours, and
+   Activities.
+4. Confirm you do not see Team, Leads, or billing tools.
+5. Open **Documents**.
+6. Upload these files. Choose the type in the form. PDF, PNG, or JPEG under
+   10 MB.
+
+| File | Type to choose |
+| --- | --- |
+| `01-background-check.pdf` | Background Check |
+| `02-liability-insurance-certificate.pdf` | Liability Insurance Certificate |
+| `03-training-certificate.pdf` | Training Certificate |
+| `04-w9.pdf` | W9 |
+| `05-direct-deposit-form.pdf` | Direct Deposit Form |
+| `06-license-optional.pdf` | License (optional) |
+
+7. Tell Nancy the five required files are uploaded. You stay inactive until
+   Nancy approves those five.
+
+**Pass if:** all five required files show as uploaded.
+
+| Pass | Fail | What I saw |
+| ---- | ---- | ---------- |
+| ☐    | ☐    |            |
+
+---
+
+## Story 6 — Nancy approves the documents and assigns Ary
+
+**Goal:** Nancy reviews the papers, then gives Ary to that doula.
+
+1. Sign back in as Nancy.
+2. Open Sam’s documents.
+3. Approve all five required files. The license is optional.
+4. Open **Leads** and open **Ary Practice**.
+5. Set Ary to the matching phase and save. The assign control only works in
+   that phase. If the screen says Ary is not in the matching phase, stop and
+   tell the setup person. Do not set **Matched** to force it.
+6. Assign **Sam Doula** as the primary doula and save.
+7. Confirm Ary’s page lists Sam.
+8. After the assignment works, you may set status to **Matched**. That moves
+   Ary from Leads to **Customers**.
+
+**Pass if:** the five documents are approved and Ary’s page lists Sam.
+
+| Pass | Fail | What I saw |
+| ---- | ---- | ---------- |
+| ☐    | ☐    |            |
+
+---
+
+## Story 7 — Nancy invites Ary to the portal and sends the contract
+
+**Goal:** Ary gets a login and a contract email with a sign-by date.
+
+1. Stay signed in as Nancy.
+2. On Ary’s page, send **Invite to portal**.
+3. Confirm that email arrives for `hello+pilot.ary@sokanacollective.com`.
+4. Send Ary a contract.
+5. Open the contract email. It should say **Please review and sign**, include
+   a signing link, and show a sign-by date 7 days after today.
+6. If you resend the contract, the sign-by date stays the same. Use the newest
+   link. The older link stops working.
+7. Add a short office note on Ary, such as “Practice check-in.” Do not write
+   medical details. Sam should get an email that a note was added. The email
+   must not include the note text.
+
+**Pass if:** the portal invite arrived and the contract email shows the
+sign-by date.
+
+| Pass | Fail | What I saw |
+| ---- | ---- | ---------- |
+| ☐    | ☐    |            |
+
+---
+
+## Story 8 — Nancy looks at billing papers
+
+**Goal:** The office can open money screens without taking a payment.
+
+1. Stay signed in as Nancy.
+2. Open **Contract Templates**. An empty list is okay.
 3. Open **Signed Contracts**.
 4. Open **Payment Schedules**.
-5. Open **Payments** and **Invoices** if they appear.
-6. Open **Integrations** (QuickBooks). Click **Connect**. Sign in to Sokana’s
-   real QuickBooks company if prompted.
-7. You should return to Integrations with QuickBooks connected.
-8. Any card payment after that is a **real charge**.
+5. Open **Payments** and **Invoices** if you see them.
+6. Skip **QuickBooks** unless the person running this run tells you to connect
+   it.
+7. Do not charge a card.
 
-**Pass if:** the pages load and QuickBooks shows as connected. Empty lists on
-the contract/payment screens still count as a pass.
+**Pass if:** those pages open. Empty lists still count as a pass.
 
 | Pass | Fail | What I saw |
 | ---- | ---- | ---------- |
@@ -235,33 +293,21 @@ the contract/payment screens still count as a pass.
 
 ---
 
-# 7 — Doula access
+## Story 9 — Put on the doula hat
 
-Sam should see **Maya only**, not the full office.
+Sam should see Ary only.
 
-### If Sam can sign in
+1. Log out of Nancy.
+2. Sign in as `hello+pilot.doula@sokanacollective.com`.
+3. Open **Clients**. You should see **Ary Practice** only.
+4. Open **Hours**. Add a visit for today with a short note such as “practice
+   visit.”
+5. Open **Activities**. Add a short note such as “Practice check-in.” Do not
+   include medical details.
+6. Try to open `/team`. You should not get the staff team list.
+7. Log out.
 
-1. Open your name (usually at the bottom of the left menu) and **Log out**.
-2. Sign in with Sam’s email if you have a password for Sam.
-3. You should **not** see Team, Leads, or full admin tools.
-4. You **should** see Doula Dashboard items: Profile, Documents, Clients, Hours,
-   Activities.
-5. Open **Clients**. You should see **Maya Tester**.
-6. You should not see other real families (this site should only have fictional
-   records).
-7. Open **Hours**. Add a short visit (today’s date, note such as “pilot visit”).
-8. Open **Activities**. Add a short note such as “Pilot check-in.”
-
-**Pass if:** Sam sees Maya, can log hours and notes, and cannot open Team or
-other families.
-
-### If Sam cannot sign in yet
-
-Stay as Test Admin.
-
-1. Open **Doulas**.
-2. Open **Sam Doula** if present.
-3. Note: “Doula login not ready. Admin can still see Sam on the team.”
+**Pass if:** Sam sees Ary, can write hours and a note, and cannot open Team.
 
 | Pass | Fail | What I saw |
 | ---- | ---- | ---------- |
@@ -269,40 +315,29 @@ Stay as Test Admin.
 
 ---
 
-# 8 — Client portal
+## Story 10 — Put on the family hat
 
-Maya should see **only Maya’s** information.
+Ary should see only Ary’s things.
 
-### If Maya can sign in
-
-Client login is separate from staff login:
+The family door is different from staff login:
 
 **https://sokana-front-end-dev-46lcr3n2qa-uc.a.run.app/auth/client-login**
 
-| Field    | Value                                     |
-| -------- | ----------------------------------------- |
-| Email    | `hello+pilot.client@sokanacollective.com` |
-| Password | Ask the person who set up this pilot      |
+1. Open the portal invite for `hello+pilot.ary@sokanacollective.com`.
+2. Set a password if you have not already, then sign in.
+3. Confirm the left menu shows **Profile Information** and **Billing
+   Information** only.
+4. Open Profile. The name should be Ary Practice.
+5. Open Billing. You should see only this family’s billing, even if the page
+   is empty.
+6. You should not see Team, Leads, Doulas, or the doula menu.
+7. Try to open `/team`. You should be blocked.
+8. Log out.
+9. Open the contract email and the signing link if you are testing the
+   signature. Signing does not charge a card.
 
-1. Log out of staff if you are still Test Admin or Sam.
-2. Open the client login link above.
-3. Sign in as Maya.
-4. You should see **Profile Information** and **Billing Information**.
-5. You should **not** see Team, Leads, Inbox, or Doula Dashboard.
-6. Open Profile. The name should be Maya.
-7. Open Billing. You should see Maya’s billing only.
-
-**Pass if:** Maya can see only Maya’s records.
-
-### If Maya cannot sign in yet
-
-Stay as Test Admin.
-
-1. Open Maya’s client page.
-2. Look for **Invite to portal** or similar.
-3. Send the invite if you can.
-4. Confirm whether an email arrived. Mail should send from
-   `hello@sokanacollective.com`.
+**Pass if:** Ary sees only Ary’s profile and billing, and the contract link
+opens.
 
 | Pass | Fail | What I saw |
 | ---- | ---- | ---------- |
@@ -310,57 +345,15 @@ Stay as Test Admin.
 
 ---
 
-# 9 — Billing role
+## Story 11 — Wrong-door checks
 
-**Intended access**
-
-A billing user is staff, limited to money:
-
-- **Can** open Payment Schedules and Signed Contracts
-- **Can** review a contract’s payment plan
-- **Cannot** match doulas
-- **Cannot** see the full health file the way an admin can
-- **Cannot** use the Doula Dashboard
-- **Cannot** use the client portal
-
-A true billing-only login should open **Signed Contracts**, with a left menu
-that shows **Billing** only.
-
-**What you can test now (as Test Admin)**
-
-1. Sign in as **Test Admin**.
-2. Open **Signed Contracts**.
-3. Open **Payment Schedules**.
-4. If a contract exists, open it and confirm the page is about money (dates,
-   amounts, status), not health notes.
-5. Confirm you still see Admin menus (you are Test Admin, not billing-only).
-
-**What you cannot test now**
-
-You cannot invite a billing-only user from **Team**. If go-live needs a separate
-money login, that role has to be added to Team invites and given its own test
-account.
-
-| Pass | Fail | What I saw |
-| ---- | ---- | ---------- |
-| ☐    | ☐    |            |
-
----
-
-# 10 — Access control
-
-Confirm people cannot open screens they should not see.
-
-1. As **Test Admin**, copy a staff page from the address bar, for example
-   `/team`.
+1. As Nancy, copy `/team` from the address bar.
 2. Log out.
 3. Paste that address while logged out. You should be sent to Log In.
-4. If you have a **client** login, sign in as Maya and try `/team`. You should
-   be blocked, not shown the team list.
-5. If you have a **doula** login, sign in as Sam and try `/team`. Sam should not
-   manage the full team.
+4. Signed in as Ary, open `/team`. You should not see the team list.
+5. Signed in as Sam, open `/team`. Sam should not manage the whole team.
 
-**Pass if:** each role is kept out of screens it should not use.
+**Pass if:** the wrong hat cannot open the wrong room.
 
 | Pass | Fail | What I saw |
 | ---- | ---- | ---------- |
@@ -368,30 +361,32 @@ Confirm people cannot open screens they should not see.
 
 ---
 
-## Not in scope for this pilot
+## What this practice run will not finish today
 
-Mark **N/A** instead of Fail:
+Write **N/A** instead of Fail for these. There is no button to force them.
 
+- The day-3 “any questions?” signing reminder
+- The day-7 cancel if the contract is still unsigned
+- The admin notice if the contract is signed and the deposit is still unpaid
+- Birth-outcome reminders (they start 5 days after the due date)
+- The email that goes out when no note has been added for 7 days
 - Inviting a billing-only teammate from Team
-
-Email, QuickBooks, and card charges **are** in scope. Treat them as live: real
-mail, real books, real money. Keep using fictional client names.
+- A card charge
+- Connecting QuickBooks, unless the person running the run says to
 
 ---
 
-## After you finish
+## End of run
 
-Tester name: \***\*\*\*\*\***\_\_\***\*\*\*\*\***
+Tester name: ______________________
 
-Date: \***\*\*\*\*\***\_\_\***\*\*\*\*\***
+Date: ______________________
 
-1. What was straightforward?
-
-2. What was unclear?
-
+1. What felt easy?
+2. What felt confusing?
 3. What was broken?
-
-4. Are we ready to use this with real families?  
+4. Are we ready to try this with real families?  
    ☐ Yes  ☐ Not yet  ☐ Not sure
 
-Return this page (or photos of the checkboxes) to the person running the pilot.
+Send this page, or photos of the checkboxes, back to the person running the
+practice run.

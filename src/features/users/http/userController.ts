@@ -13,6 +13,11 @@ import { CloudSqlTeamService } from '../../../services/cloudSqlTeamService';
 import { DoulaDocumentCompletenessService } from '../../../services/doulaDocumentCompletenessService';
 import { AuthRequest, UpdateRequest } from '../../../types';
 import { UserUseCase } from '../../../usecase/userUseCase';
+import { assertStaffInviteEmail } from '../../tenancy';
+import {
+  createStaffInvitation,
+  listPendingStaffInvitations,
+} from '../../team/application/staffInvitationService';
 import {
   buildHourSummary,
   parseHourFilter,
@@ -68,7 +73,17 @@ export class UserController {
   async getAllTeamMembers(req: AuthRequest, res: Response): Promise<void> {
     try {
       const users = await this.cloudSqlTeamService.listTeamMembers();
-      res.status(200).json(users);
+      let pending: Awaited<ReturnType<typeof listPendingStaffInvitations>> = [];
+      try {
+        pending = await listPendingStaffInvitations(req.tenant?.id);
+      } catch (error) {
+        const code =
+          error && typeof error === 'object' && 'code' in error
+            ? String((error as { code?: unknown }).code)
+            : '';
+        if (code !== '42P01') throw error;
+      }
+      res.status(200).json([...pending, ...users]);
     } catch (error) {
       this.handleError(error, res);
     }
@@ -107,7 +122,7 @@ export class UserController {
       }
       res.status(200).json({
         success: true,
-        message: 'Team member has been deleted successfully',
+        message: 'Team member has been removed from the organization',
       });
     } catch (error) {
       this.handleError(error, res);
@@ -461,7 +476,7 @@ export class UserController {
 
   async addTeamMember(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { firstname, lastname, email, role, phone_number } = req.body;
+      const { firstname, lastname, email, role } = req.body;
 
       if (!firstname || !lastname || !email || !role) {
         res.status(400).json({ error: 'Missing required fields' });
@@ -476,15 +491,28 @@ export class UserController {
         return;
       }
 
-      const newMember = await this.cloudSqlTeamService.addTeamMember({
+      await assertStaffInviteEmail({
+        tenantId: req.tenant?.id,
+        email: String(email),
+        role: normalizedRole as 'admin' | 'doula',
+      });
+
+      const newMember = await createStaffInvitation({
+        tenantId: req.tenant?.id,
         firstname: String(firstname).trim(),
         lastname: String(lastname).trim(),
         email: String(email).trim(),
         role: normalizedRole as 'admin' | 'doula',
-        phone_number: typeof phone_number === 'string' ? phone_number : null,
+        invitedByEmail: req.user?.email ? String(req.user.email) : null,
       });
       res.status(201).json(newMember);
     } catch (error) {
+      if (error instanceof ValidationError || error instanceof ConflictError) {
+        res.status(error instanceof ConflictError ? 409 : 400).json({
+          error: error.message,
+        });
+        return;
+      }
       const message = (error as Error)?.message || 'Failed to add team member';
       const lower = message.toLowerCase();
       if (
@@ -503,6 +531,18 @@ export class UserController {
     try {
       const userId = req.params.id;
       const updateData = req.body;
+      const nextEmail =
+        typeof updateData.email === 'string' ? updateData.email.trim() : '';
+      if (nextEmail) {
+        const member = await this.cloudSqlTeamService.getTeamMemberById(userId);
+        if (member?.role === 'admin') {
+          await assertStaffInviteEmail({
+            tenantId: req.tenant?.id,
+            email: nextEmail,
+            role: 'admin',
+          });
+        }
+      }
 
       // When setting account_status to 'approved' for a doula, enforce document completeness
       const newStatus = updateData.account_status?.trim?.();

@@ -55,6 +55,16 @@ export class EmailController {
         return;
       }
 
+      const normalizedRole = String(role).trim().toLowerCase();
+      if (normalizedRole === 'admin' || normalizedRole === 'doula') {
+        res.status(200).json({
+          success: true,
+          message:
+            'The invitation email is sent when the invite is created. It stays pending until they accept.',
+        });
+        return;
+      }
+
       await this.emailService.sendTeamInviteEmail(
         email,
         firstname,

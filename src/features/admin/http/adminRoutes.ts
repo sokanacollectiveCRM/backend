@@ -77,6 +77,16 @@ adminRoutes.patch(
   (req, res, next) => authorizeRoles(req, res, next, ['admin']),
   (req, res) => doulaController.reviewDocument(req, res)
 );
+adminRoutes.patch(
+  '/doulas/:doulaId/profile/review',
+  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
+  (req, res) => doulaController.reviewProfileInformation(req, res)
+);
+adminRoutes.get(
+  '/doulas/:doulaId/documents/:documentId/content',
+  (req, res, next) => authorizeRoles(req, res, next, ['admin']),
+  (req, res) => doulaController.downloadAdminDoulaDocument(req, res)
+);
 adminRoutes.get(
   '/doulas/:doulaId/documents/:documentId/url',
   (req, res, next) => authorizeRoles(req, res, next, ['admin']),

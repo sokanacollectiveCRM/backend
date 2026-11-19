@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 
 import { getPool } from '../db/cloudSqlPool';
+import { removeTeamMember } from '../features/team/application/removeTeamMember';
 import { DoulaAvailabilityService } from './doulaAvailabilityService';
 import {
   resolveProfilePictureFields,
@@ -16,6 +17,8 @@ export interface TeamMemberDto {
   email: string;
   role: 'admin' | 'doula';
   account_status: string;
+  profile_review_status?: 'draft' | 'not_submitted' | 'pending' | 'approved' | 'rejected';
+  profile_rejection_reason?: string | null;
   phone_number: string | null;
   address: string | null;
   city: string | null;
@@ -47,6 +50,8 @@ interface DoulaRow {
   email: string | null;
   phone: string | null;
   account_status?: string | null;
+  profile_review_status?: 'draft' | 'not_submitted' | 'pending' | 'approved' | 'rejected' | null;
+  profile_rejection_reason?: string | null;
   address?: string | null;
   city?: string | null;
   state?: string | null;
@@ -128,6 +133,8 @@ function mapRow(row: DoulaRow): TeamMemberDto {
     email: row.email ?? '',
     role: 'doula',
     account_status: row.account_status ?? 'approved',
+    profile_review_status: row.profile_review_status ?? 'draft',
+    profile_rejection_reason: row.profile_rejection_reason ?? null,
     phone_number: row.phone ?? null,
     address: row.address ?? null,
     city: row.city ?? null,
@@ -205,10 +212,10 @@ export class CloudSqlTeamService {
     try {
       const { rows } = await pool.query<DoulaRow & { role: 'admin' | 'doula' }>(
         `
-        SELECT id, full_name, NULL::text AS first_name, NULL::text AS last_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, 'doula'::text AS role, created_at, updated_at
+        SELECT id, full_name, NULL::text AS first_name, NULL::text AS last_name, email, phone, account_status, profile_review_status, profile_review_reason AS profile_rejection_reason, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, 'doula'::text AS role, created_at, updated_at
         FROM public.doulas
         UNION ALL
-        SELECT id, full_name, first_name, last_name, email, phone, 'approved'::text, address, city, state, country, zip_code, bio, profile_picture, NULL::text[], NULL::text, 'admin'::text AS role, created_at, updated_at
+        SELECT id, full_name, first_name, last_name, email, phone, 'approved'::text, NULL::text, NULL::text, address, city, state, country, zip_code, bio, profile_picture, NULL::text[], NULL::text, 'admin'::text AS role, created_at, updated_at
         FROM public.admins
         ORDER BY full_name ASC
         `
@@ -225,7 +232,7 @@ export class CloudSqlTeamService {
       if (msg.includes('public.admins') && msg.includes('does not exist')) {
         const { rows } = await pool.query<DoulaRow>(
           `
-          SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, created_at, updated_at
+          SELECT id, full_name, email, phone, account_status, profile_review_status, profile_review_reason AS profile_rejection_reason, address, city, state, country, zip_code, bio, profile_picture, languages_other_than_english, scheduling_url, created_at, updated_at
           FROM public.doulas
           ORDER BY full_name ASC
           `
@@ -269,7 +276,7 @@ export class CloudSqlTeamService {
     const pool = getPool();
     const { rows } = await pool.query<DoulaRow>(
       `
-      SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, scheduling_url,
+      SELECT id, full_name, email, phone, account_status, profile_review_status, profile_review_reason AS profile_rejection_reason, address, city, state, country, zip_code, bio, profile_picture, scheduling_url,
              gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details,
              created_at, updated_at
       FROM public.doulas
@@ -285,7 +292,7 @@ export class CloudSqlTeamService {
     const pool = getPool();
     const { rows } = await pool.query<DoulaRow>(
       `
-      SELECT id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture, scheduling_url,
+      SELECT id, full_name, email, phone, account_status, profile_review_status, profile_review_reason AS profile_rejection_reason, address, city, state, country, zip_code, bio, profile_picture, scheduling_url,
              gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details,
              created_at, updated_at
       FROM public.doulas
@@ -344,6 +351,33 @@ export class CloudSqlTeamService {
       ]
     );
     return mapRow(rows[0]);
+  }
+
+  async reviewDoulaProfile(
+    doulaId: string,
+    status: 'pending' | 'approved' | 'rejected',
+    reviewedBy?: string,
+    rejectionReason?: string
+  ): Promise<TeamMemberDto | null> {
+    const { rows } = await getPool().query<DoulaRow>(
+      `
+      UPDATE public.doulas
+      SET profile_review_status = $2,
+          profile_review_reason = CASE WHEN $2 = 'rejected' THEN $4 ELSE NULL END,
+          profile_reviewed_by = CASE WHEN $2 = 'pending' THEN NULL ELSE $3 END,
+          profile_reviewed_at = CASE WHEN $2 = 'pending' THEN NULL ELSE NOW() END,
+          account_status = CASE WHEN $2 = 'rejected' THEN 'pending' ELSE account_status END,
+          updated_at = NOW()
+      WHERE id = $1::uuid
+      RETURNING id, full_name, email, phone, account_status, profile_review_status,
+                profile_review_reason AS profile_rejection_reason, address, city, state, country, zip_code,
+                bio, profile_picture, scheduling_url, gender, pronouns,
+                race_ethnicity, languages_other_than_english, race_ethnicity_other,
+                other_demographic_details, created_at, updated_at
+      `,
+      [doulaId, status, reviewedBy ?? null, rejectionReason?.trim() ?? null]
+    );
+    return this.withResolvedProfilePicture(rows[0] ? mapRow(rows[0]) : null);
   }
 
   async addAdmin(input: {
@@ -492,9 +526,10 @@ export class CloudSqlTeamService {
       input.account_status?.trim() || existing.account_status || 'approved';
     const bio = input.bio !== undefined ? input.bio : (existing.bio ?? null);
     const profilePicture =
-      input.profile_picture !== undefined
-        ? input.profile_picture
-        : (existing.profile_picture ?? null);
+      typeof input.profile_picture === 'string' &&
+      input.profile_picture.trim().length > 0
+        ? input.profile_picture.trim()
+        : null;
     const gender =
       input.gender !== undefined ? input.gender : (existing.gender ?? null);
     const pronouns =
@@ -532,7 +567,7 @@ export class CloudSqlTeamService {
             email = $4,
             phone = $5,
             bio = $6,
-            profile_picture = $7,
+            profile_picture = COALESCE($7, profile_picture),
             address = $8,
             city = $9,
             state = $10,
@@ -583,10 +618,10 @@ export class CloudSqlTeamService {
           race_ethnicity_other = $15,
           other_demographic_details = $16,
           scheduling_url = $17,
-          profile_picture = $18,
+          profile_picture = COALESCE($18, profile_picture),
           updated_at = NOW()
       WHERE id = $19::uuid
-      RETURNING id, full_name, email, phone, account_status, address, city, state, country, zip_code, bio, profile_picture,
+      RETURNING id, full_name, email, phone, account_status, profile_review_status, profile_review_reason AS profile_rejection_reason, address, city, state, country, zip_code, bio, profile_picture,
                gender, pronouns, race_ethnicity, languages_other_than_english, race_ethnicity_other, other_demographic_details, scheduling_url,
                 created_at, updated_at
       `,
@@ -647,6 +682,13 @@ export class CloudSqlTeamService {
     });
   }
 
+  async getDoulaProfilePicturePath(doulaId: string): Promise<string | null> {
+    const { rows } = await getPool().query<{ profile_picture: string | null }>(
+      'SELECT profile_picture FROM public.doulas WHERE id = $1::uuid LIMIT 1', [doulaId]
+    );
+    return rows[0]?.profile_picture ?? null;
+  }
+
   async updateDoulaProfilePicture(
     doulaId: string,
     profilePictureUrl: string
@@ -664,31 +706,6 @@ export class CloudSqlTeamService {
   }
 
   async deleteTeamMember(id: string): Promise<boolean> {
-    const pool = getPool();
-    const result = await pool.query(
-      `
-      DELETE FROM public.doulas
-      WHERE id = $1::uuid
-      `,
-      [id]
-    );
-    if ((result.rowCount ?? 0) > 0) return true;
-
-    try {
-      const adminResult = await pool.query(
-        `
-        DELETE FROM public.admins
-        WHERE id = $1::uuid
-        `,
-        [id]
-      );
-      return (adminResult.rowCount ?? 0) > 0;
-    } catch (error) {
-      const msg = (error as Error)?.message || '';
-      if (msg.includes('public.admins') && msg.includes('does not exist')) {
-        return false;
-      }
-      throw error;
-    }
+    return removeTeamMember(id);
   }
 }

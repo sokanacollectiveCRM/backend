@@ -151,7 +151,7 @@ export class DoulaDocumentRepository {
       SET status = $2,
           reviewed_at = NOW(),
           reviewed_by = $3,
-          rejection_reason = CASE WHEN $2 = 'approved' THEN NULL ELSE $4 END,
+          rejection_reason = CASE WHEN $2::varchar = 'approved'::varchar THEN NULL ELSE $4::text END,
           updated_at = NOW()
       WHERE id = $1::uuid
       RETURNING *

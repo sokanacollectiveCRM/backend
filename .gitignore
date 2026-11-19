@@ -18,6 +18,7 @@ generated/
 # Local operational data and diagnostic output
 /tmp/
 /outputs/
+/scripts/dev-env/.local/
 /annotated-*.pdf
 /layout-diff*.pdf
 .env.*

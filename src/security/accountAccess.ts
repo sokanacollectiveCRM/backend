@@ -1,5 +1,6 @@
 import { getPool } from '../db/cloudSqlPool';
 import type { User } from '../entities/User';
+import { runWithTenancyBypass } from '../features/tenancy';
 
 const DENIED_ACCOUNT_STATUSES = new Set([
   'inactive',
@@ -40,12 +41,14 @@ export async function isCurrentAccountActive(user: User): Promise<boolean> {
   if (!isAccountActive(user)) return false;
   if (String(user.role).toLowerCase() !== 'client') return true;
 
-  const { rows } = await getPool().query<{ portal_status: string | null }>(
-    `SELECT portal_status
-       FROM public.phi_clients
-      WHERE user_id::text = $1::text OR id::text = $1::text
-      LIMIT 1`,
-    [String(user.id)]
+  const { rows } = await runWithTenancyBypass(async () =>
+    getPool().query<{ portal_status: string | null }>(
+      `SELECT portal_status
+         FROM public.phi_clients
+        WHERE user_id::text = $1::text OR id::text = $1::text
+        LIMIT 1`,
+      [String(user.id)]
+    )
   );
   const status = String(rows[0]?.portal_status ?? '')
     .trim()

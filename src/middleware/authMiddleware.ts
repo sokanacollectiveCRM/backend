@@ -4,6 +4,7 @@ import { logger } from '../common/utils/logger';
 import { SAFE_INTERNAL_ERROR_MESSAGE } from '../common/utils/safeLogging';
 import {
   TENANT_HEADER,
+  isPlatformSupportPrincipal,
   isTenancyEnforced,
   resolveTenantGate,
   runWithTenant,
@@ -17,6 +18,7 @@ import {
 } from '../security/emailVerificationPolicy';
 import { ApiErrorCode } from '../security/errorCodes';
 import { SESSION_COOKIE } from '../security/sessionCookies';
+import { CloudSqlIdentityUserService } from '../services/identityPlatform/cloudSqlIdentityUserService';
 import { type AuthRequest, ROLE } from '../types';
 
 /** Cookie and header names for session token (canonical). */
@@ -130,9 +132,11 @@ const authMiddleware = async (
 
     let user_entity;
     let emailVerified = true;
+    let firebaseUid: string;
     try {
       const resolved = await identityTokenService.resolveSessionUser(token);
       user_entity = resolved.user;
+      firebaseUid = resolved.firebaseUid;
       emailVerified = resolved.emailVerified;
     } catch (verifyError) {
       logger.warn(
@@ -151,48 +155,45 @@ const authMiddleware = async (
       return;
     }
 
-    if (
-      !emailVerified &&
-      roleRequiresVerifiedEmail(user_entity.role) &&
-      !isEmailVerificationExemptRequest(req)
-    ) {
-      res.status(403).json({
-        error: 'Verify your email before accessing this resource.',
-        code: ApiErrorCode.EMAIL_NOT_VERIFIED,
-      });
-      return;
-    }
-
-    if (!(await isCurrentAccountActive(user_entity))) {
-      logger.warn(
-        {
-          service: 'backend-authn',
-          event: 'inactive_account_denied',
-          userId: String(user_entity.id || ''),
-          role: String(user_entity.role || '').toLowerCase(),
-          method: req.method,
-          path: req.path,
-          status: 403,
-        },
-        'Inactive account denied'
-      );
-      res.status(403).json({
-        error: 'Account is inactive',
-        code: ApiErrorCode.FORBIDDEN,
-      });
-      return;
-    }
-
     req.user = user_entity;
     const headerValue = req.header(TENANT_HEADER);
     const gate = await resolveTenantGate({
-      userId: String(user_entity.id || ''),
+      userId: firebaseUid || String(user_entity.id || ''),
       email: user_entity.email,
       requestedTenant: headerValue?.trim() || null,
       currentRole: user_entity.role ? String(user_entity.role) : null,
     });
 
     if (gate.action === 'deny') {
+      const requestPath = req.originalUrl.split('?')[0];
+      if (requestPath.startsWith('/api/intake-forms')) {
+        const platformSupport = await isPlatformSupportPrincipal({
+          userId: String(user_entity.id || ''),
+          email: user_entity.email,
+        });
+        if (platformSupport) {
+          if (
+            !emailVerified &&
+            roleRequiresVerifiedEmail(user_entity.role) &&
+            !isEmailVerificationExemptRequest(req)
+          ) {
+            res.status(403).json({
+              error: 'Verify your email before accessing this resource.',
+              code: ApiErrorCode.EMAIL_NOT_VERIFIED,
+            });
+            return;
+          }
+          if (!(await isCurrentAccountActive(user_entity))) {
+            res.status(403).json({
+              error: 'Account is inactive',
+              code: ApiErrorCode.FORBIDDEN,
+            });
+            return;
+          }
+          next();
+          return;
+        }
+      }
       logger.warn(
         {
           service: 'backend-authz',
@@ -209,6 +210,61 @@ const authMiddleware = async (
         error: gate.error,
         code: gate.code,
         ...(gate.tenants ? { tenants: gate.tenants } : {}),
+      });
+      return;
+    }
+
+    if (gate.action === 'attach' && isTenancyEnforced()) {
+      const scoped = await new CloudSqlIdentityUserService().findTenantUser(
+        { uid: firebaseUid, email: user_entity.email },
+        gate.tenant
+      );
+      if (!scoped) {
+        res.status(403).json({
+          error: 'Organization profile is unavailable',
+          code: ApiErrorCode.FORBIDDEN,
+        });
+        return;
+      }
+      scoped.emailVerified = emailVerified;
+      user_entity = scoped;
+      req.user = scoped;
+    }
+
+    if (
+      !emailVerified &&
+      roleRequiresVerifiedEmail(user_entity.role) &&
+      !isEmailVerificationExemptRequest(req)
+    ) {
+      res.status(403).json({
+        error: 'Verify your email before accessing this resource.',
+        code: ApiErrorCode.EMAIL_NOT_VERIFIED,
+      });
+      return;
+    }
+
+    if (
+      !(await (gate.action === 'attach'
+        ? runWithTenant(gate.tenant.id, () =>
+            isCurrentAccountActive(user_entity)
+          )
+        : isCurrentAccountActive(user_entity)))
+    ) {
+      logger.warn(
+        {
+          service: 'backend-authn',
+          event: 'inactive_account_denied',
+          userId: String(user_entity.id || ''),
+          role: String(user_entity.role || '').toLowerCase(),
+          method: req.method,
+          path: req.path,
+          status: 403,
+        },
+        'Inactive account denied'
+      );
+      res.status(403).json({
+        error: 'Account is inactive',
+        code: ApiErrorCode.FORBIDDEN,
       });
       return;
     }

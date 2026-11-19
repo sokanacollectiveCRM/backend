@@ -33,6 +33,18 @@ export type {
   ClientAssignInput,
   ClientAssignResult,
 } from './application/assignDoulaOnClient';
+export { listAssignedDoulas } from './application/listAssignedDoulas';
+export type {
+  ListAssignedDoulasDeps,
+  ListAssignedDoulasInput,
+  ListAssignedDoulasResult,
+} from './application/listAssignedDoulas';
+export { unassignDoulaFromClient } from './application/unassignDoulaFromClient';
+export type {
+  UnassignDoulaDeps,
+  UnassignDoulaInput,
+  UnassignDoulaResult,
+} from './application/unassignDoulaFromClient';
 export { matchDoulaForAdmin } from './application/matchDoulaForAdmin';
 export type {
   AdminMatchInput,

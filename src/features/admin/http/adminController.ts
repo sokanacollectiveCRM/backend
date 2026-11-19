@@ -1,4 +1,3 @@
-import * as crypto from 'crypto';
 import { Response } from 'express';
 
 import { logger } from '../../../common/utils/logger';
@@ -7,8 +6,10 @@ import { ClientRepository } from '../../../repositories/interface/clientReposito
 import { UserRepository } from '../../../repositories/interface/userRepository';
 import { CloudSqlDoulaAssignmentService } from '../../../services/cloudSqlDoulaAssignmentService';
 import { CloudSqlTeamService } from '../../../services/cloudSqlTeamService';
+import { ConflictError, ValidationError } from '../../../domains/errors';
 import { AuthRequest } from '../../../types';
 import { ACCOUNT_STATUS, CLIENT_STATUS, ROLE } from '../../../types';
+import { createStaffInvitation } from '../../team/application/staffInvitationService';
 import { matchDoulaForAdmin } from '../../matching';
 
 export class AdminController {
@@ -56,61 +57,31 @@ export class AdminController {
       }
 
       const normalizedEmail = String(email).trim().toLowerCase();
-      const team = await this.cloudSqlTeamService.listTeamMembers();
-      const existing = team.find(
-        (m) => m.email.toLowerCase() === normalizedEmail
-      );
-
-      if (existing && existing.role !== 'doula') {
-        res.status(400).json({
-          success: false,
-          error: 'A non-doula team member with this email already exists',
+      try {
+        const invitation = await createStaffInvitation({
+          tenantId: req.tenant?.id,
+          firstname: String(firstname).trim(),
+          lastname: String(lastname).trim(),
+          email: normalizedEmail,
+          role: 'doula',
+          invitedByEmail: req.user?.email ? String(req.user.email) : null,
         });
-        return;
-      }
-
-      if (!existing) {
-        try {
-          await this.cloudSqlTeamService.addTeamMember({
-            firstname: String(firstname).trim(),
-            lastname: String(lastname).trim(),
-            email: normalizedEmail,
-            role: 'doula',
-          });
-        } catch (error: any) {
-          const message = error?.message || 'Failed to create doula';
-          const lower = message.toLowerCase();
-          if (
-            !(
-              lower.includes('already') ||
-              lower.includes('exists') ||
-              lower.includes('duplicate')
-            )
-          ) {
-            res.status(500).json({
-              success: false,
-              error: message,
-            });
-            return;
-          }
+        res.status(201).json({
+          success: true,
+          message: `Invitation sent to ${invitation.email}. It stays pending until they accept.`,
+          invitation,
+        });
+      } catch (error) {
+        if (error instanceof ValidationError) {
+          res.status(400).json({ success: false, error: error.message });
+          return;
         }
+        if (error instanceof ConflictError) {
+          res.status(409).json({ success: false, error: error.message });
+          return;
+        }
+        throw error;
       }
-
-      // Generate invite token (optional, for tracking)
-      const inviteToken = crypto.randomBytes(32).toString('hex');
-
-      // Send invitation email
-      await this.emailController.sendDoulaInvite(
-        email,
-        firstname,
-        lastname,
-        inviteToken
-      );
-
-      res.status(200).json({
-        success: true,
-        message: `Invitation email sent to ${email}`,
-      });
     } catch (error: any) {
       console.error('inviteDoula error:', error);
       res.status(500).json({

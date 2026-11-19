@@ -1,5 +1,10 @@
 import { getPool } from '../../db/cloudSqlPool';
 import { User } from '../../entities/User';
+import {
+  type TenantView,
+  runWithTenancyBypass,
+  runWithTenant,
+} from '../../features/tenancy';
 import { isUuid } from '../../security/resolveAuthoritativeRole';
 import { ROLE } from '../../types';
 
@@ -102,8 +107,8 @@ const PROFILE_QUERY = `
       a.profile_picture,
       1 AS priority
     FROM public.admins a
-    WHERE a.identity_platform_uid = $1
-       OR ($2::uuid IS NOT NULL AND a.id = $2::uuid)
+    WHERE a.identity_platform_uid::text = $1
+       OR ($2::text IS NOT NULL AND a.id::text = $2::text)
        OR ($3::text IS NOT NULL AND lower(a.email) = $3::text)
 
     UNION ALL
@@ -126,8 +131,8 @@ const PROFILE_QUERY = `
       d.profile_picture,
       2
     FROM public.doulas d
-    WHERE d.identity_platform_uid = $1
-       OR ($2::uuid IS NOT NULL AND d.id = $2::uuid)
+    WHERE d.identity_platform_uid::text = $1
+       OR ($2::text IS NOT NULL AND d.id::text = $2::text)
        OR ($3::text IS NOT NULL AND lower(d.email) = $3::text)
 
     UNION ALL
@@ -150,8 +155,11 @@ const PROFILE_QUERY = `
       NULL::text,
       3
     FROM public.phi_clients c
-    WHERE c.identity_platform_uid = $1
-       OR ($2::uuid IS NOT NULL AND (c.user_id = $2::uuid OR c.id = $2::uuid))
+    WHERE c.identity_platform_uid::text = $1
+       OR (
+         $2::text IS NOT NULL
+         AND (c.user_id::text = $2::text OR c.id::text = $2::text)
+       )
        OR ($3::text IS NOT NULL AND lower(c.email) = $3::text)
   )
   SELECT
@@ -164,10 +172,10 @@ const PROFILE_QUERY = `
 `;
 
 const LEGACY_PROFILE_QUERY = PROFILE_QUERY.replace(
-  /\s+[ad]\.(?:identity_platform_uid) = \$1\n\s+OR/g,
+  /\s+[ad]\.(?:identity_platform_uid)(?:::text)? = \$1\n\s+OR/g,
   ''
 )
-  .replace(/\s+c\.(?:identity_platform_uid) = \$1\n\s+OR/g, '')
+  .replace(/\s+c\.(?:identity_platform_uid)(?:::text)? = \$1\n\s+OR/g, '')
   .replace(/\$2/g, '$1')
   .replace(/\$3/g, '$2');
 
@@ -177,6 +185,45 @@ const LEGACY_PROFILE_QUERY = PROFILE_QUERY.replace(
  */
 export class CloudSqlIdentityUserService {
   async findUser(claims: IdentityClaims): Promise<User | null> {
+    return runWithTenancyBypass(async () => this.findUserUnscoped(claims));
+  }
+
+  /** Load the selected membership's profile, never a profile from another org. */
+  async findTenantUser(
+    claims: IdentityClaims,
+    tenant: TenantView
+  ): Promise<User | null> {
+    const query = PROFILE_QUERY.replace(
+      'COALESCE(c.user_id::text, c.id::text),',
+      'c.id::text,'
+    )
+      .replace(
+        'FROM candidates\n  ORDER BY priority',
+        `FROM candidates c
+       JOIN public.memberships m
+         ON m.principal_id::text = c.principal_id AND m.principal_type = c.role
+       WHERE m.id = $4::uuid AND m.tenant_id = $5::uuid AND m.status = 'active'
+       ORDER BY priority`
+      )
+      .replace(
+        '    principal_id, email, first_name, last_name, role, account_status,',
+        '    c.principal_id, c.email, first_name, last_name, c.role, account_status,'
+      );
+    return runWithTenant(tenant.id, async () => {
+      const { rows } = await getPool().query<IdentityUserRow>(query, [
+        claims.uid,
+        isUuid(claims.uid) ? claims.uid : null,
+        normalizeEmail(claims.email),
+        tenant.membershipId,
+        tenant.id,
+      ]);
+      const user = rows[0] ? mapIdentityUser(rows[0]) : null;
+      if (user) user.role = tenant.role as ROLE;
+      return user;
+    });
+  }
+
+  private async findUserUnscoped(claims: IdentityClaims): Promise<User | null> {
     const normalizedEmail = normalizeEmail(claims.email);
     const idParam = isUuid(claims.uid) ? claims.uid : null;
     const params = [claims.uid, idParam, normalizedEmail];

@@ -29,6 +29,7 @@ export class Client {
     public phoneNumber?: string, // Add phone number field
     public portal_status?: string, // Portal invite status: 'not_invited', 'invited', 'active', 'disabled'
     public clientNumber?: string, // Unique human-readable ID (e.g., CL-00001) for internal tracking
+    public isTest = false
   ) {}
 
   toJson(): Object {

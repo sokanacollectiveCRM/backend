@@ -35,8 +35,8 @@ describe('GET public intake branding', () => {
         logoPath: '/sokana360-logo.png',
         markPath: '/sokana360-mark.png',
         pageTitle: 'Request for Service',
-        primaryColor: '#009688',
-        accentColor: '#00bcd4',
+        primaryColor: '#0A3147',
+        accentColor: '#D6704D',
       },
     });
 

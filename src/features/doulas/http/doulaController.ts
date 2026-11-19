@@ -1,3 +1,5 @@
+import { downloadObject, GCS_PREFIX, objectPath } from '../../../services/gcs/documentStorage';
+import { isHttpUrl, profilePictureObjectPath } from '../../../services/gcs/profilePictureStorage';
 import { Response } from 'express';
 import { File as MulterFile } from 'multer';
 
@@ -9,6 +11,7 @@ import {
   MAX_DOCUMENT_SIZE_BYTES,
 } from '../../../constants/doulaDocuments';
 import { NotFoundError } from '../../../domains/errors';
+import { contractNotifications } from '../../../config/env';
 import {
   MAX_DOULA_DOCUMENT_FILE_NAME_LENGTH,
   renameDoulaDocumentSchema,
@@ -20,9 +23,13 @@ import { ActivityRepository } from '../../../repositories/interface/activityRepo
 import { CloudSqlTeamService } from '../../../services/cloudSqlTeamService';
 import type { TeamMemberDto } from '../../../services/cloudSqlTeamService';
 import { DoulaAvailabilityService } from '../../../services/doulaAvailabilityService';
-import { DoulaDocumentCompletenessService } from '../../../services/doulaDocumentCompletenessService';
+import {
+  DoulaDocumentCompletenessService,
+  type DocumentCompletenessSummary,
+} from '../../../services/doulaDocumentCompletenessService';
 import { DoulaDocumentIdResolver } from '../../../services/doulaDocumentIdResolver';
 import { DoulaDocumentUploadService } from '../../../services/doulaDocumentUploadService';
+import { NodemailerService } from '../../../services/emailService';
 import { CloudSqlIdentityUserService } from '../../../services/identityPlatform/cloudSqlIdentityUserService';
 import { AuthRequest } from '../../../types';
 import { ClientUseCase } from '../../../usecase/clientUseCase';
@@ -32,6 +39,8 @@ import {
   parseHourFilter,
   parseHourType,
 } from '../../../utils/hourTypes';
+
+const DOULA_DOCUMENT_REVIEW_NOTIFICATION_EMAIL = 'hello@sokanacollective.com';
 
 export class DoulaController {
   private documentRepository: DoulaDocumentRepository;
@@ -77,6 +86,126 @@ export class DoulaController {
       String(userId),
       req.user?.email
     );
+  }
+
+  private isDoulaProfileComplete(
+    doula: TeamMemberDto | null,
+    documents: DocumentCompletenessSummary
+  ): boolean {
+    if (!doula) return false;
+    const requiredText = [
+      doula.firstname,
+      doula.lastname,
+      doula.phone_number,
+      doula.address,
+      doula.city,
+      doula.state,
+      doula.country,
+      doula.zip_code,
+      doula.bio,
+      doula.pronouns,
+    ];
+    const hasRequiredText = requiredText.every(
+      (value) => typeof value === 'string' && value.trim().length > 0
+    );
+    const raceEthnicity = doula.race_ethnicity ?? [];
+    const hasRaceEthnicity =
+      raceEthnicity.length > 0 &&
+      (!raceEthnicity.includes('another_race_ethnicity') ||
+        Boolean(doula.race_ethnicity_other?.trim()));
+    const hasLanguages =
+      (doula.languages_other_than_english ?? []).some((language) =>
+        language.trim()
+      );
+    const hasDocuments = documents.items.every(
+      (item) => item.status === 'uploaded' || item.status === 'approved'
+    );
+    return hasRequiredText && hasRaceEthnicity && hasLanguages && hasDocuments;
+  }
+
+  private async notifyDoulaProfileSubmitted(doulaId: string): Promise<void> {
+    try {
+      const doula = await this.cloudSqlTeamService.getTeamMemberById(doulaId);
+      if (!doula?.email) {
+        logger.warn(
+          { doulaId },
+          'Profile is complete, but the doula email was not found'
+        );
+        return;
+      }
+
+      const doulaName = doula.fullName || `${doula.firstname} ${doula.lastname}`.trim();
+      const adminUrl = new URL('/login', contractNotifications.frontendUrl);
+      adminUrl.searchParams.set('next', '/team');
+      const doulaUrl = new URL('/login', contractNotifications.frontendUrl);
+      doulaUrl.searchParams.set('next', '/doula-dashboard/profile?step=review');
+      const emailService = new NodemailerService();
+      const messages = [
+        {
+          recipient: DOULA_DOCUMENT_REVIEW_NOTIFICATION_EMAIL,
+          subject: `Doula profile ready for review: ${doulaName}`,
+          text: `${doulaName} (${doula.email}) completed their profile and submitted all required documents. The profile is ready for review.\n\nOpen Team Members in Sokana:\n${adminUrl.toString()}`,
+        },
+        {
+          recipient: doula.email,
+          subject: 'Your Sokana profile is ready for review',
+          text: `Hello ${doulaName},\n\nYour profile and required documents are complete and have been sent to Sokana for review. We’ll email you when the review is finished.\n\nSign in to review your submission:\n${doulaUrl.toString()}`,
+        },
+      ];
+      const results = await Promise.allSettled(
+        messages.map(({ recipient, subject, text }) =>
+          emailService.sendEmail(recipient, subject, text)
+        )
+      );
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          logger.error(
+            { err: result.reason, doulaId, recipientRole: index === 0 ? 'admin' : 'doula' },
+            'Failed to send profile completion notification'
+          );
+        }
+      });
+    } catch (error) {
+      logger.error(
+        { err: error, doulaId },
+        'Could not prepare profile completion notifications'
+      );
+    }
+  }
+
+  private async notifyAdminsOfDocumentReplacement(
+    req: AuthRequest,
+    document: { id: string; documentType: string; fileName: string },
+    doulaId: string
+  ): Promise<void> {
+    const doulaName = [req.user?.firstname, req.user?.lastname]
+      .filter((part) => typeof part === 'string' && part.trim())
+      .join(' ') || 'A doula';
+    const doulaEmail = req.user?.email || 'Unknown email';
+    const documentName = document.documentType
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    const reviewUrl = new URL('/team', contractNotifications.frontendUrl).toString();
+    const subject = `${documentName} replacement ready for review`;
+    const text =
+      `${doulaName} (${doulaEmail}) replaced a rejected ${documentName}. ` +
+      `The new file is waiting in the review queue.\n\n` +
+      `File: ${document.fileName}\n` +
+      `Review the submission in Sokana: ${reviewUrl}`;
+
+    const emailService = new NodemailerService();
+    try {
+      await emailService.sendEmail(
+        DOULA_DOCUMENT_REVIEW_NOTIFICATION_EMAIL,
+        subject,
+        text
+      );
+    } catch (error) {
+      logger.error(
+        { err: error, doulaId, documentId: document.id },
+        'Document replacement was saved, but the admin notification could not be sent'
+      );
+    }
   }
 
   private getFileExtension(fileName: string): string {
@@ -171,6 +300,15 @@ export class DoulaController {
         return;
       }
 
+      const [doulaBeforeUpload, documentsBeforeUpload] = await Promise.all([
+        this.cloudSqlTeamService.getTeamMemberById(doulaId),
+        this.completenessService.getCompleteness(doulaId),
+      ]);
+      const profileWasComplete = this.isDoulaProfileComplete(
+        doulaBeforeUpload,
+        documentsBeforeUpload
+      );
+
       // Validate file size (backend enforcement - never trust client)
       if (file.size > MAX_DOCUMENT_SIZE_BYTES) {
         res.status(400).json({
@@ -191,6 +329,7 @@ export class DoulaController {
           doulaId,
           document_type
         );
+      const replacingRejectedDocument = existingDoc?.status === 'rejected';
       if (existingDoc) {
         await this.uploadService.deleteDocument(existingDoc.filePath);
         await this.documentRepository.deleteDocument(existingDoc.id);
@@ -213,6 +352,38 @@ export class DoulaController {
         expiresAt: expires_at ? new Date(expires_at) : undefined,
         notes: notes || undefined,
       });
+
+      const [doulaAfterUpload, documentsAfterUpload] = await Promise.all([
+        this.cloudSqlTeamService.getTeamMemberById(doulaId),
+        this.completenessService.getCompleteness(doulaId),
+      ]);
+      const profileIsComplete = this.isDoulaProfileComplete(
+        doulaAfterUpload,
+        documentsAfterUpload
+      );
+      const profileJustCompleted = !profileWasComplete && profileIsComplete;
+
+      if (
+        profileJustCompleted &&
+        doulaBeforeUpload?.profile_review_status !== 'rejected'
+      ) {
+        await this.cloudSqlTeamService.reviewDoulaProfile(
+          doulaId,
+          'pending'
+        );
+        await this.notifyDoulaProfileSubmitted(doulaId);
+      }
+
+      if (replacingRejectedDocument && !profileJustCompleted) {
+        try {
+          await this.notifyAdminsOfDocumentReplacement(req, document, doulaId);
+        } catch (emailError) {
+          logger.error(
+            { err: emailError, doulaId, documentId: document.id },
+            'Replacement document was saved, but admin notification failed'
+          );
+        }
+      }
 
       // Generate signed URL for the response (valid for 1 hour)
       const signedUrl = await this.documentRepository.getSignedUrl(
@@ -356,6 +527,30 @@ export class DoulaController {
     }
   }
 
+  /** Serve local-only doula files through the authenticated API. */
+  async getLocalDocument(req: AuthRequest, res: Response): Promise<void> {
+    const doulaId = req.user?.id;
+    const objectName = req.params[0];
+    const expectedPrefix = `${GCS_PREFIX.doulaDocuments}/${doulaId}/`;
+    if (!doulaId || !objectName?.startsWith(expectedPrefix)) {
+      res.status(404).json({ error: 'Document not found' });
+      return;
+    }
+    try {
+      const data = await downloadObject(objectName);
+      const extension = objectName.split('.').pop()?.toLowerCase();
+      const mimeType = extension === 'pdf' ? 'application/pdf'
+        : extension === 'png' ? 'image/png'
+        : ['jpg', 'jpeg'].includes(extension ?? '') ? 'image/jpeg'
+        : 'application/octet-stream';
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.type(mimeType).send(data);
+    } catch {
+      res.status(404).json({ error: 'Document not found' });
+    }
+  }
+
   /**
    * Get documents and completeness for a doula (admin only)
    * GET /api/admin/doulas/:doulaId/documents
@@ -384,6 +579,9 @@ export class DoulaController {
 
       const completeness =
         await this.completenessService.getCompleteness(effectiveDocDoulaId);
+      const doulaProfile = await this.cloudSqlTeamService.getTeamMemberById(
+        doulaId
+      );
 
       const documentsWithUrls = await Promise.all(
         documents.map(async (doc) => {
@@ -443,6 +641,10 @@ export class DoulaController {
 
       res.json({
         success: true,
+        profileReview: {
+          status: doulaProfile?.profile_review_status ?? 'draft',
+          rejection_reason: doulaProfile?.profile_rejection_reason ?? null,
+        },
         documents: documentsWithUrls,
         completeness: {
           total_required: completeness.totalRequired,
@@ -458,6 +660,73 @@ export class DoulaController {
       res
         .status(500)
         .json({ error: error.message || 'Failed to fetch documents' });
+    }
+  }
+
+  private async notifyProfileAndDocumentsApproved(
+    doulaId: string,
+    adminId: string,
+    adminEmail?: string
+  ): Promise<void> {
+    try {
+      const doula = await this.cloudSqlTeamService.getTeamMemberById(doulaId);
+      if (!doula?.email) {
+        logger.warn(
+          { doulaId },
+          'All required doula documents were approved, but no doula email was found'
+        );
+        return;
+      }
+
+      const admin = adminEmail
+        ? null
+        : await this.cloudSqlTeamService.getTeamMemberById(adminId);
+      const resolvedAdminEmail = (adminEmail || admin?.email || '').trim();
+      const frontendUrl = contractNotifications.frontendUrl;
+      const doulaLoginUrl = new URL('/login', frontendUrl);
+      doulaLoginUrl.searchParams.set('next', '/doula-dashboard/profile');
+      const adminLoginUrl = new URL('/login', frontendUrl);
+      adminLoginUrl.searchParams.set('next', '/team');
+      const doulaName = doula.fullName || `${doula.firstname} ${doula.lastname}`.trim();
+      const emailService = new NodemailerService();
+      const messages = [
+        {
+          recipient: doula.email,
+          role: 'doula',
+          subject: 'Your Sokana profile and documents are approved',
+          text: `Hello ${doulaName},\n\nYour Sokana profile and all required documents have been approved. Sign in to view your profile:\n${doulaLoginUrl.toString()}`,
+        },
+        ...(resolvedAdminEmail
+          ? [{
+              recipient: resolvedAdminEmail,
+              role: 'admin',
+              subject: `Doula profile and documents approved: ${doulaName}`,
+              text: `All required documents for ${doulaName} (${doula.email}) have been approved. The doula profile is approved.\n\nOpen Team Members in Sokana:\n${adminLoginUrl.toString()}`,
+            }]
+          : []),
+      ];
+      const results = await Promise.allSettled(
+        messages.map((message) =>
+          emailService.sendEmail(
+            message.recipient,
+            message.subject,
+            message.text
+          )
+        )
+      );
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          logger.error(
+            { err: result.reason, doulaId, recipientRole: messages[index].role },
+            'Failed to send doula profile approval email'
+          );
+        }
+      });
+    } catch (error) {
+      logger.error(
+        { err: error, doulaId },
+        'Could not prepare doula profile approval emails'
+      );
     }
   }
 
@@ -499,12 +768,77 @@ export class DoulaController {
         return;
       }
 
+      const completenessBefore =
+        status === 'approved'
+          ? await this.completenessService.getCompleteness(document.doulaId)
+          : null;
       const updated = await this.documentRepository.updateDocumentStatus(
         documentId,
         status,
         adminId,
         status === 'rejected' ? rejection_reason : undefined
       );
+
+      if (
+        status === 'approved' &&
+        completenessBefore &&
+        !completenessBefore.canBeActive
+      ) {
+        const completenessAfter = await this.completenessService.getCompleteness(
+          document.doulaId
+        );
+        const doula = await this.cloudSqlTeamService.getTeamMemberById(
+          document.doulaId
+        );
+        if (completenessAfter.canBeActive && doula?.profile_review_status === 'approved') {
+          await this.cloudSqlTeamService.updateTeamMember(
+            document.doulaId,
+            { account_status: 'active' }
+          );
+          await this.notifyProfileAndDocumentsApproved(
+            document.doulaId,
+            adminId,
+            req.user?.email
+          );
+        }
+      }
+
+      if (status === 'rejected') {
+        try {
+          const doula = await this.cloudSqlTeamService.getTeamMemberById(
+            document.doulaId
+          );
+          if (doula?.email) {
+            const documentName = String(document.documentType || 'document')
+              .replace(/_/g, ' ')
+              .replace(/\b\w/g, (letter) => letter.toUpperCase());
+            const documentPath = `/doula-dashboard/documents?documentType=${encodeURIComponent(document.documentType)}#required-documents`;
+            const loginUrl = new URL(
+              '/login',
+              contractNotifications.frontendUrl
+            );
+            loginUrl.searchParams.set('next', documentPath);
+            const reason = String(
+              updated.rejectionReason || rejection_reason || 'Please review the document and upload an updated version.'
+            ).trim();
+            await new NodemailerService().sendEmail(
+              doula.email,
+              `${documentName} needs an update`,
+              `Your ${documentName} was not approved.\n\nReason: ${reason}\n\nSign in to Sokana to review the feedback and replace this document:\n${loginUrl.toString()}`
+            );
+          } else {
+            logger.warn(
+              { doulaId: document.doulaId, documentId },
+              'Could not send document rejection email: doula email not found'
+            );
+          }
+        } catch (emailError) {
+          logger.error(
+            { err: emailError, doulaId: document.doulaId, documentId },
+            'Document was rejected, but the rejection email could not be sent'
+          );
+        }
+      }
 
       res.json({
         success: true,
@@ -520,6 +854,124 @@ export class DoulaController {
       res
         .status(500)
         .json({ error: error.message || 'Failed to review document' });
+    }
+  }
+
+  async reviewProfileInformation(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { doulaId } = req.params;
+      const adminId = req.user?.id;
+      const adminEmail = req.user?.email;
+      const { status, rejection_reason } = req.body ?? {};
+
+      if (!doulaId || !adminId) {
+        res.status(400).json({ error: 'Missing required parameters' });
+        return;
+      }
+      if (!['approved', 'rejected'].includes(status)) {
+        res.status(400).json({ error: 'status must be "approved" or "rejected"' });
+        return;
+      }
+      if (status === 'rejected' && !String(rejection_reason ?? '').trim()) {
+        res.status(400).json({ error: 'A rejection reason is required' });
+        return;
+      }
+
+      const doula = await this.cloudSqlTeamService.reviewDoulaProfile(
+        doulaId,
+        status,
+        adminId,
+        status === 'rejected' ? String(rejection_reason).trim() : undefined
+      );
+      if (!doula) {
+        res.status(404).json({ error: 'Doula profile not found' });
+        return;
+      }
+
+      if (status === 'rejected' && doula.email) {
+        const name = doula.fullName || `${doula.firstname} ${doula.lastname}`.trim();
+        const loginUrl = new URL('/login', contractNotifications.frontendUrl);
+        loginUrl.searchParams.set('next', '/doula-dashboard/profile');
+        try {
+          await new NodemailerService().sendEmail(
+            doula.email,
+            'Please update your Sokana profile information',
+            `Hello ${name},\n\nSokana needs you to update your profile information before your profile can be approved.\n\nReason from the reviewer:\n${String(rejection_reason).trim()}\n\nSign in to update your profile:\n${loginUrl.toString()}`
+          );
+        } catch (emailError) {
+          logger.error(
+            { err: emailError, doulaId },
+            'Profile information was rejected, but the doula email could not be sent'
+          );
+        }
+      }
+
+      let accountStatus = doula.account_status;
+      if (status === 'approved') {
+        const completeness = await this.completenessService.getCompleteness(doulaId);
+        if (
+          completeness.canBeActive &&
+          this.isDoulaProfileComplete(doula, completeness)
+        ) {
+          const activated = await this.cloudSqlTeamService.updateTeamMember(
+            doulaId,
+            { account_status: 'active' }
+          );
+          accountStatus = activated?.account_status ?? accountStatus;
+          await this.notifyProfileAndDocumentsApproved(doulaId, adminId, adminEmail);
+        }
+      }
+
+      res.json({
+        success: true,
+        profileReview: {
+          status,
+          rejection_reason: status === 'rejected' ? String(rejection_reason).trim() : null,
+          account_status: accountStatus,
+        },
+      });
+    } catch (error: any) {
+      logger.error({ err: error, doulaId: req.params.doulaId }, 'Failed to review doula profile information');
+      res.status(500).json({ error: error.message || 'Failed to review profile information' });
+    }
+  }
+
+  /**
+   * Stream a doula document through the authorized admin API. This is used
+   * for local document storage, where a signed URL points back to the
+   * doula-only local file route.
+   * GET /api/admin/doulas/:doulaId/documents/:documentId/content
+   */
+  async downloadAdminDoulaDocument(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { doulaId, documentId } = req.params;
+      const document = await this.documentRepository.getDocumentById(documentId);
+      if (!document) {
+        res.status(404).json({ error: 'Document not found' });
+        return;
+      }
+      const isOwned = await this.documentIdResolver.isDocumentOwnedByDoula(
+        doulaId,
+        document.doulaId
+      );
+      if (!isOwned) {
+        res.status(403).json({ error: 'Document does not belong to this doula' });
+        return;
+      }
+
+      const objectName = objectPath(
+        GCS_PREFIX.doulaDocuments,
+        document.filePath
+      );
+      const contents = await downloadObject(objectName);
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Content-Disposition', 'inline');
+      res.setHeader('Content-Type', document.mimeType || 'application/octet-stream');
+      res.send(contents);
+    } catch (error) {
+      console.error('Error downloading doula document:', error);
+      res.status(500).json({ error: 'Failed to retrieve document' });
     }
   }
 
@@ -1307,6 +1759,33 @@ export class DoulaController {
    * Upload doula's profile picture (headshot)
    * POST /api/doulas/profile/picture
    */
+  async getProfilePicture(req: AuthRequest, res: Response): Promise<void> {
+    const doulaId = req.user?.id;
+    if (!doulaId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+    try {
+      const stored = await this.cloudSqlTeamService.getDoulaProfilePicturePath(doulaId);
+      if (!stored || isHttpUrl(stored) || !stored.startsWith(`${doulaId}/`)) {
+        res.status(404).json({ error: 'Profile photo not found' }); return;
+      }
+      const data = await downloadObject(profilePictureObjectPath(stored));
+      const mime = data.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) ? 'image/png'
+        : data[0] === 255 && data[1] === 216 && data[2] === 255 ? 'image/jpeg'
+        : data.toString('ascii', 0, 4) === 'RIFF' && data.toString('ascii', 8, 12) === 'WEBP' ? 'image/webp'
+        : /^GIF8[79]a$/.test(data.toString('ascii', 0, 6)) ? 'image/gif' : null;
+      if (!mime) { res.status(415).json({ error: 'Unsupported profile photo format' }); return; }
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Cross-Origin-Resource-Policy', 'same-site');
+      res.type(mime).send(data);
+    } catch {
+      res.status(500).json({ error: 'Could not load profile photo' });
+    }
+  }
+
+  private profilePictureReadUrl(req: AuthRequest): string {
+    return `${req.protocol}://${req.get('host')}/api/doulas/profile/picture`;
+  }
+
   async uploadProfilePicture(req: AuthRequest, res: Response): Promise<void> {
     try {
       const doulaId = req.user?.id;
@@ -1352,9 +1831,9 @@ export class DoulaController {
         cloudSqlMember && cloudSqlMember.role === 'doula'
           ? this.buildDoulaProfilePayload(cloudSqlMember, {
               profilePictureFallback:
-                cloudSqlMember.profile_picture ?? imageUrl,
+                cloudSqlMember.profile_picture ?? this.profilePictureReadUrl(req),
             })
-          : { profile_picture: imageUrl };
+          : { profile_picture: this.profilePictureReadUrl(req) };
       res.json({ success: true, profile });
     } catch (error: any) {
       console.error('Error uploading doula profile picture:', error);
@@ -1513,6 +1992,9 @@ export class DoulaController {
           reqUserJson,
           currentAvailability,
         });
+        if (!isHttpUrl(String(profile.profile_picture ?? '')) && await this.cloudSqlTeamService.getDoulaProfilePicturePath(doulaId)) {
+          profile.profile_picture = this.profilePictureReadUrl(req);
+        }
         res.json({
           success: true,
           profile,
@@ -1554,6 +2036,19 @@ export class DoulaController {
         res.status(401).json({ error: 'Unauthorized' });
         return;
       }
+      // Autosave must accept incomplete draft values. Required-field validation
+      // belongs to the explicit onboarding submission step.
+      if (req.get('x-profile-autosave') !== 'true') {
+        for (const [field, label] of [
+          ['address', 'Address'], ['city', 'City'], ['state', 'State'], ['zip_code', 'ZIP code'],
+        ] as const) {
+          if (Object.prototype.hasOwnProperty.call(req.body || {}, field) &&
+              (typeof req.body[field] !== 'string' || !req.body[field].trim())) {
+            res.status(400).json({ error: `${label} is required.` });
+            return;
+          }
+        }
+      }
       // Filter out undefined/null values but keep empty strings for explicit clearing.
       const fieldsToUpdate = Object.entries(req.body || {}).reduce(
         (acc, [key, value]) => {
@@ -1563,6 +2058,25 @@ export class DoulaController {
           return acc;
         },
         {} as Record<string, any>
+      );
+
+      const [doulaBeforeUpdate, documentsBeforeUpdate] = await Promise.all([
+        this.cloudSqlTeamService.getTeamMemberById(doulaId),
+        this.completenessService.getCompleteness(doulaId),
+      ]);
+      const profileWasComplete = this.isDoulaProfileComplete(
+        doulaBeforeUpdate,
+        documentsBeforeUpdate
+      );
+      const wasProfileRejected =
+        doulaBeforeUpdate?.profile_review_status === 'rejected';
+      const profileInformationFields = [
+        'firstname', 'lastname', 'phone', 'phone_number', 'address', 'city',
+        'state', 'country', 'zip_code', 'bio', 'pronouns', 'race_ethnicity',
+        'race_ethnicity_other', 'languages_other_than_english',
+      ];
+      const profileInformationTouched = profileInformationFields.some((field) =>
+        Object.prototype.hasOwnProperty.call(fieldsToUpdate, field)
       );
 
       const cloudSqlUpdateData: {
@@ -1674,13 +2188,43 @@ export class DoulaController {
         cloudSqlUpdateData.scheduling_url = t.length ? t : null;
       }
 
-      const updatedMember = await this.cloudSqlTeamService.updateTeamMember(
+      let updatedMember = await this.cloudSqlTeamService.updateTeamMember(
         doulaId,
         cloudSqlUpdateData
       );
       if (!updatedMember || updatedMember.role !== 'doula') {
         res.status(404).json({ error: 'Profile not found' });
         return;
+      }
+
+      if (wasProfileRejected && profileInformationTouched) {
+        updatedMember =
+          (await this.cloudSqlTeamService.reviewDoulaProfile(
+            doulaId,
+            'pending'
+          )) ?? updatedMember;
+      }
+
+      const documentsAfterUpdate = await this.completenessService.getCompleteness(
+        doulaId
+      );
+      const profileIsComplete = this.isDoulaProfileComplete(
+        updatedMember,
+        documentsAfterUpdate
+      );
+      if (
+        profileIsComplete &&
+        ((!profileWasComplete && !wasProfileRejected) ||
+          (wasProfileRejected && profileInformationTouched))
+      ) {
+        if (updatedMember.profile_review_status !== 'pending') {
+          updatedMember =
+            (await this.cloudSqlTeamService.reviewDoulaProfile(
+              doulaId,
+              'pending'
+            )) ?? updatedMember;
+        }
+        await this.notifyDoulaProfileSubmitted(doulaId);
       }
 
       const reqUserJson = req.user?.toJSON?.() as any;
@@ -1741,6 +2285,7 @@ export class DoulaController {
       lastname: member.lastname,
       fullName: member.fullName,
       role: 'doula' as const,
+      phone: member.phone_number,
       phone_number: member.phone_number,
       address: member.address ?? '',
       city: member.city ?? '',
@@ -1755,6 +2300,8 @@ export class DoulaController {
       race_ethnicity_other: member.race_ethnicity_other ?? '',
       other_demographic_details: member.other_demographic_details ?? '',
       scheduling_url: member.scheduling_url ?? '',
+      profile_review_status: member.profile_review_status ?? 'draft',
+      profile_rejection_reason: member.profile_rejection_reason ?? null,
       availability_status: currentAvailability.status,
       availability_note: currentAvailability.reason,
       unavailable_from: currentAvailability.startAt,

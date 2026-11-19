@@ -4,6 +4,7 @@ import multer from 'multer';
 import { clientController, doulaController } from '../../../index';
 import authMiddleware from '../../../middleware/authMiddleware';
 import authorizeRoles from '../../../middleware/authorizeRoles';
+import { preserveTenantContext } from '../../../middleware/preserveTenantContext';
 
 const doulaRoutes: Router = express.Router();
 
@@ -38,8 +39,15 @@ doulaRoutes.post(
   '/documents',
   authMiddleware,
   (req, res, next) => authorizeRoles(req, res, next, ['doula']),
-  upload.single('file'),
+  preserveTenantContext(upload.single('file')),
   (req, res) => doulaController.uploadDocument(req, res)
+);
+
+doulaRoutes.get(
+  '/documents/local/*',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['doula']),
+  (req, res) => doulaController.getLocalDocument(req, res)
 );
 
 doulaRoutes.get(
@@ -139,7 +147,7 @@ doulaRoutes.post(
 doulaRoutes.get(
   '/clients/:clientId/activities',
   authMiddleware,
-  (req, res, next) => authorizeRoles(req, res, next, ['doula']),
+  (req, res, next) => authorizeRoles(req, res, next, ['admin', 'doula']),
   (req, res) => doulaController.getClientActivities(req, res)
 );
 
@@ -165,11 +173,18 @@ doulaRoutes.put(
   (req, res) => doulaController.updateMyProfile(req, res)
 );
 
+doulaRoutes.get(
+  '/profile/picture',
+  authMiddleware,
+  (req, res, next) => authorizeRoles(req, res, next, ['doula']),
+  (req, res) => doulaController.getProfilePicture(req, res)
+);
+
 doulaRoutes.post(
   '/profile/picture',
   authMiddleware,
   (req, res, next) => authorizeRoles(req, res, next, ['doula']),
-  profilePictureUpload.single('profile_picture'),
+  preserveTenantContext(profilePictureUpload.single('profile_picture')),
   (req, res) => doulaController.uploadProfilePicture(req, res)
 );
 

@@ -55,6 +55,7 @@ const fetchCalendarEventsFromCloudSql = async (
       `SELECT id, first_name, last_name, due_date
        FROM phi_clients
        WHERE due_date IS NOT NULL AND due_date >= $1
+         AND COALESCE(is_test, false) = false
        ORDER BY due_date ASC`,
       [todayIso]
     );
@@ -95,7 +96,11 @@ dashboardRoutes.get(
         monthlyRevenue,
       ] = await Promise.all([
         countRows('SELECT COUNT(*)::text AS count FROM public.doulas'),
-        countRows('SELECT COUNT(*)::text AS count FROM public.phi_clients'),
+        countRows(
+          `SELECT COUNT(*)::text AS count
+           FROM public.phi_clients
+           WHERE COALESCE(is_test, false) = false`
+        ),
         countRows(
           `SELECT COUNT(*)::text AS count
            FROM public.phi_contracts

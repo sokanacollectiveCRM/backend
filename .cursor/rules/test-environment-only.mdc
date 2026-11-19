@@ -1,0 +1,24 @@
+---
+description: Always use the isolated test Cloud Run stack, never production
+alwaysApply: true
+---
+
+# Test environment only
+
+This workspace is for the isolated test stack. Do not deploy, check, or change production unless the user explicitly says production.
+
+## Test services
+
+- API: `sokana-private-api-dev`
+- Dashboard: `sokana-front-end-dev`
+- Database: `sokana-phi-postgres-dev` / `sokana_private_dev`
+- Dashboard URL: `https://sokana-front-end-dev-46lcr3n2qa-uc.a.run.app`
+- API URL: `https://sokana-private-api-dev-46lcr3n2qa-uc.a.run.app`
+
+## Production names to avoid
+
+- `sokana-private-api`
+- `sokana-front-end`
+- `sokana-phi-postgres` / `sokana_private`
+
+A push to `main` updates production Cloud Build only. The test services stay on their last manual deploy until `scripts/dev-env/deploy-cloudrun.sh` and `scripts/dev-env/deploy-frontend.sh` are run.

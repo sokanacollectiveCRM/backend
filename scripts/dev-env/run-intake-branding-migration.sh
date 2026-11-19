@@ -63,6 +63,10 @@ fi
 
 run_sql "${MIG_DIR}/20261007_tenant_slug_sokana360_and_intake_branding.sql"
 
+if [[ -f "${MIG_DIR}/20261008_sokana360_logo_brand_colors.sql" ]]; then
+  run_sql "${MIG_DIR}/20261008_sokana360_logo_brand_colors.sql"
+fi
+
 dev_env_log "Verifying Sokana360 intake branding row"
 PGPASSWORD="${POSTGRES_PASSWORD}" psql \
   -h "${PROXY_ADDRESS}" \

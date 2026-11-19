@@ -150,7 +150,31 @@ For testing, we use [Jest](https://jestjs.io/) as our testing framework.
 development.
 
 ## Cloud Run verification
+
 - npm run build
 - PORT=8080 node dist/cloudrun.js
 - curl -i http://localhost:8080/health
 - Expect a single log line: "Cloud Run listening on 8080"
+
+## Repository layout
+
+- `src/features/`: feature-owned business code; remaining global layers are
+  being migrated incrementally.
+- `templates/`: contract source documents and reference variants.
+- `scripts/dev-env/`: isolated Cloud SQL + Cloud Run test stack (schema clone,
+  synthetic data). See `scripts/dev-env/README.md`.
+- `scripts/deploy.sh`: manual production deployment, run with
+  `bash scripts/deploy.sh`.
+- `scripts/sql/`: ad hoc SQL utilities; these are not automatically applied
+  migrations.
+- `scripts/legacy/`: older manual utilities retained for reference; review
+  before running against any database.
+- `docs/runbooks/`: operational documentation, including
+  [production readiness](docs/runbooks/PRODUCTION_READINESS.md).
+- `docs/debugging/`: troubleshooting prompts and guides.
+
+Run manual scripts from the repository root unless their instructions say
+otherwise. Keep package manifests, compiler/test/lint configuration,
+`Dockerfile`, and `cloudbuild.yaml` at the root for existing tool and deployment
+discovery. Generated output and local migration manifests are excluded from Git
+and build uploads.

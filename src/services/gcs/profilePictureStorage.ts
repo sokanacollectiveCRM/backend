@@ -25,11 +25,18 @@ export function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value.trim());
 }
 
-/**
- * Resolve a stored profile_picture value to something usable in <img src>.
- * - Legacy Supabase/public http(s) URLs pass through
- * - Relative GCS paths become short-lived signed URLs
- */
+/** Replace a stored profile path with a URL the browser can load. */
+export async function attachDisplayProfilePicture<
+  T extends { profile_picture?: unknown },
+>(record: T): Promise<T> {
+  const stored = record.profile_picture;
+  if (typeof stored !== 'string' || !stored.trim()) return record;
+  const displayUrl = await resolveProfilePictureUrl(stored);
+  if (!displayUrl) return record;
+  record.profile_picture = displayUrl;
+  return record;
+}
+
 export async function resolveProfilePictureUrl(
   stored: string | null | undefined,
   expiresInSeconds = 60 * 60

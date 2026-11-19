@@ -39,7 +39,9 @@ export interface AdminMatchInput {
  * Requires the client status `matching` and an existing doula row.
  * Does not check availability. An existing active assignment is 400.
  */
-export async function matchDoulaForAdmin<TClient extends { status: string }>(
+export async function matchDoulaForAdmin<
+  TClient extends { status: string; isTest?: boolean },
+>(
   deps: AdminMatchDeps<TClient>,
   input: AdminMatchInput
 ): Promise<AdminMatchResult<TClient>> {
@@ -85,6 +87,17 @@ export async function matchDoulaForAdmin<TClient extends { status: string }>(
       ok: false,
       status: 404,
       body: { success: false, error: 'Client not found' },
+    };
+  }
+
+  if (client.isTest === true) {
+    return {
+      ok: false,
+      status: 400,
+      body: {
+        success: false,
+        error: 'Test intake submissions are not available for matching.',
+      },
     };
   }
 

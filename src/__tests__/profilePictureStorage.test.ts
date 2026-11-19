@@ -3,6 +3,7 @@ import {
   uploadObject,
 } from '../services/gcs/documentStorage';
 import {
+  attachDisplayProfilePicture,
   isHttpUrl,
   resolveProfilePictureUrl,
   uploadProfilePictureObject,
@@ -55,6 +56,12 @@ describe('profilePictureStorage', () => {
       'profile-pictures/user-1/123_headshot.png',
       60 * 60
     );
+  });
+
+  it('replaces a stored path with a display url', async () => {
+    const user = { profile_picture: 'user-1/123_headshot.png' };
+    await attachDisplayProfilePicture(user);
+    expect(user.profile_picture).toBe('https://signed.example/profile.jpg');
   });
 
   it('detects http urls', () => {

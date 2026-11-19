@@ -11,8 +11,10 @@ import {
 } from '../../../domains/errors';
 import {
   TENANT_HEADER,
+  isPlatformSupportPrincipal,
   isTenancyEnforced,
   resolveTenantGate,
+  runWithTenant,
 } from '../../../features/tenancy';
 import { getSessionToken } from '../../../middleware/authMiddleware';
 import { ApiErrorCode } from '../../../security/errorCodes';
@@ -23,6 +25,7 @@ import {
 } from '../../../security/sessionCookies';
 import { CloudSqlTeamService } from '../../../services/cloudSqlTeamService';
 import { attachDisplayProfilePicture } from '../../../services/gcs/profilePictureStorage';
+import { CloudSqlIdentityUserService } from '../../../services/identityPlatform/cloudSqlIdentityUserService';
 import { EmailMfaChallengeService } from '../../../services/identityPlatform/emailMfaChallengeService';
 import {
   emailVerificationService,
@@ -153,8 +156,9 @@ export class AuthController {
         return;
       }
 
-      const { user: appUser } =
+      const resolved =
         await this.identityTokenService.resolveSessionUser(token);
+      let appUser = resolved.user;
       if (!appUser) {
         res.status(404).json({ error: 'User not found' });
         return;
@@ -162,21 +166,48 @@ export class AuthController {
 
       const requestedTenant = req.header(TENANT_HEADER);
       const gate = await resolveTenantGate({
-        userId: String(appUser.id || ''),
+        userId: resolved.firebaseUid || String(appUser.id || ''),
         email: appUser.email,
         requestedTenant: requestedTenant?.trim() || null,
         currentRole: appUser.role ? String(appUser.role) : null,
       });
       if (gate.action === 'deny') {
-        res.status(gate.status).json({
-          error: gate.error,
-          code: gate.code,
-          ...(gate.tenants ? { tenants: gate.tenants } : {}),
+        const platformSupport = await isPlatformSupportPrincipal({
+          userId: String(appUser.id || ''),
+          email: appUser.email,
         });
+        if (!platformSupport) {
+          res.status(gate.status).json({
+            error: gate.error,
+            code: gate.code,
+            ...(gate.tenants ? { tenants: gate.tenants } : {}),
+          });
+          return;
+        }
+        await attachDisplayProfilePicture(appUser);
+        const supportBody = appUser.toJSON() as Record<string, unknown>;
+        supportBody.platformSupport = true;
+        res.json(supportBody);
         return;
       }
 
-      await attachDisplayProfilePicture(appUser);
+      if (gate.action === 'attach' && isTenancyEnforced()) {
+        const scoped = await new CloudSqlIdentityUserService().findTenantUser(
+          { uid: resolved.firebaseUid, email: appUser.email },
+          gate.tenant
+        );
+        if (!scoped)
+          throw new AuthorizationError('Organization profile is unavailable');
+        scoped.emailVerified = resolved.emailVerified;
+        appUser = scoped;
+      }
+      if (gate.action === 'attach') {
+        await runWithTenant(gate.tenant.id, () =>
+          attachDisplayProfilePicture(appUser)
+        );
+      } else {
+        await attachDisplayProfilePicture(appUser);
+      }
       const body = appUser.toJSON() as Record<string, unknown>;
       if (gate.action === 'attach') {
         body.tenant = {
@@ -189,6 +220,10 @@ export class AuthController {
           body.role = gate.tenant.role;
         }
       }
+      body.platformSupport = await isPlatformSupportPrincipal({
+        userId: String(appUser.id || ''),
+        email: appUser.email,
+      });
       res.json(body);
     } catch (err: any) {
       const errorInfo = this.handleError(err, res);

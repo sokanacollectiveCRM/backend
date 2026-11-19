@@ -1,0 +1,89 @@
+# Build an isolated CRM frontend that calls sokana-private-api-dev.
+# Used by scripts/dev-env/deploy-frontend.sh. Do not point this at production.
+
+substitutions:
+  _SERVICE_NAME: sokana-front-end-dev
+  _DEPLOY_REGION: us-central1
+  _AR_HOSTNAME: us-central1-docker.pkg.dev
+  _AR_REPOSITORY: cloud-run-source-deploy
+  _VITE_APP_BACKEND_URL: https://sokana-private-api-dev-46lcr3n2qa-uc.a.run.app
+  _VITE_APP_FRONTEND_URL: https://sokana-front-end-dev-46lcr3n2qa-uc.a.run.app
+  _VITE_AUTH_MODE: identity
+  _VITE_FIREBASE_API_KEY: AIzaSyCYi0daAulf325svrrQllREnV087Gx5zGg
+  _VITE_FIREBASE_AUTH_DOMAIN: sokana-private-data.firebaseapp.com
+  _VITE_FIREBASE_PROJECT_ID: sokana-private-data
+  _VITE_FIREBASE_APP_ID: ''
+  _VITE_SUPABASE_URL: ''
+  _VITE_SUPABASE_ANON_KEY: ''
+  _VITE_QUICKBOOKS_PAYMENTS_TOKEN_ENDPOINT: ''
+  _VITE_QUICKBOOKS_PAYMENTS_SAVE_ENDPOINT: ''
+  _VITE_PAYMENT_AUTHORIZATION_FORM_URL: ''
+  _VITE_CLIENT_PORTAL_SERVICE_OUTCOMES_URL: ''
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: Build
+    args:
+      - build
+      - --no-cache
+      - -t
+      - ${_AR_HOSTNAME}/$PROJECT_ID/${_AR_REPOSITORY}/frontend/${_SERVICE_NAME}:$BUILD_ID
+      - --build-arg
+      - VITE_APP_BACKEND_URL=${_VITE_APP_BACKEND_URL}
+      - --build-arg
+      - VITE_APP_FRONTEND_URL=${_VITE_APP_FRONTEND_URL}
+      - --build-arg
+      - VITE_SUPABASE_URL=${_VITE_SUPABASE_URL}
+      - --build-arg
+      - VITE_SUPABASE_ANON_KEY=${_VITE_SUPABASE_ANON_KEY}
+      - --build-arg
+      - VITE_AUTH_MODE=${_VITE_AUTH_MODE}
+      - --build-arg
+      - VITE_FIREBASE_API_KEY=${_VITE_FIREBASE_API_KEY}
+      - --build-arg
+      - VITE_FIREBASE_AUTH_DOMAIN=${_VITE_FIREBASE_AUTH_DOMAIN}
+      - --build-arg
+      - VITE_FIREBASE_PROJECT_ID=${_VITE_FIREBASE_PROJECT_ID}
+      - --build-arg
+      - VITE_FIREBASE_APP_ID=${_VITE_FIREBASE_APP_ID}
+      - --build-arg
+      - VITE_QUICKBOOKS_PAYMENTS_TOKEN_ENDPOINT=${_VITE_QUICKBOOKS_PAYMENTS_TOKEN_ENDPOINT}
+      - --build-arg
+      - VITE_QUICKBOOKS_PAYMENTS_SAVE_ENDPOINT=${_VITE_QUICKBOOKS_PAYMENTS_SAVE_ENDPOINT}
+      - --build-arg
+      - VITE_PAYMENT_AUTHORIZATION_FORM_URL=${_VITE_PAYMENT_AUTHORIZATION_FORM_URL}
+      - --build-arg
+      - VITE_CLIENT_PORTAL_SERVICE_OUTCOMES_URL=${_VITE_CLIENT_PORTAL_SERVICE_OUTCOMES_URL}
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    id: Push
+    args:
+      - push
+      - ${_AR_HOSTNAME}/$PROJECT_ID/${_AR_REPOSITORY}/frontend/${_SERVICE_NAME}:$BUILD_ID
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    id: Deploy
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        gcloud run deploy ${_SERVICE_NAME} \
+          --project "$PROJECT_ID" \
+          --region ${_DEPLOY_REGION} \
+          --image ${_AR_HOSTNAME}/$PROJECT_ID/${_AR_REPOSITORY}/frontend/${_SERVICE_NAME}:$BUILD_ID \
+          --platform managed \
+          --ingress all \
+          --no-invoker-iam-check \
+          --cpu 1 \
+          --memory 512Mi \
+          --min-instances 0 \
+          --max-instances 2 \
+          --quiet
+
+images:
+  - ${_AR_HOSTNAME}/$PROJECT_ID/${_AR_REPOSITORY}/frontend/${_SERVICE_NAME}:$BUILD_ID
+
+options:
+  logging: CLOUD_LOGGING_ONLY

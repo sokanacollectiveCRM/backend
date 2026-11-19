@@ -1,4 +1,6 @@
 import { Bucket, Storage } from '@google-cloud/storage';
+import fs from 'fs/promises';
+import path from 'path';
 
 import { optionalEnv } from '../../config/env';
 
@@ -19,6 +21,25 @@ export const GCS_PREFIX = {
 } as const;
 
 let storageClient: Storage | null = null;
+
+/** Opt-in local-only object store. Never enabled in production. */
+function localStorageRoot(objectName: string): string | null {
+  const configured = optionalEnv('GCS_LOCAL_STORAGE_DIR');
+  if (
+    !configured ||
+    process.env.NODE_ENV === 'production' ||
+    !objectName.startsWith(`${GCS_PREFIX.doulaDocuments}/`)
+  ) return null;
+  return path.resolve(configured);
+}
+
+function localObjectPath(root: string, objectName: string): string {
+  const resolved = path.resolve(root, objectName);
+  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
+    throw new Error('Invalid object path');
+  }
+  return resolved;
+}
 
 function getStorage(): Storage {
   if (!storageClient) {
@@ -41,6 +62,16 @@ export function objectPath(prefix: string, relativePath: string): string {
 }
 
 export async function downloadObject(objectName: string): Promise<Buffer> {
+  const localRoot = localStorageRoot(objectName);
+  if (localRoot) {
+    try {
+      return await fs.readFile(localObjectPath(localRoot, objectName));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      // Documents uploaded before local storage was enabled remain in GCS.
+      // The calling admin/doula route performs authorization before reaching here.
+    }
+  }
   const [buf] = await getDocumentsBucket().file(objectName).download();
   return buf;
 }
@@ -51,6 +82,21 @@ export async function uploadObject(
   contentType: string,
   upsert = true
 ): Promise<void> {
+  const localRoot = localStorageRoot(objectName);
+  if (localRoot) {
+    const destination = localObjectPath(localRoot, objectName);
+    await fs.mkdir(path.dirname(destination), { recursive: true });
+    if (!upsert) {
+      try {
+        await fs.access(destination);
+        throw new Error(`Object already exists: ${objectName}`);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+    }
+    await fs.writeFile(destination, data, { flag: upsert ? 'w' : 'wx' });
+    return;
+  }
   const file = getDocumentsBucket().file(objectName);
   if (!upsert) {
     const [exists] = await file.exists();
@@ -80,6 +126,15 @@ export async function uploadObjectWithMetadata(
   contentType: string,
   options: { upsert?: boolean; metadata?: Record<string, string> } = {}
 ): Promise<UploadedObjectMetadata> {
+  const localRoot = localStorageRoot(objectName);
+  if (localRoot) {
+    const destination = localObjectPath(localRoot, objectName);
+    await fs.mkdir(path.dirname(destination), { recursive: true });
+    await fs.writeFile(destination, data, {
+      flag: options.upsert === false ? 'wx' : 'w',
+    });
+    return { generation: null, size: data.length };
+  }
   const file = getDocumentsBucket().file(objectName);
   await file.save(data, {
     contentType,
@@ -100,6 +155,11 @@ export async function uploadObjectWithMetadata(
 }
 
 export async function deleteObject(objectName: string): Promise<void> {
+  const localRoot = localStorageRoot(objectName);
+  if (localRoot) {
+    await fs.rm(localObjectPath(localRoot, objectName), { force: true });
+    return;
+  }
   await getDocumentsBucket().file(objectName).delete({ ignoreNotFound: true });
 }
 
@@ -132,6 +192,11 @@ export async function getSignedReadUrl(
   objectName: string,
   expiresInSeconds = 15 * 60
 ): Promise<string> {
+  const localRoot = localStorageRoot(objectName);
+  if (localRoot) {
+    const base = optionalEnv('GCS_LOCAL_BASE_URL') ?? 'http://localhost:8080';
+    return `${base.replace(/\/$/, '')}/api/doulas/documents/local/${encodeURIComponent(objectName)}`;
+  }
   const [url] = await getDocumentsBucket()
     .file(objectName)
     .getSignedUrl({

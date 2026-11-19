@@ -36,6 +36,7 @@ import requestRouter from './routes/requestRoute';
 import userRoutes from './routes/specificUserRoutes';
 import { ApiErrorCode } from './security/errorCodes';
 import { loginBodySchema } from './security/requestSchemas';
+import { createSigningReminderCronRouter } from './features/contracts/http/signingReminderCron';
 import { deprecateAlias } from './security/routeDeprecationTelemetry';
 
 const app: Express = express();
@@ -69,6 +70,7 @@ const corsOptions = {
     'X-Session-Token',
     'X-Signing-Session',
     'Idempotency-Key',
+    'X-Profile-Autosave',
   ],
   credentials: true, // Required for HttpOnly sokana_session_token cookie cross-origin
   maxAge: 86400,
@@ -125,6 +127,7 @@ app.post(
   (req, res) => authController.login(req, res)
 );
 app.use('/auth', asMiddleware(authRoutes));
+app.use('/internal/cron', createSigningReminderCronRouter());
 if (nativeContracts.enabled) {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const native = require('./features/contracts/composition');
