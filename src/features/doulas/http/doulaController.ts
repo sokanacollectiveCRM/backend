@@ -42,6 +42,7 @@ import {
   isSensitiveDocument,
   readBackgroundCheck,
 } from '../application/backgroundCheck';
+import { sendDocumentReviewEmail } from '../application/documentReviewEmail';
 import { submitDoulaProfile } from '../application/submitDoulaProfile';
 import { PROFILE_REQUIREMENTS } from '../domain/documentPolicy';
 import {
@@ -667,6 +668,24 @@ export class DoulaController {
         adminId,
         status === 'rejected' ? rejection_reason : undefined
       );
+
+      const { rows: doulaRows } = await getPool().query<{
+        email: string;
+        full_name: string;
+      }>(
+        'SELECT email, full_name FROM public.doulas WHERE id=$1::uuid AND tenant_id=$2::uuid',
+        [doulaId, req.tenant?.id ?? null]
+      );
+      const doula = doulaRows[0];
+      if (doula?.email) {
+        await sendDocumentReviewEmail({
+          email: doula.email,
+          fullName: doula.full_name,
+          status,
+          rejectionReason:
+            status === 'rejected' ? rejection_reason.trim() : undefined,
+        });
+      }
 
       res.json({
         success: true,
