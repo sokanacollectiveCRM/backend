@@ -1,6 +1,7 @@
 import { DoulaController } from '../controllers/doulaController';
 import { getPool } from '../db/cloudSqlPool';
 import { DOCUMENT_TYPE_ERROR } from '../security/documentUpload';
+import { NodemailerService } from '../services/emailService';
 import { DOCUMENT_FIXTURES } from '../test/fixtures/documentFiles';
 import { type AuthRequest, ROLE } from '../types';
 
@@ -12,6 +13,7 @@ jest.mock('../services/cloudSqlTeamService', () => ({
 }));
 
 jest.mock('../db/cloudSqlPool', () => ({ getPool: jest.fn() }));
+jest.mock('../services/emailService', () => ({ NodemailerService: jest.fn() }));
 
 describe('DoulaController.uploadDocument document types', () => {
   beforeEach(() => {
@@ -305,52 +307,95 @@ describe('DoulaController.uploadDocument document types', () => {
     expect(repo.deleteDocument).not.toHaveBeenCalled();
     expect(upload.deleteDocument).not.toHaveBeenCalled();
   });
-  it('persists a pending replacement before removing the old file', async () => {
-    const events: string[] = [];
-    const repo = {
-      getCurrentDocumentByType: jest
-        .fn()
-        .mockResolvedValue({
+  it.each([
+    ['rejected', true, 2],
+    ['rejected', false, 0],
+    ['approved', true, 0],
+  ])(
+    'handles replacement of a %s document (removed: %s)',
+    async (status, replaced, emailCount) => {
+      const events: string[] = [];
+      const sendEmail = jest.fn().mockImplementation(async () => {
+        events.push('email');
+      });
+      (NodemailerService as jest.Mock).mockImplementation(() => ({
+        sendEmail,
+      }));
+      const query = jest.fn().mockImplementation(async (sql: string) => ({
+        rows: sql.includes('FROM public.tenant_settings')
+          ? [{ email: 'admin@example.test' }]
+          : [{ id: doulaId }],
+      }));
+      (getPool as jest.Mock).mockReturnValue({ query });
+      const repo = {
+        getCurrentDocumentByType: jest.fn().mockResolvedValue({
           id: 'old-document',
           filePath: 'fictional/old.pdf',
+          status,
         }),
-      createDocument: jest.fn().mockImplementation(async () => {
-        events.push('persist');
-        return {
-          id: 'new-document',
-          filePath: 'fictional/new.pdf',
-          status: 'uploaded',
-        };
-      }),
-      deleteDocument: jest
-        .fn()
-        .mockImplementation(async () => events.push('remove-old-row')),
-      getSignedUrl: jest
-        .fn()
-        .mockResolvedValue('https://fictional.example/signed'),
-    };
-    const upload = {
-      uploadDocument: jest.fn().mockImplementation(async () => {
-        events.push('store');
-        return { filePath: 'fictional/new.pdf', fileName: 'fictional-new.pdf' };
-      }),
-      deleteDocument: jest
-        .fn()
-        .mockImplementation(async () => events.push('remove-old-file')),
-    };
-    const controller = buildController({ repo, upload });
-    const res = buildRes();
-    await controller.uploadDocument(buildReq('direct_deposit_form'), res);
-    expect(events).toEqual([
-      'store',
-      'persist',
-      'remove-old-row',
-      'remove-old-file',
-    ]);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({
-        document: expect.objectContaining({ status: 'uploaded' }),
-      })
-    );
-  });
+        createDocument: jest.fn().mockImplementation(async () => {
+          events.push('persist');
+          return {
+            id: 'new-document',
+            filePath: 'fictional/new.pdf',
+            status: 'uploaded',
+          };
+        }),
+        deleteDocument: jest.fn().mockImplementation(async () => {
+          events.push('remove-old-row');
+          return replaced;
+        }),
+        getSignedUrl: jest
+          .fn()
+          .mockResolvedValue('https://fictional.example/signed'),
+      };
+      const upload = {
+        uploadDocument: jest.fn().mockImplementation(async () => {
+          events.push('store');
+          return {
+            filePath: 'fictional/new.pdf',
+            fileName: 'fictional-new.pdf',
+          };
+        }),
+        deleteDocument: jest
+          .fn()
+          .mockImplementation(async () => events.push('remove-old-file')),
+      };
+      const controller = buildController({ repo, upload });
+      const res = buildRes();
+      const req = buildReq('direct_deposit_form');
+      req.user!.email = 'DOULA@example.test';
+      req.tenant = { id: 'tenant-id' } as AuthRequest['tenant'];
+      await controller.uploadDocument(req, res);
+      expect(events).toEqual([
+        'store',
+        'persist',
+        'remove-old-row',
+        'remove-old-file',
+        ...Array(emailCount).fill('email'),
+      ]);
+      expect(sendEmail).toHaveBeenCalledTimes(emailCount);
+      if (emailCount) {
+        expect(query).toHaveBeenCalledWith(
+          expect.stringContaining('FROM public.tenant_settings'),
+          ['tenant-id']
+        );
+        expect(sendEmail).toHaveBeenCalledWith(
+          'admin@example.test',
+          'Sokana360: Replacement document ready for review',
+          expect.stringContaining(`/team?review=${doulaId}`)
+        );
+        expect(sendEmail).toHaveBeenCalledWith(
+          'doula@example.test',
+          'Sokana360: Replacement document received',
+          expect.stringContaining('/doula-dashboard/profile?step=documents')
+        );
+      }
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          document: expect.objectContaining({ status: 'uploaded' }),
+        })
+      );
+    }
+  );
 });

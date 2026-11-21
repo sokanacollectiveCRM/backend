@@ -8,7 +8,10 @@ import {
   backgroundCheckSatisfied,
 } from '../domain/documentPolicy';
 import { isValidPhone, missingProfileFields } from '../domain/profile';
-import { deliverProfileReviewEmails } from './profileReviewEmail';
+import {
+  deliverProfileReviewEmails,
+  findDoulaReviewAdminEmails,
+} from './profileReviewEmail';
 
 type ReviewAction = 'submitted' | 'changes_requested' | 'approved';
 export async function transitionDoulaProfile(input: {
@@ -111,13 +114,7 @@ export async function transitionDoulaProfile(input: {
           );
       }
     }
-    const recipients = await client.query(
-      `SELECT lower(trim(intake_notification_email)) AS email FROM public.tenant_settings
-       WHERE tenant_id=$1::uuid AND NULLIF(trim(intake_notification_email),'') IS NOT NULL
-       UNION SELECT lower(trim(email)) AS email FROM public.admins
-       WHERE tenant_id=$1::uuid AND NULLIF(trim(email),'') IS NOT NULL`,
-      [input.tenantId]
-    );
+    const recipients = await findDoulaReviewAdminEmails(client, input.tenantId);
     if (!recipients.rows.length || !profile.email)
       throw new ValidationError(
         'An admin email and doula email are required for review notifications.'

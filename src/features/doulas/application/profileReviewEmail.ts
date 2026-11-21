@@ -1,5 +1,20 @@
+import type { PoolClient } from 'pg';
+
 import { getPool } from '../../../db/cloudSqlPool';
 import { NodemailerService } from '../../../services/emailService';
+
+export function findDoulaReviewAdminEmails(
+  database: Pick<PoolClient, 'query'>,
+  tenantId: string
+) {
+  return database.query<{ email: string }>(
+    `SELECT lower(trim(intake_notification_email)) AS email FROM public.tenant_settings
+     WHERE tenant_id=$1::uuid AND NULLIF(trim(intake_notification_email),'') IS NOT NULL
+     UNION SELECT lower(trim(email)) AS email FROM public.admins
+     WHERE tenant_id=$1::uuid AND NULLIF(trim(email),'') IS NOT NULL`,
+    [tenantId]
+  );
+}
 
 /** Durable queue: concurrent workers cannot deliver the same row simultaneously. */
 export async function deliverProfileReviewEmails(
