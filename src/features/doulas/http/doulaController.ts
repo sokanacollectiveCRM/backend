@@ -42,7 +42,10 @@ import {
   isSensitiveDocument,
   readBackgroundCheck,
 } from '../application/backgroundCheck';
-import { sendDocumentReviewEmail } from '../application/documentReviewEmail';
+import {
+  sendDocumentReplacementEmails,
+  sendDocumentReviewEmail,
+} from '../application/documentReviewEmail';
 import { submitDoulaProfile } from '../application/submitDoulaProfile';
 import { PROFILE_REQUIREMENTS } from '../domain/documentPolicy';
 import {
@@ -270,11 +273,21 @@ export class DoulaController {
       });
 
       if (existingDoc) {
-        await this.documentRepository.deleteDocument(existingDoc.id);
+        const replaced = await this.documentRepository.deleteDocument(
+          existingDoc.id
+        );
         // Storage cleanup must not turn a persisted replacement into an error.
         await this.uploadService
           .deleteDocument(existingDoc.filePath)
           .catch(() => undefined);
+
+        if (replaced && existingDoc.status === 'rejected' && !adminTargetId) {
+          await sendDocumentReplacementEmails({
+            doulaId,
+            email: req.user?.email,
+            tenantId: req.tenant?.id,
+          });
+        }
       }
 
       // Generate signed URL for the response (valid for 1 hour)

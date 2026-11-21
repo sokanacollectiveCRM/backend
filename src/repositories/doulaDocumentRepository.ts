@@ -182,8 +182,8 @@ export class DoulaDocumentRepository {
     return Array.from(byType.values());
   }
 
-  async deleteDocument(documentId: string): Promise<void> {
-    await queryCloudSql(
+  async deleteDocument(documentId: string): Promise<boolean> {
+    const { rowCount } = await queryCloudSql(
       `
       WITH invalidated AS (
         UPDATE public.doulas SET profile_review_status=CASE WHEN profile_review_status IN ('approved','submitted') THEN 'draft' ELSE profile_review_status END,
@@ -195,6 +195,7 @@ export class DoulaDocumentRepository {
       `,
       [documentId]
     );
+    return Boolean(rowCount);
   }
 
   async updateDocumentMetadata(

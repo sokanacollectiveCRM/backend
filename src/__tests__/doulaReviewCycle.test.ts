@@ -5,6 +5,7 @@ import * as documentPolicy from '../features/doulas/domain/documentPolicy';
 
 jest.mock('../db/cloudSqlPool', () => ({ getPool: jest.fn() }));
 jest.mock('../features/doulas/application/profileReviewEmail', () => ({
+  ...jest.requireActual('../features/doulas/application/profileReviewEmail'),
   deliverProfileReviewEmails: jest.fn().mockResolvedValue(undefined),
 }));
 const query = jest.fn(),
