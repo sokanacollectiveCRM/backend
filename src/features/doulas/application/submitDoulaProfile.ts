@@ -56,6 +56,10 @@ export async function transitionDoulaProfile(input: {
         'This profile has changed. Refresh it before reviewing.'
       );
     }
+    if (input.action !== 'submitted' && !profile.profile_submitted_at)
+      throw new ValidationError(
+        'This profile cannot be reviewed until the doula completes onboarding and submits it.'
+      );
     if (
       input.action === 'submitted' &&
       !['draft', 'changes_requested'].includes(state)

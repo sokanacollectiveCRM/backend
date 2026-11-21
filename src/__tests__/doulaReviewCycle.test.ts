@@ -108,6 +108,7 @@ it('completes submit, request changes, resubmit, approve and queues both recipie
 });
 it('requires a reason and the latest review version', async () => {
   profile.profile_review_status = 'submitted';
+  profile.profile_submitted_at = new Date().toISOString();
   profile.profile_review_version = 1;
   await expect(
     run('changes_requested', { reason: ' ', expectedVersion: 1 })
@@ -118,17 +119,18 @@ it('requires a reason and the latest review version', async () => {
   await expect(run('approved')).rejects.toThrow('changed');
   expect(deliverProfileReviewEmails).not.toHaveBeenCalled();
 });
-it('allows approval before submission but still requires certificate approval', async () => {
-  await run('approved', { expectedVersion: 0 });
-  expect(profile.profile_review_status).toBe('approved');
-  expect(profile.profile_submitted_at).toBeNull();
-
-  profile.profile_review_status = 'draft';
-  profile.profile_review_version = 0;
-  certificate = false;
+it('blocks approval and requested changes before the doula submits onboarding', async () => {
   await expect(run('approved', { expectedVersion: 0 })).rejects.toThrow(
-    'training certificate'
+    'cannot be reviewed'
   );
+  await expect(
+    run('changes_requested', {
+      reason: 'Please correct your bio.',
+      expectedVersion: 0,
+    })
+  ).rejects.toThrow('cannot be reviewed');
+  expect(profile.profile_review_status).toBe('draft');
+  expect(profile.profile_submitted_at).toBeNull();
 });
 it('requires complete fields and resolved rejected documents before resubmission', async () => {
   profile.profile_review_status = 'changes_requested';
@@ -189,7 +191,10 @@ it.each(['submitted', 'changes_requested', 'approved'] as const)(
       }
       return original(sql, args);
     });
-    if (action !== 'submitted') profile.profile_review_status = 'submitted';
+    if (action !== 'submitted') {
+      profile.profile_review_status = 'submitted';
+      profile.profile_submitted_at = new Date().toISOString();
+    }
     await run(action, {
       expectedVersion: 0,
       reason: 'Please update your bio.',
@@ -212,6 +217,7 @@ it('blocks submission and approval until HR clears the background check', async 
   profile.background_check_status = 'not_cleared';
   await expect(run('submitted')).rejects.toThrow('background check');
   profile.profile_review_status = 'submitted';
+  profile.profile_submitted_at = new Date().toISOString();
   await expect(run('approved', { expectedVersion: 0 })).rejects.toThrow(
     'background check'
   );
@@ -232,6 +238,7 @@ it.each(['w9', 'direct_deposit_form', 'training_certificate'])(
     });
     await expect(run('submitted')).rejects.toThrow('Required');
     profile.profile_review_status = 'submitted';
+    profile.profile_submitted_at = new Date().toISOString();
     await expect(run('approved', { expectedVersion: 0 })).rejects.toThrow(
       'Required'
     );
