@@ -74,6 +74,7 @@ const corsOptions = {
     'X-Session-Token',
     'X-Tenant-Id',
     'X-Signing-Session',
+    'X-Profile-Autosave',
     'Idempotency-Key',
   ],
   credentials: true, // Required for HttpOnly sokana_session_token cookie cross-origin
