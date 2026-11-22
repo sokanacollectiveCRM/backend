@@ -33,6 +33,7 @@ import { getFirebaseAuth } from '../../../services/identityPlatform/firebaseAdmi
 import { IdentityPlatformTokenService } from '../../../services/identityPlatform/identityPlatformTokenService';
 import { AuthRequest, LoginBody, ROLE, SignupBody } from '../../../types';
 import { AuthUseCase } from '../../../usecase/authUseCase.js';
+import { sendPasswordResetEmailIfAccountExists } from '../application/passwordResetEmail';
 
 export class AuthController {
   private authUseCase: AuthUseCase;
@@ -524,9 +525,15 @@ export class AuthController {
   // returns:
   //    None
   //
-  async requestPasswordReset(_req: Request, res: Response): Promise<void> {
-    res.status(410).json({
-      error: 'Password reset is handled by Firebase.',
+  async requestPasswordReset(req: Request, res: Response): Promise<void> {
+    try {
+      await sendPasswordResetEmailIfAccountExists(req.body?.email);
+    } catch {
+      // Keep the public response generic so account existence and provider
+      // delivery details cannot be inferred from this endpoint.
+    }
+    res.status(202).json({
+      message: 'If an account exists, password reset instructions were sent.',
     });
   }
 
