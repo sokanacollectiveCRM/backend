@@ -89,7 +89,10 @@ export async function transitionDoulaProfile(input: {
         throw new ValidationError(
           'Complete your name, phone number, address, and bio before submitting.'
         );
-      if (!backgroundCheckSatisfied(profile.background_check_status))
+      if (
+        input.action === 'approved' &&
+        !backgroundCheckSatisfied(profile.background_check_status)
+      )
         throw new ValidationError(
           'HR/payroll must mark the background check Cleared before profile review.'
         );

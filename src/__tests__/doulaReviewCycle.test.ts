@@ -213,19 +213,23 @@ it.each(['submitted', 'changes_requested', 'approved'] as const)(
   }
 );
 
-it('blocks submission and approval until HR clears the background check', async () => {
+it('submits and emails both sides before clearance but blocks approval until HR clears the background check', async () => {
   profile.background_check_status = 'not_cleared';
-  await expect(run('submitted')).rejects.toThrow('background check');
-  profile.profile_review_status = 'submitted';
-  profile.profile_submitted_at = new Date().toISOString();
-  await expect(run('approved', { expectedVersion: 0 })).rejects.toThrow(
+  await run('submitted');
+  expect(profile.profile_review_status).toBe('submitted');
+  expect(
+    query.mock.calls
+      .filter(([sql]) => sql.includes('INSERT INTO public.doula_review_emails'))
+      .map(([, args]) => args[1])
+  ).toEqual(['maya@example.com', 'admin@example.com']);
+  await expect(run('approved', { expectedVersion: 1 })).rejects.toThrow(
     'background check'
   );
   expect(
-    query.mock.calls.some(([sql]) =>
+    query.mock.calls.filter(([sql]) =>
       sql.includes('INSERT INTO public.doula_profile_reviews')
     )
-  ).toBe(false);
+  ).toHaveLength(1);
 });
 it.each(['w9', 'direct_deposit_form', 'training_certificate'])(
   'requires configured %s at submission and approval',
@@ -247,14 +251,16 @@ it.each(['w9', 'direct_deposit_form', 'training_certificate'])(
 
 it('follows the clearance config flag when clearance becomes optional', async () => {
   profile.background_check_status = 'not_cleared';
+  profile.profile_review_status = 'submitted';
+  profile.profile_submitted_at = new Date().toISOString();
   const property = jest.replaceProperty(
     documentPolicy,
     'BACKGROUND_CHECK_REQUIRED',
     false
   );
   try {
-    await run('submitted');
-    expect(profile.profile_review_status).toBe('submitted');
+    await run('approved', { expectedVersion: 0 });
+    expect(profile.profile_review_status).toBe('approved');
   } finally {
     property.restore();
   }
