@@ -52,6 +52,57 @@ describe('P-15 doula phone validation', () => {
       'phone_number'
     );
   });
+  it('accepts incomplete draft fields only for profile autosave', async () => {
+    const controller = Object.create(DoulaController.prototype) as any;
+    controller.cloudSqlTeamService = {
+      updateTeamMember: jest.fn().mockResolvedValue({
+        id: 'fictional',
+        role: 'doula',
+        firstname: '',
+        lastname: '',
+        email: 'fictional@example.com',
+      }),
+    };
+    controller.doulaAvailabilityService = {
+      getCurrentAvailabilityStatus: jest.fn().mockResolvedValue(null),
+    };
+    const res: any = { json: jest.fn(), status: jest.fn().mockReturnThis() };
+
+    await controller.updateMyProfile(
+      {
+        user: { id: 'fictional', toJSON: () => ({}) },
+        body: {
+          phone_number: '555-',
+          address: '',
+          city: '',
+          state: '',
+          zip_code: '',
+          bio: '',
+        },
+        get: (name: string) =>
+          name.toLowerCase() === 'x-profile-autosave' ? 'true' : undefined,
+      },
+      res
+    );
+
+    expect(
+      controller.cloudSqlTeamService.updateTeamMember
+    ).toHaveBeenCalledWith(
+      'fictional',
+      expect.objectContaining({
+        phone_number: '555',
+        address: '',
+        city: '',
+        state: '',
+        zip_code: '',
+        bio: '',
+      })
+    );
+    expect(res.status).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ success: true })
+    );
+  });
   it.each(['submitted', 'approved'] as const)(
     'blocks %s without a phone, including an already submitted profile',
     async (action) => {

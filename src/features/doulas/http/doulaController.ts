@@ -1779,18 +1779,21 @@ export class DoulaController {
         res.status(401).json({ error: 'Unauthorized' });
         return;
       }
+      const isAutosave = req.get?.('x-profile-autosave') === 'true';
       // Validate before filtering nulls: explicit clearing of required address
       // fields must fail for ordinary saves as well as review submissions.
-      for (const [field, label] of [
-        ['address', 'Address'],
-        ['city', 'City'],
-        ['state', 'State'],
-        ['zip_code', 'ZIP code'],
-      ] as const) {
-        if (Object.prototype.hasOwnProperty.call(req.body || {}, field)) {
-          const value = req.body[field];
-          if (typeof value !== 'string' || !value.trim()) {
-            throw new ValidationError(`${label} is required.`);
+      if (!isAutosave) {
+        for (const [field, label] of [
+          ['address', 'Address'],
+          ['city', 'City'],
+          ['state', 'State'],
+          ['zip_code', 'ZIP code'],
+        ] as const) {
+          if (Object.prototype.hasOwnProperty.call(req.body || {}, field)) {
+            const value = req.body[field];
+            if (typeof value !== 'string' || !value.trim()) {
+              throw new ValidationError(`${label} is required.`);
+            }
           }
         }
       }
@@ -1854,13 +1857,27 @@ export class DoulaController {
         cloudSqlUpdateData.fullName = String(fieldsToUpdate.fullName);
       if (fieldsToUpdate.email !== undefined)
         cloudSqlUpdateData.email = String(fieldsToUpdate.email);
-      // Profile saves require a phone even for accounts created before P-15.
-      // Login and read endpoints remain compatible with a missing phone.
-      cloudSqlUpdateData.phone_number = normalizePhone(
-        Object.prototype.hasOwnProperty.call(req.body || {}, 'phone_number')
-          ? req.body.phone_number
-          : req.body?.phone
-      );
+      // Autosave accepts an incomplete phone while the doula is still typing.
+      // Explicit saves and review submission continue to require ten digits.
+      const phoneValue = Object.prototype.hasOwnProperty.call(
+        req.body || {},
+        'phone_number'
+      )
+        ? req.body.phone_number
+        : req.body?.phone;
+      if (isAutosave) {
+        if (phoneValue !== undefined) {
+          const phoneDraft = String(phoneValue).trim();
+          if (phoneDraft.length > 20 || !/^[0-9-]*$/.test(phoneDraft)) {
+            throw new ValidationError('Enter a 10-digit phone number');
+          }
+          cloudSqlUpdateData.phone_number = phoneDraft.replace(/-/g, '');
+        }
+      } else {
+        // Profile saves require a phone even for accounts created before P-15.
+        // Login and read endpoints remain compatible with a missing phone.
+        cloudSqlUpdateData.phone_number = normalizePhone(phoneValue);
+      }
       if (fieldsToUpdate.address !== undefined)
         cloudSqlUpdateData.address = fieldsToUpdate.address;
       if (fieldsToUpdate.city !== undefined)
@@ -1884,12 +1901,12 @@ export class DoulaController {
       }
       if (fieldsToUpdate.bio !== undefined) {
         if (
-          typeof fieldsToUpdate.bio !== 'string' ||
-          !fieldsToUpdate.bio.trim()
+          !isAutosave &&
+          (typeof fieldsToUpdate.bio !== 'string' || !fieldsToUpdate.bio.trim())
         ) {
           throw new ValidationError('Bio is required.');
         }
-        cloudSqlUpdateData.bio = fieldsToUpdate.bio.trim();
+        cloudSqlUpdateData.bio = String(fieldsToUpdate.bio).trim();
       }
       if (fieldsToUpdate.gender !== undefined) {
         const g = String(fieldsToUpdate.gender).trim();
