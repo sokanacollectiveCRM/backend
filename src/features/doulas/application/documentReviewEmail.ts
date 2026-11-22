@@ -24,11 +24,11 @@ export function buildDocumentReviewEmail(input: DocumentReviewEmailInput): {
       : 'Sokana360: Document changes requested';
   const result =
     input.status === 'approved'
-      ? 'One of your uploaded documents has been approved.'
-      : `One of your uploaded documents needs changes.\n\nReason:\n${input.rejectionReason?.trim()}`;
+      ? 'The Sokana team reviewed and approved one of your uploaded documents.'
+      : `The Sokana team reviewed one of your uploaded documents and requested changes.\n\nReason:\n${input.rejectionReason?.trim()}`;
   return {
     subject,
-    body: `Hi ${input.fullName.trim() || 'there'},\n\n${result}\n\nReview your documents: ${base}/doula-dashboard/profile?step=documents\n\nSokana360`,
+    body: `Hello ${input.fullName.trim().split(/\s+/)[0] || 'Doula'},\n\n${result}\n\nReview your documents: ${base}/doula-dashboard/profile?step=documents\n\nSokana360`,
   };
 }
 
@@ -58,6 +58,7 @@ export async function sendDocumentReviewEmail(
 export async function sendDocumentReplacementEmails(input: {
   doulaId: string;
   email?: string;
+  fullName?: string;
   tenantId?: string;
 }): Promise<void> {
   const base = (process.env.FRONTEND_URL || 'http://localhost:3001').replace(
@@ -65,6 +66,8 @@ export async function sendDocumentReplacementEmails(input: {
     ''
   );
   const email = input.email?.trim().toLowerCase();
+  const fullName = input.fullName?.trim() || 'The doula';
+  const firstName = fullName.split(/\s+/)[0] || 'Doula';
   const send = async (recipient: string, subject: string, body: string) =>
     new NodemailerService().sendEmail(recipient, subject, body);
 
@@ -83,7 +86,7 @@ export async function sendDocumentReplacementEmails(input: {
         send(
           recipient,
           'Sokana360: Replacement document ready for review',
-          `A doula uploaded a replacement for a rejected document. The new document is ready for review.\n\nReview in Teams: ${base}/team?review=${encodeURIComponent(input.doulaId)}\n\nSokana360`
+          `Hello Sokana team,\n\n${fullName} uploaded a replacement for a rejected document. The replacement is ready for admin review.\n\nReview in Teams: ${base}/team?review=${encodeURIComponent(input.doulaId)}\n\nSokana360`
         )
       )
     );
@@ -97,7 +100,7 @@ export async function sendDocumentReplacementEmails(input: {
     await send(
       email,
       'Sokana360: Replacement document received',
-      `We received your replacement document. It is ready for review.\n\nView your documents: ${base}/doula-dashboard/profile?step=documents\n\nSokana360`
+      `Hello ${firstName},\n\nWe received your replacement document. You completed the replacement upload, and the document has been sent to the Sokana team for review.\n\nView your documents: ${base}/doula-dashboard/profile?step=documents\n\nSokana360`
     );
   };
 

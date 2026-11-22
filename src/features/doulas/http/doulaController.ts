@@ -285,6 +285,8 @@ export class DoulaController {
           await sendDocumentReplacementEmails({
             doulaId,
             email: req.user?.email,
+            fullName:
+              `${req.user?.firstname ?? ''} ${req.user?.lastname ?? ''}`.trim(),
             tenantId: req.tenant?.id,
           });
         }

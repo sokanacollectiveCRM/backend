@@ -166,20 +166,60 @@ export async function transitionDoulaProfile(input: {
     const profileUrl = `${base}/doula-dashboard/profile`;
     const resubmitted =
       input.action === 'submitted' && state === 'changes_requested';
-    const subject =
+    const doulaName = String(profile.full_name || 'Doula').trim() || 'Doula';
+    const doulaFirstName = doulaName.split(/\s+/)[0] || 'Doula';
+    const doulaSubject =
       input.action === 'approved'
-        ? 'Sokana360: Doula account approved'
+        ? 'Sokana360: Your profile is approved'
         : input.action === 'changes_requested'
-          ? 'Sokana360: Changes requested to your profile'
+          ? 'Sokana360: Changes requested for your profile'
           : resubmitted
-            ? 'Sokana360: Profile resubmitted for review'
-            : 'Sokana360: Profile submitted for review';
-    const summary =
+            ? 'Sokana360: Your profile was resubmitted for review'
+            : 'Sokana360: Your profile was submitted for review';
+    const adminSubject =
       input.action === 'approved'
-        ? `${profile.full_name}’s profile and documents have been approved. Profile completion is now approved. Dashboard access remains available.`
+        ? 'Sokana360: ' + doulaName + "'s profile was approved"
         : input.action === 'changes_requested'
-          ? `Changes are needed for ${profile.full_name}’s profile before approval.\n\nRequested changes:\n${reason}\n\nUpdate the profile and any rejected documents, then select Resubmit for review. Profile approval remains pending. Dashboard access remains available.`
-          : `${profile.full_name} has ${resubmitted ? 'resubmitted' : 'submitted'} their profile and documents. Profile approval is pending. The doula can continue using dashboard tools while awaiting review.`;
+          ? 'Sokana360: Changes were requested from ' + doulaName
+          : 'Sokana360: ' +
+            doulaName +
+            (resubmitted
+              ? ' resubmitted a profile for review'
+              : ' submitted a profile for review');
+    const doulaSummary =
+      input.action === 'approved'
+        ? 'Hello ' +
+          doulaFirstName +
+          ',\n\nYour profile and required documents have been approved. Your profile setup is complete, and your dashboard remains available.'
+        : input.action === 'changes_requested'
+          ? 'Hello ' +
+            doulaFirstName +
+            ',\n\nThe Sokana team reviewed your profile and requested changes before approval.\n\nRequested changes:\n' +
+            reason +
+            '\n\nUpdate your profile and any rejected documents. Your dashboard remains available while you complete these updates.'
+          : resubmitted
+            ? 'Hello ' +
+              doulaFirstName +
+              ',\n\nYou completed the requested updates, and your profile has been resubmitted to the Sokana team for review. Your dashboard remains available while you wait for the review.'
+            : 'Hello ' +
+              doulaFirstName +
+              ',\n\nYou completed the required profile information and uploaded the required documents. Your profile has been submitted to the Sokana team for review. Your dashboard remains available while you wait for the review.';
+    const adminSummary =
+      input.action === 'approved'
+        ? 'Hello Sokana team,\n\n' +
+          doulaName +
+          "'s profile and required documents were approved. No further onboarding review action is required."
+        : input.action === 'changes_requested'
+          ? 'Hello Sokana team,\n\nThe requested changes were sent to ' +
+            doulaName +
+            '.\n\nRequested changes:\n' +
+            reason +
+            '\n\nThe profile remains pending until the doula completes the updates and resubmits it.'
+          : 'Hello Sokana team,\n\n' +
+            doulaName +
+            ' completed the required profile information and uploaded the required documents. The profile has been ' +
+            (resubmitted ? 'resubmitted' : 'submitted') +
+            ' and is ready for admin review.';
     const doulaEmail = profile.email.trim().toLowerCase();
     for (const recipient of new Set(
       [doulaEmail, ...recipients.rows.map((row) => row.email)]
@@ -187,6 +227,8 @@ export async function transitionDoulaProfile(input: {
         .filter(Boolean)
     )) {
       const isDoula = recipient === doulaEmail;
+      const subject = isDoula ? doulaSubject : adminSubject;
+      const summary = isDoula ? doulaSummary : adminSummary;
       await client.query(
         `INSERT INTO public.doula_review_emails(event_id,recipient,subject,body) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
         [
@@ -203,8 +245,8 @@ export async function transitionDoulaProfile(input: {
       [
         input.tenantId,
         input.doulaId,
-        subject,
-        `${profile.full_name}\n${reviewUrl}`,
+        adminSubject,
+        `${adminSummary}\n\nReview in Teams: ${reviewUrl}`,
         `doula-review:${eventId}`,
       ]
     );

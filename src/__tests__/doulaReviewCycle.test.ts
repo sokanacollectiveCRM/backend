@@ -98,8 +98,34 @@ it('completes submit, request changes, resubmit, approve and queues both recipie
     'maya@example.com',
     'admin@example.com',
   ]);
+  expect(emails[0][1][2]).toBe(
+    'Sokana360: Your profile was submitted for review'
+  );
+  expect(emails[0][1][3]).toContain('Hello Maya');
+  expect(emails[0][1][3]).toContain(
+    'You completed the required profile information and uploaded the required documents.'
+  );
+  expect(emails[0][1][3]).toContain('Your profile has been submitted');
+  expect(emails[0][1][3]).not.toContain('Maya Rivers completed');
+  expect(emails[1][1][2]).toBe(
+    'Sokana360: Maya Rivers submitted a profile for review'
+  );
+  expect(emails[1][1][3]).toContain('Hello Sokana team');
+  expect(emails[1][1][3]).toContain('Maya Rivers completed');
+  expect(emails[1][1][3]).toContain('ready for admin review');
+  expect(emails[2][1][3]).toContain('The Sokana team reviewed your profile');
+  expect(emails[3][1][3]).toContain(
+    'The requested changes were sent to Maya Rivers'
+  );
   expect(emails[4][1][2]).toContain('resubmitted');
-  expect(emails[6][1][3]).toContain('Dashboard access remains available');
+  expect(emails[4][1][3]).toContain('You completed the requested updates');
+  expect(emails[5][1][3]).toContain('Maya Rivers completed');
+  expect(emails[6][1][3]).toContain(
+    'Your profile and required documents have been approved'
+  );
+  expect(emails[7][1][3]).toContain(
+    "Maya Rivers's profile and required documents were approved"
+  );
   expect(
     query.mock.calls.filter(([sql]) =>
       sql.includes('INSERT INTO public.doula_profile_reviews')

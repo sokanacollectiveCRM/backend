@@ -380,7 +380,7 @@ export async function acceptStaffInvitation(input: {
         process.env.FRONTEND_URL || 'http://localhost:3001'
       ).replace(/\/+$/, '');
       const subject = 'Sokana360: Review your information after rejoining';
-      const message = `You have rejoined ${invitation.organization_name}. Your saved profile and documents for this organization are now pending admin review. Please look over your information and documents and update anything that has changed. Documents from other organizations have not been copied. An admin may send you specific requested changes.\n\nView your profile: ${base}/doula-dashboard/profile`;
+      const message = `Hello ${invitation.first_name},\n\nYou have rejoined ${invitation.organization_name}. Your saved profile and documents for this organization are now pending admin review. Please look over your information and documents and update anything that has changed. Documents from other organizations have not been copied. An admin may send you specific requested changes.\n\nView your profile: ${base}/doula-dashboard/profile`;
       await db.query(
         `INSERT INTO public.doula_review_emails(event_id,recipient,subject,body) VALUES($1,$2,$3,$4)`,
         [reviewEventId, invitation.email, subject, message]
