@@ -1,17 +1,9 @@
 import { randomUUID } from 'crypto';
 
-import { UPLOADABLE_DOULA_DOCUMENT_TYPES } from '../../../constants/doulaDocuments';
 import { getPool } from '../../../db/cloudSqlPool';
 import { NotFoundError, ValidationError } from '../../../domains/errors';
-import {
-  REQUIRED_DOULA_DOCUMENT_TYPES,
-  backgroundCheckSatisfied,
-} from '../domain/documentPolicy';
+import { REQUIRED_DOULA_DOCUMENT_TYPES } from '../domain/documentPolicy';
 import { isValidPhone, missingProfileFields } from '../domain/profile';
-import {
-  SENSITIVE_DOCUMENT_TYPES,
-  isSensitiveDocument,
-} from './backgroundCheck';
 import {
   deliverProfileReviewEmails,
   findDoulaReviewAdminEmails,
@@ -93,42 +85,21 @@ export async function transitionDoulaProfile(input: {
         throw new ValidationError(
           'Complete your name, phone number, address, and bio before submitting.'
         );
-      if (
-        input.action === 'approved' &&
-        !backgroundCheckSatisfied(profile.background_check_status)
-      )
-        throw new ValidationError(
-          'HR/payroll must mark the background check Cleared before profile review.'
-        );
-      let canApproveSensitiveDocuments = false;
-      if (input.action === 'approved') {
-        const access = await client.query(
-          `SELECT 1 FROM public.doula_hr_permissions
-           WHERE tenant_id=$1::uuid AND admin_id=$2
-             AND department IN ('hr','payroll') LIMIT 1`,
-          [input.tenantId, input.actorId]
-        );
-        canApproveSensitiveDocuments = !!access.rowCount;
-      }
-      for (const type of REQUIRED_DOULA_DOCUMENT_TYPES) {
-        const canApproveUploaded =
-          input.action === 'submitted' ||
-          (input.action === 'approved' &&
-            (!isSensitiveDocument(type) || canApproveSensitiveDocuments));
-        const document = await client.query(
-          `SELECT 1 FROM (
-             SELECT status,file_path FROM public.doula_documents WHERE doula_id=$1::text
-             AND tenant_id=$4::uuid AND document_type=$3 ORDER BY uploaded_at DESC,id DESC LIMIT 1
-           ) current_document WHERE NULLIF(file_path,'') IS NOT NULL
-           AND (status='approved' OR ($2::boolean AND status='uploaded'))`,
-          [input.doulaId, canApproveUploaded, type, input.tenantId]
-        );
-        if (!document.rowCount)
-          throw new ValidationError(
-            `Required ${type === 'training_certificate' ? 'training certificate' : type} must be ${input.action === 'approved' && isSensitiveDocument(type) && !canApproveSensitiveDocuments ? 'approved by HR/payroll' : 'uploaded'} before profile review.`
+      if (input.action === 'submitted') {
+        for (const type of REQUIRED_DOULA_DOCUMENT_TYPES) {
+          const document = await client.query(
+            `SELECT 1 FROM (
+               SELECT status,file_path FROM public.doula_documents WHERE doula_id=$1::text
+               AND tenant_id=$3::uuid AND document_type=$2 ORDER BY uploaded_at DESC,id DESC LIMIT 1
+             ) current_document WHERE NULLIF(file_path,'') IS NOT NULL
+             AND status IN ('uploaded','approved')`,
+            [input.doulaId, type, input.tenantId]
           );
-      }
-      if (['submitted', 'approved'].includes(input.action)) {
+          if (!document.rowCount)
+            throw new ValidationError(
+              `Required ${type === 'training_certificate' ? 'training certificate' : type} must be uploaded before profile review.`
+            );
+        }
         const rejected = await client.query(
           `SELECT 1 FROM (
              SELECT DISTINCT ON (document_type) status
@@ -137,37 +108,12 @@ export async function transitionDoulaProfile(input: {
                AND document_type=ANY($3::text[])
              ORDER BY document_type,uploaded_at DESC,id DESC
            ) current_documents WHERE status='rejected' LIMIT 1`,
-          [input.doulaId, input.tenantId, UPLOADABLE_DOULA_DOCUMENT_TYPES]
+          [input.doulaId, input.tenantId, REQUIRED_DOULA_DOCUMENT_TYPES]
         );
         if (rejected.rowCount)
           throw new ValidationError(
-            `Replace or remove rejected documents before ${input.action === 'approved' ? 'approval' : 'resubmitting'}.`
+            'Replace or remove rejected documents before resubmitting.'
           );
-      }
-      if (input.action === 'approved') {
-        await client.query(
-          `WITH current_documents AS (
-             SELECT DISTINCT ON (document_type) id,document_type
-             FROM public.doula_documents
-             WHERE doula_id=$1::text AND tenant_id=$2::uuid
-               AND document_type=ANY($4::text[])
-             ORDER BY document_type,uploaded_at DESC,id DESC
-           )
-           UPDATE public.doula_documents d
-           SET status='approved',reviewed_at=now(),reviewed_by=$3,
-               rejection_reason=NULL,updated_at=now()
-           FROM current_documents current
-           WHERE d.id=current.id AND d.status='uploaded'
-             AND ($5::boolean OR NOT (d.document_type=ANY($6::text[])))`,
-          [
-            input.doulaId,
-            input.tenantId,
-            input.actorId,
-            UPLOADABLE_DOULA_DOCUMENT_TYPES,
-            canApproveSensitiveDocuments,
-            SENSITIVE_DOCUMENT_TYPES,
-          ]
-        );
       }
     }
     const recipients = await findDoulaReviewAdminEmails(client, input.tenantId);
@@ -239,7 +185,7 @@ export async function transitionDoulaProfile(input: {
       input.action === 'approved'
         ? 'Hello ' +
           doulaFirstName +
-          ',\n\nYour profile and all current uploaded documents have been approved. Your profile setup is complete, and your dashboard remains available.'
+          ',\n\nYour profile information has been approved. Your background check and required documents are reviewed separately. Your setup is complete after all three requirements are approved.'
         : input.action === 'changes_requested'
           ? 'Hello ' +
             doulaFirstName +
@@ -257,7 +203,7 @@ export async function transitionDoulaProfile(input: {
       input.action === 'approved'
         ? 'Hello Sokana team,\n\n' +
           doulaName +
-          "'s profile and all current uploaded documents were approved. No further onboarding review action is required."
+          "'s profile information was approved. Background clearance and required documents remain separate onboarding requirements."
         : input.action === 'changes_requested'
           ? 'Hello Sokana team,\n\nThe requested changes were sent to ' +
             doulaName +

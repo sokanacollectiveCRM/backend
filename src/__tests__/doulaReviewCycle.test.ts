@@ -121,26 +121,16 @@ it('completes submit, request changes, resubmit, approve and queues both recipie
   expect(emails[4][1][3]).toContain('You completed the requested updates');
   expect(emails[5][1][3]).toContain('Maya Rivers completed');
   expect(emails[6][1][3]).toContain(
-    'Your profile and all current uploaded documents have been approved'
+    'Your profile information has been approved'
   );
   expect(emails[7][1][3]).toContain(
-    "Maya Rivers's profile and all current uploaded documents were approved"
+    "Maya Rivers's profile information was approved"
   );
-  const bulkApproval = query.mock.calls.find(([sql]) =>
-    sql.includes('UPDATE public.doula_documents d')
-  );
-  expect(bulkApproval?.[1]).toEqual([
-    'doula',
-    'tenant',
-    'actor',
-    expect.arrayContaining([
-      'training_certificate',
-      'w9',
-      'direct_deposit_form',
-    ]),
-    true,
-    expect.arrayContaining(['w9', 'direct_deposit_form']),
-  ]);
+  expect(
+    query.mock.calls.some(([sql]) =>
+      sql.includes('UPDATE public.doula_documents')
+    )
+  ).toBe(false);
   expect(
     query.mock.calls.filter(([sql]) =>
       sql.includes('INSERT INTO public.doula_profile_reviews')
@@ -254,7 +244,7 @@ it.each(['submitted', 'changes_requested', 'approved'] as const)(
   }
 );
 
-it('submits and emails both sides before clearance but blocks approval until HR clears the background check', async () => {
+it('keeps profile approval independent from background clearance', async () => {
   profile.background_check_status = 'not_cleared';
   await run('submitted');
   expect(profile.profile_review_status).toBe('submitted');
@@ -263,74 +253,43 @@ it('submits and emails both sides before clearance but blocks approval until HR 
       .filter(([sql]) => sql.includes('INSERT INTO public.doula_review_emails'))
       .map(([, args]) => args[1])
   ).toEqual(['maya@example.com', 'admin@example.com']);
-  await expect(run('approved', { expectedVersion: 1 })).rejects.toThrow(
-    'background check'
-  );
+  await run('approved', { expectedVersion: 1 });
+  expect(profile.profile_review_status).toBe('approved');
   expect(
     query.mock.calls.filter(([sql]) =>
       sql.includes('INSERT INTO public.doula_profile_reviews')
     )
-  ).toHaveLength(1);
+  ).toHaveLength(2);
 });
 it.each(['w9', 'direct_deposit_form', 'training_certificate'])(
-  'requires configured %s at submission and approval',
+  'requires configured %s at submission but not for the separate profile decision',
   async (type) => {
     const original = query.getMockImplementation()!;
     query.mockImplementation(async (sql: string, args: any[] = []) => {
-      if (sql.includes('FROM public.doula_documents') && args[2] === type)
+      if (sql.includes('FROM public.doula_documents') && args[1] === type)
         return { rows: [], rowCount: 0 };
       return original(sql, args);
     });
     await expect(run('submitted')).rejects.toThrow('Required');
     profile.profile_review_status = 'submitted';
     profile.profile_submitted_at = new Date().toISOString();
-    await expect(run('approved', { expectedVersion: 0 })).rejects.toThrow(
-      'Required'
-    );
+    await run('approved', { expectedVersion: 0 });
+    expect(profile.profile_review_status).toBe('approved');
   }
 );
 
-it('requires HR/payroll approval for sensitive documents when the reviewer lacks access', async () => {
+it('approves good profile information while a document remains rejected', async () => {
   profile.profile_review_status = 'submitted';
   profile.profile_submitted_at = new Date().toISOString();
-  const original = query.getMockImplementation()!;
-  query.mockImplementation(async (sql: string, args: any[] = []) => {
-    if (sql.includes('FROM public.doula_hr_permissions'))
-      return { rows: [], rowCount: 0 };
-    if (
-      sql.includes('current_document WHERE') &&
-      ['w9', 'direct_deposit_form'].includes(args[2]) &&
-      args[1] === false
-    )
-      return { rows: [], rowCount: 0 };
-    return original(sql, args);
-  });
+  rejected = true;
 
-  await expect(run('approved', { expectedVersion: 0 })).rejects.toThrow(
-    'approved by HR/payroll'
-  );
+  await run('approved', { expectedVersion: 0 });
+  expect(profile.profile_review_status).toBe('approved');
   expect(
     query.mock.calls.some(([sql]) =>
-      sql.includes('UPDATE public.doula_documents d')
+      sql.includes('UPDATE public.doula_documents')
     )
   ).toBe(false);
-});
-
-it('follows the clearance config flag when clearance becomes optional', async () => {
-  profile.background_check_status = 'not_cleared';
-  profile.profile_review_status = 'submitted';
-  profile.profile_submitted_at = new Date().toISOString();
-  const property = jest.replaceProperty(
-    documentPolicy,
-    'BACKGROUND_CHECK_REQUIRED',
-    false
-  );
-  try {
-    await run('approved', { expectedVersion: 0 });
-    expect(profile.profile_review_status).toBe('approved');
-  } finally {
-    property.restore();
-  }
 });
 it('follows the configured upload list when W-9 and direct deposit become optional', async () => {
   const property = jest.replaceProperty(
@@ -342,8 +301,8 @@ it('follows the configured upload list when W-9 and direct deposit become option
     await run('submitted');
     expect(
       query.mock.calls
-        .filter(([sql]) => sql.includes('document_type=$3'))
-        .map(([, args]) => args[2])
+        .filter(([sql]) => sql.includes('document_type=$2'))
+        .map(([, args]) => args[1])
     ).toEqual(['training_certificate']);
   } finally {
     property.restore();

@@ -462,8 +462,7 @@ export class DoulaController {
       const result = await getPool().query(
         `WITH updated AS (
           UPDATE public.doulas SET background_check_status=$3, background_check_set_at=now(),
-          background_check_set_by=$4, profile_review_status=CASE WHEN profile_review_status IN ('approved','submitted') THEN 'draft' ELSE profile_review_status END,
-          profile_review_version=profile_review_version+1, updated_at=now()
+          background_check_set_by=$4, updated_at=now()
           WHERE id::text=$1 AND tenant_id=$2::uuid
           RETURNING id, background_check_status AS status, background_check_set_at AS "setAt", background_check_set_by AS "setBy"
         ), event AS (
