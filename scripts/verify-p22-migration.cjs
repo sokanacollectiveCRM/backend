@@ -76,7 +76,7 @@ async function main() {
         `fictional-${documentType}.pdf`
       );
       const profile = (await db.query('SELECT * FROM public.doulas')).rows[0];
-      assert.equal(profile.profile_review_status, 'draft');
+      assert.equal(profile.profile_review_status, 'approved');
       await db.query(
         "UPDATE public.doulas SET profile_review_status='approved'"
       );
@@ -86,7 +86,7 @@ async function main() {
       assert.equal(
         (await db.query('SELECT profile_review_status FROM public.doulas'))
           .rows[0].profile_review_status,
-        'draft'
+        'approved'
       );
     }
     assert.equal(
@@ -106,7 +106,7 @@ async function main() {
       )
     );
     console.log(
-      'P-22 migration: repeat-safe, historical rows intact, four new/restored types persist and reset review.'
+      'P-22 migration: repeat-safe, historical rows intact, four new/restored types persist without changing the separate profile review.'
     );
   } finally {
     await db.close();
