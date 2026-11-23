@@ -107,7 +107,7 @@ export async function changeStaffPermission(req: AuthRequest) {
     const tenantId = req.tenant!.id,
       adminId = req.params.adminId;
     const target = await db.query(
-      `SELECT id,email,first_name,full_name FROM public.admins WHERE tenant_id=$1::uuid AND id::text=$2 AND NOT EXISTS(SELECT 1 FROM public.memberships m WHERE m.tenant_id=admins.tenant_id AND m.principal_id=admins.id AND m.status='inactive') FOR UPDATE`,
+      `SELECT id,email,full_name FROM public.admins WHERE tenant_id=$1::uuid AND id::text=$2 AND NOT EXISTS(SELECT 1 FROM public.memberships m WHERE m.tenant_id=admins.tenant_id AND m.principal_id=admins.id AND m.status='inactive') FOR UPDATE`,
       [tenantId, adminId]
     );
     if (!target.rowCount) throw new PermissionError(404, 'Admin not found.');
@@ -146,8 +146,7 @@ export async function changeStaffPermission(req: AuthRequest) {
       const account = target.rows[0];
       notification = {
         email: String(account.email).trim().toLowerCase(),
-        firstName:
-          account.first_name || String(account.full_name || '').split(/\s+/)[0],
+        firstName: String(account.full_name || '').split(/\s+/)[0],
         capability,
         enabled,
       };

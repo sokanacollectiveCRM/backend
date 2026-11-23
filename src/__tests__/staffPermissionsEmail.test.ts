@@ -23,14 +23,13 @@ beforeEach(() => {
   query.mockImplementation(async (sql: string) => {
     if (sql.includes('SELECT a.id FROM public.admins'))
       return { rowCount: 1, rows: [{ id: 'manager' }] };
-    if (sql.includes('SELECT id,email,first_name,full_name'))
+    if (sql.includes('SELECT id,email,full_name'))
       return {
         rowCount: 1,
         rows: [
           {
             id: 'target',
             email: 'STAFF@example.test',
-            first_name: 'Maya',
             full_name: 'Maya Rivers',
           },
         ],
