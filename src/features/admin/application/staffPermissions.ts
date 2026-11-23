@@ -1,6 +1,8 @@
 import type { PoolClient } from 'pg';
 
+import { logger } from '../../../common/utils/logger';
 import { getPool } from '../../../db/cloudSqlPool';
+import { NodemailerService } from '../../../services/emailService';
 import type { AuthRequest } from '../../../types';
 
 class PermissionError extends Error {
@@ -57,8 +59,36 @@ export async function readStaffPermissions(req: AuthRequest) {
   return { admins, lastChange: rows[0] ?? null };
 }
 
+export function buildStaffPermissionChangeEmail(input: {
+  firstName?: string | null;
+  capability: 'hr' | 'payroll';
+  enabled: boolean;
+}) {
+  const capabilityName = input.capability === 'hr' ? 'HR' : 'Payroll';
+  const firstName = input.firstName?.trim() || 'Staff member';
+  const base = (process.env.FRONTEND_URL || 'http://localhost:3001').replace(
+    /\/+$/,
+    ''
+  );
+  const subject = `Sokana360: ${capabilityName} access ${input.enabled ? 'enabled' : 'removed'}`;
+  const change = input.enabled
+    ? `You now have ${capabilityName} access in Sokana360. This gives you access to sensitive doula documents, including W-9 and direct deposit forms, and background-check status.`
+    : `Your ${capabilityName} access in Sokana360 was removed. Sensitive doula documents and background-check status are no longer available through that permission.`;
+  return {
+    subject,
+    body: `Hello ${firstName},\n\nYour Sokana360 staff permissions were updated. ${change}\n\nThe change is effective immediately. No sign-out is required.\n\nOpen Staff permissions: ${base}/settings/staff-permissions\n\nSokana360`,
+  };
+}
+
 export async function changeStaffPermission(req: AuthRequest) {
   const db = await getPool().connect();
+  let notification: {
+    email: string;
+    firstName?: string | null;
+    capability: 'hr' | 'payroll';
+    enabled: boolean;
+  } | null = null;
+  let changed = false;
   try {
     await db.query('BEGIN');
     // Serialize all writers across processes, then recheck the actor after waiting.
@@ -77,7 +107,7 @@ export async function changeStaffPermission(req: AuthRequest) {
     const tenantId = req.tenant!.id,
       adminId = req.params.adminId;
     const target = await db.query(
-      `SELECT id FROM public.admins WHERE tenant_id=$1::uuid AND id::text=$2 AND NOT EXISTS(SELECT 1 FROM public.memberships m WHERE m.tenant_id=admins.tenant_id AND m.principal_id=admins.id AND m.status='inactive') FOR UPDATE`,
+      `SELECT id,email,first_name,full_name FROM public.admins WHERE tenant_id=$1::uuid AND id::text=$2 AND NOT EXISTS(SELECT 1 FROM public.memberships m WHERE m.tenant_id=admins.tenant_id AND m.principal_id=admins.id AND m.status='inactive') FOR UPDATE`,
       [tenantId, adminId]
     );
     if (!target.rowCount) throw new PermissionError(404, 'Admin not found.');
@@ -86,6 +116,7 @@ export async function changeStaffPermission(req: AuthRequest) {
       [tenantId, adminId, capability]
     );
     const old = !!current.rowCount;
+    changed = old !== enabled;
     if (old !== enabled) {
       if (!enabled) {
         const remaining = await db.query(
@@ -112,15 +143,38 @@ export async function changeStaffPermission(req: AuthRequest) {
         'INSERT INTO public.staff_permission_events(tenant_id,actor_id,admin_id,capability,old_value,new_value) VALUES($1::uuid,$2,$3,$4,$5,$6)',
         [tenantId, req.user!.id, adminId, capability, old, enabled]
       );
+      const account = target.rows[0];
+      notification = {
+        email: String(account.email).trim().toLowerCase(),
+        firstName:
+          account.first_name || String(account.full_name || '').split(/\s+/)[0],
+        capability,
+        enabled,
+      };
     }
     await db.query('COMMIT');
-    return { changed: old !== enabled };
   } catch (error) {
     await db.query('ROLLBACK');
     throw error;
   } finally {
     db.release();
   }
+  if (notification) {
+    const message = buildStaffPermissionChangeEmail(notification);
+    await new NodemailerService()
+      .sendEmail(notification.email, message.subject, message.body)
+      .catch(() =>
+        logger.error(
+          {
+            service: 'staff-permissions',
+            operation: 'send_permission_change_email',
+            errorCode: 'STAFF_PERMISSION_EMAIL_FAILURE',
+          },
+          'Staff permission changed but notification email failed'
+        )
+      );
+  }
+  return { changed };
 }
 
 export function staffPermissionHandler(
