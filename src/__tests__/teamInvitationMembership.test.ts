@@ -1,4 +1,5 @@
 import { getPool } from '../db/cloudSqlPool';
+import { createStaffInvitation } from '../features/team/application/staffInvitationService';
 import { runWithTenant } from '../features/tenancy/application/tenantRequestStore';
 import { CloudSqlTeamService } from '../services/cloudSqlTeamService';
 import { getFirebaseAuth } from '../services/identityPlatform/firebaseAdmin';
@@ -7,15 +8,21 @@ jest.mock('../db/cloudSqlPool', () => ({ getPool: jest.fn() }));
 jest.mock('../services/identityPlatform/firebaseAdmin', () => ({
   getFirebaseAuth: jest.fn(),
 }));
+jest.mock('../features/team/application/staffInvitationService', () => ({
+  createStaffInvitation: jest.fn(),
+}));
 const query = jest.fn(),
+  poolQuery = jest.fn(),
   release = jest.fn(),
   createUser = jest.fn(),
   deleteUser = jest.fn();
 beforeEach(() => {
   jest.resetAllMocks();
   query.mockResolvedValue({ rows: [{ id: 'new-member' }] });
+  poolQuery.mockResolvedValue({ rows: [], rowCount: 0 });
   createUser.mockResolvedValue({ uid: 'firebase-uid' });
   (getPool as jest.Mock).mockReturnValue({
+    query: poolQuery,
     connect: async () => ({ query, release }),
   });
   (getFirebaseAuth as jest.Mock).mockReturnValue({ createUser, deleteUser });
@@ -26,6 +33,36 @@ const input = {
   email: 'maya@example.com',
   role: 'doula' as const,
 };
+it('reinvites an inactive retained member without creating a duplicate profile', async () => {
+  poolQuery.mockResolvedValue({
+    rows: [{ id: 'retained-doula' }],
+    rowCount: 1,
+  });
+  (createStaffInvitation as jest.Mock).mockResolvedValue({
+    id: 'invite',
+    firstname: 'Maya',
+    lastname: 'Rivers',
+    email: input.email,
+    role: 'doula',
+    invitation_status: 'pending',
+    account_status: 'pending',
+  });
+
+  const result = await runWithTenant('inviting-tenant', () =>
+    new CloudSqlTeamService().addTeamMember(input)
+  );
+
+  expect(result.invitation_status).toBe('pending');
+  expect(createStaffInvitation).toHaveBeenCalledWith(
+    expect.objectContaining({
+      tenantId: 'inviting-tenant',
+      email: input.email,
+      role: 'doula',
+    })
+  );
+  expect(createUser).not.toHaveBeenCalled();
+  expect(query).not.toHaveBeenCalled();
+});
 it.each(['doula', 'admin'] as const)(
   'links new %s accounts to the inviting organization and Firebase UID',
   async (role) => {

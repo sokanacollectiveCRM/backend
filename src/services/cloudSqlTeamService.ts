@@ -442,6 +442,31 @@ export class CloudSqlTeamService {
     if (input.role === 'hr' && !input.invitedById)
       throw new Error('An inviting admin is required for HR');
     const normalizedEmail = input.email.toLowerCase().trim();
+    const profileTable = input.role === 'doula' ? 'doulas' : 'admins';
+    const retained = await getPool().query(
+      `SELECT p.id FROM public.${profileTable} p
+       JOIN public.memberships m
+         ON m.tenant_id=p.tenant_id AND m.principal_id=p.id
+       WHERE p.tenant_id=$1::uuid AND lower(p.email)=$2
+         AND m.status='inactive'
+       LIMIT 1`,
+      [tenantId, normalizedEmail]
+    );
+    if (retained.rowCount) {
+      const { createStaffInvitation } = await import(
+        '../features/team/application/staffInvitationService'
+      );
+      const pending = await createStaffInvitation({
+        tenantId,
+        firstname: input.firstname,
+        lastname: input.lastname,
+        email: normalizedEmail,
+        role: input.role,
+        invitedByEmail: input.invitedByEmail ?? input.invitedById ?? null,
+        invitedById: input.invitedById,
+      });
+      return { ...pending, phone_number: null };
+    }
     const auth = getFirebaseAuth();
     let createdAuth;
     try {

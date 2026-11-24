@@ -86,6 +86,68 @@ it('creates an active doula when accepting a token invitation', async () => {
   expect(insert?.[0]).toContain("'active'");
 });
 
+it('reactivates a retained doula in draft instead of submitting the old profile', async () => {
+  query.mockImplementation(async (sql: string) => {
+    if (sql.includes('FROM public.staff_invitations i'))
+      return {
+        rows: [
+          {
+            id: 'invite',
+            tenant_id: 'tenant',
+            email: 'maya@example.com',
+            first_name: 'Maya',
+            last_name: 'Rivers',
+            role: 'doula',
+            status: 'pending',
+            expires_at: new Date(Date.now() + 60000),
+          },
+        ],
+      };
+    if (sql.includes('SELECT status,expires_at'))
+      return {
+        rows: [{ status: 'pending', expires_at: new Date(Date.now() + 60000) }],
+      };
+    if (sql.includes('FROM public.doulas') && sql.includes('FOR UPDATE'))
+      return {
+        rows: [
+          {
+            id: 'retained-doula',
+            identity_platform_uid: null,
+            staff_role: 'doula',
+          },
+        ],
+        rowCount: 1,
+      };
+    if (sql.includes('FROM public.memberships'))
+      return { rows: [{ status: 'inactive' }], rowCount: 1 };
+    return { rows: [], rowCount: 0 };
+  });
+  (getFirebaseAuth as jest.Mock).mockReturnValue({
+    getUserByEmail: jest
+      .fn()
+      .mockRejectedValue({ code: 'auth/user-not-found' }),
+    createUser: jest.fn().mockResolvedValue({ uid: 'new-firebase-uid' }),
+    deleteUser: jest.fn(),
+  });
+
+  await acceptStaffInvitation({
+    token: 'fictional-token',
+    password: 'fictional-password',
+  });
+
+  const update = query.mock.calls.find(([sql]) =>
+    sql.includes('UPDATE public.doulas')
+  );
+  expect(update?.[0]).toContain("profile_review_status='draft'");
+  expect(update?.[0]).toContain('profile_submitted_at=NULL');
+  expect(update?.[0]).not.toContain("profile_review_status='submitted'");
+  expect(
+    query.mock.calls.some(([sql]) =>
+      sql.includes('INSERT INTO public.doula_profile_reviews')
+    )
+  ).toBe(false);
+});
+
 it('keeps pending doula accounts able to authenticate for onboarding', async () => {
   const doula = new User({
     id: 'doula',
